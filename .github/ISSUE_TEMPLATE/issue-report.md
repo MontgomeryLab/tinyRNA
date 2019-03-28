@@ -1,6 +1,6 @@
 ---
-name: Issue Template
-about: Submitting issues - bugs and enhancements
+name: Issue Report
+about: Create a report to help us improve
 title: ''
 labels: ''
 assignees: ''
@@ -18,9 +18,9 @@ For enhancements, please make sure we are already not working on this under [pro
 Please describe what you believe should have happened and what actually happened in simple terms. If you think you have an idea of what caused the error, that is also welcome here. 
 
 ## Environment
-**Operating System: ** Mac OS Mojave
-**aquatx version: ** v0.1
-**Additional comments: ** 
+**Operating System:** Mac OS Mojave
+**aquatx version:** v0.1
+**Additional comments:** 
 
 ## Reproducible example
 
