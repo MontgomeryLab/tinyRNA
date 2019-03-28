@@ -3,6 +3,7 @@
 
 *This repository is being actively developed and tested, thus incomplete and only recommended for testing and playing around with until a release is made. Feedback, suggestions, and bug reports are welcome under the [issues tab](https://github.com/biokcb/aquatx-srna/issues). Thank you!*
 
+[![Build Status](https://travis-ci.com/MontgomeryLab/aquatx-srna.svg?branch=master)](https://travis-ci.com/MontgomeryLab/aquatx-srna)
 
 AQuATx (Automated QUantitative Analysis of Transcript eXpression) is a set of tools to simplify the analysis of next-generation sequencing data. The goal of this specific repository is to provide an entire workflow for processing small RNA sequencing data. 
 
