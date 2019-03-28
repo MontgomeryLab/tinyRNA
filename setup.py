@@ -1,0 +1,55 @@
+#!/usr/bin/env python
+
+import setuptools 
+
+# Package metadata
+NAME = 'aquatx'
+DESCRIPTION = 'Automated Quantitative Analysis of Transcript Expression'
+URL = 'https://github.com/MontgomeryLab/aquatx-srna/'
+EMAIL = 'kristen.brown@colostate.edu'
+AUTHOR = 'Kristen Brown'
+REQUIRES_PYTHON = '>=3.6.0, !=3.7.*'
+VERSION = '0.1'
+
+# Required packages
+REQUIRED = [
+    'ruamel.yaml>=0.15.50, <=0.15.77',
+    'cwltool',
+    'htseq',
+    'numpy',
+    'pandas',
+    'matplotlib',
+]
+
+setuptools.setup(
+    name=NAME,
+    version=VERSION,
+    author=AUTHOR,
+    author_email=EMAIL,
+    description=DESCRIPTION,
+    packages=setuptools.find_packages(exclude=['tests/*']),
+    include_package_data=True,
+    package_data={'aquatx': ['cwl/tools/*.cwl', 
+                             'cwl/workflows/*.cwl', 
+                             'extras/*.csv', 
+                             'extras/*.yml', 
+                             'extras/*.gff']},
+    zip_safe=False,
+    entry_points={
+        'console_scripts': [
+            'aquatx = aquatx.aquatx:main',
+            'aquatx-config = aquatx.srna.configuration_setup:main',
+            'aquatx-collapse = aquatx.srna.collapser:main',
+            'aquatx-count = aquatx.srna.counter:main',
+            'aquatx-merge = aquatx.srna.merge_samples:main'
+        ]
+    },
+    scripts=['aquatx/srna/aquatx-deseq'],
+    python_requires=REQUIRES_PYTHON,
+    install_requires=REQUIRED,
+    classifiers=[
+        'Programming Language :: Python :: 3',
+        'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
+        'Operating System :: OS Independent',
+    ],
+)

@@ -1,0 +1,255 @@
+######----------------------------- AQuATx Configuration -----------------------------######
+#
+# For reproducibility purposes, if you do not rename this file, we will make a copy
+# with current run time and date information. 
+# 
+# Please rename this file with identifying information if you wish to trace back your run. 
+# If you would like to add run time information, you may add it here. 
+#
+#
+#
+# 1. Add a username here to identify the person creating the runs, if desired for record keeping
+# 2. Please add a final run directory to store files - otherwise it will be generated based on
+#    initial run time and date (with added option username). 
+# 3. Please add a final run output prefix to label run-specific summary reports - otherwise
+#    it will be generated based on initial run time and date (with added optional username).
+#
+######-------------------------------------------------------------------------------######
+
+user: ''
+run_directory: ''
+run_prefix: ''
+run_date: ''
+run_time: ''
+
+##############################  MAIN INPUT FILES FOR ANALYSIS ##############################
+#
+# Edit this section to contain the sample sheets with file information to use in the
+# workflow. If you want to use DEFAULT settings for the workflow, this is all you need to
+# edit before running the workflow. 
+#
+# Directions:
+# 1. Fill out the sample sheet with files to process + naming scheme. [sample_sheet_template.csv]
+# 2. Fill out the reference sheet with reference files and corresponding optional masks [reference_sheet_template.csv]
+# 3. Rename the files and list them here. If you DO NOT rename them, they will be renamed for you.  
+# 4. Add an output identifier for summary files and databases
+# 
+######-------------------------------------------------------------------------------######
+ 
+##-- Relative path to sample & reference sheets --##
+sample_sheet_file: 'extras/sample_sheet_template.csv'
+reference_sheet_file: 'extras/reference_sheet_template.csv'
+
+##-- The prefix for your bowtie index, include relative path --##
+ebwt: 'tests/testdata/references/c_elegans_ws230'
+
+##-- If True: run bowtie-build to index the genome --##
+run_idx: False
+
+##-- Number of threads for multi-threaded programs --##
+threads: 2
+
+##-- Final output file prefixes for overall run --##
+##-- If none given, run_prefix is used (default: date_time_aquatx) --##
+output_prefix: ''
+
+######---------------------TRIMMING AND QUALITY FILTER OPTIONS ----------------------######
+#
+# We use the program fastp to perform: adapter trimming (req), quality filtering (on), 
+# and QC analysis for an output QC report. See https://github.com/OpenGene/fastp for more
+# information on the fastp tool. We have limited the options available to those appropriate
+# for small RNA sequencing data. If you require an addition option, create an issue on the
+# pipeline github: https://github.com/biokcb/smallRNA/issues
+# 
+# We have specified default parameters for small RNA data based on our own "best practices".
+# You may change the parameters here.
+#
+######-------------------------------------------------------------------------------######
+
+##-- Adapter sequence to trim --##
+adapter_sequence: 'auto_detect'
+ 
+##-- Minumum & maximum accepted lengths after trimming --##
+length_required: 15
+length_limit: 30
+
+##-- Minimum phred score for a base to pass quality filter --##
+qualified_quality_phred: 15
+
+##-- Minimum % of bases that can be below minimum phred score (above) --##
+unqualified_percent_limit: 0
+
+##-- Minimum allowed number of bases --##
+n_base_limit: 1
+
+##-- Compression level for gzip output --##
+compression: 4
+
+###-- Unused option inputs: Remove '#' in front to use --###
+##-- Trim poly x tails of a given length --##
+#trim_poly_x: false
+#poly_x_min_len: 0
+
+##-- Is the data phred 64? --##
+#fp_phred64: False
+
+##-- Turn on overrepresentation sampling analysis --##
+#overrepresentation_sampling: 0 
+#overrepresentation_analysis: false
+
+##-- If true: don't overwrite the files --##
+#dont_overwrite: false
+
+##-- If true: disable these options --##
+#disable_quality_filtering: false
+#disable_length_filtering: false
+#disable_adapter_trimming: false
+
+###-- These options are generated from sample sheet --###
+# input fastq files
+in_fq: ''
+# output, cleaned fastq files
+out_fq: ''
+# output reports
+report_title: ''
+
+######--------------------------- READ COLLAPSER OPTIONS ----------------------------######
+#
+# We use a custom Python script for collapsing duplicate reads for now. There are only a 
+# couple options and we recommend using the default (keep all reads). 
+#
+# We have specified default parameters for small RNA data based on our own "best practices".
+# You may change the parameters here.
+#
+######-------------------------------------------------------------------------------######
+
+##-- Min. num of duplicate sequences required to keep --##
+threshold: 1
+
+##-- If True: write the sequences below threshold to a file --##
+keep_low_counts: False
+
+###-- These options are generated from sample sheet --###
+# output filenames
+uniq_seq_file: ''
+
+######------------------------- BOWTIE2 ALIGNMENT OPTIONS ---------------------------######
+#
+# We use bowtie2 for read alignment to a genome. 
+#
+# We have specified default parameters for small RNA data based on our own "best practices".
+# You may change the parameters here.
+#
+######-------------------------------------------------------------------------------######
+
+##-- Max allowed num of mismatches --##
+end_to_end: 0
+
+##-- If True: report all alignments --##
+all: True
+
+##-- Set a random seed for alignment --##
+seed: 0
+
+##-- If True: supress sam records for unaligned reads --##
+no_unal: True
+
+##-- If True: input files are fasta --##
+fasta: True
+
+##-- If True: output a sam file instead of stdout --##
+sam: True
+
+###-- Unused option inputs: Remove '#' in front to use --###
+##-- If true: do not align to reverse-compliment reference --##
+#norc: False
+
+##-- If True: do not align to forward reference --##
+#nofw: False
+
+##-- If True: input quality scores are Phred64 --##
+#bt_phred64: False
+
+##-- If True: input files are fastq --##
+#fastq: False
+
+##-- Number of alignments to report --##
+#k_aln
+
+##-- Number of bases to trim from 5' or 3' end of reads --##
+#trim5: 0
+#trim3: 0
+
+##-- If True: input files are solexa or solexa 1.3 quality --##
+#solexa: false
+#solexa13: false
+
+###-- These options generated from sample & reference sheet --###
+# bowtie index files
+bt_index_files: ''
+# output alignment file names
+outfile: ''
+#unaligned read file names
+un: ''
+
+######--------------------------- FEATURE COUNTER OPTIONS ---------------------------######
+#
+# We use a custom Python script that utilizes the HTSeq API to count small RNA reads. 
+#
+#
+######-------------------------------------------------------------------------------######
+
+##-- If True: save intermediate table with all information --##
+intermed_file: False
+
+###-- These options generated from sample & reference sheet --###
+# output file prefix
+out_prefix: ''
+# reference gffs
+ref_annotations: ''
+# mask gffs
+mask_annotations: ''
+# turn on/off counting antisense alignments
+antisense: ''
+
+######--------------------------- MERGE SAMPLES OPTIONS ---------------------------######
+#
+# We use a custom Python script to merge outputs of the counter for further processing.
+#
+#
+######-------------------------------------------------------------------------------######
+
+##-- These options are generated with output_prefix --##
+output_file_stats: ''
+output_file_counts: ''
+
+
+######---------------------- NORMALIZATION AND STATISTICS OPTIONS -------------------######
+#
+# We use a custom Python script for read normalization and statistical analysis 
+# (differential gene expression) based on statistical methods developed in [ref]. If you 
+# do not want to use this method and would prefer to use a method such as DESeq2 in R,
+# set use_smrna_stats to False and your output will end at the counts step.
+#
+# We have specified default parameters for small RNA data based on our own "best practices".
+# You may change the parameters here.
+#
+######-------------------------------------------------------------------------------######
+
+##-- If True: use zero-inflated model for normalization and DEG calling --##
+use_smrna_stats: False
+use_deseq: True
+
+######-------------------------------- PLOTTING OPTIONS -----------------------------######
+#
+# We use a custom Python script for creating all plots. The default base style is called
+# 'smrna-light'. If you wish to use another matplotlib stylesheet you may specify that here
+# (i.e. ggplot or seaborn-white). You may also specify color palettes built into matplotlib
+# if you do not wish to use 'smrna-light' defaults.
+#
+# We have specified default parameters for small RNA data based on our own "best practices".
+# You may change the parameters here.
+#
+######-------------------------------------------------------------------------------######
+
+create_pdf: True
