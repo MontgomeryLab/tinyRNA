@@ -19,17 +19,14 @@ def get_args():
     Requires the user provide the output of counter.py.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input-file', metavar='DATAFILE', required=True,
+    parser.add_argument('-i', '--input-files', metavar='DATAFILE', required=True,
                         help='input files with data from final merged tables')
-    parser.add_argument('-f', '--second-file', metavar='DATAFILE', 
-                        help='input files with data from final merged tables')
-    parser.add_argument('-o', '--out-file', metavar='OUTFILE', required=True,
+    parser.add_argument('-o', '--out-prefix', metavar='OUTFILE', required=True,
                         help='prefix to use for output PDF files. If mode=all/by-sample, sample.'\
                         'names will also be appended to the prefix.')
-    parser.add_argument('-m', '--plot-mode', metavar='MODE', required=True, default='all',
-                        help='mode for plotting. Default \'all\' saves all plots separately.'\
-                        '\'by-sample\' saves one PDF per sample. \'by-run\' saves all plots'\
-                        'for the run together.')
+    parser.add_argument('-m', '--data-types', metavar='MODE', required=True,
+                        help='List of data types corresponding to input files. Options: '\
+                        'raw_counts, norm_counts, degs, len_dist, class_counts')
     parser.add_argument('-s', '--style', metavar='PLOTSTYLE', default='smrna-light',
                         help='plotting style to use. Default: smrna-light.')
     parser.add_argument('-c', '--color', metavar='PLOTCOLOR', 
@@ -39,45 +36,13 @@ def get_args():
 
     return args
 
-def process_input_format(input_file):
-    """
-    Check what kind of table the input file is and return the appropriately
-    processed dataframe for plotting. This is based on the HEADER in the 
-    file which is added during the post-processing steps. 
-
-    Input:
-        input_file: the file name to process
-
-    Output:
-        df: the processed data frame
-        dftype: the type of data
-    """
-    
-    with open(input_file) as f:
-        dftype = f.readline()
-    
-    if dftype == '_5p_len_dist':
-        df = pd.read_csv(input_file, index_col=0)
-        total_reads = df.sum().sum()
-        df_prop = df/total_reads
-    elif dftype == '_raw_count_table':
-        pass
-    elif dftype == '_deg_count_table':
-        pass
-    elif dftype == '_raw_class_count_table':
-        pass
-    else:
-        raise ValueError("Input format for %s is incorrect, make sure the header matches an accepted format" % input_file)
-
-    return df, dftype
-
-def size_5p_nt_dist_barplot(size_dist_file, out_name):
+def size_5p_nt_dist_barplot(size_dist_file, prefix):
     """
     Generate the size and 5'nt distribution plot for a sample.
 
     Input:
         size_dist_file = the file containing the 5p nt vs length matrix
-        out_name = file to save output PDF to
+        outprefix = prefix to use for saving the file
 
     Output:
         PDF file containing the plot
@@ -85,7 +50,7 @@ def size_5p_nt_dist_barplot(size_dist_file, out_name):
     # Read the size_dist file
     size_dist = pd.read_csv(size_dist_file, index_col=0)
     total_reads = size_dist.sum().sum()
-    print(total_reads)
+
     size_dist_rpm = size_dist/total_reads
 
     # Create the plot
@@ -98,13 +63,11 @@ def size_5p_nt_dist_barplot(size_dist_file, out_name):
     plt.xticks(rotation=0)
     plt.ylabel('Proportion of Reads')
     plt.xlabel('Length of Sequence')
-    # Other modifications
-    
 
     # Save the plot
     plt.savefig(out_name, bbox_inches='tight')
 
-def norm_counts_scatter(x_sample, y_sample, out_name):
+def counts_scatter_plot(infile, outprefix):
     """
     Generates scatter plot of normalized small RNA counts.
     
@@ -116,6 +79,7 @@ def norm_counts_scatter(x_sample, y_sample, out_name):
     Outputs:
         PDF file containing the plot
     """
+    # TODO: create all possible combinations of scatter plots based on columns
     x_data = pd.read_csv(x_sample, index_col=0, sep='\t', usecols=[1,2], names=['sample_1_feats', 'sample_1_counts'])
     y_data = pd.read_csv(y_sample, index_col=0, sep='\t', usecols=[1,2], names=['sample_2_feats', 'sample_2_counts'])
     
@@ -129,12 +93,12 @@ def norm_counts_scatter(x_sample, y_sample, out_name):
 
     plt.savefig(out_name, bbox_inches='tight')
 
-def class_plotter(class_file, out_name):
+def class_plots(class_file, out_name):
     """
     Generates pie and bar charts for each library according to counts
     that correspond to different classes.
     """
-
+    # TODO: Create all class plots based on columns (looped)
     class_counts = pd.read_csv(class_file, index_col=0, usecols=[1,2], header=0, names=['class', 'counts']).drop('_no_class')
     class_counts = class_counts/(class_counts.sum())
     print(class_counts)
@@ -163,22 +127,25 @@ def main():
     args = get_args()
 
     # Define basic plot parameters
-    plt.style.use(args.style)
+    try:
+        plt.style.use(args.style)
+    except:
+        print("%s theme not installed. Using seaborn-poster instead." % args.style)
+        plt.style.use('seaborn-poster')
 
-    #for infile in args.input_files:
-    #    df, dftype = process_input_format(infile)
-        
-    #    if args.mode == 'all':
-    #        single_plot(dftype, df, args.out_prefix)
-            
-    if args.plot_mode == '5plen':
-        size_5p_nt_dist_barplot(args.input_file, args.out_file)
-    elif args.plot_mode == 'rep_scatter':
-        norm_counts_scatter(args.input_file, args.second_file, args.out_file)
-    elif args.plot_mode == 'class_plots':
-        class_plotter(args.input_file, args.out_file)
-    elif args.plot_mode == 'pca':
-        pca_plots()
+    # Create all plots by reading in a list of files & types
+    for infile, dtype in zip(args.input_files, args.data_types):
+        if dtype == 'raw_counts':
+            counts_scatter_plot(infile, args.out_prefix + '_raw_count_scatter')
+        elif dtype == 'norm_counts':
+            counts_scatter(infile, args.out_prefix + '_norm_count_scatter')
+        elif dtype == 'degs':
+            continue
+        elif dtype == 'len_dist':
+            size_5p_nt_dist_barplot(infile, args.out_prefix + '_len_dist')
+        elif dtype == 'class_counts':
+            class_plots(infile, args.out_prefix + '_class_plots')
+
 
 if __name__ == '__main__':
     main()
