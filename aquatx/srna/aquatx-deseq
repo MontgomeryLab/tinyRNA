@@ -16,8 +16,6 @@ if (length(args) > 4){
         %s
 
         Did you add a space in a list?", args[5:length(args)]))
-} else if (length(args) < 4){
-  stop(sprintf("Not enough arguments given. Only parsed %d arguments.", length(args)))
 } else if (length(args) == 0){
   stop("No arguments given. The following arguments are accepted:
        
@@ -31,6 +29,8 @@ if (length(args) > 4){
                   2. Differential gene expression table per comparison
 
        ")
+} else if (length(args) < 4){
+  stop(sprintf("Not enough arguments given. Only parsed %d arguments.", length(args)))
 }
 
 # Grab all the arg information
