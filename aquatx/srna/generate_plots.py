@@ -19,12 +19,12 @@ def get_args():
     Requires the user provide the output of counter.py.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input-files', metavar='DATAFILE', required=True,
+    parser.add_argument('-i', '--input-files', metavar='DATAFILE', required=True, nargs='+',
                         help='input files with data from final merged tables')
     parser.add_argument('-o', '--out-prefix', metavar='OUTFILE', required=True,
                         help='prefix to use for output PDF files. If mode=all/by-sample, sample.'\
                         'names will also be appended to the prefix.')
-    parser.add_argument('-m', '--data-types', metavar='MODE', required=True,
+    parser.add_argument('-m', '--data-types', metavar='MODE', required=True, nargs='+',
                         help='List of data types corresponding to input files. Options: '\
                         'raw_counts, norm_counts, degs, len_dist, class_counts')
     parser.add_argument('-s', '--style', metavar='PLOTSTYLE', default='smrna-light',
