@@ -51,6 +51,24 @@ def size_dist_plot(size_file, pdf_name, **kwargs):
     # Save the plot
     ax.savefig(out_name, bbox_inches='tight')
 
+def class_plots(class_file, pdf_name, **kwargs):
+    """Create a PDF of the proportion of counts assigned to
+    a feature in a particular class as a pie and bar chart.
+
+    Args:
+        class_counts: Path to the file containing a table of class counts
+        pdf_name: String to use as a prefix for saving the output
+        kwargs: Keyword arguments to pass to matplotlib rc or plot 
+
+    Returns:
+        None: Saves a PDF file containing the plot
+    """
+    class_counts = pd.read_csv(class_file, index_col=0).drop('_no_class')
+    fig, ax = aqplt.class_pie_barh(class_counts, pdf_name, **kwargs)
+    
+    # Save the plot
+    fig.savefig(pdf_name, bbox_inches='tight')
+
 def main():
     """ 
     Main routine

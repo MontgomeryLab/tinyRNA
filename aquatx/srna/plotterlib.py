@@ -159,11 +159,53 @@ def class_barh(class_df, **kwargs):
     class_prop = class_df/(class_df.sum())
 
     # Create the plot
-    cbar = class_prop.barh(color=plt.rcParams['axes.prop_cycle'].by_key()['color'])
+    colors = kwargs.get('colors', plt.rcParams['axes.prop_cycle'].by_key()['color'])
+    cbar = class_prop.plot(kind='barh', color=colors)
     cbar.set_xlabel('Proportion of reads')
     cbar.set_xlim(0,1)
     
     return cbar
+
+def class_pie_barh(class_df, outname, **kwargs):
+    """Creates both a pie & bar chart in the same figure
+
+    Args:
+        class_df: A pandas dataframe containing counts per class
+
+    Returns:
+        cplots: A pie chart & horizontal bar chart of sRNA classes
+    """
+    # Set the plot style
+    kwargs = set_aquatx_style(**kwargs, figure={'figsize':(8,4)})
+
+    # Convert reads to proportion
+    class_prop = class_df/(class_df.sum())
+    
+    # Create the plots
+    fig, ax = plt.subplots(nrows=1, ncols=2)
+    
+    # pie
+    class_prop.plot(kind='pie', subplots=True, ax=ax[0], labels=None, **kwargs)
+    ax[0].set_aspect("equal")
+    ax[0].legend(loc='best', bbox_to_anchor= (1,0.5), fontsize=10, labels=class_prop.index)
+    ax[0].set_ylabel('')
+    ax[0].set_xlabel('')
+    
+    # bar
+    colors = kwargs.get('colors', plt.rcParams['axes.prop_cycle'].by_key()['color'])
+    class_prop.plot(kind='barh', subplots=True, ax=ax[1], color=colors)
+    ax[1].legend().set_visible(False)
+    ax[1].set_title('')
+    ax[1].set_xlabel('Proportion of reads')
+    ax[1].set_ylabel('')
+    ax[1].set_xlim(0,1)
+    
+    # finalize & save figure
+    fig.suptitle("Proportion of classes of small RNAs", fontsize=22)
+    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+    fig.subplots_adjust(top=0.85)
+    
+    return fig, ax
 
 def scatter_range(df):
     """ Find an appropriate range for x,y limits of a scatter plot.
@@ -175,8 +217,6 @@ def scatter_range(df):
         lim_min: The minimum value to set axis limits
         lim_max: The maximum value to set axis limits
     """
-
-
     if np.min(np.min(df)) == -np.inf:
         df_min = 0
     else:
