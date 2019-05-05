@@ -1,22 +1,20 @@
-""" Plotting functions for small RNA data. 
+""" Plotting script for the sRNA AQuATx workflow.
 
-This script produces basic static plots for publications. It uses a default style
-called smrna-light, which is a style sheet we defined for this tool. Other styles
-may be used if desired. This is the master script for all plots from the QC step to
-the final DEG plots. Requires the user provide the output of counter.py."""
+This script produces basic static plots for publications as part of the AQuATx
+workflow. It uses a default style and produces multiple PDFs. This script is
+intended to be used immediately following the aquatx-count/counter.py step of
+the workflow. It creates a specific set of plots through the mode argument.
+"""
 
 import argparse
 import numpy as np
 import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import warnings; warnings.filterwarnings(action='once')
 import aquatx.srna.plotterlib as aqplt
 
 def get_args():
-    """
-    Get input arguments from the user/command line.
-    """
+    """Get input arguments from the user/command line."""
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--input-files', metavar='DATAFILE', required=True, nargs='+',
@@ -27,11 +25,6 @@ def get_args():
     parser.add_argument('-m', '--data-types', metavar='MODE', required=True, nargs='+',
                         help='List of data types corresponding to input files. Options: '\
                         'raw_counts, norm_counts, degs, len_dist, class_counts')
-    parser.add_argument('-s', '--style', metavar='PLOTSTYLE', default='smrna-light',
-                        help='plotting style to use. Default: smrna-light.')
-    parser.add_argument('-c', '--color', metavar='PLOTCOLOR', 
-                        help='color palette to use for data instead of default')
-
     args = parser.parse_args()
 
     return args
