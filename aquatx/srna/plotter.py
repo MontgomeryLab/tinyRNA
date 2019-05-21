@@ -73,7 +73,7 @@ def class_plots(class_file, pdf_name, **kwargs):
         pdf_name: String to use as a prefix for saving the output
         kwargs: Keyword arguments to pass to matplotlib rc or plot 
     """
-    class_counts = pd.read_csv(class_file, index_col=0).drop('_no_class')
+    class_counts = pd.read_csv(class_file, index_col=0, header=None).drop('_no_class')
     fig, ax = aqplt.class_pie_barh(class_counts, pdf_name, **kwargs)
     
     # Save the plot
