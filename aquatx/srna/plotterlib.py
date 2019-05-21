@@ -5,6 +5,7 @@ with the AQuATx pipeline. The plots are built off of matplotlib, but updated to
 use the plot style of this tool. Other color schemes and built-in matplotlib styles
 can be used. 
 """
+import itertools
 import numpy as np
 import pandas as pd
 import matplotlib as mpl
@@ -279,3 +280,36 @@ def scatter_simple(count_x, count_y, log_norm=False, **kwargs):
         sscat.set_ylim(sscat_lims)
         
     return sscat
+
+def scatter_grouped(count_x, count_y, *args, log_norm=False, **kwargs):
+    """Creates a scatter plot with different groups highlighted.
+
+    Args:
+        count_x: A pandas dataframe/series of counts per feature (X axis)
+        count_y: A pandas dataframe/series of counts per feature (Y axis)
+        args: A list of features to highlight, can pass multiple lists
+        log_norm: whether or not the data should be log-normalized
+        kwargs: Additional arguments to pass to matplotlib rc or plot
+    
+    Returns:
+        gscat: A scatter plot containing groups highlighted different colors
+    """
+    kwargs = set_aquatx_style(figure={'figsize': (8,8)}, **kwargs)
+
+    # Subset the base points to avoid overplotting
+    count_x_base = count_x.drop(list(itertools.chain(*args)))
+    count_y_base = count_y.drop(list(itertools.chain(*args)))
+
+    # Create a base plot using counts not in *args
+    colors = iter(kwargs.get('colors', plt.rcParams['axes.prop_cycle'].by_key()['color']))
+    gscat = scatter_simple(count_x_base, count_y_base, log_norm=log_norm, color='#888888', marker='s', alpha=0.3, s=50, edgecolors='none', **kwargs)
+
+    if log_norm:
+        count_x = count_x.apply(np.log2).replace(-np.inf, 0)
+        count_y = count_y.apply(np.log2).replace(-np.inf, 0)
+
+    # Add points for each *args 
+    for group in args:
+        gscat.scatter(count_x.loc[group], count_y.loc[group], color=next(colors), marker='s', alpha=0.9, s=50, edgecolors='none', **kwargs)
+
+    return gscat
