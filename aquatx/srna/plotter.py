@@ -22,24 +22,37 @@ def get_args():
     parser.add_argument('-o', '--out-prefix', metavar='OUTFILE', required=True,
                         help='prefix to use for output PDF files. If mode=all/by-sample, sample.'\
                         'names will also be appended to the prefix.')
-    parser.add_argument('-m', '--data-types', metavar='MODE', required=True, nargs='+',
+    parser.add_argument('-d', '--data-types', metavar='DATATYPE', required=True, nargs='+',
                         help='List of data types corresponding to input files. Options: '\
-                        'raw_counts, norm_counts, degs, len_dist, class_counts')
+                        '\nraw_counts: the raw counts per feature data,'\
+                        '\nnorm_counts: the normalized counts per feature data,'\
+                        '\ndegs: the table of differential gene expression analysis including p-values,'\
+                        '\nlen_dist: the size and 5p nucleotide count matrix,'\ 
+                        '\nclass_counts: the table of raw counts per class')
+    parser.add_argument('-p', '--plots', metavar='PLOTS', required=True, nargs='+',
+                        help='List of plots to create. Options: '\
+                        '\nlen_dist: A stacked barplot showing size & 5p-nt distribution,'\
+                        '\nclass_charts: A pie and barchart showing proportions of counts per class,'\
+                        '\nreplicate_scatter: A scatter plot comparing replicates for all count files given,'\
+                        '\nsample_avg_scatter: A scatter plot comparing all sample groups,'\
+                        'averaged by replicate. Uses the normalized counts for averaging.'\
+                        '\nsample_avg_scatter_by_class: A scatter plot comparing all sample groups,'\
+                        'with different classes highlighted.'\
+                        '\nsample_avg_scatter_by_deg: A scatter plot comparing all sample groups,'\
+                        'with significantly different (padj<0.05) genes highlighted.'\
+                        '\nsample_avg_scatter_by_both: A scatter plot comparing all sample groups,'\
+                        'with classes and significantly different genes highlighted')
     args = parser.parse_args()
 
     return args
 
 def size_dist_plot(size_file, pdf_name, **kwargs):
-    """
-    Create a PDF of size and 5'nt distribution plot for a sample.
+    """Create a PDF of size and 5'nt distribution plot for a sample.
 
     Args:
         size_file: Path to file containing size + 5p-nt counts
         pdf name: String to use as prefix for saving the output
         kwargs: Keyword arguments to pass to matplotlib rc or plot 
-
-    Returns:
-        None: Saves a PDF file containing the plot
     """
     # Read the size_dist file
     size_dist = pd.read_csv(size_file, index_col=0)
@@ -59,9 +72,6 @@ def class_plots(class_file, pdf_name, **kwargs):
         class_counts: Path to the file containing a table of class counts
         pdf_name: String to use as a prefix for saving the output
         kwargs: Keyword arguments to pass to matplotlib rc or plot 
-
-    Returns:
-        None: Saves a PDF file containing the plot
     """
     class_counts = pd.read_csv(class_file, index_col=0).drop('_no_class')
     fig, ax = aqplt.class_pie_barh(class_counts, pdf_name, **kwargs)
@@ -75,18 +85,8 @@ def main():
     """
     args = get_args()
 
-    # Create all plots by reading in a list of files & types
-    for infile, dtype in zip(args.input_files, args.data_types):
-        if dtype == 'raw_counts':
-            continue
-        elif dtype == 'norm_counts':
-            continue
-        elif dtype == 'degs':
-            continue
-        elif dtype == 'len_dist':
-            size_5p_nt_dist_barplot(infile, args.out_prefix + '_len_dist')
-        elif dtype == 'class_counts':
-            continue
+    # Sort files & types
+    data_dict = dict(zip(args.input_files, args.data_types))
 
 if __name__ == '__main__':
     main()
