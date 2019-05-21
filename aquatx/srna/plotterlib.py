@@ -234,23 +234,48 @@ def scatter_range(df):
 
     return lim_min, lim_max
 
-def scatter_simple(count_df, **kwargs):
+def scatter_simple(count_x, count_y, log_norm=False, **kwargs):
     """Creates a simple scatter plot of counts.
 
     Args:
-        count_df: A pandas dataframe containing the counts per feature
-
+        count_x: A pandas dataframe/series of counts per feature (X axis)
+        count_y: A pandas dataframe/series of counts per feature (Y axis)
+        log_norm: Apply log2 normalization to the data
+        kwargs: Additional arguments to pass to matplotlib rc or plot
+    
     Returns:
         sscat: A simple scatter plot of counts
     """
     # Set the plot style
-    kwargs = set_aquatx_style(figure={'figsize': (8,8)})
-    
-    # Create the plot
-    sscat = count_df.plot(kind='scatter', **kwargs)
-    sscat.set_xticklabels(sscat.get_xticklabels(), rotation=0)
-    sscat_lims = scatter_range(count_df)
-    sscat.set_xlim(sscat_lims)
-    sscat.set_ylim(sscat_lims)
+    kwargs = set_aquatx_style(figure={'figsize': (8,8)}, **kwargs)
 
+    fig, sscat = plt.subplots()
+
+    # log2 normalize data if requested
+    if log_norm:
+        count_x = count_x.apply(np.log2)
+        count_y = count_y.apply(np.log2)
+        sscat_lims = scatter_range(pd.concat([count_x, count_y]))
+        sscat.set_xlim(sscat_lims)
+        sscat.set_ylim(sscat_lims)
+        sscat.scatter(count_x, count_y, **kwargs)
+        
+        oldticks = sscat.get_xticks()
+        newticks = np.empty([len(oldticks)-1, 8])
+        print(oldticks)
+        for i in range(1,len(oldticks)-1):
+            newticks[i,:] = np.arange(2**oldticks[i-1], 2**oldticks[i], (2**oldticks[i] - 2**oldticks[i-1])/8)
+        print(newticks)
+        newticks = np.sort(newticks[2:,:].flatten())
+        sscat.set_xticks(np.log2(newticks), minor=True)
+        sscat.set_xticklabels(np.round(2**oldticks))
+        sscat.set_yticks(np.log2(newticks), minor=True)
+        sscat.set_yticklabels(np.round(2**oldticks))
+    
+    else:
+        sscat.scatter(count_x, count_y, **kwargs)
+        sscat_lims = scatter_range(pd.concat([count_x, count_y]))
+        sscat.set_xlim(sscat_lims)
+        sscat.set_ylim(sscat_lims)
+        
     return sscat
