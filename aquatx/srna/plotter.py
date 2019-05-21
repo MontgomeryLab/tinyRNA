@@ -12,6 +12,7 @@ import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import aquatx.srna.plotterlib as aqplt
+import itertools
 
 def get_args():
     """Get input arguments from the user/command line."""
@@ -46,6 +47,11 @@ def get_args():
 
     return args
 
+def get_pairs(samples):
+    """Returns all pairs of comparisons from a list of samples to compare."""
+
+    return itertools.product(samples, 2)
+
 def size_dist_plot(size_file, pdf_name, **kwargs):
     """Create a PDF of size and 5'nt distribution plot for a sample.
 
@@ -78,6 +84,44 @@ def class_plots(class_file, pdf_name, **kwargs):
     
     # Save the plot
     fig.savefig(pdf_name, bbox_inches='tight')
+
+def get_replicates(df):
+    """Determine which replicates to compare in a dataframe based on sample_replicate_N format.
+    
+    Args:
+        df: The dataframe with columns using sample_replicate_N format and features for rows
+
+    Returns:
+        sample_dict: A dictionary containing all column names corresponding to unique samples.
+    """
+    
+    sample_dict = dict()
+
+    for col in df.columns:
+        sample = col.split("_replicate_")[0]
+        sample_dict.setdefault(sample, []).append(col)
+
+    return sample_dict
+
+def get_sample_averages(df):
+    """Average the counts per sample across replicates.
+    
+    Args:
+        df: The dataframe with columns using sample_replicate_N format and features for rows
+            to be averaged.
+    
+    Returns:
+        new_df: The new dataframe with averaged counts per unique sample.
+    """
+
+    samples = get_replicates(df)
+    
+    new_df = pd.DataFrame(index=df.index, columns=samples.keys())
+
+    for key, val in samples.items():
+        new_df.loc[key] = df[val].mean(axis=1)
+    
+    return new_df
 
 def main():
     """ 
