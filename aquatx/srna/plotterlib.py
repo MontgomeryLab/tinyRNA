@@ -263,10 +263,10 @@ def scatter_simple(count_x, count_y, log_norm=False, **kwargs):
         
         oldticks = sscat.get_xticks()
         newticks = np.empty([len(oldticks)-1, 8])
-        print(oldticks)
+
         for i in range(1,len(oldticks)-1):
             newticks[i,:] = np.arange(2**oldticks[i-1], 2**oldticks[i], (2**oldticks[i] - 2**oldticks[i-1])/8)
-        print(newticks)
+
         newticks = np.sort(newticks[2:,:].flatten())
         sscat.set_xticks(np.log2(newticks), minor=True)
         sscat.set_xticklabels(np.round(2**oldticks))
