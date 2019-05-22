@@ -61,7 +61,7 @@ def get_pairs(samples):
         pair: An generator of all possible pairs
     """
     
-    for pair in combinations(samples, 2):
+    for pair in itertools.combinations(samples, 2):
         yield pair
 
 def size_dist_plot(size_file, pdf_name, **kwargs):
