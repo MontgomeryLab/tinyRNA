@@ -132,7 +132,7 @@ def get_sample_averages(df):
     new_df = pd.DataFrame(index=df.index, columns=samples.keys())
 
     for key, val in samples.items():
-        new_df.loc[key] = df[val].mean(axis=1)
+        new_df.loc[:, key] = df[val].mean(axis=1)
     
     return new_df
 
