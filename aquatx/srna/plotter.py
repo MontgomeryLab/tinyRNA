@@ -135,7 +135,7 @@ def get_sample_averages(df):
     
     return new_df
 
-def get_annotations(*args):
+def get_annotations(count_df, *args):
     """Get feature + class information from reference annotation files
 
     Args:
@@ -317,12 +317,6 @@ def main():
     for infile, dtype in zip(args.input_files, args.data_types):
         data_dict.setdefault(dtype, []).append(infile)
     
-    # get class information if given
-    try:
-        classes = get_annotations(args.references)
-    except:
-        classes = None
-
     # Create count dataframes if given
     try: 
         raw_count_df = pd.read_csv(data_dict['raw_counts'][0], index_col=0)
@@ -332,6 +326,15 @@ def main():
     try:
         norm_count_df = pd.read_csv(data_dict['norm_counts'][0], index_col=0)
         norm_count_avg_df = get_sample_averages(norm_count_df)
+    
+        # get class information if given
+        try:
+            classes = get_annotations(norm_count_df, args.references)
+        except NameError:
+            classes = None
+            if bool(set('sample_avg_scatter_by_class', 'sample_avg_scatter_by_both') & set(args.plots)):
+                raise Exception('No reference annotation file given, but class highlighting on scatter'\
+                                'plots requested. Please check -r/--references was given.')
 
     except KeyError:
         norm_count_df = None
