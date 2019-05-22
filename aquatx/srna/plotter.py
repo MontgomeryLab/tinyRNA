@@ -156,6 +156,29 @@ def get_annotations(*args):
 
     return classes
 
+def scatter_replicates(count_df, output_prefix, norm=False):
+    """Creates PDFs of all pairwise comparison scatter plots from a count table.
+    
+    Args:
+        count_df: A dataframe of counts per features
+        output_prefix: The prefix to use for saving the files
+        norm: Boolean indicating if data was normalized
+    """
+
+    samples = get_replicates(count_df)
+
+    for samp, reps in samples.items():
+        for pair in get_pairs(reps):
+            rscat = aqplt.scatter_simple(count_df.loc[:,pair[0]], count_df.loc[:,pair[1]], 
+                                        color='#888888', marker='s', alpha=0.5, s=50, 
+                                        edgecolors='none', log_norm=True)
+            rscat.set_title(samp)
+            rscat.set_xlabel('Replicate ' + pair[0].split('_replicate_')[1])
+            rscat.set_ylabel('Replicate ' + pair[1].split('_replicate_')[1])
+            pdf_name = '_'.join([output_prefix, samp, 'replicates', pair[0].split('_replicate_')[1],
+                                pair[1].split('_replicate_')[1], 'scatter.pdf'])
+            rscat.figure.savefig(pdf_name, bbox_inches='tight')
+
 def main():
     """ 
     Main routine
