@@ -7,12 +7,12 @@ the workflow. It creates a specific set of plots through the mode argument.
 """
 
 import argparse
+import itertools
 import numpy as np
 import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import aquatx.srna.plotterlib as aqplt
-import itertools
 from HTSeq import GFF_Reader
 
 def get_args():
@@ -52,9 +52,17 @@ def get_args():
     return args
 
 def get_pairs(samples):
-    """Returns all pairs of comparisons from a list of samples to compare."""
-
-    return itertools.product(samples, 2)
+    """Get pairs of comparisons from a list of samples to compare.
+    
+    Args:
+        samples: A list of samples to compare
+    
+    Returns:
+        pair: An generator of all possible pairs
+    """
+    
+    for pair in combinations(samples, 2):
+        yield pair
 
 def size_dist_plot(size_file, pdf_name, **kwargs):
     """Create a PDF of size and 5'nt distribution plot for a sample.
