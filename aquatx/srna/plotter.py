@@ -13,6 +13,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import aquatx.srna.plotterlib as aqplt
 import itertools
+from HTSeq import GFF_Reader
 
 def get_args():
     """Get input arguments from the user/command line."""
