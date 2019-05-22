@@ -225,24 +225,27 @@ def scatter_samples(count_df, output_prefix, classes=None, degs=None, ambig=Fals
         if not ambig:
             uniq_classes.remove('ambiguous')
         
-        grp_args = []
-        for cls in uniq_classes:
-            grp_args += list(classes.loc[classes['class'] == cls].index)
-    
         for pair in samples:
+            grp_args = []
             try:
                 samp_comp = '%s_vs_%s' % (pair[0], pair[1])
-                grp_args.append(list(degs.loc[degs[samp_comp] < pval].index))
+                deg_list = list(degs.loc[degs[samp_comp] < pval].index)
             except KeyError:
                 try: 
                     samp_comp = '%s_vs_%s' % (pair[1], pair[0])
-                    grp_args.append(list(degs.loc[degs[samp_comp] < pval].index))
+                    deg_list = list(degs.loc[degs[samp_comp] < pval].index)
                 except KeyError as ke:
                     print('Sample names in count data frame do not match sample comparisons')
                     print('in DEG table. Make sure formatting is correct in your tables for')
                     print('AQuATx. Error occurred with %s, %s in count table.' % (pair[0], pair[1]))
                     raise ke
-            labels = uniq_classes + ['p < %d' % pval]
+            
+            class_degs = classes.loc[deg_list, :]
+
+            for cls in uniq_classes:
+                grp_args.append(list(class_degs.loc[class_degs['class'] == cls].index))
+
+            labels = ['p > %6.2f' % pval] + uniq_classes
             sscat = aqplt.scatter_grouped(count_df.loc[:,pair[0]], count_df.loc[:,pair[1]],
                                           *grp_args, log_norm=True, labels=labels) 
             sscat.set_title('%s vs %s' % (pair[0], pair[1]))
@@ -252,7 +255,7 @@ def scatter_samples(count_df, output_prefix, classes=None, degs=None, ambig=Fals
             sscat.figure.savefig(pdf_name, bbox_inches='tight')
 
     elif classes is not None:
-        uniq_classes = pd.unique(classes.loc['class'].dropna())
+        uniq_classes = list(pd.unique(classes.loc[:, 'class'].dropna()))
         
         if not ambig:
             uniq_classes.remove('ambiguous')
