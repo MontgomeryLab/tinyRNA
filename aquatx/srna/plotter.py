@@ -197,7 +197,7 @@ def get_degs(*args):
         samples[degfile] = os.path.basename(degfile).split('.')[:-1][0].split('_cond1_')[1].split('_deseq_')[0].replace('_cond2_','_vs_')
 
         if count == 0:
-            de_table = pd.DataFrame(index=degs.index, columns=degfiles)
+            de_table = pd.DataFrame(index=degs.index, columns=args)
         
         de_table.loc[:, degfile] = degs.loc[:, 'padj']
         count += 1
