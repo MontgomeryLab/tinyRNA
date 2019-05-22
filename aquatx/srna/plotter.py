@@ -248,7 +248,7 @@ def scatter_samples(count_df, output_prefix, classes=None, degs=None, ambig=Fals
             sscat.set_title('%s vs %s' % (pair[0], pair[1]))
             sscat.set_xlabel(pair[0])
             sscat.set_ylabel(pair[1])
-            pdf_name = '_'.join([output_prefix, pair[0], 'vs', pair[1], 'scatter.pdf'])
+            pdf_name = '_'.join([output_prefix, pair[0], 'vs', pair[1], 'scatter_by_deg_class.pdf'])
             sscat.figure.savefig(pdf_name, bbox_inches='tight')
 
     elif classes is not None:
@@ -267,7 +267,7 @@ def scatter_samples(count_df, output_prefix, classes=None, degs=None, ambig=Fals
             sscat.set_title('%s vs %s' % (pair[0], pair[1]))
             sscat.set_xlabel(pair[0])
             sscat.set_ylabel(pair[1])
-            pdf_name = '_'.join([output_prefix, pair[0], 'vs', pair[1], 'scatter.pdf'])
+            pdf_name = '_'.join([output_prefix, pair[0], 'vs', pair[1], 'scatter_by_class.pdf'])
             sscat.figure.savefig(pdf_name, bbox_inches='tight')
     
     elif degs is not None:
@@ -292,7 +292,7 @@ def scatter_samples(count_df, output_prefix, classes=None, degs=None, ambig=Fals
             sscat.set_title('%s vs %s' % (pair[0], pair[1]))
             sscat.set_xlabel(pair[0])
             sscat.set_ylabel(pair[1])
-            pdf_name = '_'.join([output_prefix, pair[0], 'vs', pair[1], 'scatter.pdf'])
+            pdf_name = '_'.join([output_prefix, pair[0], 'vs', pair[1], 'scatter_by_deg.pdf'])
             sscat.figure.savefig(pdf_name, bbox_inches='tight')
     
     else:
