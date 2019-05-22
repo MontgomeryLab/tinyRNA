@@ -7,6 +7,7 @@ the workflow. It creates a specific set of plots through the mode argument.
 """
 
 import argparse
+import os.path
 import itertools
 import numpy as np
 import pandas as pd
@@ -178,6 +179,33 @@ def scatter_replicates(count_df, output_prefix, norm=False):
             pdf_name = '_'.join([output_prefix, samp, 'replicates', pair[0].split('_replicate_')[1],
                                 pair[1].split('_replicate_')[1], 'scatter.pdf'])
             rscat.figure.savefig(pdf_name, bbox_inches='tight')
+
+def get_degs(*args):
+    """Create a new dataframe containing all features and pvalues for each comparison
+    from a set of DEG tables. 
+
+    Args:
+        args: Files (DEG tables) to process
+
+    Returns:
+        de_table: A single table of p-values per feature/comparison
+    """
+    count = 0
+    samples = {}
+    
+    for degfile in args:
+        degs = pd.read_csv(degfile, index_col=0)
+        samples[degfile] = os.path.basename(degfile).split('.')[:-1][0].split('_cond1_')[1].split('_deseq_')[0].replace('_cond2_','_vs_')
+
+        if count == 0:
+            de_table = pd.DataFrame(index=degs.index, columns=degfiles)
+        
+        de_table.loc[:, degfile] = degs.loc[:, 'padj']
+        count += 1
+        
+    de_table.rename(samples, axis=1, inplace=True)
+    
+    return de_table
 
 def main():
     """ 

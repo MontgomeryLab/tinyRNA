@@ -78,6 +78,6 @@ for (i in 1:nrow(all_comparisons)){
   comparison <- all_comparisons[i,] 
   deseq_res <- results(deseq_run, c("condition", comparison[1], comparison[2]))
   deseq_res <- deseq_res[order(deseq_res$padj),]
-  write.csv(deseq_res, paste(out_pref, comparison[1], comparison[2], "deseq_table.csv", sep="_"))
+  write.csv(deseq_res, paste(out_pref, "cond1", comparison[1], "cond2", comparison[2], "deseq_table.csv", sep="_"))
 }
 
