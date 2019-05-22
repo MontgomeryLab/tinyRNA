@@ -219,8 +219,8 @@ def scatter_samples(count_df, output_prefix, classes=None, degs=None, ambig=Fals
     """
     samples = get_pairs(list(count_df.columns))
 
-    if None not in [classes, degs]:
-        uniq_classes = pd.unique(classes.loc['class'].dropna())
+    if (classes is not None) and (degs is not None):
+        uniq_classes = list(pd.unique(classes.loc[:,'class'].dropna()))
         
         if not ambig:
             uniq_classes.remove('ambiguous')
@@ -391,13 +391,13 @@ def main():
             if norm_count_df is not None:
                 scatter_samples(norm_count_avg_df, args.out_prefix)
         elif plot is 'sample_avg_scatter_by_class':
-            if None not in [norm_count_df, classes]:
+            if (norm_count_df is not None) and (classes is not None):
                 scatter_samples(norm_count_avg_df, args.out_prefix, classes=classes)
         elif plot is 'sample_avg_scatter_by_deg':
-            if None not in [norm_count_df, de_table]:
+            if (norm_count_df is not None) and (de_table is not None):
                 scatter_samples(norm_count_avg_df, args.out_prefix, degs=de_table)
         elif plot is 'sample_avg_scatter_by_both':
-            if None not in [norm_count_df, de_table, classes]:
+            if (norm_count_df is not None) and (de_table is not None) and  (classes is not None):
                 scatter_samples(norm_count_avg_df, args.out_prefix, classes=classes, degs=de_table)
         else:
             print('Plot type %s not recognized, please check the -p/--plot arguments' % plot)
