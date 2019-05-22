@@ -207,6 +207,106 @@ def get_degs(*args):
     
     return de_table
 
+def scatter_samples(count_df, output_prefix, classes=None, degs=None, ambig=False, pval=0.05):
+    """Creates PDFs of all pairwise comparison scatter plots from a count table.
+    Can highlight classes and/or differentially expressed genes as different colors.
+
+    Args:
+        count_df: A dataframe of counts per feature
+        output_prefix: A string to use as a prefix for saving files
+        classes: A dataframe containing class per feature
+        degs: A dataframe of differential gene table output to highlight
+        ambig: Boolean indicating if ambiguous classes should be highlighted
+    """
+    samples = get_pairs(list(count_df.columns))
+
+    if None not in [classes, degs]:
+        uniq_classes = pd.unique(classes.loc['class'].dropna())
+        
+        if not ambig:
+            uniq_classes.remove('ambiguous')
+        
+        grp_args = []
+        for cls in uniq_classes:
+            grp_args += list(classes.loc[classes['class'] == cls].index)
+    
+        for pair in samples:
+            try:
+                samp_comp = '%s_vs_%s' % (pair[0], pair[1])
+                grp_args.append(list(degs.loc[degs[samp_comp] < pval].index))
+            except KeyError:
+                try: 
+                    samp_comp = '%s_vs_%s' % (pair[1], pair[0])
+                    grp_args.append(list(degs.loc[degs[samp_comp] < pval].index))
+                except KeyError as ke:
+                    print('Sample names in count data frame do not match sample comparisons')
+                    print('in DEG table. Make sure formatting is correct in your tables for')
+                    print('AQuATx. Error occurred with %s, %s in count table.' % (pair[0], pair[1]))
+                    raise ke
+            labels = uniq_classes + ['p < %d' % pval]
+            sscat = aqplt.scatter_grouped(count_df.loc[:,pair[0]], count_df.loc[:,pair[1]],
+                                          *grp_args, log_norm=True, labels=labels) 
+            sscat.set_title('%s vs %s' % (pair[0], pair[1]))
+            sscat.set_xlabel(pair[0])
+            sscat.set_ylabel(pair[1])
+            pdf_name = '_'.join([output_prefix, pair[0], 'vs', pair[1], 'scatter.pdf'])
+            sscat.figure.savefig(pdf_name, bbox_inches='tight')
+
+    elif classes is not None:
+        uniq_classes = pd.unique(classes.loc['class'].dropna())
+        
+        if not ambig:
+            uniq_classes.remove('ambiguous')
+        
+        grp_args = []
+        for cls in uniq_classes:
+            grp_args.append(list(classes.loc[classes['class'] == cls].index))
+    
+        for pair in samples:
+            sscat = aqplt.scatter_grouped(count_df.loc[:,pair[0]], count_df.loc[:,pair[1]],
+                                          *grp_args, log_norm=True, labels=uniq_classes) 
+            sscat.set_title('%s vs %s' % (pair[0], pair[1]))
+            sscat.set_xlabel(pair[0])
+            sscat.set_ylabel(pair[1])
+            pdf_name = '_'.join([output_prefix, pair[0], 'vs', pair[1], 'scatter.pdf'])
+            sscat.figure.savefig(pdf_name, bbox_inches='tight')
+    
+    elif degs is not None:
+        
+        for pair in samples:    
+            grp_args = []
+            try:
+                samp_comp = '%s_vs_%s' % (pair[0], pair[1])
+                grp_args.append(list(degs.loc[degs[samp_comp] < pval].index))
+            except KeyError:
+                try: 
+                    samp_comp = '%s_vs_%s' % (pair[1], pair[0])
+                    grp_args.append(list(degs.loc[degs[samp_comp] < pval].index))
+                except KeyError as ke:
+                    print('Sample names in count data frame do not match sample comparisons')
+                    print('in DEG table. Make sure formatting is correct in your tables for')
+                    print('AQuATx. Error occurred with %s, %s in count table.' % (pair[0], pair[1]))
+                    raise ke
+            labels = ['p < %d' % pval]
+            sscat = aqplt.scatter_grouped(count_df.loc[:,pair[0]], count_df.loc[:,pair[1]],
+                                          *grp_args, log_norm=True, labels=labels) 
+            sscat.set_title('%s vs %s' % (pair[0], pair[1]))
+            sscat.set_xlabel(pair[0])
+            sscat.set_ylabel(pair[1])
+            pdf_name = '_'.join([output_prefix, pair[0], 'vs', pair[1], 'scatter.pdf'])
+            sscat.figure.savefig(pdf_name, bbox_inches='tight')
+    
+    else:
+        for pair in samples:
+            sscat = aqplt.scatter_simple(count_df.loc[:,pair[0]], count_df.loc[:,pair[1]], 
+                                        color='#888888', marker='s', alpha=0.5, s=50, 
+                                        edgecolors='none', log_norm=True)
+            sscat.set_title('%s vs %s' % (pair[0], pair[1]))
+            sscat.set_xlabel(pair[0])
+            sscat.set_ylabel(pair[1])
+            pdf_name = '_'.join([output_prefix, pair[0], 'vs', pair[1], 'scatter.pdf'])
+            sscat.figure.savefig(pdf_name, bbox_inches='tight')
+
 def main():
     """ 
     Main routine
