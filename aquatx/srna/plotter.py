@@ -30,6 +30,9 @@ def get_args():
                         '\ndegs: the table of differential gene expression analysis including p-values,'\
                         '\nlen_dist: the size and 5p nucleotide count matrix,'\ 
                         '\nclass_counts: the table of raw counts per class')
+    parser.add_argument('-r', '--references', metavar='GFF3_FILES', nargs='+',
+                        help='The reference annotation files containing class information to'\
+                        'highlight on plots.')
     parser.add_argument('-p', '--plots', metavar='PLOTS', required=True, nargs='+',
                         help='List of plots to create. Options: '\
                         '\nlen_dist: A stacked barplot showing size & 5p-nt distribution,'\
@@ -122,6 +125,27 @@ def get_sample_averages(df):
         new_df.loc[key] = df[val].mean(axis=1)
     
     return new_df
+
+def get_annotations(*args):
+    """Get feature + class information from reference annotation files
+
+    Args:
+        args: A list of all files to process
+
+    Returns:
+        classes: A dataframe containing features in index + class information.
+    """
+    classes = pd.DataFrame(index=count_df.index, columns=['class'])
+
+    for afile in args:
+        feat_gff = GFF_Reader(afile)
+        for feat in feat_gff:
+            if pd.isnull(classes.loc[feat.attr["ID"]]).any():
+                classes.loc[feat.attr["ID"]] = feat.type
+            else:
+                classes.loc[feat.attr["ID"]] = 'ambiguous'
+
+    return classes
 
 def main():
     """ 
