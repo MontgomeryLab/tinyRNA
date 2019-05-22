@@ -308,14 +308,13 @@ def scatter_grouped(count_x, count_y, *args, log_norm=False, labels=None, **kwar
         count_x = count_x.apply(np.log2).replace(-np.inf, 0)
         count_y = count_y.apply(np.log2).replace(-np.inf, 0)
     
-    if labels is not None:
-        label_iter = iter(labels)
-    
+    if labels is None:
+        labels = list(range(len(args)))
+        
     # Add points for each *args 
     for group in args:
-        if labels is not None:
-            gscat.scatter(count_x.loc[group], count_y.loc[group], color=next(colors), marker='s', alpha=0.9, s=50, edgecolors='none', label=next(label_iter), **kwargs)
-        else:
-            gscat.scatter(count_x.loc[group], count_y.loc[group], color=next(colors), marker='s', alpha=0.9, s=50, edgecolors='none', **kwargs)
+        gscat.scatter(count_x.loc[group], count_y.loc[group], color=next(colors), marker='s', alpha=0.9, s=50, edgecolors='none', **kwargs)
     
+    gscat.legend(labels=labels)
+
     return gscat
