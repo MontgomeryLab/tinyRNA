@@ -38,6 +38,7 @@ def process_sample_sheet(sample_file, config_settings):
     sample_low_counts = list()
     sample_json = list()
     sample_html = list()
+    sample_plot_ins = {'files': list(), 'dtypes': list()}
 
     with open(sample_file) as sf:
         csv_reader = csv.DictReader(sf, delimiter=',')
@@ -56,6 +57,24 @@ def process_sample_sheet(sample_file, config_settings):
             sample_low_counts.append(sample_basename + '_low_count_uniq_seqs.fa')
             sample_json.append(sample_basename + '_qc.json')
             sample_html.append(sample_basename + '_qc.html')
+            sample_plot_ins['files'].append(row['Sample/Group Name'] + '_replicate_'
+                                      + row['Replicate number'] + '_out_nt_len_dist.csv')
+            sample_plot_ins['dtypes'].append('len_dist')
+            sample_plot_ins['files'].append(row['Sample/Group Name'] + '_replicate_'
+                                      + row['Replicate number'] + '_out_class_counts.csv')
+            sample_plot_ins['dtypes'].append('class_counts')
+            sample_compare.add(row['Sample/Group Name'])
+
+    if 'replicate_scatter' in config_settings['plots']:
+        sample_plot_ins['files'].append(config_settings['output_prefix'] + '_norm_counts.csv')
+        sample_plot_ins['dtypes'].append('norm_counts')
+        sample_plot_ins['files'].append(config_settings['output_prefix'] + '_raw_counts.csv')
+        sample_plot_ins['dtypes'].append('raw_counts')
+    
+    if bool(set(['sample_avg_scatter_by_deg', 'sample_avg_scatter_by_both']) & set(config_settings['plots'])):
+        sample_plot_ins['files'].append(config_settings['output_prefix'] + 'cond1'
+                                        + 'cond2' + '_deseq_table.csv')
+        sample_plot_ins['dtypes'].append('degs')
 
     if not config_settings['keep_low_counts']:
         config_settings.pop('keep_low_counts')
@@ -71,7 +90,6 @@ def process_sample_sheet(sample_file, config_settings):
     config_settings['out_fq'] = sample_out_fq
     config_settings['in_fq'] = sample_files
     config_settings['out_prefix'] = sample_identifiers
-
 
     return config_settings
 
@@ -133,14 +151,14 @@ def setup_config(time, input_file, config_settings):
     config_settings['run_date'] = time.split('_')[0]
     config_settings['run_time'] = time.split('_')[1]
 
-    config_settings = process_sample_sheet(config_settings['sample_sheet_file'], config_settings)
-
     if config_settings['run_directory'] == '':
         config_settings['run_directory'] = time + config_settings['user'] + '_aquatx'
     if config_settings['run_prefix'] == '':
         config_settings['run_prefix'] = time + config_settings['user'] + '_aquatx'
     if config_settings['output_prefix'] == '':
         config_settings['output_prefix'] = config_settings['run_prefix']
+
+    config_settings = process_sample_sheet(config_settings['sample_sheet_file'], config_settings)
 
     config_settings['output_file_stats'] = config_settings['output_prefix'] + '_run_stats.csv'
     config_settings['output_file_counts'] = config_settings['output_prefix'] + '_raw_counts.csv'
