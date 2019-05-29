@@ -72,7 +72,7 @@ def create_ref_array(ref_file, class_counts, feat_counts, mask_file=None, strand
     # Add mask features so intervals that overlap have > 1 feature and aren't counted
     if mask_file is not None:
         mask_gff = HTSeq.GFF_Reader(mask_file)
-    # Add all masked features that overlap with existing features in array
+        # Add all masked features that overlap with existing features in array
         for mask in mask_gff:
             # mark features as mask to distinguish them later
             # might make sense to to step through feature array & only add if the mask overlaps
@@ -192,7 +192,7 @@ def tally_feature_counts(sam_alignment, ref_array_dict, class_counts, feat_count
     for aln_bundle in HTSeq.bundle_multiple_alignments(sam_alignment):
         # Calculate counts for multimapping
         dup_counts = int(aln_bundle[0].read.name.split('_x')[1])
-        cor_counts = dup_counts/len(aln_bundle)
+        cor_counts = dup_counts / len(aln_bundle)
         stats_counts['_unique_sequences_aligned'] += 1
         stats_counts['_aligned_reads'] += dup_counts
         if len(aln_bundle) > 1:
@@ -219,7 +219,7 @@ def tally_feature_counts(sam_alignment, ref_array_dict, class_counts, feat_count
                 bundle_class["ambiguous"] += cor_counts
             elif len(aln_feats) > 1:
                 for feat in aln_feats:
-                    bundle_feats[feat] += cor_counts/len(aln_feats)
+                    bundle_feats[feat] += cor_counts / len(aln_feats)
             else:
                 if aln_classes.item() == '_no_feature':
                     stats_counts['_no_feature'] += cor_counts
@@ -253,6 +253,7 @@ def tally_feature_counts(sam_alignment, ref_array_dict, class_counts, feat_count
         out.write('Summary Statistics\n')
         for key, value in stats_counts.items():
             out.write('\t'.join([key, str(value) + '\n']))
+        out.write('\t'.join(['_no_feature', feat_counts['_no_feature'] + '\n']))
 
     return class_counts, feat_counts, nt_len_mat
 
@@ -298,7 +299,7 @@ def main():
 
     print("Completed feature assignment...")
     class_counts_df = pd.DataFrame.from_dict(class_counts, orient='index').reset_index()
-    feat_counts_df = pd.DataFrame.from_dict(feat_counts, orient='index').reset_index()
+    feat_counts_df = pd.DataFrame.from_dict(feat_counts, orient='index').reset_index().drop('_no_feature')
 
     print("Writing final count files...")
     class_counts_df.to_csv(args.out_prefix + '_out_class_counts.csv', index=False, header=False)
