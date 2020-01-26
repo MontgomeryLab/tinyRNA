@@ -252,4 +252,17 @@ use_deseq: True
 #
 ######-------------------------------------------------------------------------------######
 
-create_pdf: True
+# Define the plots desired by uncommenting (removing the '#') for each plot
+# or adding a '#' to remove that plot
+plots:
+  - 'len_dist'
+  - 'class_charts'
+  - 'replicate_scatter'
+#  - 'sample_avg_scatter'
+#  - 'sample_avg_scatter_by_class'
+#  - 'sample_avg_scatter_by_deg'
+  - 'sample_avg_scatter_by_both'
+
+##-- These options are generated based on sample input --##
+plot_input_files: ''
+plot_data_types: ''

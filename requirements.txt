@@ -4,3 +4,4 @@ matplotlib==2.2.3
 htseq==0.11.0
 fastp==0.19.3
 bowtie==1.2.2
+nodejs>=4.2.6

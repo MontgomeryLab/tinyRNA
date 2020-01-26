@@ -72,6 +72,12 @@ inputs:
   output_file_counts: string
   output_prefix: string
 
+  # plot
+  plot_input_files: string[]
+  plot_data_types: string[]
+  plots: string[]
+
+
 steps:
   fastp:
     run: ../tools/fastp.cwl
@@ -181,6 +187,16 @@ steps:
       outfile_prefix: output_prefix
     out: [norm_counts, comparisons]
 
+  plotter:
+    run: ../tools/aquatx-plot.cwl
+    in:
+      input_files: plot_input_files
+      data_types: plot_data_types
+      out_prefix: output_prefix
+      reference: ref_annotations
+      plots: plots
+    out: [plots]
+
 outputs:
   fastq_clean:  
     type: File[]
@@ -229,6 +245,10 @@ outputs:
   deseq_tables:
     type: File[]
     outputSource: deseq2/comparisons
+
+  plots:
+    type: File[]
+    outputSource: plotter/plots
 
   # Optional outputs
   aln_table:

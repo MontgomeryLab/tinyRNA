@@ -52,8 +52,9 @@ def main():
     elif sys.argv[1] == "setup-cwl":
         print("Creating cwl workflow...")
 
-        print("The configuration file: ")
-        subprocess.run(['aquatx-config'] + sys.argv[2:], stdout=subprocess.PIPE)
+        if sys.argv[3] not in ('None', 'none'):
+            print("The configuration file: ")
+            subprocess.run(['aquatx-config'] + sys.argv[2:], stdout=subprocess.PIPE)
 
         print("\nThe workflow and files are under: cwl/tools/ and cwl/workflows/")
         os.makedirs('cwl/tools/', exist_ok=True)
