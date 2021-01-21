@@ -8,7 +8,7 @@ DESCRIPTION = 'Automated Quantitative Analysis of Transcript Expression'
 URL = 'https://github.com/MontgomeryLab/aquatx-srna/'
 EMAIL = 'kristen.brown@colostate.edu'
 AUTHOR = 'Kristen Brown'
-REQUIRES_PYTHON = '>=3.6.0'
+REQUIRES_PYTHON = '>=3.7.0'
 VERSION = '0.1'
 
 # Required packages
