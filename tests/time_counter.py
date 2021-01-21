@@ -41,20 +41,6 @@ seq_df = seq_counter(sam_df)
     print('Average time to count 5\'nt and sizes from df: {}'.format(sum([x/10 for x in times])/len(times)))
     print('Max time to count 5\'nt and sizes from df: {}'.format(max([x/10 for x in times])))
 
-def time_bokeh_5nt_plots():
-    SETUP_CODE = '''
-from smrna.counter import sam_to_df, seq_counter, nt_counter
-from smrna.smrnaplot import bokeh_5nt_plots
-sam_df = sam_to_df('tests/testdata/KB1_test.sam')
-seq_df = seq_counter(sam_df)
-nt_counts = nt_counter(seq_df, save=True, out_prefix='KB1_test')
-'''
-    TEST_CODE = '''bokeh_5nt_plots(nt_counts)'''
-
-    times = timeit.repeat(setup=SETUP_CODE, stmt=TEST_CODE, repeat=2, number=10)
-    print('Average time to plot 5\'nt and size counts: {}'.format(sum([x/10 for x in times])/len(times)))
-    print('Max time to plot 5\'nt and size counts: {}'.format(max([x/10 for x in times])))
-
 def time_feature_reader():
     SETUP_CODE='''from smrna.counter import feature_reader'''
     TEST_CODE='''features = feature_reader('tests/testdata/fixed_miRNAs_4nt.gff')'''
@@ -137,7 +123,6 @@ def time_main_routine():
 import argparse
 import pandas as pd
 from smrna.counter import sam_to_df, seq_counter, nt_counter, feature_reader, feature_splitter, feature_counter
-from smrna.smrnaplot import bokeh_5nt_plots
 args = argparse.Namespace
 args.input_file='tests/testdata/KB1_test.sam'
 args.ref_annotations='tests/testdata/fixed_miRNAs_4nt.gff'
@@ -149,10 +134,6 @@ args.antisense=None
 #Read in and process sam file
 sam_df = sam_to_df(args.input_file)
 seq_df = seq_counter(sam_df)
-
-# Get 5p nt + length count table & plots
-nt_counts = nt_counter(seq_df, save=True, out_prefix=args.out_prefix)
-bokeh_5nt_plots(nt_counts)
 
 # Read in and process feature file
 features = feature_reader(args.ref_annotations)
@@ -208,7 +189,6 @@ def main():
     time_feature_splitter_both()
     time_feature_splitter_annotations()
     time_feature_reader()
-    time_bokeh_5nt_plots()
     time_nt_counter()
     time_seq_counter()
     time_sam_to_df()
