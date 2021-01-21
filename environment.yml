@@ -1,4 +1,4 @@
-name: aquatx-srna-test
+name: aquatx-srna
 channels:
   - bioconda
 dependencies:
@@ -11,3 +11,4 @@ dependencies:
   - pip
   - pip:
       - htseq
+      - . # This allows pip to handle the installation of AQuATx via setup.py
