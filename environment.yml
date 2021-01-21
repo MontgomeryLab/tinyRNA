@@ -1,0 +1,13 @@
+name: aquatx-srna-test
+channels:
+  - bioconda
+dependencies:
+  - numpy==1.19.2
+  - pandas==1.2.1
+  - matplotlib==3.3.2
+  - fastp==0.20.1
+  - bowtie==1.0.0
+  - nodejs>=10.13.0
+  - pip
+  - pip:
+      - htseq
