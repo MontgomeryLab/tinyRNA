@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 """
 The main entry point for AQuATx for small RNA data analysis. This tool provides an end-to-end
-workflow for analyzing small RNA sequencing data from raw fastq files to statistics and plots.
-This entry point also provides options for only returning workflows that can be used separately
-or to retrieve template files.
+workflow for analyzing small RNA sequencing data from raw fastq files. This entry point also provides
+options for only returning workflows that can be used separately or to retrieve template files.
 
 When installed this script should be run as:
 
