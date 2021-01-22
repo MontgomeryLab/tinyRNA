@@ -45,7 +45,7 @@ python setup.py install
 
 ## Usage
 
-There are several ways to use the pipeline, the easiest of which is to run an end-to-end analysis with `aquatx`. You can also access the individual scripts for collapsing reads, counting, differential expression, and plotting separately. More detailed documentation to be added to the Wiki soon.
+There are several ways to use the pipeline, the easiest of which is to run an end-to-end analysis with `aquatx`. You can also access the individual scripts for collapsing reads, counting, and differential expression. More detailed documentation to be added to the Wiki soon.
 
 The inputs to the pipeline are a sample sheet, a reference sheet, and a configuration file. To obtain the templates for these inputs use the following command:
 
@@ -76,7 +76,7 @@ The accepted inputs to the analysis workflow are:
 
 ### Running the end-to-end analysis
 
-The main option for using the workflow is to run an end-to-end analysis. This will automatically take your input configuration and run a full, standard small RNA sequencing data analysis pipeline from raw fastq files to DEGs and plots. This utilizes `cwltool` to run a CWL based workflow. This will first run the configuration setup based on your input files.
+The main option for using the workflow is to run an end-to-end analysis. This will automatically take your input configuration and run a full, standard small RNA sequencing data analysis pipeline from raw fastq files to DEGs. This utilizes `cwltool` to run a CWL based workflow. This will first run the configuration setup based on your input files.
 
 ```
 aquatx run --config <path/to/config.yml>

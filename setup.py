@@ -41,8 +41,7 @@ setuptools.setup(
             'aquatx-config = aquatx.srna.configuration_setup:main',
             'aquatx-collapse = aquatx.srna.collapser:main',
             'aquatx-count = aquatx.srna.counter:main',
-            'aquatx-merge = aquatx.srna.merge_samples:main',
-            'aquatx-plot = aquatx.srna.plotter:main'
+            'aquatx-merge = aquatx.srna.merge_samples:main'
         ]
     },
     scripts=['aquatx/srna/aquatx-deseq'],
