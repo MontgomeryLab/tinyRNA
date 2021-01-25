@@ -10,7 +10,7 @@ and where I should focus my efforts to optimize.
 import timeit
 
 def time_seq_counter_from_fastq():
-    SETUP_CODE = '''from smrna.collapser import seq_counter'''
+    SETUP_CODE = '''from aquatx.srna.collapser import seq_counter'''
     TEST_CODE = '''seq_counter('tests/testdata/KB1_cleaned.fq')'''
 
     times = timeit.repeat(setup=SETUP_CODE, stmt = TEST_CODE, repeat=2, number=10)
@@ -21,7 +21,7 @@ def time_seq_counter_from_fastq():
 
 def time_seq_2_fasta():
     SETUP_CODE = '''
-from smrna.collapser import seq_counter, seq2fasta
+from aquatx.srna.collapser import seq_counter, seq2fasta
 seqs = seq_counter('tests/testdata/KB1_cleaned.fq')'''
     TEST_CODE = '''seq2fasta(seqs, 'tests/testdata/KB1_uniq.fa')'''
 
@@ -31,7 +31,7 @@ seqs = seq_counter('tests/testdata/KB1_cleaned.fq')'''
 
 def time_collapse_fastq_file_full():
     SETUP_CODE = '''
-from smrna.collapser import seq_counter, seq2fasta'''
+from aquatx.srna.collapser import seq_counter, seq2fasta'''
     TEST_CODE = '''
 seqs = seq_counter('tests/testdata/KB1_cleaned.fq')
 seq2fasta(seqs, 'tests/testdata/KB1_uniq.fa')'''
@@ -41,7 +41,7 @@ seq2fasta(seqs, 'tests/testdata/KB1_uniq.fa')'''
     print('Max time to to collapse fastq: {}'.format(max([x/10 for x in times])))
 
 def main():
-    time_seq_counter_from_fasta()
+    time_seq_counter_from_fastq()
     time_seq_2_fasta()
     time_collapse_fastq_file_full()
 

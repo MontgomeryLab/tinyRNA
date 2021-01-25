@@ -5,7 +5,7 @@
 import unittest
 import pandas as pd
 import numpy as np
-import smrna.counter as smrna
+import aquatx.srna.counter as smrna
 
 class test_get_sam_flags(unittest.TestCase):
     """ 

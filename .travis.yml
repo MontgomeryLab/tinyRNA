@@ -1,6 +1,6 @@
 language: python
 python:
-  - "3.6"
+  - "3.7"
 
 before_install:
   - wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
@@ -10,8 +10,7 @@ before_install:
   - conda update --yes conda
 
 install:
-  - conda install --yes -c bioconda --file requirements.txt
-  - python setup.py install
+  - conda env update -f environment.yml
 
 script:
   - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then python -m tests.unit_tests_aquatx; fi
