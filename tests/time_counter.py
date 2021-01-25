@@ -9,7 +9,7 @@ and where I should focus my efforts to optimize.
 import timeit
 
 def time_sam_to_df():
-    SETUP_CODE = '''from smrna.counter import sam_to_df'''
+    SETUP_CODE = '''from aquatx.srna.counter import sam_to_df'''
     TEST_CODE = '''sam_to_df('tests/testdata/KB1_test.sam')'''
 
     times = timeit.repeat(setup=SETUP_CODE, stmt = TEST_CODE, repeat=2, number=10)
@@ -20,7 +20,7 @@ def time_sam_to_df():
 
 def time_seq_counter():
     SETUP_CODE = '''
-from smrna.counter import sam_to_df, seq_counter
+from aquatx.srna.counter import sam_to_df, seq_counter
 sam_df = sam_to_df('tests/testdata/KB1_test.sam')'''
 
     TEST_CODE = '''seq_df = seq_counter(sam_df)'''
@@ -31,7 +31,7 @@ sam_df = sam_to_df('tests/testdata/KB1_test.sam')'''
 
 def time_nt_counter():
     SETUP_CODE = '''
-from smrna.counter import sam_to_df, seq_counter, nt_counter
+from aquatx.srna.counter import sam_to_df, seq_counter, nt_counter
 sam_df = sam_to_df('tests/testdata/KB1_test.sam')
 seq_df = seq_counter(sam_df)
 '''
@@ -42,7 +42,7 @@ seq_df = seq_counter(sam_df)
     print('Max time to count 5\'nt and sizes from df: {}'.format(max([x/10 for x in times])))
 
 def time_feature_reader():
-    SETUP_CODE='''from smrna.counter import feature_reader'''
+    SETUP_CODE='''from aquatx.srna.counter import feature_reader'''
     TEST_CODE='''features = feature_reader('tests/testdata/fixed_miRNAs_4nt.gff')'''
     
     times = timeit.repeat(setup=SETUP_CODE, stmt=TEST_CODE, repeat=2, number=10)
@@ -51,7 +51,7 @@ def time_feature_reader():
 
 def time_feature_splitter_annotations():
     SETUP_CODE='''
-from smrna.counter import feature_reader, feature_splitter
+from aquatx.srna.counter import feature_reader, feature_splitter
 features = feature_reader('tests/testdata/fixed_miRNAs_4nt.gff')'''
     TEST_CODE='''split_feats = feature_splitter(features)'''
     
@@ -61,7 +61,7 @@ features = feature_reader('tests/testdata/fixed_miRNAs_4nt.gff')'''
     
 def time_feature_splitter_both():
     SETUP_CODE='''
-from smrna.counter import sam_to_df, seq_counter, nt_counter, feature_reader, feature_splitter, feature_counter
+from aquatx.srna.counter import sam_to_df, seq_counter, nt_counter, feature_reader, feature_splitter, feature_counter
 sam_df = sam_to_df('tests/testdata/KB1_test.sam')
 seq_df = seq_counter(sam_df)
 features = feature_reader('tests/testdata/fixed_miRNAs_4nt.gff')'''
@@ -75,7 +75,7 @@ split_seqs = feature_splitter(seq_df)'''
     
 def time_feature_counter_full():
     SETUP_CODE = '''
-from smrna.counter import sam_to_df, seq_counter, nt_counter,feature_reader, feature_counter
+from aquatx.srna.counter import sam_to_df, seq_counter, nt_counter,feature_reader, feature_counter
 sam_df = sam_to_df('tests/testdata/KB1_test.sam')
 seq_df = seq_counter(sam_df)
 features = feature_reader('tests/testdata/fixed_miRNAs_4nt.gff')
@@ -88,7 +88,7 @@ features = feature_reader('tests/testdata/fixed_miRNAs_4nt.gff')
 
 def time_feature_counter_split_both_strand():
     SETUP_CODE = '''
-from smrna.counter import sam_to_df, seq_counter, nt_counter, feature_reader, feature_splitter, feature_counter
+from aquatx.srna.counter import sam_to_df, seq_counter, nt_counter, feature_reader, feature_splitter, feature_counter
 sam_df = sam_to_df('tests/testdata/KB1_test.sam')
 seq_df = seq_counter(sam_df)
 features = feature_reader('tests/testdata/fixed_miRNAs_4nt.gff')
@@ -105,7 +105,7 @@ feature_counter(split_feats['-'], split_seqs['-'])'''
 
 def time_feature_counter_split_plus_strand():
     SETUP_CODE = '''
-from smrna.counter import sam_to_df, seq_counter, nt_counter, feature_reader, feature_splitter, feature_counter
+from aquatx.srna.counter import sam_to_df, seq_counter, nt_counter, feature_reader, feature_splitter, feature_counter
 sam_df = sam_to_df('tests/testdata/KB1_test.sam')
 seq_df = seq_counter(sam_df)
 features = feature_reader('tests/testdata/fixed_miRNAs_4nt.gff')
@@ -122,7 +122,7 @@ def time_main_routine():
     SETUP_CODE = '''
 import argparse
 import pandas as pd
-from smrna.counter import sam_to_df, seq_counter, nt_counter, feature_reader, feature_splitter, feature_counter
+from aquatx.srna.counter import sam_to_df, seq_counter, nt_counter, feature_reader, feature_splitter, feature_counter
 args = argparse.Namespace
 args.input_file='tests/testdata/KB1_test.sam'
 args.ref_annotations='tests/testdata/fixed_miRNAs_4nt.gff'
