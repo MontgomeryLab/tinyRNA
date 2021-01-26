@@ -4,8 +4,3 @@
 *.svg
 test_*
 .idea/*
-tests/*/*
-.eggs*
-*.egg
-build/*
-aquatx.egg-info/*

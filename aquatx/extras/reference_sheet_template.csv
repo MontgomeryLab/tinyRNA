@@ -1,5 +1,5 @@
 Reference Annotation Files,Reference Mask Annotation Files,Also count antisense?
-tests/testdata/fixed_21U.gff,None,FALSE
-tests/testdata/fixed_CSR-1_Targets_All.gff,tests/testdata/fixed_miRNAs_4nt.gff,TRUE
-tests/testdata/fixed_miRNAs_4nt.gff,None,FALSE
-tests/testdata/fixed_mut-16_targets_ws230.gff,tests/testdata/fixed_miRNAs_4nt.gff,TRUE
+../../tests/testdata/fixed_21U.gff,None,FALSE
+../../tests/testdata/fixed_CSR-1_Targets_All.gff,tests/testdata/fixed_miRNAs_4nt.gff,TRUE
+../../tests/testdata/fixed_miRNAs_4nt.gff,None,FALSE
+../../tests/testdata/fixed_mut-16_targets_ws230.gff,tests/testdata/fixed_miRNAs_4nt.gff,TRUE
