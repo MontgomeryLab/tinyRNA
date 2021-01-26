@@ -3,12 +3,13 @@ This script uses the simple configuration file and spreadsheets to create the
 configuration YAML that can be used as input in the CWL workflow.
 """
 import os
-import datetime
-import argparse
-from shutil import copyfile
 import csv
-from pkg_resources import resource_filename
+import argparse
 import ruamel.yaml
+from shutil import copyfile
+from datetime import datetime
+from pkg_resources import resource_filename
+
 
 def get_args():
     """
@@ -56,9 +57,12 @@ def process_sample_sheet(sample_file, config_settings):
             sample_low_counts.append(sample_basename + '_low_count_uniq_seqs.fa')
             sample_json.append(sample_basename + '_qc.json')
             sample_html.append(sample_basename + '_qc.html')
-            sample_compare.add(row['Sample/Group Name'])
 
-    if not config_settings['keep_low_counts']:
+            # Todo: find out if this was necessary for plotter... ultimately it is never added to config...
+            # sample_compare.add(row['Sample/Group Name'])
+
+    #
+    if config_settings.get('keep_low_counts', None) == False:
         config_settings.pop('keep_low_counts')
     else:
         config_settings['keep_low_counts'] = sample_low_counts
@@ -126,10 +130,17 @@ def process_reference_sheet(ref_file, config_settings):
 
     return config_settings
 
-def setup_config(time, input_file, config_settings):
+def setup_config(input_file):
     """
     Function to set up the configuration file from template
     """
+
+    # Parse YAML run configuration file
+    with open(input_file) as conf:
+        config_settings = ruamel.yaml.YAML().load(conf)
+
+    # Run time information
+    time = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     config_settings['run_date'] = time.split('_')[0]
     config_settings['run_time'] = time.split('_')[1]
 
@@ -148,7 +159,7 @@ def setup_config(time, input_file, config_settings):
     config_settings = process_reference_sheet(config_settings['reference_sheet_file'],
                                               config_settings)
 
-    if config_settings['adapter_sequence'] == 'auto_detect':
+    if config_settings.get('adapter_sequence', None) == 'auto_detect':
         config_settings.pop('adapter_sequence')
 
     if os.path.basename(input_file) == 'run_config_template.yml':
@@ -162,18 +173,9 @@ def setup_config(time, input_file, config_settings):
                                     default_flow_style=False, indent=4, block_seq_indent=2)
     
     # output filenames to stdout for running cwltool
-    print(input_name, end='')
+    return input_name
 
-def setup_workflow(time, config_settings):
-    """
-    Create the workflow according to configuration
-    """
-    
-    yml = ruamel.yaml.YAML()
 
-    with open("test-wf.cwl", 'w') as cwl:
-        ruamel.yaml.round_trip_dump
-    pass
 
 def main():
     """
@@ -182,20 +184,11 @@ def main():
 
     # Get input config file
     args = get_args()
+    setup_config(args.input_file)
 
-    # Run time information
-    time = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    
-    # If the template is being used, save as a new file
-    yml = ruamel.yaml.YAML()
-
-    with open(args.input_file) as conf:
-        config_settings = yml.load(conf)
-    
     #TODO: need to specify the non-model organism run when no reference genome is given
 
-    setup_config(time, args.input_file, config_settings)
-    setup_workflow(time, config_settings)
+
 
 if __name__ == '__main__':
     main()
