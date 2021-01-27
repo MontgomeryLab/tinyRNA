@@ -8,9 +8,10 @@ When installed this script should be run as:
 
 aquatx <subcommand> --config <config-file>
 """
-import srna.configuration_setup
+import aquatx.srna.configuration_setup
 import subprocess
 import shutil
+import os
 
 from pkg_resources import resource_filename
 from argparse import ArgumentParser
@@ -44,7 +45,7 @@ def run(aquatx_cwl_path, config_file):
     print("Running the end-to-end analysis...")
 
     # First get the configuration file set up for this run
-    workflow_conf_file = srna.configuration_setup.setup_config(config_file)
+    workflow_conf_file = aquatx.srna.configuration_setup.setup_config(config_file)
 
     # Run with cwltool
     subprocess.run(f"cwltool {aquatx_cwl_path}workflows/aquatx_wf.cwl {workflow_conf_file}", shell=True)
@@ -59,7 +60,7 @@ def get_template(aquatx_extras_path):
     ]
 
     for template in template_files:
-        shutil.copyfile(f"{aquatx_extras_path}{template}", '.')
+        shutil.copyfile(f"{aquatx_extras_path}{template}", f"./{template}")
 
 
 def setup_cwl(aquatx_cwl_path, config_file):
@@ -67,11 +68,16 @@ def setup_cwl(aquatx_cwl_path, config_file):
 
     if config_file not in ('None', 'none'):
         # Set up the config file
-        processed_config_location = srna.configuration_setup.setup_config(config_file)
+        processed_config_location = aquatx.srna.configuration_setup.setup_config(config_file)
         print("The processed configuration file is located at: " + processed_config_location)
 
     print("The workflow and files are under: cwl/tools/ and cwl/workflows/")
-    shutil.copytree(aquatx_cwl_path, '.')
+    shutil.copytree(aquatx_cwl_path, './cwl')
+
+
+def setup_nextflow(config_file):
+    print("Creating nextflow workflow...")
+    print("This command is currently not implemented.")
 
 
 def main():
@@ -92,15 +98,14 @@ def main():
     aquatx_extras_path = resource_filename('aquatx', 'extras/')
 
     # Execute appropriate command based on command line input
-    if args.command == "run":
-        run(aquatx_cwl_path, args.config)
-    elif args.command == "get-template":
-        get_template(aquatx_extras_path)
-    elif args.command == "setup-cwl":
-        setup_cwl(aquatx_cwl_path, args.config)
-    elif args.command == "setup-nextflow":
-        print("Creating nextflow workflow...")
-        print("This command is currently not implemented.")
+    command_map = {
+        "run": lambda: run(aquatx_cwl_path, args.config),
+        "setup-cwl": lambda: setup_cwl(aquatx_cwl_path, args.config),
+        "get-template": lambda: get_template(aquatx_extras_path),
+        "setup-nextflow": lambda: setup_nextflow(args.config)
+    }
+
+    command_map[args.command]()
 
 
 if __name__ == '__main__':
