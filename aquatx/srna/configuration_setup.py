@@ -10,6 +10,11 @@ from shutil import copyfile
 from datetime import datetime
 from pkg_resources import resource_filename
 
+"""
+Remaining issues observed in the processed (output) config file:
+    - ebwt relative path is dropped from processed config file BUT
+    it is preserved under the bt_index_files option
+"""
 
 def get_args():
     """
@@ -151,13 +156,16 @@ def setup_config(input_file):
     if config_settings['output_prefix'] == '':
         config_settings['output_prefix'] = config_settings['run_prefix']
 
-    config_settings = process_sample_sheet(config_settings['sample_sheet_file'], config_settings)
+    # Path specification should be relative to the config file, not relative to the script's CWD
+    sample_sheet_path = os.path.dirname(input_file) + os.sep + config_settings['sample_sheet_file']
+    config_settings = process_sample_sheet(sample_sheet_path, config_settings)
 
     config_settings['output_file_stats'] = config_settings['output_prefix'] + '_run_stats.csv'
     config_settings['output_file_counts'] = config_settings['output_prefix'] + '_raw_counts.csv'
 
-    config_settings = process_reference_sheet(config_settings['reference_sheet_file'],
-                                              config_settings)
+    # Path specification should be relative to the config file, not relative to the script's CWD
+    reference_sheet_path = os.path.dirname(input_file) + os.sep + config_settings['reference_sheet_file']
+    config_settings = process_reference_sheet(reference_sheet_path, config_settings)
 
     if config_settings.get('adapter_sequence', None) == 'auto_detect':
         config_settings.pop('adapter_sequence')
