@@ -36,11 +36,11 @@ run_time: ''
 # 
 ######-------------------------------------------------------------------------------######
  
-##-- Relative path to sample & reference sheets --##
-sample_sheet_file: 'extras/sample_sheet_template.csv'
-reference_sheet_file: 'extras/reference_sheet_template.csv'
+##-- Relative path to sample & reference sheets (relative to this config file) --##
+sample_sheet_file: '../../aquatx/extras/sample_sheet_template.csv'
+reference_sheet_file: '../../aquatx/extras/reference_sheet_template.csv'
 
-##-- The prefix for your bowtie index, include relative path --##
+##-- The prefix for your bowtie index, include relative path (relative to this config file) --##
 ebwt: 'tests/testdata/references/c_elegans_ws230'
 
 ##-- If True: run bowtie-build to index the genome --##
