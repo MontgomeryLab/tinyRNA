@@ -45,12 +45,14 @@ def process_sample_sheet(sample_file, config_settings):
     sample_json = list()
     sample_html = list()
 
+    sample_sheet_dir = os.path.dirname(sample_file) + os.sep
+
     with open(sample_file) as sf:
         csv_reader = csv.DictReader(sf, delimiter=',')
         for row in csv_reader:
             sample_basename = os.path.splitext(os.path.basename(row['\ufeffInput FastQ/A Files']))[0]
             sample_files.append({'class': 'File',
-                                 'path': row['\ufeffInput FastQ/A Files']})
+                                 'path': sample_sheet_dir + row['\ufeffInput FastQ/A Files']})
             sample_identifiers.append(row['Sample/Group Name'] + '_replicate_'
                                       + row['Replicate number'])
             sample_out_fq.append(sample_basename + '_cleaned.fastq')
@@ -93,6 +95,7 @@ def process_reference_sheet(ref_file, config_settings):
     antisense = list()
 
     aquatx_extras_path = resource_filename('aquatx', 'extras/')
+    ref_sheet_dir = os.path.dirname(ref_file) + os.sep
 
     with open(ref_file) as rf:
         csv_reader = csv.DictReader(rf, delimiter=',')
@@ -115,11 +118,11 @@ def process_reference_sheet(ref_file, config_settings):
                                                        {'class': 'File',
                                                         'path': bt_idx + '.rev.2.ebwt'}))
 
-            ref_files.append({'class': 'File', 'path': row['Reference Annotation Files']})
+            ref_files.append({'class': 'File', 'path': ref_sheet_dir + row['Reference Annotation Files']})
             if row['Reference Mask Annotation Files'].lower() in ('none', ''):
                 mask_files.append({'class': 'File', 'path': aquatx_extras_path + '_empty_maskfile_aquatx.gff'})
             else:
-                mask_files.append({'class': 'File', 'path': row['Reference Mask Annotation Files']})
+                mask_files.append({'class': 'File', 'path': ref_sheet_dir + row['Reference Mask Annotation Files']})
 
             if row['Also count antisense?'].lower() in ('true', 'false'):
                 antisense.append(row['Also count antisense?'].lower())
