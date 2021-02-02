@@ -48,7 +48,7 @@ def run(aquatx_cwl_path, config_file):
     workflow_conf_file = aquatx.srna.configuration_setup.setup_config(config_file)
 
     # Run with cwltool
-    subprocess.run(f"cwltool {aquatx_cwl_path}workflows/aquatx_wf.cwl {workflow_conf_file}", shell=True)
+    subprocess.run(f"cwltool {aquatx_cwl_path}/workflows/aquatx_wf.cwl {workflow_conf_file}", shell=True)
 
 
 def get_template(aquatx_extras_path):
