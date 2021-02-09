@@ -31,7 +31,7 @@ def get_dir_tree(root_path):
             for level in top.replace(root_path + os.sep, '').split(os.sep):
                 context = context[level]
 
-        context['files'] = files
+        context['files'] = set(files)
         for folder in dirs: context[folder] = {}
 
     return dir_tree
@@ -56,13 +56,13 @@ def get_dir_checksum_tree(root_path):
             for level in top.replace(root_path + os.sep, '').split(os.sep):
                 context = context[level]
 
-        context['files'] = []
+        context['files'] = set()
         for folder in dirs: context[folder] = {}
         for file in files:
             path = f"{top}/{file}"
             with open(path, 'rb') as f:
                 # Add (file, hash) tuple
-                context['files'].append((file, hashlib.md5(f.read()).hexdigest()))
+                context['files'].add((file, hashlib.md5(f.read()).hexdigest()))
 
     return dir_tree
 

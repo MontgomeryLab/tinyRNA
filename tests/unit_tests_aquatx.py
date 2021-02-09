@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 
-from . import unit_test_helpers as helpers
-import aquatx.aquatx as aquatx
-
-import unittest
-import psutil
-import shutil
-import time
-import sys
 import os
+import shutil
+import sys
+import time
+import unittest
+
+import psutil
+
+import aquatx.aquatx as aquatx
+import tests.unit_test_helpers as helpers
 
 """
 
@@ -17,6 +18,8 @@ as well as post-install testing of invocation by terminal. Each
 test covers both environments.
 
 """
+
+
 class test_aquatx(unittest.TestCase):
     @classmethod
     def setUpClass(self):
@@ -35,25 +38,25 @@ class test_aquatx(unittest.TestCase):
         self.config_file = './testdata/run_config_template.yml'
         self.expected_cwl_dir_tree = {
             'cwl': {
-                'files': [],
+                'files': set(),
                 'tools': {
-                    'files': [
+                    'files': {
                         'aquatx-deseq.cwl', 'bowtie.cwl',
                         'aquatx-collapse.cwl', 'bowtie-build.cwl',
                         'aquatx-count.cwl', 'aquatx-merge.cwl', 'fastp.cwl'
-                    ]
+                    }
                 },
                 'workflows': {
-                    'files': ['aquatx_wf.cwl']
+                    'files': {'aquatx_wf.cwl'}
                 }
             }
         }
-
 
     """
     Testing that get-template copies the correct files 
     to the current directory.
     """
+
     def test_get_template(self):
         test_functions = [
             helpers.LambdaCapture(lambda: aquatx.get_template(self.aquatx_extras_path)),  # The pre-install invocation
@@ -77,23 +80,23 @@ class test_aquatx(unittest.TestCase):
                 # Check that exactly 3 files were produced by the command
                 self.assertEqual(
                     dir_entry_ct() - dir_before_count, 3,
-                    f"Abnormal number of template files. Expected 3. Function: {test}")
+                    f"Abnormal number of template files. Expected 3. Function: {test_context}")
 
                 # Check that each expected file was produced
                 for file in template_files:
                     self.assertTrue(os.path.isfile(file),
-                                    f"An expected template file wasn't copied: {file}, function: {test}")
+                                    f"An expected template file wasn't copied: {file}, function: {test_context}")
                     os.remove(file)
             finally:
                 # Remove the local template files if necessary, even if an exception was thrown above
                 for file in template_files:
                     if os.path.isfile(file): os.remove(file)
 
-
     """
     Testing that setup-cwl with a None/none config file 
     copies workflow files without mentioning a config file
     """
+
     def test_setup_cwl_noconfig(self):
         no_config = ['None', 'none']
         for config in no_config:
@@ -110,22 +113,22 @@ class test_aquatx(unittest.TestCase):
                         # Check that the function did not mention the configuration file
                         self.assertNotIn(
                             "configuration", test.get_stdout(),
-                            "Setup mentioned configfile when None was provided")
+                            f"Setup mentioned configfile when {no_config} was provided, function: {test_context}")
 
                         # Check (by name and directory structure) that the expected files/folders were produced
                         self.assertEqual(helpers.get_dir_tree('./cwl'),
-                                          self.expected_cwl_dir_tree,
-                                         "The expected local cwl directory tree was not found")
+                                         self.expected_cwl_dir_tree,
+                                         f"The expected local cwl directory tree was not found, function: {test_context}")
                 finally:
                     # Remove the copied workflow files even if an exception was thrown above
                     if os.path.isdir('./cwl'): shutil.rmtree('./cwl')
-
 
     """
     Testing that setup-cwl WITH config file mentions the location of the 
     processed input configfile, then copies workflow files. Correctness
     of processed config file will be checked in the setup_config tests.
     """
+
     def test_setup_cwl_withconfig(self):
         test_functions = [
             helpers.LambdaCapture(lambda: aquatx.setup_cwl(self.aquatx_cwl_path, self.config_file)),
@@ -144,11 +147,13 @@ class test_aquatx(unittest.TestCase):
                     config_file_location = stdout_result.splitlines()[1].split(": ")[1]
 
                 # Check that the function mentioned the config file with a complete name
-                self.assertRegex(stdout_result, r'The processed configuration file is located at: \d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_run_config\.yml',
-                              "Setup failed to mention the location of the processed config file.")
+                self.assertRegex(stdout_result,
+                                 r'The processed configuration file is located at: \d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_run_config\.yml',
+                                 f"Setup failed to mention the location of the processed config file. Function: {test_context}")
 
                 # Check that the processed configuration file exists
-                self.assertTrue(os.path.isfile(config_file_location), f"The processed config file does not exist: {config_file_location}")
+                self.assertTrue(os.path.isfile(config_file_location),
+                                f"The processed config file does not exist: {config_file_location}. Function: {test_context}")
                 os.remove(config_file_location)
 
                 # Check (by name and directory structure) that the expected files/folders were produced
@@ -160,7 +165,6 @@ class test_aquatx(unittest.TestCase):
                 # Remove the output config file
                 if os.path.isfile(config_file_location): os.remove(config_file_location)
 
-
     """
     Test that run invocation produces a cwltool subprocess. Since subprocess.run() 
     is a blocking call, we need to call aquatx.run() in its own thread so we can 
@@ -169,6 +173,7 @@ class test_aquatx(unittest.TestCase):
     subprocesses would have already exited. The post-install command accomplishes
     the same thing but in another process rather than another thread.
     """
+
     def test_run(self):
         # Non-blocking test functions (invocations continue to run in background until test_context is left)
         test_functions = [
@@ -186,13 +191,14 @@ class test_aquatx(unittest.TestCase):
                 # Get the names of all descendents of the current process
                 subprocs = psutil.Process(os.getpid()).children(recursive=True)
                 sub_names = [sub.name() for sub in subprocs]
-                self.assertIn('cwltool', sub_names, "The cwltool subprocess does not appear to have started.")
-
+                self.assertIn('cwltool', sub_names,
+                              f"The cwltool subprocess does not appear to have started. Function: {test_context}")
 
     """
     A very minimal test for the subprocess context manager that is used
     to execute post-install aquatx commands via a shell.
     """
+
     def test_ShellCapture_helper(self):
         # Test blocking capture with stdout (though we can still check stderr with a blocking capture...)
         with helpers.ShellCapture('echo "Today is the day"') as fn:
@@ -228,6 +234,7 @@ class test_aquatx(unittest.TestCase):
     A very minimal test for the function context manager that is used
     to execute pre-install invocations of aquatx Python functions
     """
+
     def test_LambdaCapture_helper(self):
         # Test stdout capture
         with helpers.LambdaCapture(lambda: print("Today is the day")) as fn:
@@ -257,5 +264,5 @@ class test_aquatx(unittest.TestCase):
         with helpers.LambdaCapture(lambda: time.sleep(2), blocking=False) as fn:
             fn()
             self.assertFalse(fn.is_complete())
-            time.sleep(2)
+            time.sleep(3)
             self.assertTrue(fn.is_complete())
