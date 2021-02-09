@@ -13,4 +13,4 @@ install:
   - conda env update -f environment.yml
 
 script:
-  - python -m tests.unit_tests_aquatx
+  - python -m unittest tests.unit_tests_aquatx
