@@ -13,4 +13,4 @@ install:
   - conda env update -f environment.yml
 
 script:
-  - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then python -m tests.unit_tests_aquatx; fi
+  - python -m tests.unit_tests_aquatx
