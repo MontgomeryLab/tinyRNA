@@ -1,9 +1,15 @@
 """ Collapse sequences from a fastq file to a fasta file.
 Headers of the final fasta file will contain the count
 """
-
-from collections import Counter
 import argparse
+import os
+
+try: # Load Counter's C helper function if it is available. Uses 30% less memory than Counter()
+    from _collections import _count_elements
+except ImportError:
+    # Uses slower mapping[elem] = mapping.get(elem,default_val)+1 in loop
+    from collections import _count_elements
+
 
 def get_args():
     """
@@ -26,6 +32,7 @@ def get_args():
 
     return args
 
+
 def seq_counter(fastq_file):
     """
     Counts number of times each sequence appears.
@@ -39,23 +46,20 @@ def seq_counter(fastq_file):
     Outputs:
         seqs: return a dict of {seq: count}
     """
-    seqs = Counter()
+    with open(fastq_file, 'rb') as f:
+        def line_generator():    # Generator function for every 4th line (fastq sequence line) of file
+            while f.readline():  # Sequence identifier
+                # Sequence (Binary -> ASCII extract every 4th from 1st line, newline removed)
+                yield f.readline()[:-1].decode("utf-8")
+                f.readline()     # "+"
+                f.readline()     # Quality Score
 
-    with open(fastq_file) as f:
-        while True:
-            # Read 4 lines per loop for a fastq format
-            _ = f.readline() # unused
-            seq = f.readline()
-            _ = f.readline() # unused
-            qual = f.readline() # qual should be last line for a non-corrupt fq
-
-            # Indicates EOF
-            if not qual:
-                break
-            
-            seqs[seq] += 1
+        # Count occurrences of unique elements, and populate (merge) with seqs
+        seqs = dict()
+        _count_elements(seqs, line_generator())
 
     return seqs
+
 
 def seq2fasta(seqs, out_file, thresh=0, low_count_file=None):
     """
@@ -70,23 +74,42 @@ def seq2fasta(seqs, out_file, thresh=0, low_count_file=None):
             >seq_N_xCOUNTS
             SEQUENCE
     """
-    # Count keeps track of sequence number for headers
-    count = 0
-    lowseq = Counter()
-    lowseqname = dict()
-    # Append to a fasta file - need to add a check to see if file exists
-    with open(out_file, "w") as f:
-        for key, value in seqs.items():
-            if value > thresh:
-                f.writelines('>seq_{0}_x{1}\n{2}'.format(count, value, key))
-            else:
-                lowseq[key] += 1
-                lowseqname[key] = count
-            count += 1
-    if low_count_file is not None:
-        with open(low_count_file, "w") as f:
-            for key, value in lowseq.items():
-                f.writelines('>seq_{0}_x{1}\n{2}'.format(lowseqname[key], value, key))
+
+    # >seq_INDEX_xCOUNT
+    # SEQUENCE
+    def to_fasta_record(x):
+        # x[0]=index, x[1][1]=sequence count, x[1][0]=sequence
+        return '\n'.join([
+            f">seq_{x[0]}_x{x[1][1]}",
+            f"{x[1][0]}"
+        ])
+
+    def get_above_thresh(x):
+        return x[1][1] > thresh
+
+    def get_below_thresh(x):
+        return x[1][1] <= thresh
+
+    above_thresh = filter(get_above_thresh, enumerate(seqs.items()))
+    below_thresh = filter(get_below_thresh, enumerate(seqs.items()))
+
+    if os.path.exists(out_file):
+        print(f"Error: {out_file} already exists.")
+        return
+
+    with open(out_file, 'w') as fasta:
+        if thresh == 0:  # No filtering required
+            fasta.write('\n'.join(map(to_fasta_record, enumerate(seqs.items()))))
+        else:
+            fasta.write('\n'.join(map(to_fasta_record, above_thresh)))
+
+    if low_count_file:
+        if os.path.exists(low_count_file):
+            print(f"Error: {low_count_file} already exists.")
+            return
+        with open(low_count_file, 'w') as lcf:
+            lcf.write('\n'.join(map(to_fasta_record, below_thresh)))
+
 
 def main():
     """
