@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import unit_test_helpers as helpers
+from . import unit_test_helpers as helpers
 import aquatx.aquatx as aquatx
 
 import unittest
@@ -18,7 +18,12 @@ test covers both environments.
 
 """
 class test_aquatx(unittest.TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpClass(self):
+        # Change CWD to test folder if test was invoked from project root (ex: by Travis)
+        if os.path.basename(os.getcwd()) == 'aquatx-srna':
+            os.chdir(f".{os.sep}tests")
+
         # For pre-install tests
         self.aquatx_cwl_path = '../aquatx/cwl'
         self.aquatx_extras_path = '../aquatx/extras'
@@ -124,7 +129,7 @@ class test_aquatx(unittest.TestCase):
     def test_setup_cwl_withconfig(self):
         test_functions = [
             helpers.LambdaCapture(lambda: aquatx.setup_cwl(self.aquatx_cwl_path, self.config_file)),
-            #helpers.ShellCapture(f"aquatx setup-cwl --config {self.config_file}")
+            helpers.ShellCapture(f"aquatx setup-cwl --config {self.config_file}")
         ]
         for test_context in test_functions:
             # So that we may reference the filename in the finally block below
@@ -144,6 +149,7 @@ class test_aquatx(unittest.TestCase):
 
                 # Check that the processed configuration file exists
                 self.assertTrue(os.path.isfile(config_file_location), f"The processed config file does not exist: {config_file_location}")
+                os.remove(config_file_location)
 
                 # Check (by name and directory structure) that the expected files/folders were produced
                 self.assertEqual(helpers.get_dir_tree('./cwl'),
@@ -222,7 +228,7 @@ class test_aquatx(unittest.TestCase):
     A very minimal test for the function context manager that is used
     to execute pre-install invocations of aquatx Python functions
     """
-    def test_fn_ctx_mgr(self):
+    def test_LambdaCapture_helper(self):
         # Test stdout capture
         with helpers.LambdaCapture(lambda: print("Today is the day")) as fn:
             # Pre-execution test
