@@ -181,16 +181,20 @@ class test_aquatx(unittest.TestCase):
             helpers.ShellCapture(f"aquatx run --config {self.config_file}", blocking=False)
         ]
 
+        def get_children():
+            return psutil.Process(os.getpid()).children(recursive=True)
+
         for test_context in test_functions:
             with test_context as test:
                 test()
 
-                # Allow some time for the cwltool subprocess to spin up
-                time.sleep(1)
+                # Check for cwltool in child processes up to 5 times, waiting 1 second in between
+                for i in range(10):
+                    time.sleep(1)
+                    sub_names = [sub.name() for sub in get_children()]
+                    if 'cwltool' in sub_names:
+                        break
 
-                # Get the names of all descendents of the current process
-                subprocs = psutil.Process(os.getpid()).children(recursive=True)
-                sub_names = [sub.name() for sub in subprocs]
                 self.assertIn('cwltool', sub_names,
                               f"The cwltool subprocess does not appear to have started. Function: {test_context}")
 
@@ -215,7 +219,7 @@ class test_aquatx(unittest.TestCase):
             self.assertEqual(fn.get_exit_status(), 0)
 
         # Test non-blocking capture with stderr (though we can still check stdout with a non-blocking capture...)
-        with helpers.ShellCapture('echo "Today was not the day" > /dev/stderr', blocking=False) as fn:
+        with helpers.ShellCapture('echo "Today was not the day" > /dev/stderr && sleep 1', blocking=False) as fn:
             # Pre-execution test
             self.assertFalse(fn.is_complete())
             self.assertEqual(fn.get_stdout(), '')
@@ -261,8 +265,8 @@ class test_aquatx(unittest.TestCase):
             self.assertEqual(fn.get_stderr(), "Today wasn't the day\n")
 
         # Test non-blocking execution
-        with helpers.LambdaCapture(lambda: time.sleep(2), blocking=False) as fn:
+        with helpers.LambdaCapture(lambda: time.sleep(1), blocking=False) as fn:
             fn()
             self.assertFalse(fn.is_complete())
-            time.sleep(3)
+            time.sleep(1)
             self.assertTrue(fn.is_complete())

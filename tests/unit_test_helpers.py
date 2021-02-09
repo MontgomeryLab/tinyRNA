@@ -106,7 +106,10 @@ class ShellCapture:
     def __exit__(self, exception_type, exception_value, exception_traceback):
         # Remove child processes starting with lowest descendents first
         for subproc in reversed(psutil.Process(os.getpid()).children(recursive=True)):
-            subproc.terminate()
+            try:
+                subproc.terminate()
+            except psutil.NoSuchProcess:
+                pass # If subprocess already exited, do nothing
 
         # Restore SIGCHLD handler to default
         signal.signal(signal.SIGCHLD, self.default_SIGCHLD_handler)
@@ -203,7 +206,10 @@ class LambdaCapture:
     def __exit__(self, exception_type, exception_value, exception_traceback):
         # Remove child processes starting with lowest descendents first
         for subproc in reversed(psutil.Process(os.getpid()).children(recursive=True)):
-            subproc.terminate()
+            try:
+                subproc.terminate()
+            except psutil.NoSuchProcess:
+                pass # If subprocess already exited, do nothing
 
         # Restore original stdout/stderr system attributes
         sys.stdout.flush()
