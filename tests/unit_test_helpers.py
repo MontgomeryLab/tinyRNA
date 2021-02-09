@@ -11,17 +11,21 @@ import sys
 import io
 import os
 
-"""
-Returns a nested dictionary representation of a given directory tree.
-Each directory is assigned its own sub-dictionary. Files within a
-directory are listed under the "files" array key within that directory's
-dictionary. This is very useful for checking correctness of operations
-which generate complex nested file outputs.
-"""
 
+def get_dir_tree(root_path: str) -> dict:
+    """Returns a nested dictionary representation of a given directory tree.
 
-def get_dir_tree(root_path):
-    root_dir = os.path.basename(root_path)
+    Each directory is assigned its own sub-dictionary. Files within a directory
+    are listed under the "files" set key within that directory's dictionary.
+    This is very useful for checking correctness of operations which generate
+    complex nested file outputs.
+
+    Args:
+        root_path: The relative or absolute path of the directory from which to start.
+            The base name (the lowest directory name defined in the path) will occupy
+            the top level of the resulting dictionary.
+    """
+    root_dir = os.path.basename(root_path) if root_path != '"."' else os.path.basename(os.getcwd())
     dir_tree = {root_dir: {}}
 
     for top, dirs, files in os.walk(root_path):
@@ -37,16 +41,20 @@ def get_dir_tree(root_path):
     return dir_tree
 
 
-"""
-Returns a nested dictionary representation of a given directory tree, as above.
-However, this function also tags each file with an md5 checksum of its contents.
-This is useful for validating both structure AND content of complex nested
-file outputs.
-"""
+def get_dir_checksum_tree(root_path: str) -> dict:
+    """Returns a nested dictionary representation of a given directory tree with md5 file checksums
 
+    Same as `get_dir_tree()` but each file in a directory's "files" set is represented as
+    a tuple: (fileName, md5checksum). The md5 checksum is determined by the file's contents.
+    This is useful for validating both structure AND content of complex nested file outputs.
 
-def get_dir_checksum_tree(root_path):
-    root_dir = os.path.basename(root_path)
+    Args:
+        root_path: The relative or absolute path of the directory from which to start.
+            The base name (the lowest directory name defined in the path) will occupy
+            the top level of the resulting dictionary.
+    """
+
+    root_dir = os.path.basename(root_path) if root_path != '"."' else os.path.basename(os.getcwd())
     dir_tree = {root_dir: {}}
 
     for top, dirs, files in os.walk(root_path):
@@ -67,20 +75,44 @@ def get_dir_checksum_tree(root_path):
     return dir_tree
 
 
-"""
-Context manager for executing the given post-install aquatx command and
-reading the command's stdout/stderr, then properly terminating any remaining
-children to avoid zombie processes. It's not as dark as it sounds.
-"""
-
-
 class ShellCapture:
-    # Constructor
-    def __init__(self, command, blocking=True):
+    """Context manager for executing a shell command and reading the command's output
+
+    Both blocking (execution of this script halts while the target completes) and
+    non-blocking (execution of this script continues in parallel with the target) invocation
+    is supported. Progress of the command can be measured using is_complete() and
+    get_exit_status(). The entire child processes tree is properly terminated upon context
+    exit to avoid creating zombie processes. STDOUT and STDERR are captured, meaning
+    they are not printed to the console. Both STDOUT and STDERR can be retrieved for
+    both blocking and non-blocking contexts.
+
+    This object MUST be used as a context manager in a "with" block for proper behavior.
+    However, its target command is executed with the () operator and you may interface
+    with its attributes as you would any other object.
+
+    Examples:
+        with ShellCapture('for i in {1..5}; do echo "$i"; done') as shellEx:
+            shellEx()
+            print(f"The command output was {shellEx.get_stdout()}")
+
+    Attributes:
+        invocation: the command to be executed, with the appropriate blocking/non-blocking
+            wrapper function to capture output streams
+        blocking: a boolean variable to indicate which wrapper function was used
+    """
+
+    def __init__(self, command: str, blocking=True) -> None:
+        """Class constructor
+
+        Args:
+            command: The target shell command to be executed when this object is invoked with ()
+            blocking: True for blocking execution, False for non-blocking execution
+        """
+
         # Sanitize input to avoid any risk of shell injection, then tokenize
         tokenized_command = shlex.split(shlex.quote(command))
         # Assemble subprocess invocation
-        self.blocking, self.result = blocking, None
+        self.blocking, self._result = blocking, None
         subprocess_method = subprocess.run if blocking else subprocess.Popen
         self.invocation = lambda: subprocess_method(
             tokenized_command,              # A list containing the command and each argument as separate elements
@@ -90,81 +122,126 @@ class ShellCapture:
             shell=True                      # Executes the command through a shell, allows for access to shell features
         )
 
-    # Allows this object to be called as though it were also a function
-    def __call__(self):
-        # Set handler for child process termination (avoids zombie children)
-        signal.signal(signal.SIGCHLD, self.__handle_sigchld)
-        self.result = self.invocation()
+    def __call__(self) -> None:
+        """Allows this object to be called as though it were also a function"""
 
-    # Executed upon context entry
-    def __enter__(self):
-        # Save the default SIGCHLD handler to restore later
-        self.default_SIGCHLD_handler = signal.getsignal(signal.SIGCHLD)
+        self._result = self.invocation()
+
+    def __enter__(self) -> 'ShellCapture':
+        """Executed upon context entry.
+
+        The default signal handler for SIGCHLD is saved so that it may be
+        restored later. The default handler is replaced with a custom handler.
+        """
+
+        self._default_SIGCHLD_handler = signal.getsignal(signal.SIGCHLD)
+        signal.signal(signal.SIGCHLD, self._handle_sigchld)
         return self
 
-    # Executed upon context exit or exception
-    def __exit__(self, exception_type, exception_value, exception_traceback):
-        # Remove child processes starting with lowest descendents first
+    def __exit__(self, exception_type, exception_value, exception_traceback) -> None:
+        """Executed upon context exit or exception
+
+        The entire child process tree is terminated from leaf to root, and
+        the default SIGCHLD handler is restored.
+        """
+
         for subproc in reversed(psutil.Process(os.getpid()).children(recursive=True)):
             try:
                 subproc.terminate()
             except psutil.NoSuchProcess:
-                pass # If subprocess already exited, do nothing
+                pass  # If subprocess already exited, do nothing
 
-        # Restore SIGCHLD handler to default
-        signal.signal(signal.SIGCHLD, self.default_SIGCHLD_handler)
+        signal.signal(signal.SIGCHLD, self._default_SIGCHLD_handler)
 
-    def get_stdout(self):
-        if self.result is None: return ''
-        elif self.blocking:  # subprocess.run -- stdout is a string object
-            return self.result.stdout
-        else:  # subprocess.Popen -- stdout is a stream object
-            return self.result.communicate()[0]
+    def get_stdout(self) -> str:
+        """Retrieves the captured STDOUT of the target command"""
 
-    def get_stderr(self):
-        if self.result is None: return ''
-        elif self.blocking:  # subprocess.run -- stderr is a string object
-            return self.result.stderr
-        else:  # subprocess.Popen -- stderr is a stream object
-            return self.result.communicate()[1]
+        if self._result is None: return ''
+        elif self.blocking:
+            return self._result.stdout  # subprocess.run -- stdout is a string object
+        else:
+            return self._result.communicate()[0]  # subprocess.Popen -- stdout is a stream object
 
-    def is_complete(self):
+    def get_stderr(self) -> str:
+        """Retrieves the captured STDERR of the target command"""
+
+        if self._result is None: return ''
+        elif self.blocking:
+            return self._result.stderr  # subprocess.run -- stderr is a string object
+        else:
+            return self._result.communicate()[1]  # subprocess.Popen -- stderr is a stream object
+
+    def is_complete(self) -> bool:
+        """Checks if the target command has finished execution"""
+
         if self.blocking:
             # A blocking call will have a non-None result only after complete execution
-            return self.result is not None
-        if not self.blocking and self.result is not None:
+            return self._result is not None
+        if not self.blocking and self._result is not None:
             # A non-blocking call may still be running. If so, .poll() will be None until complete
-            return self.result.poll() is not None
+            return self._result.poll() is not None
         else:
             return False
 
-    def get_exit_status(self):
-        return self.result.returncode if self.is_complete() else None
+    def get_exit_status(self) -> int:
+        """Returns the target command's exit status if it has finished"""
+
+        return self._result.returncode if self.is_complete() else None
 
     @staticmethod
-    def __handle_sigchld(signum, stackframe):
-        # Removes terminated child processes from the process table.
-        # This avoids creating zombie processes after termination.
+    def _handle_sigchld(signum, stackframe):
+        """Removes terminated child processes from the process table.
+
+        This avoids creating zombie processes after termination (and the
+        resource warnings that accompany)
+        """
+
         try:
             os.waitpid(-1, os.WNOHANG)
         except ChildProcessError:
             pass
 
 
-"""
-Context manager for executing the given pre-install Python function
-in a new thread and reading the resulting stdout/stderr. The procedure
-for capturing stdout and stderr was informed by contextlib, which was not
-suitable for this application since daemon threads were exiting without
-proper context cleanup and this was leading to broken global stdout/stderr
-hooks. This implementation properly handles the transaction.
-"""
-
-
 class LambdaCapture:
+    """Context manager for executing a Python function and reading the function's output
 
-    # Constructor takes a lambda function to be executed
-    def __init__(self, function_call, blocking=True):
+    Both blocking (execution of this script halts while the target completes) and
+    non-blocking (execution of this script continues in parallel with the target) invocation
+    is supported. Progress of the function can be measured using is_complete(). The entire
+    child processes tree is properly terminated upon context exit to avoid creating zombie
+    processes. Note: this behavior can be overridden by the target if the target uses the
+    subprocess module or defines its own handler for SIGTERM or SIGCHLD. STDOUT and STDERR
+    are captured, meaning they are not printed to the console. Note: this behavior can be
+    overridden by the target. Both STDOUT and STDERR can be retrieved for both blocking and
+    non-blocking contexts. The procedure for capturing stdout and stderr was informed by
+    contextlib, which was not suitable for this application since daemon threads were exiting
+    without proper context cleanup and this was leading to broken global stdout/stderr hooks.
+    This implementation properly handles the transaction.
+
+    This object MUST be used as a context manager in a "with" block for proper behavior.
+    However, its target command is executed with the () operator and you may interface
+    with its attributes as you would any other object.
+
+    Examples:
+        with LambdaCapture(lambda: print("oops", file=sys.stderr), blocking=False) as lambdaCap:
+            lambdaCap()
+            time.sleep(1)
+            print(f"{lambdaCap.get_stderr()} was printed")
+
+    Attributes:
+        function_thread: The target function, wrapped in a thread which hooks stdout/stderr for capture
+        blocking: A boolean variable to indicate whether the target function will be executed in
+            serial or parallel
+    """
+
+    def __init__(self, function_call: callable, blocking=True) -> None:
+        """Class constructor
+
+        Args:
+            function_call: a lambda function to be executed when this object is invoked with ()
+            blocking: True for blocking execution, False for non-blocking execution
+        """
+
         self._stdout = io.StringIO()
         self._stderr = io.StringIO()
         self._old_targets = {}
@@ -187,29 +264,36 @@ class LambdaCapture:
         else:
             raise ValueError("Constructor requires a lambda function. Your argument was not.")
 
-    # Allows this object to be called as though it were also a function
-    def __call__(self):
-        # Set handler for child process termination (avoids zombie children)
-        signal.signal(signal.SIGCHLD, self.__handle_sigchld)
-        # Execute the target function
+    def __call__(self) -> None:
+        """Allows this object to be called as though it were also a function"""
+
         self.function_thread.start()
-        # Wait for the thread to finish before returning from this call
         if self.blocking: self.function_thread.join()
 
-    # Executed upon context entry
-    def __enter__(self):
-        # Save the default SIGCHLD handler to restore later
-        self.default_SIGCHLD_handler = signal.getsignal(signal.SIGCHLD)
+    def __enter__(self) -> 'LambdaCapture':
+        """Executed upon context entry
+
+        The default signal handler for SIGCHLD is saved so that it may be
+        restored later. The default handler is replaced with a custom handler.
+        """
+
+        self._default_SIGCHLD_handler = signal.getsignal(signal.SIGCHLD)
+        signal.signal(signal.SIGCHLD, self._handle_sigchld)
         return self
 
-    # Executed upon context exit or exception
-    def __exit__(self, exception_type, exception_value, exception_traceback):
-        # Remove child processes starting with lowest descendents first
+    def __exit__(self, exception_type, exception_value, exception_traceback) -> None:
+        """Executed upon context exit or exception
+
+        The entire child process tree is terminated from leaf to root, default
+        STDOUT and STDERR behavior is restored, and the default SIGCHLD handler
+        is restored.
+        """
+
         for subproc in reversed(psutil.Process(os.getpid()).children(recursive=True)):
             try:
                 subproc.terminate()
             except psutil.NoSuchProcess:
-                pass # If subprocess already exited, do nothing
+                pass  # If subprocess already exited, do nothing
 
         # Restore original stdout/stderr system attributes
         sys.stdout.flush()
@@ -218,31 +302,37 @@ class LambdaCapture:
             setattr(sys, stream, orig_target)
 
         # Restore SIGCHLD handler to default
-        signal.signal(signal.SIGCHLD, self.default_SIGCHLD_handler)
+        signal.signal(signal.SIGCHLD, self._default_SIGCHLD_handler)
 
-    def get_stdout(self):
-        # If function_thread has been assigned an identity, then it has been .start()ed
+    def get_stdout(self) -> str:
+        """Retrieves the captured STDOUT of the target function"""
+
         if self.function_thread.ident is not None:
             return self._stdout.getvalue()
         else:
             return ''
 
-    def get_stderr(self):
-        # If function_thread has been assigned an identity, then it has been .start()ed
+    def get_stderr(self) -> str:
+        """Retrieves the captured STDOUT of the target function"""
+
         if self.function_thread.ident is not None:
             return self._stderr.getvalue()
         else:
             return ''
 
-    # Check if the function has been executed AND is no longer alive
-    def is_complete(self):
+    def is_complete(self) -> bool:
+        """Returns true if the wrapper has been executed AND is no longer alive"""
+
         return self.function_thread.ident is not None and not self.function_thread.is_alive()
 
-    # Private method
     @staticmethod
-    def __handle_sigchld(signum, stackframe):
-        # Removes terminated child processes from the process table.
-        # This avoids creating zombie processes after termination.
+    def _handle_sigchld(signum, stackframe):
+        """Removes terminated child processes from the process table.
+
+        This avoids creating zombie processes after termination (and the
+        resource warnings that accompany)
+        """
+
         try:
             os.waitpid(-1, os.WNOHANG)
         except ChildProcessError:
