@@ -1,19 +1,15 @@
 """
 Helper functions for unit tests
 """
+import subprocess
+import threading
+import hashlib
+import signal
+import psutil
+import shlex
+import sys
 import io
 import os
-import shlex
-import signal
-import sys
-import threading
-import types
-
-import psutil
-import hashlib
-import subprocess
-import contextlib
-
 
 """
 Returns a nested dictionary representation of a given directory tree.
@@ -73,7 +69,7 @@ def get_dir_checksum_tree(root_path):
 
 """
 Context manager for executing the given post-install aquatx command and
-reading the command's stdout, then properly terminating any remaining
+reading the command's stdout/stderr, then properly terminating any remaining
 children to avoid zombie processes. It's not as dark as it sounds.
 """
 
@@ -89,7 +85,7 @@ class ShellCapture:
         self.invocation = lambda: subprocess_method(
             tokenized_command,              # A list containing the command and each argument as separate elements
             stdout=subprocess.PIPE,         # Capture stdout
-            stderr=subprocess.STDOUT,       # Redirect stderr to stdout
+            stderr=subprocess.PIPE,         # Capture stderr
             universal_newlines=True,        # Assume utf-8 (non-binary) command output
             shell=True                      # Executes the command through a shell, allows for access to shell features
         )
@@ -98,10 +94,7 @@ class ShellCapture:
     def __call__(self):
         # Set handler for child process termination (avoids zombie children)
         signal.signal(signal.SIGCHLD, self.__handle_sigchld)
-        if self.invocation is not None:
-            self.result = self.invocation()
-        else:
-            print("Improperly constructed wrapper was invoked.")
+        self.result = self.invocation()
 
     # Executed upon context entry
     def __enter__(self):
@@ -111,26 +104,33 @@ class ShellCapture:
 
     # Executed upon context exit or exception
     def __exit__(self, exception_type, exception_value, exception_traceback):
-        # Remove child processes so we can handle SIGCHLD and remove from process table
-        # Descendents list is reversed so that the lowest descendents are terminated first
+        # Remove child processes starting with lowest descendents first
         for subproc in reversed(psutil.Process(os.getpid()).children(recursive=True)):
             subproc.terminate()
 
         # Restore SIGCHLD handler to default
         signal.signal(signal.SIGCHLD, self.default_SIGCHLD_handler)
 
-    def get_output(self):
-        if self.blocking: # subprocess.run -- stdout is a string object
-            return self.result.stdout if self.result is not None else None
-        else: # subprocess.Popen -- stdout is a stream object
-            return self.result.communicate()[0] if self.result is not None else None
+    def get_stdout(self):
+        if self.result is None: return ''
+        elif self.blocking:  # subprocess.run -- stdout is a string object
+            return self.result.stdout
+        else:  # subprocess.Popen -- stdout is a stream object
+            return self.result.communicate()[0]
+
+    def get_stderr(self):
+        if self.result is None: return ''
+        elif self.blocking:  # subprocess.run -- stderr is a string object
+            return self.result.stderr
+        else:  # subprocess.Popen -- stderr is a stream object
+            return self.result.communicate()[1]
 
     def is_complete(self):
-        # A blocking call will have a non-None result only after complete execution
         if self.blocking:
+            # A blocking call will have a non-None result only after complete execution
             return self.result is not None
-        # A non-blocking call may still be running. If so, .poll() will be None until complete
         if not self.blocking and self.result is not None:
+            # A non-blocking call may still be running. If so, .poll() will be None until complete
             return self.result.poll() is not None
         else:
             return False
@@ -138,8 +138,8 @@ class ShellCapture:
     def get_exit_status(self):
         return self.result.returncode if self.is_complete() else None
 
-    # Private method
-    def __handle_sigchld(self, signum, stackframe):
+    @staticmethod
+    def __handle_sigchld(signum, stackframe):
         # Removes terminated child processes from the process table.
         # This avoids creating zombie processes after termination.
         try:
@@ -150,29 +150,30 @@ class ShellCapture:
 
 """
 Context manager for executing the given pre-install Python function
-in a new thread and reading the resulting stdout. The procedure for
-capturing stdout and stderr was informed by contextlib, which was not
+in a new thread and reading the resulting stdout/stderr. The procedure
+for capturing stdout and stderr was informed by contextlib, which was not
 suitable for this application since daemon threads were exiting without
 proper context cleanup and this was leading to broken global stdout/stderr
 hooks. This implementation properly handles the transaction.
 """
 
 
-class LambdaCapture():
+class LambdaCapture:
 
     # Constructor takes a lambda function to be executed
     def __init__(self, function_call, blocking=True):
-        self._result = io.StringIO()
+        self._stdout = io.StringIO()
+        self._stderr = io.StringIO()
+        self._old_targets = {}
+        self.blocking = blocking
 
+        # This is the thread target in which outputs are hooked before executing the provided function
         def redirect_target_output():
             # Save current stdout/stderr targets to restore on context exit
             self._old_targets = {stream: getattr(sys, stream) for stream in ["stdout", "stderr"]}
-
-            sys.stderr.flush()
-            # Redirect streams to self._result
-            for stream in self._old_targets:
-                setattr(sys, stream, self._result)
-
+            # Set new targets to allow for capturing these streams
+            setattr(sys, "stdout", self._stdout)
+            setattr(sys, "stderr", self._stderr)
             # Finally, call target function
             function_call()
 
@@ -182,10 +183,6 @@ class LambdaCapture():
             self.function_thread = threading.Thread(target=redirect_target_output, daemon=True)
         else:
             raise ValueError("Constructor requires a lambda function. Your argument was not.")
-
-        # If blocking, __call__ will wait until the thread finishes
-        self.blocking = blocking
-        self._old_targets = {}
 
     # Allows this object to be called as though it were also a function
     def __call__(self):
@@ -208,27 +205,36 @@ class LambdaCapture():
         for subproc in reversed(psutil.Process(os.getpid()).children(recursive=True)):
             subproc.terminate()
 
-        sys.stdout.flush()
         # Restore original stdout/stderr system attributes
+        sys.stdout.flush()
+        sys.stderr.flush()
         for stream, orig_target in self._old_targets.items():
             setattr(sys, stream, orig_target)
 
         # Restore SIGCHLD handler to default
         signal.signal(signal.SIGCHLD, self.default_SIGCHLD_handler)
 
-    def get_output(self):
+    def get_stdout(self):
         # If function_thread has been assigned an identity, then it has been .start()ed
         if self.function_thread.ident is not None:
-            return self._result.getvalue()
+            return self._stdout.getvalue()
         else:
-            return None
+            return ''
+
+    def get_stderr(self):
+        # If function_thread has been assigned an identity, then it has been .start()ed
+        if self.function_thread.ident is not None:
+            return self._stderr.getvalue()
+        else:
+            return ''
 
     # Check if the function has been executed AND is no longer alive
     def is_complete(self):
         return self.function_thread.ident is not None and not self.function_thread.is_alive()
 
     # Private method
-    def __handle_sigchld(self, signum, stackframe):
+    @staticmethod
+    def __handle_sigchld(signum, stackframe):
         # Removes terminated child processes from the process table.
         # This avoids creating zombie processes after termination.
         try:

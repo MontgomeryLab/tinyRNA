@@ -104,7 +104,7 @@ class test_aquatx(unittest.TestCase):
 
                         # Check that the function did not mention the configuration file
                         self.assertNotIn(
-                            "configuration", test.get_output(),
+                            "configuration", test.get_stdout(),
                             "Setup mentioned configfile when None was provided")
 
                         # Check (by name and directory structure) that the expected files/folders were produced
@@ -134,15 +134,10 @@ class test_aquatx(unittest.TestCase):
                 # Execute the given function and capture its stdout stream
                 with test_context as test:
                     test()
-                    stdout_result = test.get_output()
+                    stdout_result = test.get_stdout()
                     # Get the name of the processed config file
                     config_file_location = stdout_result.splitlines()[1].split(": ")[1]
 
-                # Todo: address resource cleanup issues throwing off this test. Warnings are likely issued by cwltool,
-                # since it invokes subprocess.* functions which I believe leads to my SIGCHLD/anti-zombie handler from
-                # being properly called. Need to see if it is possible to hook this at a deeper system level (likely)
-                print("Result: " + stdout_result)
-                print("File: " + config_file_location)
                 # Check that the function mentioned the config file with a complete name
                 self.assertRegex(stdout_result, r'The processed configuration file is located at: \d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_run_config\.yml',
                               "Setup failed to mention the location of the processed config file.")
@@ -192,31 +187,36 @@ class test_aquatx(unittest.TestCase):
     A very minimal test for the subprocess context manager that is used
     to execute post-install aquatx commands via a shell.
     """
-    def test_subproc_ctx_mgr(self):
-        # Test blocking capture
+    def test_ShellCapture_helper(self):
+        # Test blocking capture with stdout (though we can still check stderr with a blocking capture...)
         with helpers.ShellCapture('echo "Today is the day"') as fn:
             # Pre-execution test
             self.assertFalse(fn.is_complete())
-            self.assertEqual(fn.get_output(), None)
+            self.assertEqual(fn.get_stdout(), '')
+            self.assertEqual(fn.get_stderr(), '')
             self.assertEqual(fn.get_exit_status(), None)
 
             fn()
             self.assertTrue(fn.is_complete())
-            self.assertEqual(fn.get_output(), "Today is the day\n")
+            self.assertEqual(fn.get_stdout(), "Today is the day\n")
+            self.assertEqual(fn.get_stderr(), '')
             self.assertEqual(fn.get_exit_status(), 0)
 
-        # Test non-blocking capture
-        with helpers.ShellCapture('echo "Today is the day"') as fn:
+        # Test non-blocking capture with stderr (though we can still check stdout with a non-blocking capture...)
+        with helpers.ShellCapture('echo "Today was not the day" > /dev/stderr', blocking=False) as fn:
             # Pre-execution test
             self.assertFalse(fn.is_complete())
-            self.assertEqual(fn.get_output(), None)
+            self.assertEqual(fn.get_stdout(), '')
+            self.assertEqual(fn.get_stderr(), '')
             self.assertEqual(fn.get_exit_status(), None)
 
             fn()
+            self.assertFalse(fn.is_complete())
             time.sleep(1)
-            self.assertTrue(fn.is_complete())
-            self.assertEqual(fn.get_output(), "Today is the day\n")
+            self.assertEqual(fn.get_stdout(), '')
+            self.assertEqual(fn.get_stderr(), "Today was not the day\n")
             self.assertEqual(fn.get_exit_status(), 0)
+            self.assertTrue(fn.is_complete())
 
     """
     A very minimal test for the function context manager that is used
@@ -227,22 +227,29 @@ class test_aquatx(unittest.TestCase):
         with helpers.LambdaCapture(lambda: print("Today is the day")) as fn:
             # Pre-execution test
             self.assertFalse(fn.is_complete())
-            self.assertEqual(fn.get_output(), None)
+            self.assertEqual(fn.get_stdout(), '')
+            self.assertEqual(fn.get_stderr(), '')
 
             fn()
             self.assertTrue(fn.is_complete())
-            self.assertEqual(fn.get_output(), "Today is the day\n")
+            self.assertEqual(fn.get_stdout(), "Today is the day\n")
+            self.assertEqual(fn.get_stderr(), '')
 
         # Test stderr capture
         with helpers.LambdaCapture(lambda: print("Today wasn't the day", file=sys.stderr)) as fn:
             # Pre-execution test
             self.assertFalse(fn.is_complete())
-            self.assertEqual(fn.get_output(), None)
+            self.assertEqual(fn.get_stdout(), '')
+            self.assertEqual(fn.get_stderr(), '')
 
             fn()
             self.assertTrue(fn.is_complete())
-            self.assertEqual(fn.get_output(), "Today wasn't the day\n")
+            self.assertEqual(fn.get_stdout(), '')
+            self.assertEqual(fn.get_stderr(), "Today wasn't the day\n")
 
-
-if __name__ == '__main__':
-    unittest.main()
+        # Test non-blocking execution
+        with helpers.LambdaCapture(lambda: time.sleep(2), blocking=False) as fn:
+            fn()
+            self.assertFalse(fn.is_complete())
+            time.sleep(2)
+            self.assertTrue(fn.is_complete())
