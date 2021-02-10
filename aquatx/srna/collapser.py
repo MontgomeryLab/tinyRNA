@@ -4,7 +4,10 @@ Headers of the final fasta file will contain the count
 import argparse
 import os
 
-try: # Load Counter's C helper function if it is available. Uses 30% less memory than Counter()
+from typing import Optional
+
+try:
+    # Load Counter's C helper function if it is available. Uses 30% less memory than Counter()
     from _collections import _count_elements
 except ImportError:
     # Uses slower mapping[elem] = mapping.get(elem,default_val)+1 in loop
@@ -17,9 +20,10 @@ def get_args():
     functions.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input-file', metavar='FASTQFILE', required=True,
+    parser.add_argument(
+        '-i', '--input-file', metavar='FASTQFILE', required=True,
                         help='input fastq file to collapse')
-    parser.add_argument('-o', '--out-file', metavar='OUTPUTFILE',
+    parser.add_argument('-o', '--out-file', metavar='OUTPUTFILE', required=True,
                         help='output file name to use')
     parser.add_argument('-t', '--threshold', type=int, default=0,
                         help='number of sequences needed to keep in'
@@ -33,9 +37,8 @@ def get_args():
     return args
 
 
-def seq_counter(fastq_file):
-    """
-    Counts number of times each sequence appears.
+def seq_counter(fastq_file: str) -> dict:
+    """Counts number of times each sequence appears.
     Skip quality scores since it is quality filtered
     data.
 
@@ -46,6 +49,7 @@ def seq_counter(fastq_file):
     Outputs:
         seqs: return a dict of {seq: count}
     """
+
     with open(fastq_file, 'rb') as f:
         def line_generator():    # Generator function for every 4th line (fastq sequence line) of file
             while f.readline():  # Sequence identifier
@@ -61,7 +65,7 @@ def seq_counter(fastq_file):
     return seqs
 
 
-def seq2fasta(seqs, out_file, thresh=0, low_count_file=None):
+def seq2fasta(seqs: dict, out_file: str, thresh: int = 0, low_count_file: Optional[str] = None) -> None:
     """
     Turns a sequence count dict into a fasta file.
 
