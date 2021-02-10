@@ -12,4 +12,5 @@ dependencies:
   - pip
   - pip:
       - htseq
+      - psutil
       - . # This allows pip to handle the installation of AQuATx via setup.py

@@ -1,78 +1,166 @@
 #!/usr/bin/env python
-"""
-The main entry point for AQuATx for small RNA data analysis. This tool provides an end-to-end
-workflow for analyzing small RNA sequencing data from raw fastq files. This entry point also provides
-options for only returning workflows that can be used separately or to retrieve template files.
+"""The main entry point for AQuATx for small RNA data analysis.
 
-When installed this script should be run as:
+This tool provides an end-to-end workflow for analyzing small RNA sequencing
+data from raw fastq files. This entry point also provides options for only
+returning template files and workflows that can be used separately.
 
-aquatx <subcommand> <args>
+Subcommands:
+    - get-template
+    - setup-cwl
+    - run
+
+When installed, run and setup-cwl should be invoked with:
+    aquatx <subcommand> --config <config-file>
+
+A configuration file should be supplied for the run subcommand (required)
+and for the setup-cwl subcommand (optional; alternatively you may use the
+word "None" or "none" to obtain only the workflow files). This config file
+will be processed and rewritten to reflect the workflow inputs defined under
+the keys `sample_sheet_file` and `reference_sheet_file` (use get-template for
+more info). Config files that share the same name as the template config file
+will be renamed.
 """
-import os
-import sys
+
+import aquatx.srna.configuration_setup
 import subprocess
-from shutil import copyfile
+import shutil
+import os
+
 from pkg_resources import resource_filename
+from argparse import ArgumentParser
+
+
+def get_args():
+    """Parses command line input"""
+
+    parser = ArgumentParser(description=__doc__)
+
+    # Parser for subcommands: (run, setup-cwl, get-template, etc.)
+    subparsers = parser.add_subparsers(required=True, dest='command')
+    subcommands_with_configfile = {
+        "run": "Processes the provided config file and executes the workflow it specifies.",
+        "setup-cwl": 'Processes the provided config file and copies workflow files to the current directory',
+        "setup-nextflow": "This subcommand is not yet implemented"
+    }
+
+    # Subcommands that require a configuration file argument
+    for command, desc in subcommands_with_configfile.items():
+        subparsers.add_parser(command).add_argument(
+            '--config', metavar='configFile', required=True, help=desc
+        )
+
+    # Subcommand get-template has no additional arguments
+    subparsers.add_parser("get-template",
+                          help="Copies run config, sample, and reference templates to current directory")
+
+    return parser.parse_args()
+
+
+def run(aquatx_cwl_path: str, config_file: str) -> None:
+    """Processes the provided config file and executes the workflow it defines
+
+    The provided configuration file will be processed and rewritten to reflect the content
+    of the sample and reference csv files. The location of these files is defined under the
+    config file's `sample_sheet_file` and `reference_sheet_file` keys. Config files named
+    "run_config_template.yml" will be left unmodified, and the processed config will
+    instead be written under a file whose name reflects the current date and time.
+
+    Args:
+        aquatx_cwl_path: The path to the project's CWL workflow file directory
+        config_file: The configuration file for this run.
+    """
+
+    print("Running the end-to-end analysis...")
+
+    # First get the configuration file set up for this run
+    workflow_conf_file = aquatx.srna.configuration_setup.setup_config(config_file)
+
+    # Run with cwltool
+    subprocess.run(f"cwltool {aquatx_cwl_path}/workflows/aquatx_wf.cwl {workflow_conf_file}", shell=True)
+
+
+def get_template(aquatx_extras_path: str) -> None:
+    """Retrieves the template run configuration file, and the sample/reference csv templates
+
+    Args:
+        aquatx_extras_path: The path to the project's extras directory. This directory
+            contains templates for the run configuration, sample inputs, and reference
+            inputs.
+    """
+
+    print("Copying template input files to current directory...")
+    template_files = [
+        'run_config_template.yml',
+        'sample_sheet_template.csv',
+        'reference_sheet_template.csv'
+    ]
+
+    # Copy template files to the current working directory
+    for template in template_files:
+        shutil.copyfile(f"{aquatx_extras_path}/{template}", f"{os.getcwd()}/{template}")
+
+
+def setup_cwl(aquatx_cwl_path: str, config_file: str) -> None:
+    """Retrieves the project's workflow files, and if provided, processes the run config file
+
+    Args:
+        aquatx_cwl_path: The path to the project's CWL workflow file directory
+        config_file: The configuration file to be processed (or None/none to skip processing)
+
+    """
+
+    print("Creating cwl workflow...")
+
+    # If the word "None" or "none" is supplied, simply copy workflow files. No config file processing.
+    if config_file not in ('None', 'none'):
+        # Set up the config file
+        processed_config_location = aquatx.srna.configuration_setup.setup_config(config_file)
+        print("The processed configuration file is located at: " + processed_config_location)
+
+    # Copy the entire cwl directory to the current working directory
+    shutil.copytree(aquatx_cwl_path, os.getcwd() + "/cwl/")
+    print("The workflow and files are under: cwl/tools/ and cwl/workflows/")
+
+
+def setup_nextflow(config_file: str) -> None:
+    """This function is not yet implemented
+
+    Args:
+        config_file: The YML run configuration file to be converted for use with Nextflow
+
+    """
+
+    print("Creating nextflow workflow...")
+    print("This command is currently not implemented.")
+
 
 def main():
-    """
-    The main routine that determines what type of run to do.
+    """The main routine that determines what type of run to do.
 
     Options:
-
         run: Run the end-to-end analysis based on a config file.
         get-template: Get the input sheets & template config files.
         setup-cwl: Get the CWL workflow for a run
     """
 
+    # Parse command line arguments
+    args = get_args()
+
     # Get the package data
     aquatx_cwl_path = resource_filename('aquatx', 'cwl/')
     aquatx_extras_path = resource_filename('aquatx', 'extras/')
 
-    if sys.argv[1] == "run":
-        print("Running the end-to-end analysis...")
+    # Execute appropriate command based on command line input
+    command_map = {
+        "run": lambda: run(aquatx_cwl_path, args.config),
+        "setup-cwl": lambda: setup_cwl(aquatx_cwl_path, args.config),
+        "get-template": lambda: get_template(aquatx_extras_path),
+        "setup-nextflow": lambda: setup_nextflow(args.config)
+    }
 
-        # First get the configuration file set up
-        conf = subprocess.run(['aquatx-config'] + sys.argv[2:], stdout=subprocess.PIPE)
-        config_file = conf.stdout.decode('utf-8')
+    command_map[args.command]()
 
-        # Run with cwltool
-        subprocess.run('cwltool ' + aquatx_cwl_path + 'workflows/aquatx_wf.cwl '
-                       + config_file,
-                       shell=True, stdout=subprocess.PIPE)
-
-    elif sys.argv[1] == "get-template":
-        print("Copying template input files to current directory...")
-
-        copyfile(aquatx_extras_path + 'run_config_template.yml', './run_config_template.yml')
-        copyfile(aquatx_extras_path + 'sample_sheet_template.csv', './sample_sheet_template.csv')
-        copyfile(aquatx_extras_path + 'reference_sheet_template.csv', './reference_sheet_template.csv')
-
-    elif sys.argv[1] == "setup-cwl":
-        print("Creating cwl workflow...")
-
-        if sys.argv[3] not in ('None', 'none'):
-            print("The configuration file: ")
-            subprocess.run(['aquatx-config'] + sys.argv[2:], stdout=subprocess.PIPE)
-
-        print("\nThe workflow and files are under: cwl/tools/ and cwl/workflows/")
-        os.makedirs('cwl/tools/', exist_ok=True)
-        os.makedirs('cwl/workflows', exist_ok=True)
-        copyfile(aquatx_cwl_path + 'tools/bowtie.cwl', 'cwl/tools/bowtie.cwl')
-        copyfile(aquatx_cwl_path + 'tools/aquatx-collapse.cwl', 'cwl/tools/aquatx-collapse.cwl')
-        copyfile(aquatx_cwl_path + 'tools/aquatx-count.cwl', 'cwl/tools/aquatx-count.cwl')
-        copyfile(aquatx_cwl_path + 'tools/aquatx-deseq.cwl', 'cwl/tools/aquatx-deseq.cwl')
-        copyfile(aquatx_cwl_path + 'tools/aquatx-merge.cwl', 'cwl/tools/aquatx-merge.cwl')
-        copyfile(aquatx_cwl_path + 'tools/bowtie-build.cwl', 'cwl/tools/bowtie-build.cwl')
-        copyfile(aquatx_cwl_path + 'tools/fastp.cwl', 'cwl/tools/fastp.cwl')
-        copyfile(aquatx_cwl_path + 'workflows/aquatx_wf.cwl', 'cwl/workflows/aquatx_wf.cwl')
-
-    elif sys.argv[1] == "setup-nextflow":
-        print("Creating nextflow workflow...")
-        print("This command is currently not implemented.")
-
-    else:
-        print("Command not recognized...")
 
 if __name__ == '__main__':
     main()
