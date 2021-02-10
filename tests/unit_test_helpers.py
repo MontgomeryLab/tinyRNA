@@ -21,11 +21,12 @@ def get_dir_tree(root_path: str) -> dict:
     complex nested file outputs.
 
     Args:
-        root_path: The relative or absolute path of the directory from which to start.
+        root_path: The relative or absolute path of the directory tree root.
             The base name (the lowest directory name defined in the path) will occupy
             the top level of the resulting dictionary.
     """
-    root_dir = os.path.basename(root_path) if root_path != '"."' else os.path.basename(os.getcwd())
+
+    root_dir = os.path.basename(os.path.realpath(root_path))
     dir_tree = {root_dir: {}}
 
     for top, dirs, files in os.walk(root_path):
@@ -49,12 +50,12 @@ def get_dir_checksum_tree(root_path: str) -> dict:
     This is useful for validating both structure AND content of complex nested file outputs.
 
     Args:
-        root_path: The relative or absolute path of the directory from which to start.
+        root_path: The relative or absolute path of the directory tree root.
             The base name (the lowest directory name defined in the path) will occupy
             the top level of the resulting dictionary.
     """
 
-    root_dir = os.path.basename(root_path) if root_path != '"."' else os.path.basename(os.getcwd())
+    root_dir = os.path.basename(os.path.realpath(root_path))
     dir_tree = {root_dir: {}}
 
     for top, dirs, files in os.walk(root_path):
@@ -67,7 +68,7 @@ def get_dir_checksum_tree(root_path: str) -> dict:
         context['files'] = set()
         for folder in dirs: context[folder] = {}
         for file in files:
-            path = f"{top}/{file}"
+            path = f"{top}{os.sep}{file}"
             with open(path, 'rb') as f:
                 # Add (file, hash) tuple
                 context['files'].add((file, hashlib.md5(f.read()).hexdigest()))
@@ -101,7 +102,7 @@ class ShellCapture:
         blocking: a boolean variable to indicate which wrapper function was used
     """
 
-    def __init__(self, command: str, blocking=True) -> None:
+    def __init__(self, command: str, blocking: bool = True) -> None:
         """Class constructor
 
         Args:
@@ -189,7 +190,7 @@ class ShellCapture:
         return self._result.returncode if self.is_complete() else None
 
     @staticmethod
-    def _handle_sigchld(signum, stackframe):
+    def _handle_sigchld(signum: int, stackframe: object) -> None:
         """Removes terminated child processes from the process table.
 
         This avoids creating zombie processes after termination (and the
@@ -234,7 +235,7 @@ class LambdaCapture:
             serial or parallel
     """
 
-    def __init__(self, function_call: callable, blocking=True) -> None:
+    def __init__(self, function_call: callable, blocking: bool = True) -> None:
         """Class constructor
 
         Args:
@@ -326,7 +327,7 @@ class LambdaCapture:
         return self.function_thread.ident is not None and not self.function_thread.is_alive()
 
     @staticmethod
-    def _handle_sigchld(signum, stackframe):
+    def _handle_sigchld(signum: int, stackframe: object) -> None:
         """Removes terminated child processes from the process table.
 
         This avoids creating zombie processes after termination (and the

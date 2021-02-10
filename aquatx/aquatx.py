@@ -69,7 +69,6 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
     Args:
         aquatx_cwl_path: The path to the project's CWL workflow file directory
         config_file: The configuration file for this run.
-
     """
 
     print("Running the end-to-end analysis...")
@@ -88,7 +87,6 @@ def get_template(aquatx_extras_path: str) -> None:
         aquatx_extras_path: The path to the project's extras directory. This directory
             contains templates for the run configuration, sample inputs, and reference
             inputs.
-
     """
 
     print("Copying template input files to current directory...")
@@ -125,7 +123,7 @@ def setup_cwl(aquatx_cwl_path: str, config_file: str) -> None:
     print("The workflow and files are under: cwl/tools/ and cwl/workflows/")
 
 
-def setup_nextflow(config_file):
+def setup_nextflow(config_file: str) -> None:
     """This function is not yet implemented
 
     Args:
