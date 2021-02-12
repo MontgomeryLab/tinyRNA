@@ -12,24 +12,33 @@ class MyTestCase(unittest.TestCase):
         if os.path.basename(os.getcwd()) == 'aquatx-srna':
             os.chdir(f".{os.sep}tests")
 
-        self.fastq_file = './testdata/gonad_seq_full_set/KB1_raw.fastq'
+        self.fastq_file = './testdata/cel_ws279/Lib303_test.fastq'
 
     def test_seq_counter(self):
-        seq_count_dict = collapser.seq_counter(self.fastq_file)
-        collapser.seq2fasta(seq_count_dict, "out.fa")
-
-    def test_verify_counts_file(self):
-        ref = {}
-        with open("testdata/collapser/KB1_counts_reference.txt", 'r') as f:
-            content = f.read().splitlines(keepends=False)
-            for line in content:
-                rec = line.split(" ")
-                if ref.get(rec[0], None) is not None:
-                    print("Duplicate sequence: " + rec[0])
-                ref[rec[0]] = int(rec[1])
+        with open("testdata/collapser/Lib303_counts_reference.json", 'r') as f:
+            reference = json.loads(f.read())
 
         seq_count_dict = collapser.seq_counter(self.fastq_file)
-        self.assertDictEqual(seq_count_dict, ref)
+        self.assertDictEqual(seq_count_dict, reference)
+
+        # Test correctness with min filesizes
+
+    def test_seq2fasta_nolowcount(self):
+        seq_count_dict = collapser.seq_counter(self.fastq_file)
+        collapser.seq2fasta(seq_count_dict, "Lib303.fa")
+
+        # Verify relative order (header index)
+        # Verify counts (header count, i.e. _xN)
+        # Test correctness with min filesizes (empty and 4 lines (1 record))
+
+    def test_seq2fasta_lowcount(self):
+        collapser.seq2fasta()
+
+        # test correctness of above/below rosters
+        # test threshold without defined outfile
+        # test threshold < 0
+        # test threshold = inf
+
 
 if __name__ == '__main__':
     unittest.main()
