@@ -97,8 +97,11 @@ def seq2fasta(seqs: dict, out_file: str, thresh: int = 0, low_count_file: Option
     above_thresh = filter(get_above_thresh, enumerate(seqs.items()))
     below_thresh = filter(get_below_thresh, enumerate(seqs.items()))
 
-    if os.path.exists(out_file):
+    if os.path.isfile(out_file):
         print(f"Error: {out_file} already exists.")
+        return
+    if os.path.isfile(os.path.join(os.getcwd(), out_file)):
+        print("Shit fire and save the matches")
         return
 
     with open(out_file, 'w') as fasta:
@@ -108,7 +111,7 @@ def seq2fasta(seqs: dict, out_file: str, thresh: int = 0, low_count_file: Option
             fasta.write('\n'.join(map(to_fasta_record, above_thresh)))
 
     if low_count_file:
-        if os.path.exists(low_count_file):
+        if os.path.isfile(low_count_file):
             print(f"Error: {low_count_file} already exists.")
             return
         with open(low_count_file, 'w') as lcf:
@@ -121,6 +124,8 @@ def main():
     """
     args = get_args()
     seqs = seq_counter(args.input_file)
+
+    # Todo: check if outfile exists HERE to avoid long running seq_counter() followed by crushing disappointment
 
     if args.keep_low_counts:
         seq2fasta(seqs, args.out_file, args.threshold, args.keep_low_counts)
