@@ -268,5 +268,5 @@ class test_aquatx(unittest.TestCase):
         with helpers.LambdaCapture(lambda: time.sleep(1), blocking=False) as fn:
             fn()
             self.assertFalse(fn.is_complete())
-            time.sleep(1)
+            time.sleep(2)
             self.assertTrue(fn.is_complete())
