@@ -5,6 +5,7 @@ import argparse
 import os
 
 from typing import Optional
+from collections import OrderedDict
 
 try:
     # Load Counter's C helper function if it is available. Uses 30% less memory than Counter()
@@ -59,9 +60,10 @@ def seq_counter(fastq_file: str) -> dict:
                 f.readline()     # Quality Score
 
         # Count occurrences of unique elements, and populate (merge) with seqs
-        seqs = dict()
+        seqs = OrderedDict()
         _count_elements(seqs, line_generator())
 
+    seqs.pop("", None)  # Remove blank line counts from the dictionary
     return seqs
 
 
@@ -78,6 +80,17 @@ def seq2fasta(seqs: dict, out_file: str, thresh: int = 0, low_count_file: Option
             >seq_N_xCOUNTS
             SEQUENCE
     """
+
+    # TODO: move these same checks to main(). Current state is sufficient for script use, but command line use will still spend time before notifying about the problem
+    # Check that we'll be able to write results before we spend time on the work
+    if out_file is None:
+        print("Collapser critical error: an output file must be specified.")
+        return
+
+    for output_file_to_check in [out_file, low_count_file]:
+        if output_file_to_check is not None and os.path.isfile(output_file_to_check):
+            print(f"Collapser critical error: {output_file_to_check} already exists.")
+            return
 
     # >seq_INDEX_xCOUNT
     # SEQUENCE
@@ -97,13 +110,6 @@ def seq2fasta(seqs: dict, out_file: str, thresh: int = 0, low_count_file: Option
     above_thresh = filter(get_above_thresh, enumerate(seqs.items()))
     below_thresh = filter(get_below_thresh, enumerate(seqs.items()))
 
-    if os.path.isfile(out_file):
-        print(f"Error: {out_file} already exists.")
-        return
-    if os.path.isfile(os.path.join(os.getcwd(), out_file)):
-        print("Shit fire and save the matches")
-        return
-
     with open(out_file, 'w') as fasta:
         if thresh == 0:  # No filtering required
             fasta.write('\n'.join(map(to_fasta_record, enumerate(seqs.items()))))
@@ -111,9 +117,6 @@ def seq2fasta(seqs: dict, out_file: str, thresh: int = 0, low_count_file: Option
             fasta.write('\n'.join(map(to_fasta_record, above_thresh)))
 
     if low_count_file:
-        if os.path.isfile(low_count_file):
-            print(f"Error: {low_count_file} already exists.")
-            return
         with open(low_count_file, 'w') as lcf:
             lcf.write('\n'.join(map(to_fasta_record, below_thresh)))
 
@@ -124,8 +127,6 @@ def main():
     """
     args = get_args()
     seqs = seq_counter(args.input_file)
-
-    # Todo: check if outfile exists HERE to avoid long running seq_counter() followed by crushing disappointment
 
     if args.keep_low_counts:
         seq2fasta(seqs, args.out_file, args.threshold, args.keep_low_counts)
