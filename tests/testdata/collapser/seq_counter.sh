@@ -8,12 +8,17 @@ if (( $# != 2 )); then
 fi
 
 awk '
-  BEGIN {print "{"; n = 0; i = 0}
-  NR % 2 == 0 && NR % 4 != 0 {if (!($0 in counts)) n++; counts[$0]++}
-  END {
-    for (seq in counts) {
-      printf "\t\"%s\": %d",seq,counts[seq]
-      if (i++ < n-1) print ","
-    }
+  BEGIN { print "{" }
+  NR % 2 == 0 && NR % 4 != 0 {
+    if (!($0 in counts)) idx_to_seq[n++] = $0
+    counts[$0]++
   }
-  END {print "\n}"}' "$1" >> "$2"
+  END {
+    for (i = 0; i < n-1; i++) {
+      seq = idx_to_seq[i]
+      printf "\t\"%s\": %d,\n",seq,counts[seq]
+    }
+    # No trailing comma for the last sequence
+    last_seq = idx_to_seq[n-1]
+    printf "\t\"%s\": %d\n}",last_seq,counts[last_seq]
+  }' "$1" >> "$2"
