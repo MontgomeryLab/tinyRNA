@@ -76,6 +76,14 @@ def get_dir_checksum_tree(root_path: str) -> dict:
     return dir_tree
 
 
+# Convenience function for resetting mocks between subtests
+def reset_mocks(mock_open_f, mock_os, mock_stdout):
+    mock_open_f.reset_mock()
+    mock_os.reset_mock()
+    mock_stdout.truncate(0)
+    mock_stdout.seek(0)  # Avoids prepending a null string of previous buffer size
+
+
 class ShellCapture:
     """Context manager for executing a shell command and reading the command's output
 
