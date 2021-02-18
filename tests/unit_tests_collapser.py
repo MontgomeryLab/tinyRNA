@@ -8,6 +8,7 @@ from io import StringIO
 import aquatx.srna.collapser as collapser
 
 from unittest.mock import patch, MagicMock, call, mock_open
+from tests.unit_test_helpers import reset_mocks
 
 
 class MyTestCase(unittest.TestCase):
@@ -22,7 +23,7 @@ class MyTestCase(unittest.TestCase):
             with open(file, 'r') as f:
                 return f.read()
 
-        # Test-length files and file-related messages
+        # Test-length files
         self.fastq_file = './testdata/cel_ws279/Lib303_test.fastq'
         self.fastq_counts_dict = json.loads(read('./testdata/collapser/Lib303_counts_reference.json'))
         self.fasta = {
@@ -31,9 +32,13 @@ class MyTestCase(unittest.TestCase):
             "thresh=4,low_count": read('testdata/collapser/Lib303_thresh_4_lowcount.fa')
         }
 
-        self.file_exists_fn = lambda x,y: y == "mockFileExists"
-        self.file_exists_msg = "Collapser critical error: mockFileExists already exists.\n"
-        self.file_required_msg = "Collapser critical error: an output file must be specified.\n"
+        # File-related messages
+        self.prefix_exists_fn = lambda x, y: y in self.output["file"]["exists"].values()
+        self.output = {"file": {
+            "exists": {"out": "mockPrefixExists_collapsed.fa", "low": "mockPrefixExists_collapsed_lowcounts.fa"},
+            "dne": {"out": "mockPrefixDNE_collapsed.fa", "low": "mockPrefixDNE_collapsed_lowcounts.fa"}}}
+        self.output["msg"] = {k: "Collapser critical error: "+v+" already exists.\n" for k,v in self.output["file"]["exists"].items()}
+        self.prefix_required_msg = "Collapser critical error: an output file must be specified.\n"
 
         # Min-length fastq/fasta (single record)
         self.min_seq = "GTTTTGTTGGGCTTTCGCGAAGATCGGAAGAGCACACGTCTGAACTCCAGTCACATCACGATCTCGTATGCCGTCT"
@@ -71,106 +76,93 @@ class MyTestCase(unittest.TestCase):
         self.assertDictEqual(seq_count_dict, self.fastq_counts_dict)
 
     """
+    Testing that the correct usage messages are produced when improperly calling seq2fasta(),
+    or when the specified prefix conflicts with files that already exist.
+    """
+    @patch('sys.stdout', new_callable=StringIO)
+    @patch('aquatx.srna.collapser.os', autospec=True)
+    @patch('aquatx.srna.collapser.open', new_callable=mock_open())
+    def test_seq2fasta_usage(self, mock_open_f, mock_os, mock_stdout):
+        # Simulate that prefix "mockPrefixExists" exists for both output files
+        mock_os.path.isfile.configure_mock(side_effect=self.prefix_exists_fn)
+
+        # Test minimum requirements assertions
+        with self.assertRaises(AssertionError) as cm:
+            collapser.seq2fasta({}, None)
+            collapser.seq2fasta({}, "mockPrefixDoesntExist", -1)
+        mock_os.path.isfile.assert_not_called()
+        mock_open_f.assert_not_called()
+        reset_mocks(mock_open_f, mock_os, mock_stdout)
+
+        # Output file exists
+        collapser.seq2fasta({}, "mockPrefixExists")
+        mock_os.path.isfile.assert_called_once_with(self.output["file"]["exists"]["out"])
+        mock_open_f.assert_not_called()
+        self.assertEqual(self.output["msg"]["out"], mock_stdout.getvalue())
+        reset_mocks(mock_open_f, mock_os, mock_stdout)
+
+        # Low counts file exists
+        mock_os.path.isfile.configure_mock(side_effect=lambda x: x == self.output["file"]["exists"]["low"])
+        collapser.seq2fasta({}, "mockPrefixExists")
+        mock_os.path.isfile.assert_has_calls([
+            call(self.output["file"]["exists"]["out"]),
+            call(self.output["file"]["exists"]["low"])
+        ])
+        mock_open_f.assert_not_called()
+        self.assertEqual(self.output["msg"]["low"], mock_stdout.getvalue())
+
+
+    """
     Testing seq2fasta() with all permutations of the "min" parameters defined in test_map.
     The purpose of this test is to see how the script handles minimum conditions: empty
-    sequence count dictionary, single record fastq, existing/non-existing/None output files,
-    and thresholds of 0 and 1.
+    sequence count dictionary, single record fastq, and thresholds of 0 and 1.
     """
     @patch('sys.stdout', new_callable=StringIO)
     @patch('aquatx.srna.collapser.os', autospec=True)
     @patch('aquatx.srna.collapser.open', new_callable=mock_open())
     def test_seq2fasta_min(self, mock_open_f, mock_os, mock_stdout):
-        # Patch os.path.exists to only return True if filename is "mockFileExists"
-        mock_os.path.isfile.configure_mock(side_effect=self.file_exists_fn)
+        # Simulate that prefix "mockPrefixExists" exists for both output files
+        mock_os.path.isfile.configure_mock(side_effect=self.prefix_exists_fn)
 
         # The parameter sets to permute
         test_map = {
             'seqs': [{}, self.min_counts_dict],
-            'out_file': [None, "mockFileExists", "mockFileDoesntExist"],
-            'thresh': [0, 1],
-            'low_count_file': [None, "mockFileExists", "mockFileDoesntExist"]
+            'out_prefix': ["mockPrefixDNE"],
+            'thresh': [0, 1]
         }
 
-        # Convenience function for resetting mocks between parameter permutations
-        def reset_mocks():
-            mock_open_f.reset_mock()
-            mock_os.reset_mock()
-            mock_stdout.truncate(0)
-            mock_stdout.seek(0)  # Avoids prepending a null string of previous buffer size
-
-        seqs: dict; out_file: str; thresh: int; low_count_file: str
+        seqs: dict; out_prefix: str; thresh: int
         for seqs in test_map['seqs']:
-            for out_file in test_map['out_file']:
+            for out_prefix in test_map['out_prefix']:
                 for thresh in test_map['thresh']:
-                    for low_count_file in test_map['low_count_file']:
 
-                        print(f"Test case: seqs={seqs}, out_file={out_file}, thresh={thresh}, low_count_file={low_count_file}", file=sys.stderr)
-                        collapser.seq2fasta(seqs, out_file, thresh, low_count_file)
+                    print(f"Test case: seqs={seqs}, out_prefix={out_prefix}, thresh={thresh}", file=sys.stderr)
+                    collapser.seq2fasta(seqs, out_prefix, thresh)
 
-                        # === Neither above nor below threshold filtering ===
-                        if out_file in ["mockFileExists", None]:
-                            # If there was a problem with out_file, then no files should have been opened for writing
-                            mock_open_f.assert_not_called()
-                            if out_file == "mockFileExists":
-                                # Assert that the proper error message was produced
-                                self.assertEqual(mock_stdout.getvalue(), self.file_exists_msg)
-                                # Assert that the script should have checked only for the existence of the outfile
-                                mock_os.path.isfile.assert_called_once_with(out_file)
-                            else:
-                                # Assert that the proper error message was produced
-                                self.assertEqual(mock_stdout.getvalue(), self.file_required_msg)
-                                # Assert that the script shouldn't have checked for the existence of a "None" file
-                                mock_os.path.isfile.assert_not_called()
+                    # No output messages should have been produced
+                    self.assertEqual(mock_stdout.getvalue(), "")
 
-                            # No further execution path from here if we aren't able to write outputs
-                            reset_mocks()
-                            continue
-                            # out_file does NOT exist in the following checks due to the above continue statement
+                    if thresh == 0:
+                        # Only the outfile should have been opened for writing. No low count file.
+                        mock_open_f.assert_called_once_with(self.output["file"]["dne"]["out"], "w")
+                        if seqs == {}:
+                            # Empty input sequences should result in empty out file
+                            mock_open_f.return_value.__enter__().write.assert_called_once_with('')
+                        elif seqs == self.min_counts_dict:
+                            mock_open_f.return_value.__enter__().write.assert_called_once_with(self.min_fasta)
 
-                        # === Only above threshold filtering ===
-                        elif low_count_file is None:
-                            # low_count_file is optional, no error should have been produced
-                            self.assertEqual(mock_stdout.getvalue(), "")
-                            # The script shouldn't have checked for the existence of a "None" low_count_file
-                            mock_os.path.isfile.assert_called_once_with(out_file)
-                            # Only one file output for this run: the out_file
-                            mock_open_f.assert_called_once_with(out_file, "w")
-                            if seqs == {} or thresh == 1:
-                                # One empty string write to out_file: record was below thresh and no low_count_file
-                                mock_open_f.return_value.__enter__().write.assert_called_once_with('')
-                            else:
-                                # Single record write to out_file, no data for low_count_file
-                                mock_open_f.return_value.__enter__().write.assert_called_once_with(
-                                    self.min_fasta)
+                    elif thresh == 1:
+                        # Both the outfile and low count file should have been written to
+                        if seqs == {}:
+                            # Empty input sequences should result in empty out and low count file.
+                            mock_open_f.return_value.__enter__().write.assert_has_calls([call(''), call('')])
+                        elif seqs == self.min_counts_dict:
+                            # An empty outfile and a populated low count file should have been written
+                            mock_open_f.return_value.__enter__().write.assert_has_calls([
+                                call(''), call(self.min_fasta)
+                            ])
 
-                        # === Both above and below threshold filtering ===
-                        elif low_count_file is not None:
-                            # Script should have checked for the existence of out_file and low_count_file
-                            mock_os.path.isfile.assert_has_calls([call(out_file), call(low_count_file)])
-                            if low_count_file == "mockFileExists":
-                                # Check for proper error, no files should have been opened for writing
-                                self.assertEqual(mock_stdout.getvalue(), self.file_exists_msg)
-                                mock_open_f.assert_not_called()
-                            else:
-                                self.assertEqual(mock_stdout.getvalue(), "")
-                                mock_open_f.assert_called_with(low_count_file, "w")
-                                if seqs == {}:
-                                    # Should write empty string for above or below threshold
-                                    mock_open_f.return_value.__enter__().write.assert_has_calls([
-                                        call(''), call('')
-                                    ])
-                                elif seqs != {} and thresh == 0:
-                                    # Should write something for above but empty string for below threshold
-                                    mock_open_f.return_value.__enter__().write.assert_has_calls([
-                                        call(self.min_fasta), call('')
-                                    ])
-                                elif seqs != {} and thresh == 1:
-                                    # Should write empty string for above but something for below threshold
-                                    mock_open_f.return_value.__enter__().write.assert_has_calls([
-                                        call(''), call(self.min_fasta)
-                                    ])
-
-                        reset_mocks()
+                    reset_mocks(mock_open_f, mock_os, mock_stdout)
 
 
     """
@@ -181,55 +173,40 @@ class MyTestCase(unittest.TestCase):
     @patch('aquatx.srna.collapser.os', autospec=True)
     @patch('aquatx.srna.collapser.open', new_callable=mock_open())
     def test_seq2fasta_full(self, mock_open_f, mock_os, mock_stdout):
-        # Patch os.path.exists to only return True if filename is "mockFileExists"
-        mock_os.path.isfile.configure_mock(side_effect=self.file_exists_fn)
+        # Simulate that prefix "mockPrefixExists" exists for both output files
+        mock_os.path.isfile.configure_mock(side_effect=self.prefix_exists_fn)
 
         # The parameter sets to permute
         test_map = {
             'seqs': [self.fastq_counts_dict],
-            'out_file': ["mockFileDoesntExist"],
-            'thresh': [0, 4],
-            'low_count_file': [None, "mockFileDoesntExist"]
+            'out_file': ["mockPrefixDNE"],
+            'thresh': [0, 4]
         }
 
-        def reset_mocks():
-            mock_open_f.reset_mock()
-            mock_os.reset_mock()
-            mock_stdout.truncate(0)
-            mock_stdout.seek(0)  # Avoids prepending a null string of previous buffer size
-
-        seqs: dict; out_file: str; thresh: int; low_count_file: str
+        seqs: dict; out_file: str; thresh: int
         for seqs in test_map['seqs']:
             for out_file in test_map['out_file']:
                 for thresh in test_map['thresh']:
-                    for low_count_file in test_map['low_count_file']:
-                        print(
-                            f"Test case: seqs=Lib303, out_file={out_file}, thresh={thresh}, low_count_file={low_count_file}",
-                            file=sys.stderr)
-                        collapser.seq2fasta(seqs, out_file, thresh, low_count_file)
 
-                        if thresh == 0:
-                            if low_count_file is None:
-                                mock_open_f.return_value.__enter__().write.assert_called_once_with(self.fasta["thresh=0"])
-                            elif low_count_file is not None:
-                                # If low_count_file was specified, it should be created even if it has no data
-                                mock_open_f.return_value.__enter__().write.assert_has_calls([
-                                    call(self.fasta["thresh=0"]), call('')
-                                ])
-                        elif thresh == 4:
-                            if low_count_file is None:
-                                mock_open_f.return_value.__enter__().write.assert_called_once_with(self.fasta["thresh=4"])
-                            elif low_count_file is not None:
-                                mock_open_f.return_value.__enter__().write.assert_has_calls([
-                                    call(self.fasta["thresh=4"]), call(self.fasta["thresh=4,low_count"])
-                                ])
+                    print(f"Test case: seqs=Lib303, out_file={out_file}, thresh={thresh}", file=sys.stderr)
+                    collapser.seq2fasta(seqs, out_file, thresh)
 
-                        reset_mocks()
+                    # No output messages should have been produced
+                    self.assertEqual(mock_stdout.getvalue(), "")
+
+                    if thresh == 0:
+                        # Only the outfile should have been opened for writing. No low count file.
+                        mock_open_f.assert_called_once_with(self.output["file"]["dne"]["out"], "w")
+                        mock_open_f.return_value.__enter__().write.assert_called_once_with(self.fasta["thresh=0"])
+                    elif thresh == 4:
+                        # Both the outfile and low counts file should have been opened for writing. No blank files.
+                        mock_open_f.return_value.__enter__().write.assert_has_calls([
+                            call(self.fasta["thresh=4"]), call(self.fasta["thresh=4,low_count"])
+                        ])
+
+                    reset_mocks(mock_open_f, mock_os, mock_stdout)
 
 
-
-        # test threshold < 0
-        # test threshold = inf
     """
     Testing fasta headers for correctness.
     
@@ -288,8 +265,6 @@ class MyTestCase(unittest.TestCase):
         for seq,count in header_counts_reconstruct.items():
             self.assertEqual(count, self.fastq_counts_dict.get(seq, None),
                              f"Count discrepancy with sequence {seq}")
-
-
 
 
 if __name__ == '__main__':

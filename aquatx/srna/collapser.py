@@ -29,9 +29,6 @@ def get_args():
     parser.add_argument('-t', '--threshold', type=int, default=0,
                         help='number of sequences needed to keep in'
                         'final fasta file')
-    parser.add_argument('-k', '--keep-low-counts', metavar='FILENAME', 
-                        help='keep sequences not meeting threshold in'
-                        'a separate file')
 
     args = parser.parse_args()
 
@@ -67,7 +64,7 @@ def seq_counter(fastq_file: str) -> dict:
     return seqs
 
 
-def seq2fasta(seqs: dict, out_file: str, thresh: int = 0, low_count_file: Optional[str] = None) -> None:
+def seq2fasta(seqs: dict, out_prefix: str, thresh: int = 0) -> None:
     """
     Turns a sequence count dict into a fasta file.
 
@@ -82,14 +79,15 @@ def seq2fasta(seqs: dict, out_file: str, thresh: int = 0, low_count_file: Option
     """
 
     # TODO: move these same checks to main(). Current state is sufficient for script use, but command line use will still spend time before notifying about the problem
-    # Check that we'll be able to write results before we spend time on the work
-    if out_file is None:
-        print("Collapser critical error: an output file must be specified.")
-        return
+    assert out_prefix is not None, "Collapser critical error: an output file must be specified."
+    assert thresh >= 0, "An invalid threshold was specified."
 
-    for output_file_to_check in [out_file, low_count_file]:
-        if output_file_to_check is not None and os.path.isfile(output_file_to_check):
-            print(f"Collapser critical error: {output_file_to_check} already exists.")
+    # Check that we'll be able to write results before we spend time on the work
+    out_file = out_prefix + "_collapsed.fa"
+    low_count_file = out_prefix + "_collapsed_lowcounts.fa"
+    for file in [out_file, low_count_file]:
+        if os.path.isfile(file):
+            print(f"Collapser critical error: {file} already exists.")
             return
 
     # >seq_INDEX_xCOUNT
@@ -114,11 +112,9 @@ def seq2fasta(seqs: dict, out_file: str, thresh: int = 0, low_count_file: Option
         if thresh == 0:  # No filtering required
             fasta.write('\n'.join(map(to_fasta_record, enumerate(seqs.items()))))
         else:
-            fasta.write('\n'.join(map(to_fasta_record, above_thresh)))
-
-    if low_count_file:
-        with open(low_count_file, 'w') as lcf:
-            lcf.write('\n'.join(map(to_fasta_record, below_thresh)))
+            with open(low_count_file, 'w') as lcf:
+                fasta.write('\n'.join(map(to_fasta_record, above_thresh)))
+                lcf.write('\n'.join(map(to_fasta_record, below_thresh)))
 
 
 def main():
@@ -127,11 +123,7 @@ def main():
     """
     args = get_args()
     seqs = seq_counter(args.input_file)
-
-    if args.keep_low_counts:
-        seq2fasta(seqs, args.out_file, args.threshold, args.keep_low_counts)
-    else:
-        seq2fasta(seqs, args.out_file, args.threshold)
+    seq2fasta(seqs, args.out_file, args.threshold)
 
 
 if __name__ == '__main__':
