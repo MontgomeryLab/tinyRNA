@@ -16,3 +16,4 @@ install:
 
 script:
   - python -m unittest tests.unit_tests_aquatx
+  - python -m unittest tests.unit_tests_collapser
