@@ -1,7 +1,7 @@
 """
-Collapse sequences from a fastq file to a fasta file. Headers of the final fasta file
-will contain the count and an ID which indicates relative order in which each sequence
-was first encountered.
+Collapse sequences from a fastq file to a fasta file. Headers in the output fasta file
+will contain the number of times each sequence occurred in the input fastq file, and
+an ID which indicates the relative order in which each sequence was first encountered.
 """
 
 import argparse
@@ -31,17 +31,22 @@ def get_args() -> 'argparse.NameSpace':
 
     # Required arguments
     required_group.add_argument(
-        '-i', '--input-file', metavar='FASTQFILE', required=True,
-        help='The input fastq file to collapse')
+        '-i', '--input-file', metavar='FASTQFILE', required=True, help=
+        'The input fastq file to collapse'
+    )
 
-    required_group.add_argument('-o', '--out-prefix', metavar='OUTPREFIX', required=True,
-                                help='The prefix for output files {prefix}_collapsed.fa and, '
-                                'if counts fall below threshold, {prefix}_collapsed_lowcounts.fa')
+    required_group.add_argument(
+        '-o', '--out-prefix', metavar='OUTPREFIX', required=True, help=
+        'The prefix for output files {prefix}_collapsed.fa and, if '
+        'counts fall below threshold, {prefix}_collapsed_lowcounts.fa'
+    )
 
     # Optional arguments
-    parser.add_argument('-t', '--threshold', default=0, required=False, type=positive_threshold,
-                        help='Sequences <= threshold will be omitted from {prefix}_collapsed.fa '
-                             'and will instead be placed in {prefix}_collapsed_lowcounts.fa')
+    parser.add_argument(
+        '-t', '--threshold', default=0, required=False, type=positive_threshold,
+        help='Sequences <= threshold will be omitted from {prefix}_collapsed.fa '
+        'and will instead be placed in {prefix}_collapsed_lowcounts.fa'
+    )
 
     return parser.parse_args()
 
@@ -92,7 +97,7 @@ def seq2fasta(seqs: dict, out_prefix: str, thresh: int = 0) -> None:
     Args:
         seqs: A dictionary containing sequences and associated counts
         out_prefix: A prefix name for the output fasta files
-        thresh:
+        thresh: Sequences with count <= thresh will placed in a separate file
 
     Returns: None
     """
