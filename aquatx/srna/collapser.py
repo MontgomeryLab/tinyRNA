@@ -1,10 +1,12 @@
-""" Collapse sequences from a fastq file to a fasta file.
-Headers of the final fasta file will contain the count
 """
+Collapse sequences from a fastq file to a fasta file. Headers of the final fasta file
+will contain the count and an ID which indicates relative order in which each sequence
+was first encountered.
+"""
+
 import argparse
 import os
 
-from typing import Optional
 from collections import OrderedDict
 
 try:
@@ -15,37 +17,43 @@ except ImportError:
     from collections import _count_elements
 
 
-def get_args():
-    """
-    Get input arguments for collapser
-    functions.
-    """
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
+def get_args() -> 'argparse.NameSpace':
+    """Get command line arguments"""
+
+    def positive_threshold(t):
+        if int(t) >= 0:
+            return int(t)
+        else:
+            raise argparse.ArgumentTypeError("Threshold must be >= 0")
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    required_group = parser.add_argument_group("required arguments")
+
+    # Required arguments
+    required_group.add_argument(
         '-i', '--input-file', metavar='FASTQFILE', required=True,
-                        help='input fastq file to collapse')
-    parser.add_argument('-o', '--out-file', metavar='OUTPUTFILE', required=True,
-                        help='output file name to use')
-    parser.add_argument('-t', '--threshold', type=int, default=0,
-                        help='number of sequences needed to keep in'
-                        'final fasta file')
+        help='The input fastq file to collapse')
 
-    args = parser.parse_args()
+    required_group.add_argument('-o', '--out-prefix', metavar='OUTPREFIX', required=True,
+                                help='The prefix for output files {prefix}_collapsed.fa and, '
+                                'if counts fall below threshold, {prefix}_collapsed_lowcounts.fa')
 
-    return args
+    # Optional arguments
+    parser.add_argument('-t', '--threshold', default=0, required=False, type=positive_threshold,
+                        help='Sequences <= threshold will be omitted from {prefix}_collapsed.fa '
+                             'and will instead be placed in {prefix}_collapsed_lowcounts.fa')
+
+    return parser.parse_args()
 
 
-def seq_counter(fastq_file: str) -> dict:
-    """Counts number of times each sequence appears.
-    Skip quality scores since it is quality filtered
-    data.
+def seq_counter(fastq_file: str) -> 'OrderedDict':
+    """Counts the number of times each sequence appears
 
-    Inputs:
-        fastq_file: A trimmed, quality filtered fastq
-                    file
+    Args:
+        fastq_file: A trimmed, quality filtered fastq file
+                    containing sequences to count.
 
-    Outputs:
-        seqs: return a dict of {seq: count}
+    Returns: An ordered dictionary of unique sequences with associated counts.
     """
 
     with open(fastq_file, 'rb') as f:
@@ -56,7 +64,7 @@ def seq_counter(fastq_file: str) -> dict:
                 f.readline()     # "+"
                 f.readline()     # Quality Score
 
-        # Count occurrences of unique elements, and populate (merge) with seqs
+        # Count occurrences of unique sequences while maintaining insertion order
         seqs = OrderedDict()
         _count_elements(seqs, line_generator())
 
@@ -65,65 +73,70 @@ def seq_counter(fastq_file: str) -> dict:
 
 
 def seq2fasta(seqs: dict, out_prefix: str, thresh: int = 0) -> None:
+    """Converts a sequence count dictionary to a fasta file, with count filtering
+
+    If a threshold is specified, sequences with count > thresh will be written to
+    {out_prefix}_collapsed.fa, and sequences with count <= thresh will be written
+    to {out_prefix}_collapsed_lowcounts.fa. If the specified threshold results in
+    an empty collection for either output file, a blank file will still be created
+    under the corresponding name.
+
+        The fasta header is formatted as:
+            >ID_count=COUNT
+
+    Headers indicate the ID of the sequence and the sequence count. The first
+    unique sequence is assigned ID 0, and the second unique sequence (ID 1)
+    may have n repetitions of sequence ID 0 before it in the fastq file, but its
+    ID will be 1, not n+1.
+
+    Args:
+        seqs: A dictionary containing sequences and associated counts
+        out_prefix: A prefix name for the output fasta files
+        thresh:
+
+    Returns: None
     """
-    Turns a sequence count dict into a fasta file.
 
-    Inputs:
-        seqs: dictionary containing sequences and counts
-        out_file: string to name the output file
-
-    Outputs:
-        Writes a fasta file with the format:
-            >seq_N_xCOUNTS
-            SEQUENCE
-    """
-
-    # TODO: move these same checks to main(). Current state is sufficient for script use, but command line use will still spend time before notifying about the problem
-    assert out_prefix is not None, "Collapser critical error: an output file must be specified."
+    assert out_prefix is not None, "Collapser critical error: an output file prefix must be specified."
     assert thresh >= 0, "An invalid threshold was specified."
 
-    # Check that we'll be able to write results before we spend time on the work
-    out_file = out_prefix + "_collapsed.fa"
-    low_count_file = out_prefix + "_collapsed_lowcounts.fa"
-    for file in [out_file, low_count_file]:
-        if os.path.isfile(file):
-            print(f"Collapser critical error: {file} already exists.")
-            return
-
-    # >seq_INDEX_xCOUNT
-    # SEQUENCE
     def to_fasta_record(x):
-        # x[0]=index, x[1][1]=sequence count, x[1][0]=sequence
-        return '\n'.join([
-            f">seq_{x[0]}_x{x[1][1]}",
-            f"{x[1][0]}"
-        ])
+        # x[0]=ID, x[1][1]=sequence count, x[1][0]=sequence
+        return ">%d_count=%d\n%s" % (x[0], x[1][1], x[1][0])
 
-    def get_above_thresh(x):
-        return x[1][1] > thresh
-
-    def get_below_thresh(x):
-        return x[1][1] <= thresh
-
-    above_thresh = filter(get_above_thresh, enumerate(seqs.items()))
-    below_thresh = filter(get_below_thresh, enumerate(seqs.items()))
+    out_file, low_count_file = look_before_you_leap(out_prefix)
+    above_thresh = filter(lambda x: x[1][1] > thresh, enumerate(seqs.items()))
+    below_thresh = filter(lambda x: x[1][1] <= thresh, enumerate(seqs.items()))
 
     with open(out_file, 'w') as fasta:
         if thresh == 0:  # No filtering required
             fasta.write('\n'.join(map(to_fasta_record, enumerate(seqs.items()))))
         else:
-            with open(low_count_file, 'w') as lcf:
+            with open(low_count_file, 'w') as lowfa:
                 fasta.write('\n'.join(map(to_fasta_record, above_thresh)))
-                lcf.write('\n'.join(map(to_fasta_record, below_thresh)))
+                lowfa.write('\n'.join(map(to_fasta_record, below_thresh)))
+
+
+def look_before_you_leap(out_prefix: str) -> (str, str):
+    """Check that we'll be able to write results before we spend time on the work"""
+
+    out_file, low_count_file = f"{out_prefix}_collapsed.fa", f"{out_prefix}_collapsed_lowcounts.fa"
+    for file in [out_file, low_count_file]:
+        if os.path.isfile(file):
+            raise FileExistsError(f"Collapser critical error: {file} already exists.")
+
+    return out_file, low_count_file
 
 
 def main():
-    """
-    main routine
-    """
+    # Get command line arguments
     args = get_args()
+    # Ensure that the provided prefix will not result in overwritten output files
+    look_before_you_leap(args.out_prefix)
+    # Count unique sequences in input fastq file
     seqs = seq_counter(args.input_file)
-    seq2fasta(seqs, args.out_file, args.threshold)
+    # Write counted sequences to output file(s)
+    seq2fasta(seqs, args.out_prefix, args.threshold)
 
 
 if __name__ == '__main__':
