@@ -4,3 +4,4 @@
 *.svg
 test_*
 .idea/*
+cmake-build-debug/*
