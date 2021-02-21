@@ -107,7 +107,7 @@ def seq2fasta(seqs: dict, out_prefix: str, thresh: int = 0) -> None:
 
     def to_fasta_record(x):
         # x[0]=ID, x[1][1]=sequence count, x[1][0]=sequence
-        return ">%d_count=%d\n%s\n" % (x[0], x[1][1], x[1][0])
+        return ">%d_count=%d\n%s" % (x[0], x[1][1], x[1][0])
 
     out_file, low_count_file = look_before_you_leap(out_prefix)
     above_thresh = filter(lambda x: x[1][1] > thresh, enumerate(seqs.items()))
@@ -115,11 +115,11 @@ def seq2fasta(seqs: dict, out_prefix: str, thresh: int = 0) -> None:
 
     with open(out_file, 'w') as fasta:
         if thresh == 0:  # No filtering required
-            fasta.write(map(to_fasta_record, enumerate(seqs.items())))
+            fasta.write('\n'.join(map(to_fasta_record, enumerate(seqs.items()))))
         else:
             with open(low_count_file, 'w') as lowfa:
-                fasta.write(map(to_fasta_record, above_thresh))
-                lowfa.write(map(to_fasta_record, below_thresh))
+                fasta.write('\n'.join(map(to_fasta_record, above_thresh)))
+                lowfa.write('\n'.join(map(to_fasta_record, below_thresh)))
 
 
 def look_before_you_leap(out_prefix: str) -> (str, str):
