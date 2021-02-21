@@ -16,7 +16,7 @@ int main(int argv, char* args[]) {
     return 0;
 }
 
-uintmax_t sequence_counter(char *fastq_file) {
+int sequence_counter(char *fastq_file) {
     int fd = open (fastq_file, ios::in | ios::binary);
     if(fd == -1) {
         cerr << "Error on file open." << endl;
@@ -25,50 +25,82 @@ uintmax_t sequence_counter(char *fastq_file) {
         fstat (fd,&statbuf);
     }
 
-    char *fastq = (char*) mmap(nullptr, statbuf.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-    if (fastq == MAP_FAILED){
-        cerr << "Memory mapping the input fastq file failed." << endl;
-        close(fd);
-        return 0;
-    }
-
     /* Advise the kernel of our access pattern.  */
-    madvise(fastq, statbuf.st_size, MADV_SEQUENTIAL);
+    posix_fadvise (fd, 0, 0, POSIX_FADV_SEQUENTIAL);
     map<char*, size_t, c_string_comparator> counter;
 
-    char *q = fastq;
-    char *seqstart = q;
-    char *end = fastq + statbuf.st_size;
-    uintmax_t lines = 1;
+    size_t BUFFER_SIZE = 16*1024;
+    char* buf = new char[BUFFER_SIZE + 1];
+    size_t lines = 1;
+    size_t last_partial = 0;
+    size_t partial_read = 0;
 
-    /* memchr is more efficient with longer lines.  */
-    while ((q = (char*) memchr (q, '\n', end - q)))
-    {
-        if (lines % 2 == 0 && lines % 4 != 0){
-            // Rather than allocating and copying twice, change this sequence's newline to a null character
-            // Then provide the map with a pointer to sequence start; mem-mapped file happily supports
-            // Lower_bound and emplace_hint help avoid a double log(n) search and unnecessary copy
-            fastq[q - fastq] = '\0';
+    char* linestart;
+    size_t bytes_read;
 
-            auto where = counter.lower_bound(seqstart);
-            if (where == counter.end() || strcmp(where->first, seqstart) != 0){
-                counter.emplace_hint(
-                        where,
-                        piecewise_construct,
-                        forward_as_tuple(seqstart),
-                        forward_as_tuple(1)
-                );
-            } else {
-                ++where->second;
+    while((bytes_read = read(fd, buf, BUFFER_SIZE)) > 0) {
+
+        char *q = buf;
+        char *end = q + bytes_read;
+        if (!partial_read) linestart = q;
+
+        /* memchr is more efficient with longer lines.  */
+        while ((q = (char *) memchr(q, '\n', end - q))) {
+
+            if (lines % 2 == 0 && lines % 4 != 0) {
+                // Rather than allocating and copying twice, change this sequence's newline to a null character
+                // Then provide the map with a pointer to sequence start; mem-mapped file happily supports
+                // Lower_bound and emplace_hint help avoid a double log(n) search and unnecessary copy
+                buf[q - buf] = '\0';
+                char *seq = new char[q - linestart];
+                strcpy(seq, linestart);
+
+                auto where = counter.lower_bound(linestart);
+                if (where == counter.end() || strcmp(where->first, linestart) != 0) {
+                    counter.emplace_hint(
+                            where,
+                            piecewise_construct,
+                            forward_as_tuple(seq),
+                            forward_as_tuple(1)
+                    );
+                } else {
+                    ++where->second;
+                }
             }
+
+            ++q;
+            ++lines;
+            linestart = q;
         }
 
-        ++q;
-        ++lines;
-        seqstart = q;
+        // Handle sequences split across chunks here
+        last_partial = partial_read;
+        partial_read = end - linestart;
+        if (buf[BUFFER_SIZE] != '\n'){
+            // "Unshrink" the buffer since it no longer needs to accommodate the last partial
+            buf -= last_partial;
+            BUFFER_SIZE += last_partial;
+            // Copy the partial line to the beginning of the buffer
+            // Correct linestart for the new location of the partial line
+            // Advance the buffer pointer so that read() doesn't overwrite it
+            // And shrink BUFFER_SIZE to accommodate the new partial line
+            strncpy(buf, linestart, partial_read);
+            linestart = buf;
+            buf += partial_read;
+            BUFFER_SIZE -= partial_read;
+        } else {
+            // There was no partial line this time
+            // Unshrink the buffer if we had to accommodate a partial last time
+            buf -= last_partial;
+            BUFFER_SIZE += last_partial;
+            last_partial = 0;
+        }
     }
 
-    munmap(fastq, statbuf.st_size);
+    for (auto rec = counter.rbegin(); rec != counter.rend(); ++rec){
+        cout << rec->first << ": " << rec->second << endl;
+    }
+
     close(fd);
     return lines;
 }

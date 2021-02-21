@@ -5,7 +5,7 @@
 #ifndef COLLAPSER_COLLAPSER_H
 #define COLLAPSER_COLLAPSER_H
 
-uintmax_t sequence_counter(char*);
+int sequence_counter(char*);
 
 struct stat statbuf;
 struct c_string_comparator {
