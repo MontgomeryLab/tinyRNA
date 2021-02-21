@@ -54,18 +54,7 @@ int sequence_counter(char *fastq_file) {
                 //memcpy(seq, linestart, q - linestart + 1); like tears in rain
                 string seq = string(linestart);
 
-                auto where = counter.find(seq);
-                if (where == counter.end()) {
-                    counter.emplace_hint(
-                            where,
-                            piecewise_construct,
-                            forward_as_tuple(seq),
-                            forward_as_tuple(1)
-                    );
-                } else {
-                    ++where->second;
-                    //free(seq);
-                }
+                ++counter[seq];
             }
 
             ++q;
@@ -100,8 +89,8 @@ int sequence_counter(char *fastq_file) {
     char outbuf[211];
     string outstring;
     outstring.reserve(counter.size() * (counter.begin()->first.length() + 11));
-    for (auto rec: counter){
-        snprintf(outbuf, 211, "%s: %d\n", rec.first.c_str(), rec.second);
+    for (const auto& rec: counter){
+        snprintf(outbuf, 211, "%s: %lu\n", rec.first.c_str(), rec.second);
         outstring += outbuf;
     }
 
