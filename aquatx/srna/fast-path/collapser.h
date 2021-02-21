@@ -5,13 +5,11 @@
 #ifndef COLLAPSER_COLLAPSER_H
 #define COLLAPSER_COLLAPSER_H
 
+//#include <cstring>
+
 int sequence_counter(char*);
 
 struct stat statbuf;
-struct c_string_comparator {
-    bool operator()(const char* a, const char* b) const {
-        return strcmp(a, b) < 0;
-    }
-};
+static std::unordered_map<std::string, size_t> counter;
 
 #endif //COLLAPSER_COLLAPSER_H

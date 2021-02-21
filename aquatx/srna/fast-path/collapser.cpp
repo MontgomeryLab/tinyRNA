@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <unordered_map>
 
 #include "collapser.h"
 
@@ -27,36 +28,34 @@ int sequence_counter(char *fastq_file) {
 
     /* Advise the kernel of our access pattern.  */
     posix_fadvise (fd, 0, 0, POSIX_FADV_SEQUENTIAL);
-    map<char*, size_t, c_string_comparator> counter;
+    counter = unordered_map<string, size_t>(statbuf.st_size/(202*4));
 
     size_t BUFFER_SIZE = 16*1024;
     char* buf = new char[BUFFER_SIZE + 1];
-    size_t lines = 1;
-    size_t last_partial = 0;
-    size_t partial_read = 0;
 
     char* linestart;
+    size_t lines = 1;
+    size_t partial_read = 0;
     size_t bytes_read;
 
     while((bytes_read = read(fd, buf, BUFFER_SIZE)) > 0) {
-
         char *q = buf;
         char *end = q + bytes_read;
         if (!partial_read) linestart = q;
 
-        /* memchr is more efficient with longer lines.  */
+        /* memchr is more efficient than ptr search with lines >15.  */
         while ((q = (char *) memchr(q, '\n', end - q))) {
 
             if (lines % 2 == 0 && lines % 4 != 0) {
-                // Rather than allocating and copying twice, change this sequence's newline to a null character
-                // Then provide the map with a pointer to sequence start; mem-mapped file happily supports
-                // Lower_bound and emplace_hint help avoid a double log(n) search and unnecessary copy
-                buf[q - buf] = '\0';
-                char *seq = new char[q - linestart];
-                strcpy(seq, linestart);
 
-                auto where = counter.lower_bound(linestart);
-                if (where == counter.end() || strcmp(where->first, linestart) != 0) {
+                buf[q - buf] = '\0';
+
+                //char *seq = new char[q - linestart + 1];
+                //memcpy(seq, linestart, q - linestart + 1); like tears in rain
+                string seq = string(linestart);
+
+                auto where = counter.find(seq);
+                if (where == counter.end()) {
                     counter.emplace_hint(
                             where,
                             piecewise_construct,
@@ -65,6 +64,7 @@ int sequence_counter(char *fastq_file) {
                     );
                 } else {
                     ++where->second;
+                    //free(seq);
                 }
             }
 
@@ -73,8 +73,8 @@ int sequence_counter(char *fastq_file) {
             linestart = q;
         }
 
-        // Handle sequences split across chunks here
-        last_partial = partial_read;
+        // Handle lines split across chunks here
+        size_t last_partial = partial_read;
         partial_read = end - linestart;
         if (buf[BUFFER_SIZE] != '\n'){
             // "Unshrink" the buffer since it no longer needs to accommodate the last partial
@@ -93,14 +93,19 @@ int sequence_counter(char *fastq_file) {
             // Unshrink the buffer if we had to accommodate a partial last time
             buf -= last_partial;
             BUFFER_SIZE += last_partial;
-            last_partial = 0;
+            partial_read = 0;
         }
     }
 
-    for (auto rec = counter.rbegin(); rec != counter.rend(); ++rec){
-        cout << rec->first << ": " << rec->second << endl;
+    char outbuf[211];
+    string outstring;
+    outstring.reserve(counter.size() * (counter.begin()->first.length() + 11));
+    for (auto rec: counter){
+        snprintf(outbuf, 211, "%s: %d\n", rec.first.c_str(), rec.second);
+        outstring += outbuf;
     }
 
+    cout << outstring;
     close(fd);
     return lines;
 }
