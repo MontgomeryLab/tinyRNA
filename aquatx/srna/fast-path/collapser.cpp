@@ -1,5 +1,5 @@
 #include <map>
-#include <list>
+#include <deque>
 #include <cstring>
 #include <iostream>
 
@@ -24,7 +24,6 @@ struct cstr_hash{
         int len;
         const char *p;
         long x;
-
 
         len = strlen(str);
         p = str;
@@ -53,9 +52,9 @@ int sequence_counter(char *fastq_file) {
 
     /* Advise the kernel of our access pattern.  */
     posix_fadvise (fd, 0, 0, POSIX_FADV_SEQUENTIAL);
-    unordered_map<char*, size_t, cstr_hash, cstr_equal> counter(statbuf.st_size/(202*4));
-    list<char*> order;
-    cout << "Map preallocated to " << statbuf.st_size/(202*4) << endl;
+    unordered_map<char*, size_t, cstr_hash, cstr_equal> counter(statbuf.st_size/(200));
+    deque<pair<__detail::_Node_iterator<pair<char *const, unsigned long>, false, true>, bool>> order;
+    cout << "Map preallocated to " << statbuf.st_size/(200) << endl;
 
     size_t BUFFER_SIZE = 16*1024;
     char* buf = new char[BUFFER_SIZE + 1];
@@ -77,16 +76,17 @@ int sequence_counter(char *fastq_file) {
 
                 buf[q - buf] = '\0';
 
-                auto where = counter.find(linestart);
-                if (where != counter.end()){
-                    ++where->second;
-                } else {
-                    char *seq = new char[q - linestart + 1];
-                    memcpy(seq, linestart, q - linestart + 1);
-                    order.push_back(seq);
+                char *seq = new char[q - linestart + 1];
+                memcpy(seq, linestart, q - linestart + 1);
 
-                    auto record = counter.emplace(seq, 0);
-                    ++record.first->second;
+                pair<__detail::_Node_iterator<pair<char *const, unsigned long>, false, true>, bool>
+                where = counter.insert({seq, 0});
+                ++where.first->second;
+
+                if (!where.second) {
+                    free(seq);
+                } else {
+                    order.push_back(where);
                 }
             }
 
@@ -119,19 +119,23 @@ int sequence_counter(char *fastq_file) {
         }
     }
 
-    string outstring;
-    outstring.reserve(counter.size() * (strlen(counter.begin()->first) + 11));
-    for (const auto& rec: order){
-        outstring
-            .append(rec)
-            .append(": ")
-            .append(to_string(counter[rec]))
-            .append("\n");
 
-        free(rec);
+    size_t rec_len = strlen(counter.begin()->first) + strlen(": ") + 5 + 1;
+    char *report = new char[counter.size() * rec_len];
+    char *a = report;
+
+    for (const auto& rec: order){
+        size_t true_length = sprintf(a, "%s: %lu\n", rec.first->first, rec.first->second);
+        a += true_length;
+        free(rec.first->first);
     }
 
-    cout << outstring;
+    string outstring;
+    char *record_string = new char[300];
+    outstring.reserve(counter.size() * (strlen(counter.begin()->first) + 11));
+
+
+    cout << report;
     close(fd);
     return lines;
 }

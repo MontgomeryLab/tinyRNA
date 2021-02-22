@@ -12,7 +12,7 @@ int sequence_counter(char*);
 struct stat statbuf;
 
 struct cstr{
-    char* s = nullptr;
+    char *s = nullptr;
     long h = -1;
 
     void heap(){
