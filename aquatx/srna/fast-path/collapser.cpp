@@ -53,7 +53,7 @@ int sequence_counter(char *fastq_file) {
     /* Advise the kernel of our access pattern.  */
     posix_fadvise (fd, 0, 0, POSIX_FADV_SEQUENTIAL);
     unordered_map<char*, size_t, cstr_hash, cstr_equal> counter(statbuf.st_size/(200));
-    deque<pair<__detail::_Node_iterator<pair<char *const, unsigned long>, false, true>, bool>> order;
+    deque<__detail::_Node_iterator<pair<char *const, unsigned long>, false, true>> order;
     cout << "Map preallocated to " << statbuf.st_size/(200) << endl;
 
     size_t BUFFER_SIZE = 16*1024;
@@ -86,7 +86,7 @@ int sequence_counter(char *fastq_file) {
                 if (!where.second) {
                     free(seq);
                 } else {
-                    order.push_back(where);
+                    order.push_back(where.first);
                 }
             }
 
@@ -120,22 +120,17 @@ int sequence_counter(char *fastq_file) {
     }
 
 
-    size_t rec_len = strlen(counter.begin()->first) + strlen(": ") + 5 + 1;
+    /*size_t rec_len = strlen(counter.begin()->first) + strlen(": ") + 5 + 1;
     char *report = new char[counter.size() * rec_len];
     char *a = report;
 
     for (const auto& rec: order){
-        size_t true_length = sprintf(a, "%s: %lu\n", rec.first->first, rec.first->second);
+        size_t true_length = sprintf(a, "%s: %lu\n", rec->first, rec->second);
         a += true_length;
-        free(rec.first->first);
+        free(rec->first);
     }
 
-    string outstring;
-    char *record_string = new char[300];
-    outstring.reserve(counter.size() * (strlen(counter.begin()->first) + 11));
-
-
-    cout << report;
+    cout << report;*/
     close(fd);
     return lines;
 }
