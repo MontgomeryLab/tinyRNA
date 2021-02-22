@@ -1,4 +1,5 @@
 #include <map>
+#include <list>
 #include <cstring>
 #include <iostream>
 
@@ -6,11 +7,35 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
-#include <unordered_map>
 
 #include "collapser.h"
 
 using namespace std;
+
+
+struct cstr_equal{
+    bool operator()(const char *a, const char *b) const {
+        return strcmp(a, b) == 0;
+    }
+};
+
+struct cstr_hash{
+    long operator()(const char* str) const {
+        int len;
+        const char *p;
+        long x;
+
+
+        len = strlen(str);
+        p = str;
+        x = *p << 7;
+        while (--len >= 0)
+            x = (1000003*x) ^ *p++;
+        x ^= len;
+
+        return x;
+    }
+};
 
 int main(int argv, char* args[]) {
     sequence_counter(args[1]);
@@ -28,7 +53,9 @@ int sequence_counter(char *fastq_file) {
 
     /* Advise the kernel of our access pattern.  */
     posix_fadvise (fd, 0, 0, POSIX_FADV_SEQUENTIAL);
-    counter = unordered_map<string, size_t>(statbuf.st_size/(202*4));
+    unordered_map<char*, size_t, cstr_hash, cstr_equal> counter(statbuf.st_size/(202*4));
+    list<char*> order;
+    cout << "Map preallocated to " << statbuf.st_size/(202*4) << endl;
 
     size_t BUFFER_SIZE = 16*1024;
     char* buf = new char[BUFFER_SIZE + 1];
@@ -50,11 +77,17 @@ int sequence_counter(char *fastq_file) {
 
                 buf[q - buf] = '\0';
 
-                //char *seq = new char[q - linestart + 1];
-                //memcpy(seq, linestart, q - linestart + 1); like tears in rain
-                string seq = string(linestart);
+                auto where = counter.find(linestart);
+                if (where != counter.end()){
+                    ++where->second;
+                } else {
+                    char *seq = new char[q - linestart + 1];
+                    memcpy(seq, linestart, q - linestart + 1);
+                    order.push_back(seq);
 
-                ++counter[seq];
+                    auto record = counter.emplace(seq, 0);
+                    ++record.first->second;
+                }
             }
 
             ++q;
@@ -86,12 +119,16 @@ int sequence_counter(char *fastq_file) {
         }
     }
 
-    char outbuf[211];
     string outstring;
-    outstring.reserve(counter.size() * (counter.begin()->first.length() + 11));
-    for (const auto& rec: counter){
-        snprintf(outbuf, 211, "%s: %lu\n", rec.first.c_str(), rec.second);
-        outstring += outbuf;
+    outstring.reserve(counter.size() * (strlen(counter.begin()->first) + 11));
+    for (const auto& rec: order){
+        outstring
+            .append(rec)
+            .append(": ")
+            .append(to_string(counter[rec]))
+            .append("\n");
+
+        free(rec);
     }
 
     cout << outstring;
