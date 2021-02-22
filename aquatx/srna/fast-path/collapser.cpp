@@ -20,6 +20,7 @@ struct cstr_equal{
 };
 
 struct cstr_hash{
+    // This is a simplification of cPython's __hash__() for str type
     long operator()(const char* str) const {
         int len;
         const char *p;
@@ -54,7 +55,6 @@ int sequence_counter(char *fastq_file) {
     posix_fadvise (fd, 0, 0, POSIX_FADV_SEQUENTIAL);
     unordered_map<char*, size_t, cstr_hash, cstr_equal> counter(statbuf.st_size/(200));
     deque<__detail::_Node_iterator<pair<char *const, unsigned long>, false, true>> order;
-    cout << "Map preallocated to " << statbuf.st_size/(200) << endl;
 
     size_t BUFFER_SIZE = 16*1024;
     char* buf = new char[BUFFER_SIZE + 1];
@@ -80,10 +80,10 @@ int sequence_counter(char *fastq_file) {
                 memcpy(seq, linestart, q - linestart + 1);
 
                 pair<__detail::_Node_iterator<pair<char *const, unsigned long>, false, true>, bool>
-                where = counter.insert({seq, 0});
-                ++where.first->second;
+                where = counter.insert({seq, 1});
 
                 if (!where.second) {
+                    ++where.first->second;
                     free(seq);
                 } else {
                     order.push_back(where.first);
