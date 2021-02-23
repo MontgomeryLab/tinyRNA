@@ -1,13 +1,13 @@
 import ruamel.yaml
 import argparse
+import sys
 import csv
 import os
-import sys
 
-from pkg_resources import resource_filename
-from datetime import datetime
-from shutil import copyfile
 from typing import Union
+from shutil import copyfile
+from datetime import datetime
+from pkg_resources import resource_filename
 
 class Configuration:
     def __init__(self, input_file: str):
@@ -21,9 +21,7 @@ class Configuration:
         self.process_sample_sheet()
         self.process_reference_sheet()
 
-        with open(self.get_outfile_name(input_file), 'w') as outconf:
-            ruamel.yaml.round_trip_dump(self.config, outconf,
-                                        default_flow_style=False, indent=4, block_seq_indent=2)
+
 
     def process_sample_sheet(self):
         sample_sheet = self.dir + self.get('sample_sheet_file')
@@ -47,6 +45,9 @@ class Configuration:
                 self.append_to('un', sample_basename + '_unaligned_seqs.fa')
                 self.append_to('json', sample_basename + '_qc.json')
                 self.append_to('html', sample_basename + '_qc.html')
+
+        if not self.get('keep_low_counts'):
+            self.config.pop('keep_low_counts')
 
     def process_reference_sheet(self):
         reference_sheet = self.dir + self.get('reference_sheet_file')
@@ -76,51 +77,41 @@ class Configuration:
     def setup(self):
         """Populates default values and prepares per-file configuration lists"""
 
-        self.dt = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        dt = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         self.set_default_dict({
-            'run_directory': self.dt + self.get('user') + "_aquatx",
-            'run_prefix': self.dt + self.get('user') + "_aquatx",
+            'run_directory': dt + self.get('user') + "_aquatx",
+            'run_prefix':    dt + self.get('user') + "_aquatx",
             'output_prefix': self.get('run_prefix'),
-            'run_date': self.dt.split('_')[0],
-            'run_time': self.dt.split('_')[1]
-        })
-
-        self.set_default_dict({
-            'ref_annotations': [], 'mask_annotations': [], 'antisense': [], 'uniq_seq_file': [], 'in_fq': [],
-            'out_fq': [], 'out_prefix': [], 'outfile': [], 'report_title': [], 'json': [], 'html': [], 'un': []
+            'run_date':      dt.split('_')[0],
+            'run_time':      dt.split('_')[1]
         })
 
         self.extras = resource_filename('aquatx', 'extras/')
-        self.set('output_file_stats', self.get('output_prefix') + '_run_stats.csv')
+        self.set('output_file_stats', self.get('output_prefix')+ '_run_stats.csv')
         self.set('output_file_counts', self.get('output_prefix') + '_raw_counts.csv')
 
         # Per-file settings lists to be populated by process_sample_sheet() and process_reference_sheet()
-        for settings_list in []:
+        for settings_list in ['ref_annotations', 'mask_annotations', 'antisense', 'json', 'html', 'un',
+                              'outfile', 'uniq_seq_file', 'report_title', 'out_fq', 'in_fq', 'out_prefix']:
             self.set(settings_list, [])
 
-        # Bowtie index file prefix
+        # Bowtie index files
         bt_idx = (self.set('ebwt', self.prefix(self.get('ref_genome')))
                   if self.get('run_idx') and not self.get('ebwt')
                   else self.get('ebwt'))
+        self.set('bt_index_files',
+                 [self.cwl_file_def(bt_idx + fpath) for fpath in
+                  ['.1.ebwt', '.2.ebwt', '.3.ebwt', '.4.ebwt', '.rev.1.ebwt', '.rev.2.ebwt']])
 
-        # Bowtie index files
-        bt_idx_files = [self.cwl_file_def(bt_idx + fpath)
-                        for fpath in ['.1.ebwt', '.2.ebwt', '.3.ebwt', '.4.ebwt', '.rev.1.ebwt', '.rev.2.ebwt']]
-
-        self.set('bt_index_files', bt_idx_files)
-
-        # Discard these configurations if they are set as such
         if self.get('adapter_sequence') == 'auto_detect':
             self.config.pop('adapter_sequence')
-        if not self.get('keep_low_counts'):
-            self.config.pop('keep_low_counts')
 
     """========== GETTERS AND SETTERS =========="""
 
-    def get(self, key: str) -> Union[str, list, dict]:
+    def get(self, key: str) -> Union[str,list,dict]:
         return self.config.get(key, None)
 
-    def set(self, key: str, val: Union[str, list, dict]) -> Union[str, list, dict]:
+    def set(self, key: str, val: Union[str,list,dict]) -> Union[str,list,dict]:
         self.config[key] = val
         return val
 
@@ -133,17 +124,16 @@ class Configuration:
 
     def set_default_dict(self, setting_dict: dict) -> None:
         """Apply all settings in the input dictionary if they have not been previously set"""
-        for key, val in setting_dict.items():
-            self.set_default(key, val)
+        for key,val in setting_dict.items():
+            self.set_default(key,val)
 
-    def append_to(self, key: str, val: Union[str, list, dict]) -> list:
+    def append_to(self, key: str, val: Union[str,list,dict]) -> list:
         """Append a file setting to a per-file settings list"""
         target = self.get(key)
         if key:
             target.append(val)
             return target
-        else:
-            print("Tried appending to a non-existent key.", file=sys.stderr)
+        else: print("Tried appending to a non-existent key.", file=sys.stderr)
 
     """========== HELPERS =========="""
 
@@ -154,35 +144,3 @@ class Configuration:
     def prefix(self, path: str) -> str:
         """Returns everything from path except the file extension"""
         return os.path.splitext(path)[0]
-
-    def get_outfile_name(self, infile: str) -> str:
-        """This will likely be changed in the near future"""
-        if os.path.basename(infile) == 'run_config_template.yml':
-            output_name = self.dt + '_run_config.yml'
-            copyfile(infile, output_name)
-        else:
-            return infile
-
-    def get_args(self):
-        """Get the input arguments"""
-
-        parser = argparse.ArgumentParser()
-        parser.add_argument('-i', '--input-file', metavar='CONFIG', required=True,
-                            help="Input file")
-
-        args = parser.parse_args()
-        return args
-
-    def main(self):
-        """
-        Main routine to process the run information.
-        """
-
-        # Get input config file
-        args = self.get_args()
-        Configuration(args.input_file)
-
-        # TODO: need to specify the non-model organism run when no reference genome is given
-
-    if __name__ == '__main__':
-        main()

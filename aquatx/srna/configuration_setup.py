@@ -166,6 +166,7 @@ def setup_config(input_file):
     if config_settings.get('adapter_sequence', None) == 'auto_detect':
         config_settings.pop('adapter_sequence')
 
+    # TODO
     if os.path.basename(input_file) == 'run_config_template.yml':
         input_name = time + '_run_config.yml'
         copyfile(input_file, input_name)
