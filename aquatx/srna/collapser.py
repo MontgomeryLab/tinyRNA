@@ -5,9 +5,13 @@ an ID which indicates the relative order in which each sequence was first encoun
 """
 
 import argparse
+import builtins
+import gzip
 import os
 
 from collections import OrderedDict
+from functools import partial
+from typing import Tuple
 
 try:
     # Load Counter's C helper function if it is available. Uses 30% less memory than Counter()
@@ -16,6 +20,8 @@ except ImportError:
     # Uses slower mapping[elem] = mapping.get(elem,default_val)+1 in loop
     from collections import _count_elements
 
+# The GZIP read/write interface used by seq_counter() and seq2fasta()
+gz_f = partial(gzip.GzipFile, compresslevel=6, fileobj=None, mtime=0)
 
 def get_args() -> 'argparse.NameSpace':
     """Get command line arguments"""
@@ -44,30 +50,40 @@ def get_args() -> 'argparse.NameSpace':
     # Optional arguments
     parser.add_argument(
         '-t', '--threshold', default=0, required=False, type=positive_threshold,
-        help='Sequences <= threshold will be omitted from {prefix}_collapsed.fa '
+        help='Sequences <= THRESHOLD will be omitted from {prefix}_collapsed.fa '
         'and will instead be placed in {prefix}_collapsed_lowcounts.fa'
+    )
+
+    parser.add_argument(
+        '-c', '--compression', required=False, action='store_true',
+        help='Use gzip compression when writing fasta outputs. This option '
+             'is automatically set if the input fastq file is gzip compressed. '
+             'The output file will not have a .gz extension.'
     )
 
     return parser.parse_args()
 
 
-def seq_counter(fastq_file: str) -> 'OrderedDict':
+def seq_counter(fastq_file: str, file_reader: callable = builtins.open) -> 'OrderedDict':
     """Counts the number of times each sequence appears
 
     Args:
-        fastq_file: A trimmed, quality filtered fastq file
-                    containing sequences to count.
+        fastq_file: A trimmed, quality filtered fastq file containing sequences to count.
+        file_reader: Optional. The file context manager to use. Must support .readline()
 
     Returns: An ordered dictionary of unique sequences with associated counts.
     """
 
-    with open(fastq_file, 'rb') as f:
+    with file_reader(fastq_file, 'rb') as f:
         def line_generator():    # Generator function for every 4th line (fastq sequence line) of file
             while f.readline():  # Sequence identifier
                 # Sequence (Binary -> ASCII extract every 4th from 1st line, newline removed)
                 yield f.readline()[:-1].decode("utf-8")
                 f.readline()     # "+"
                 f.readline()     # Quality Score
+
+        # Switch file_reader interface if reading gzipped fastq files
+        if f.read(2) == b'\x1F\x8B': return seq_counter(fastq_file, gz_f)
 
         # Count occurrences of unique sequences while maintaining insertion order
         seqs = OrderedDict()
@@ -77,7 +93,7 @@ def seq_counter(fastq_file: str) -> 'OrderedDict':
     return seqs
 
 
-def seq2fasta(seqs: dict, out_prefix: str, thresh: int = 0) -> None:
+def seq2fasta(seqs: dict, out_prefix: str, thresh: int = 0, gz: bool = False, **kwargs) -> None:
     """Converts a sequence count dictionary to a fasta file, with count filtering
 
     If a threshold is specified, sequences with count > thresh will be written to
@@ -97,7 +113,9 @@ def seq2fasta(seqs: dict, out_prefix: str, thresh: int = 0) -> None:
     Args:
         seqs: A dictionary containing sequences and associated counts
         out_prefix: A prefix name for the output fasta files
-        thresh: Sequences with count <= thresh will placed in a separate file
+    Keyword Args:
+        thresh: Sequences with count LE thresh will placed in a separate file
+        gz: If true, file outputs will be gzip compressed
 
     Returns: None
     """
@@ -105,39 +123,56 @@ def seq2fasta(seqs: dict, out_prefix: str, thresh: int = 0) -> None:
     assert out_prefix is not None, "Collapser critical error: an output file prefix must be specified."
     assert thresh >= 0, "An invalid threshold was specified."
 
+    writer, encoder, mode = fasta_interface(gz)
+    out_file, low_count_file = look_before_you_leap(out_prefix, gz)
+
     def to_fasta_record(x):
         # x[0]=ID, x[1][1]=sequence count, x[1][0]=sequence
         return ">%d_count=%d\n%s" % (x[0], x[1][1], x[1][0])
 
-    out_file, low_count_file = look_before_you_leap(out_prefix)
     above_thresh = filter(lambda x: x[1][1] > thresh, enumerate(seqs.items()))
     below_thresh = filter(lambda x: x[1][1] <= thresh, enumerate(seqs.items()))
 
-    with open(out_file, 'w') as fasta:
+    with writer(out_file, mode) as fasta:
+
         if thresh == 0:  # No filtering required
-            fasta.write('\n'.join(map(to_fasta_record, enumerate(seqs.items()))))
+            fasta.write(encoder('\n'.join(map(to_fasta_record, enumerate(seqs.items())))))
         else:
-            with open(low_count_file, 'w') as lowfa:
-                fasta.write('\n'.join(map(to_fasta_record, above_thresh)))
-                lowfa.write('\n'.join(map(to_fasta_record, below_thresh)))
+            with writer(low_count_file, mode) as lowfa:
+                fasta.write(encoder('\n'.join(map(to_fasta_record, above_thresh))))
+                lowfa.write(encoder('\n'.join(map(to_fasta_record, below_thresh))))
 
 
-def look_before_you_leap(out_prefix: str) -> (str, str):
+def look_before_you_leap(out_prefix: str, gz: bool) -> (str, str):
     """Check that we'll be able to write results before we spend time on the work"""
 
     out_file, low_count_file = f"{out_prefix}_collapsed.fa", f"{out_prefix}_collapsed_lowcounts.fa"
     for file in [out_file, low_count_file]:
+        if gz: file += '.gz'
         if os.path.isfile(file):
             raise FileExistsError(f"Collapser critical error: {file} already exists.")
 
     return out_file, low_count_file
 
 
+def fasta_interface(gz: bool) -> Tuple[callable, callable, str]:
+    if gz:
+        # If compression is turned on, convert fasta to a byte array before writing
+        def encoder(x): return x.encode('utf-8')
+        writer, mode = gz_f, 'wb'
+    else:
+        # No conversion necessary if not writing gzip
+        def encoder(x): return x
+        writer, mode = open, 'w'
+
+    return writer, encoder, mode
+
+
 def main():
     # Get command line arguments
     args = get_args()
     # Ensure that the provided prefix will not result in overwritten output files
-    look_before_you_leap(args.out_prefix)
+    look_before_you_leap(args.out_prefix, args.compression)
     # Count unique sequences in input fastq file
     seqs = seq_counter(args.input_file)
     # Write counted sequences to output file(s)

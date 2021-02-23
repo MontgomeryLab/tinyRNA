@@ -1,4 +1,4 @@
-usage: aquatx-collapse [-h] -i FASTQFILE -o OUTPREFIX [-t THRESHOLD]
+usage: aquatx-collapse [-h] -i FASTQFILE -o OUTPREFIX [-t THRESHOLD] [-c]
 
 Collapse sequences from a fastq file to a fasta file. Headers in the output
 fasta file will contain the number of times each sequence occurred in the
@@ -8,9 +8,13 @@ sequence was first encountered.
 optional arguments:
   -h, --help            show this help message and exit
   -t THRESHOLD, --threshold THRESHOLD
-                        Sequences <= threshold will be omitted from
+                        Sequences <= THRESHOLD will be omitted from
                         {prefix}_collapsed.fa and will instead be placed in
                         {prefix}_collapsed_lowcounts.fa
+  -c, --compression     Use gzip compression when writing fasta outputs. This
+                        option is automatically set if the input fastq file is
+                        gzip compressed. The output file will not have a .gz
+                        extension.
 
 required arguments:
   -i FASTQFILE, --input-file FASTQFILE
