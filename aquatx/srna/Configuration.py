@@ -1,4 +1,5 @@
 import ruamel.yaml
+import argparse
 import csv
 import os
 import sys
@@ -47,9 +48,6 @@ class Configuration:
                 self.append_to('json', sample_basename + '_qc.json')
                 self.append_to('html', sample_basename + '_qc.html')
 
-        if not self.get('keep_low_counts'):
-            self.config.pop('keep_low_counts')
-
     def process_reference_sheet(self):
         reference_sheet = self.dir + self.get('reference_sheet_file')
         from_here = os.path.dirname(reference_sheet) + os.sep
@@ -92,9 +90,6 @@ class Configuration:
             'out_fq': [], 'out_prefix': [], 'outfile': [], 'report_title': [], 'json': [], 'html': [], 'un': []
         })
 
-        if self.get('adapter_sequence') == 'auto_detect':
-            self.config.pop('adapter_sequence')
-
         self.extras = resource_filename('aquatx', 'extras/')
         self.set('output_file_stats', self.get('output_prefix') + '_run_stats.csv')
         self.set('output_file_counts', self.get('output_prefix') + '_raw_counts.csv')
@@ -113,6 +108,12 @@ class Configuration:
                         for fpath in ['.1.ebwt', '.2.ebwt', '.3.ebwt', '.4.ebwt', '.rev.1.ebwt', '.rev.2.ebwt']]
 
         self.set('bt_index_files', bt_idx_files)
+
+        # Discard these configurations if they are set as such
+        if self.get('adapter_sequence') == 'auto_detect':
+            self.config.pop('adapter_sequence')
+        if not self.get('keep_low_counts'):
+            self.config.pop('keep_low_counts')
 
     """========== GETTERS AND SETTERS =========="""
 
@@ -161,3 +162,27 @@ class Configuration:
             copyfile(infile, output_name)
         else:
             return infile
+
+    def get_args(self):
+        """Get the input arguments"""
+
+        parser = argparse.ArgumentParser()
+        parser.add_argument('-i', '--input-file', metavar='CONFIG', required=True,
+                            help="Input file")
+
+        args = parser.parse_args()
+        return args
+
+    def main(self):
+        """
+        Main routine to process the run information.
+        """
+
+        # Get input config file
+        args = self.get_args()
+        Configuration(args.input_file)
+
+        # TODO: need to specify the non-model organism run when no reference genome is given
+
+    if __name__ == '__main__':
+        main()
