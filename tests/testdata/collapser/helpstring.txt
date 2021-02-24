@@ -3,7 +3,8 @@ usage: aquatx-collapse [-h] -i FASTQFILE -o OUTPREFIX [-t THRESHOLD] [-c]
 Collapse sequences from a fastq file to a fasta file. Headers in the output
 fasta file will contain the number of times each sequence occurred in the
 input fastq file, and an ID which indicates the relative order in which each
-sequence was first encountered.
+sequence was first encountered. Gzipped files are automatically supported for
+fastq inputs, and compressed fasta outputs are available by request.
 
 optional arguments:
   -h, --help            show this help message and exit
