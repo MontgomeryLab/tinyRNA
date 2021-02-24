@@ -14,23 +14,16 @@ from functools import partial
 from typing import Tuple
 
 try:
-    # Load Counter's C helper function if it is available. Uses 30% less memory than Counter()
-    from _collections import _count_elements
+    from _collections import _count_elements  # Load Counter's C helper function if it is available
 except ImportError:
-    # Uses slower mapping[elem] = mapping.get(elem,default_val)+1 in loop
-    from collections import _count_elements
+    from collections import _count_elements   # Slower mapping[elem] = mapping.get(elem,default_val)+1
 
 # The GZIP read/write interface used by seq_counter() and seq2fasta()
 gz_f = partial(gzip.GzipFile, compresslevel=6, fileobj=None, mtime=0)
 
+
 def get_args() -> 'argparse.NameSpace':
     """Get command line arguments"""
-
-    def positive_threshold(t):
-        if int(t) >= 0:
-            return int(t)
-        else:
-            raise argparse.ArgumentTypeError("Threshold must be >= 0")
 
     parser = argparse.ArgumentParser(description=__doc__)
     required_group = parser.add_argument_group("required arguments")
@@ -47,6 +40,12 @@ def get_args() -> 'argparse.NameSpace':
         'counts fall below threshold, {prefix}_collapsed_lowcounts.fa'
     )
 
+    def positive_threshold(t):
+        if int(t) >= 0:
+            return int(t)
+        else:
+            raise argparse.ArgumentTypeError("Threshold must be >= 0")
+
     # Optional arguments
     parser.add_argument(
         '-t', '--threshold', default=0, required=False, type=positive_threshold,
@@ -56,9 +55,7 @@ def get_args() -> 'argparse.NameSpace':
 
     parser.add_argument(
         '-c', '--compression', required=False, action='store_true',
-        help='Use gzip compression when writing fasta outputs. This option '
-             'is automatically set if the input fastq file is gzip compressed. '
-             'The output file will not have a .gz extension.'
+        help='Use gzip compression when writing fasta outputs'
     )
 
     return parser.parse_args()
@@ -146,22 +143,24 @@ def seq2fasta(seqs: dict, out_prefix: str, thresh: int = 0, gz: bool = False, **
 def look_before_you_leap(out_prefix: str, gz: bool) -> (str, str):
     """Check that we'll be able to write results before we spend time on the work"""
 
-    out_file, low_count_file = f"{out_prefix}_collapsed.fa", f"{out_prefix}_collapsed_lowcounts.fa"
-    for file in [out_file, low_count_file]:
-        if gz: file += '.gz'
+    ext = '.fa.gz' if gz else '.fa'
+    candidates = [f"{out_prefix}{file}{ext}" for file in ["_collapsed", "_collapsed_lowcounts"]]
+    for file in candidates:
         if os.path.isfile(file):
             raise FileExistsError(f"Collapser critical error: {file} already exists.")
 
-    return out_file, low_count_file
+    return tuple(candidates)
 
 
 def fasta_interface(gz: bool) -> Tuple[callable, callable, str]:
+    """Switches to writing via gzip.GzipFile() if fasta compression is specified"""
+
     if gz:
-        # If compression is turned on, convert fasta to a byte array before writing
+        # Writing gzip requires byte array input
         def encoder(x): return x.encode('utf-8')
         writer, mode = gz_f, 'wb'
     else:
-        # No conversion necessary if not writing gzip
+        # No gzip, no conversion
         def encoder(x): return x
         writer, mode = open, 'w'
 

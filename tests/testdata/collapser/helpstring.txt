@@ -11,10 +11,7 @@ optional arguments:
                         Sequences <= THRESHOLD will be omitted from
                         {prefix}_collapsed.fa and will instead be placed in
                         {prefix}_collapsed_lowcounts.fa
-  -c, --compression     Use gzip compression when writing fasta outputs. This
-                        option is automatically set if the input fastq file is
-                        gzip compressed. The output file will not have a .gz
-                        extension.
+  -c, --compression     Use gzip compression when writing fasta outputs
 
 required arguments:
   -i FASTQFILE, --input-file FASTQFILE
