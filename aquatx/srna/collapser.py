@@ -56,7 +56,7 @@ def get_args() -> 'argparse.NameSpace':
     )
 
     parser.add_argument(
-        '-c', '--compression', required=False, action='store_true',
+        '-c', '--compress', required=False, action='store_true',
         help='Use gzip compression when writing fasta outputs'
     )
 
@@ -173,11 +173,11 @@ def main():
     # Get command line arguments
     args = get_args()
     # Ensure that the provided prefix will not result in overwritten output files
-    look_before_you_leap(args.out_prefix, args.compression)
+    look_before_you_leap(args.out_prefix, args.compress)
     # Count unique sequences in input fastq file
     seqs = seq_counter(args.input_file)
     # Write counted sequences to output file(s)
-    seq2fasta(seqs, args.out_prefix, args.threshold)
+    seq2fasta(seqs, args.out_prefix, args.threshold, args.compress)
 
 
 if __name__ == '__main__':
