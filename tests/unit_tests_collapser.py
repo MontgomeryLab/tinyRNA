@@ -4,7 +4,7 @@ import sys
 import os
 
 from tests.unit_test_helpers import reset_mocks, ShellCapture
-from unittest.mock import patch, MagicMock, call, mock_open
+from unittest.mock import patch, MagicMock, call, mock_open, Mock
 from collections import OrderedDict
 from io import StringIO
 
@@ -18,17 +18,20 @@ class MyTestCase(unittest.TestCase):
             os.chdir(f".{os.sep}tests")
 
         # Simply for convenience for loading files during setup
-        def read(file):
-            with open(file, 'r') as f:
+        def read(file, mode='r'):
+            with open(file, mode) as f:
                 return f.read()
 
         # Test-length files
         self.fastq_file = 'testdata/cel_montgomery/Lib303_test.fastq'
+        self.fastq_gzip = 'testdata/collapser/Lib303_test.fastq.gz'
         self.fastq_counts_dict = json.loads(read('./testdata/collapser/Lib303_counts_reference.json'))
         self.fasta = {
             "thresh=0": read('testdata/collapser/Lib303_thresh_0_collapsed.fa'),
             "thresh=4": read('testdata/collapser/Lib303_thresh_4_collapsed.fa'),
-            "thresh=4,low_count": read('testdata/collapser/Lib303_thresh_4_collapsed_lowcounts.fa')
+            "thresh=4,low_count": read('testdata/collapser/Lib303_thresh_4_collapsed_lowcounts.fa'),
+            "thresh=0,gz": read('testdata/collapser/Lib303_thresh_0_collapsed.fa.gz', mode='rb'),
+            "min,gz": read('testdata/collapser/min_collapsed.fa.gz', mode='rb')
         }
 
         # File-related messages
@@ -49,27 +52,37 @@ class MyTestCase(unittest.TestCase):
             b"+",
             b"AAAAAEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEAE<EEAEEEEEEEEEE"
         ])
+        # Binary encoded gzip compressed min_fastq (compression level 6, mtime 0)
+        self.min_fastq_gz = b'\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\xff\x9d\x8b1\x0e\xc2@\x0c\x04\xfb{\x05=\x8d' \
+                            b'\x8fpDgQ`V\xd1"\x8a4X\x88\xff\xbf\x84\xbd \xe5\x01L\xb1\xb6\xe5\xd9\xdb\xfajf\x97>{' \
+                            b'\xb5\xc9\x1f|?q\xe7\xa7y\xf5*\xcc{\xb3\xb3\x9f\xe6>\x1d\xaa\xafn\x1e\x89\x00\x0bS(HB' \
+                            b'\x1b\x08FPOn\x93\x92\xa4%R\'\x12\x08\x8e\xde\xaf\xac\x94\x97\x91\xc4\xa6\x94c\x89\xc1' \
+                            b'\xf2\x1f\xb1\\G\xec|\x01\'\xbdlc\xd2\x00\x00\x00'
         self.min_counts_dict = {self.min_seq: 1}
         self.min_fasta = ">0_count=1\n" + self.min_seq
 
     """
     Testing seq_counter() with minimum inputs: single-record fastq and zero length files.
-    File operations are mocked.
+    File operations are mocked. Patching looks a little different in this one since
+    seq_counter() now has file_reader in its default args, so we have to instead patch
+    its __defaults__ attribute.
     """
     def test_seq_counter_min(self):
         # Single record fastq test
-        with patch('aquatx.srna.collapser.open', mock_open(read_data=self.min_fastq)) as mo:
+        with patch.object(collapser.seq_counter, '__defaults__', new=(mock_open(read_data=self.min_fastq),)) as mo:
             min_count = collapser.seq_counter("mockPrefixDNE")
-            mo.assert_called_once_with("mockPrefixDNE", "rb")
+            mo[0].assert_called_once_with("mockPrefixDNE", "rb")
             self.assertDictEqual(min_count, self.min_counts_dict)
-            print("seq_counter: passed single record test.", file=sys.stderr)
+            self.assertEqual([call('mockPrefixDNE', 'rb')], mo[0].call_args_list)
+        print("seq_counter: passed single record test.", file=sys.stderr)
 
         # Zero length file test
-        with patch('aquatx.srna.collapser.open', mock_open(read_data='')) as mo:
+        with patch.object(collapser.seq_counter, '__defaults__', new=(mock_open(read_data=''),)) as mo:
             zero_count = collapser.seq_counter("mockPrefixDNE")
-            mo.assert_called_once_with("mockPrefixDNE", "rb")
+            mo[0].assert_called_once_with("mockPrefixDNE", "rb")
             self.assertDictEqual(zero_count, {})
-            print("seq_counter: passed zero length input test.", file=sys.stderr)
+            self.assertEqual([call('mockPrefixDNE', 'rb')], mo[0].call_args_list)
+        print("seq_counter: passed zero length input test.", file=sys.stderr)
 
     """
     Testing seq_counter() with test-length library files
@@ -78,6 +91,52 @@ class MyTestCase(unittest.TestCase):
         seq_count_dict = collapser.seq_counter(self.fastq_file)
         self.assertDictEqual(seq_count_dict, self.fastq_counts_dict)
         print("seq_counter: counts verified.", file=sys.stderr)
+
+    """
+    Testing gzip reading in seq_counter() 
+    """
+    def test_seq_counter_gzip(self):
+        # MIN TEST
+        # Need to patch 1) builtins.open in gzip, 2) file_reader in seq_counter's __defaults__
+        with patch('aquatx.srna.collapser.gzip.builtins.open', new=mock_open(read_data=self.min_fastq_gz)):
+            with patch.object(collapser.seq_counter, '__defaults__', new=(mock_open(read_data=self.min_fastq_gz),)) as mo:
+                # Read the mock gzipped single record fastq file
+                gz_min_result = collapser.seq_counter("mockPrefixDNE")
+                self.assertEqual(self.min_counts_dict, gz_min_result)
+
+        # FULL TEST
+        # Verify that full-length fastq.gz files can be read and properly counted
+        gz_full_result = collapser.seq_counter(self.fastq_gzip)
+        self.assertDictEqual(self.fastq_counts_dict, gz_full_result)
+
+    """
+    Testing gzip writing in seq2fasta()
+    """
+    @patch('aquatx.srna.collapser.open', new_callable=mock_open())
+    def test_seq2fasta_gzip(self, mock_open_f):
+        def reassemble_writes(calls):
+            # The gzip module uses a buffered writer, so we need to reassemble the individual writes
+            return b''.join([x[1][0] for x in calls if x[0] == '().write'])
+
+        with patch('aquatx.srna.collapser.gzip.builtins.open', new_callable=mock_open) as gz_open:
+            # MIN TEST
+            collapser.seq2fasta(self.min_counts_dict, "min_gz", gz=True)
+            output = reassemble_writes(gz_open.mock_calls)
+            self.assertEqual(self.fasta['min,gz'], output)
+            # Only the gzip.GzipFile() interface should have been used, not builtins.open()
+            mock_open_f.assert_not_called()
+            # Only a binary write to the output file should have been called
+            self.assertEqual([call('min_gz_collapsed.fa.gz', 'wb')], gz_open.call_args_list)
+            gz_open.reset_mock()
+
+            # FULL TEST
+            collapser.seq2fasta(self.fastq_counts_dict, "Lib303_thresh_0", gz=True)
+            output = reassemble_writes(gz_open.mock_calls)
+            self.assertEqual(self.fasta["thresh=0,gz"], output)
+            # Only the gzip.GzipFile() interface should have been used, not builtins.open()
+            mock_open_f.assert_not_called()
+            # Only a binary write to the output file should have been called
+            self.assertEqual([call('Lib303_thresh_0_collapsed.fa.gz', 'wb')], gz_open.call_args_list)
 
     """
     Testing that the correct usage messages are produced when improperly calling seq2fasta(),
@@ -93,7 +152,7 @@ class MyTestCase(unittest.TestCase):
         # Test minimum requirements assertions
         with self.assertRaises(AssertionError) as cm:
             collapser.seq2fasta({}, None)
-            collapser.seq2fasta({}, "mockPrefixDoesntExist", -1)
+            collapser.seq2fasta({}, "mockPrefixDNE", -1)
         mock_os.path.isfile.assert_not_called()
         mock_open_f.assert_not_called()
         print("seq2fasta: minimum requirements checked.", file=sys.stderr)
