@@ -2,6 +2,8 @@
 Collapse sequences from a fastq file to a fasta file. Headers in the output fasta file
 will contain the number of times each sequence occurred in the input fastq file, and
 an ID which indicates the relative order in which each sequence was first encountered.
+Gzipped files are automatically supported for fastq inputs, and compressed fasta outputs
+are available by request.
 """
 
 import argparse
@@ -65,8 +67,8 @@ def seq_counter(fastq_file: str, file_reader: callable = builtins.open) -> 'Orde
     """Counts the number of times each sequence appears
 
     Args:
-        fastq_file: A trimmed, quality filtered fastq file containing sequences to count.
-        file_reader: Optional. The file context manager to use. Must support .readline()
+        fastq_file: A trimmed, quality filtered, optionally gzip compressed fastq file.
+        file_reader: The file context manager to use. Must support .readline() and 'rb'
 
     Returns: An ordered dictionary of unique sequences with associated counts.
     """
@@ -103,16 +105,16 @@ def seq2fasta(seqs: dict, out_prefix: str, thresh: int = 0, gz: bool = False, **
             >ID_count=COUNT
 
     Headers indicate the ID of the sequence and the sequence count. The first
-    unique sequence is assigned ID 0, and the second unique sequence (ID 1)
+    unique sequence is assigned ID 0, and the second unique sequence, (ID 1),
     may have n repetitions of sequence ID 0 before it in the fastq file, but its
-    ID will be 1, not n+1.
+    ID will be 1 not n+1.
 
     Args:
         seqs: A dictionary containing sequences and associated counts
         out_prefix: A prefix name for the output fasta files
     Keyword Args:
         thresh: Sequences with count LE thresh will placed in a separate file
-        gz: If true, file outputs will be gzip compressed
+        gz: If true, fasta outputs will be gzip compressed
 
     Returns: None
     """
