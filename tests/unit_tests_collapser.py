@@ -3,7 +3,7 @@ import json
 import sys
 import os
 
-from tests.unit_test_helpers import reset_mocks, ShellCapture
+from tests.unit_test_helpers import reset_mocks, ShellCapture, reassemble_gz_w
 from unittest.mock import patch, MagicMock, call, mock_open, Mock
 from collections import OrderedDict
 from io import StringIO
@@ -114,14 +114,10 @@ class MyTestCase(unittest.TestCase):
     """
     @patch('aquatx.srna.collapser.open', new_callable=mock_open())
     def test_seq2fasta_gzip(self, mock_open_f):
-        def reassemble_writes(calls):
-            # The gzip module uses a buffered writer, so we need to reassemble the individual writes
-            return b''.join([x[1][0] for x in calls if x[0] == '().write'])
-
         with patch('aquatx.srna.collapser.gzip.builtins.open', new_callable=mock_open) as gz_open:
             # MIN TEST
             collapser.seq2fasta(self.min_counts_dict, "min_gz", gz=True)
-            output = reassemble_writes(gz_open.mock_calls)
+            output = reassemble_gz_w(gz_open.mock_calls)
             self.assertEqual(self.fasta['min,gz'], output)
             # Only the gzip.GzipFile() interface should have been used, not builtins.open()
             mock_open_f.assert_not_called()
@@ -131,7 +127,7 @@ class MyTestCase(unittest.TestCase):
 
             # FULL TEST
             collapser.seq2fasta(self.fastq_counts_dict, "Lib303_thresh_0", gz=True)
-            output = reassemble_writes(gz_open.mock_calls)
+            output = reassemble_gz_w(gz_open.mock_calls)
             self.assertEqual(self.fasta["thresh=0,gz"], output)
             # Only the gzip.GzipFile() interface should have been used, not builtins.open()
             mock_open_f.assert_not_called()
@@ -370,9 +366,11 @@ class MyTestCase(unittest.TestCase):
     """
     Testing argparse requirements.
     """
+    @patch('aquatx.srna.collapser.os', autospec=True)
+    @patch('aquatx.srna.collapser.gzip.os', autospec=True)
     @patch('sys.stdout', new_callable=StringIO)
     @patch('sys.stderr',  new_callable=StringIO)
-    def test_collapser_args(self, mock_stderr, mock_stdout):
+    def test_collapser_args(self, mock_stderr, mock_stdout, os_gz, os_aq):
         def collapser_main():
             try:
                 collapser.main()
@@ -411,6 +409,37 @@ class MyTestCase(unittest.TestCase):
                 expected_helpstring = f.read()
             # Helpstring is written to stdout, not stderr
             self.assertEqual(expected_helpstring, mock_stdout.getvalue())
+            mock_stdout.truncate(0)
+            mock_stdout.seek(0)
+
+        # Compression test
+        # Lots of patching since we need to mock the file interface for seq_counter default argument,
+        # gzip, and seq2fasta. Also need to mock file existence.
+        no_compression_args = f"aquatx-collapse -i min_gz -o min_gz".split(" ")
+        [os.path.isfile.configure_mock(side_effect=self.prefix_exists_fn) for os in [os_aq, os_gz]]
+        with patch('aquatx.srna.collapser.gzip.builtins.open', new=mock_open(read_data=self.min_fastq_gz)) as gzopen:
+            with patch.object(collapser.seq_counter, '__defaults__',
+                              new=(mock_open(read_data=self.min_fastq_gz),)) as seq_counter_open:
+                with patch('aquatx.srna.collapser.open', new_callable=mock_open) as seq2fasta_open:
+
+                    # Without compression (no -c flag)
+                    with patch('sys.argv', no_compression_args):
+                        collapser_main()
+                        # Both interfaces should read at seq_counter, non-gzip write in seq2fasta
+                        self.assertEqual([call('min_gz', 'rb')], seq_counter_open[0].call_args_list)
+                        self.assertEqual([call('min_gz', 'rb')], gzopen.call_args_list)
+                        self.assertEqual([call('min_gz_collapsed.fa', 'w')], seq2fasta_open.call_args_list)
+                        gzopen.reset_mock(), seq_counter_open[0].reset_mock(), seq2fasta_open.reset_mock()
+
+                    # With compression (with -c flag)
+                    compression_args = f"aquatx-collapse -i min_gz -o min_gz -c".split(" ")
+                    with patch('sys.argv', compression_args):
+                        collapser_main()
+                        # Both interfaces should read at seq_counter, but only gzip should write
+                        self.assertEqual([call('min_gz', 'rb')], seq_counter_open[0].call_args_list)
+                        self.assertEqual([call('min_gz', 'rb'), call('min_gz_collapsed.fa.gz', 'wb')],
+                                         gzopen.call_args_list)
+                        self.assertEqual([], seq2fasta_open.call_args_list)
 
 
 if __name__ == '__main__':
