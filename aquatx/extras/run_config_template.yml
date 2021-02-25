@@ -37,8 +37,8 @@ run_time: ''
 ######-------------------------------------------------------------------------------######
  
 ##-- Relative path to sample & reference sheets --##
-sample_sheet_file: 'extras/sample_sheet_template.csv'
-reference_sheet_file: 'extras/reference_sheet_template.csv'
+sample_sheet_file: 'sample_sheet_template.csv'
+reference_sheet_file: 'reference_sheet_template.csv'
 
 ##-- The prefix for your bowtie index, include relative path --##
 ebwt: 'tests/testdata/references/c_elegans_ws230'
@@ -116,18 +116,18 @@ report_title: ''
 ######--------------------------- READ COLLAPSER OPTIONS ----------------------------######
 #
 # We use a custom Python script for collapsing duplicate reads for now. There are only a 
-# couple options and we recommend using the default (keep all reads). 
+# couple options and we recommend using the default (keep all reads: threshold = 0).
 #
 # We have specified default parameters for small RNA data based on our own "best practices".
 # You may change the parameters here.
 #
 ######-------------------------------------------------------------------------------######
 
-##-- Min. num of duplicate sequences required to keep --##
-threshold: 1
+##-- Sequences with count <= threshold will be placed in a separate low_counts fasta --##
+threshold: 0
 
-##-- If True: write the sequences below threshold to a file --##
-keep_low_counts: False
+##-- If True: outputs will be gzip compressed --##
+compress: False
 
 ###-- These options are generated from sample sheet --###
 # output filenames

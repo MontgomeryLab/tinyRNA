@@ -37,7 +37,7 @@ inputs:
   # collapser inputs
   uniq_seq_file: string[]
   threshold: int?
-  keep_low_counts: string[]?
+  compress: boolean?
 
   # bowtie inputs
   bt_index_files: File[]
@@ -104,13 +104,13 @@ steps:
 
   collapse:
     run: ../tools/aquatx-collapse.cwl
-    scatter: [input_file, out_file]
+    scatter: [input_file, out_prefix]
     scatterMethod: dotproduct
     in:
       input_file: fastp/fastq1
-      out_file: uniq_seq_file
+      out_prefix: uniq_seq_file
       threshold: threshold
-      keep_low_counts: keep_low_counts
+      compress: compress
     out: [collapsed_fa, low_counts_fa]
 
   bowtie:

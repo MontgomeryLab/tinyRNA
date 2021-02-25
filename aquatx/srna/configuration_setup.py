@@ -41,11 +41,11 @@ def process_sample_sheet(sample_file, config_settings):
     sample_uniq_seq = list()
     sample_sams = list()
     sample_unaligned = list()
-    sample_low_counts = list()
     sample_json = list()
     sample_html = list()
 
     sample_sheet_dir = os.path.dirname(sample_file) + os.sep
+    collapser_extension = '.fa.gz' if config_settings['compress'] else '.fa'
 
     with open(sample_file) as sf:
         csv_reader = csv.DictReader(sf, delimiter=',')
@@ -58,21 +58,14 @@ def process_sample_sheet(sample_file, config_settings):
             sample_out_fq.append(sample_basename + '_cleaned.fastq')
             sample_report.append(row['Sample/Group Name'] + '_replicate_'
                                  + row['Replicate number'] + '_fastp_report')
-            sample_uniq_seq.append(sample_basename + '_unique_seqs_collapsed.fa')
+            sample_uniq_seq.append(sample_basename + '_collapsed' + collapser_extension)
             sample_sams.append(sample_basename + '_aligned_seqs.sam')
             sample_unaligned.append(sample_basename + '_unaligned_seqs.fa')
-            sample_low_counts.append(sample_basename + '_low_count_uniq_seqs.fa')
             sample_json.append(sample_basename + '_qc.json')
             sample_html.append(sample_basename + '_qc.html')
 
             # Todo: find out if this was necessary for plotter... ultimately it is never added to config...
             # sample_compare.add(row['Sample/Group Name'])
-
-    #
-    if config_settings.get('keep_low_counts', None) == False:
-        config_settings.pop('keep_low_counts')
-    else:
-        config_settings['keep_low_counts'] = sample_low_counts
 
     config_settings['json'] = sample_json
     config_settings['html'] = sample_html
