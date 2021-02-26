@@ -84,6 +84,11 @@ def reset_mocks(mock_open_f, mock_os, mock_stdout):
     mock_stdout.seek(0)  # Avoids prepending a null string of previous buffer size
 
 
+# The gzip module uses a buffered writer, so we need to reassemble the individual writes
+def reassemble_gz_w(mock_calls):
+    return b''.join([x[1][0] for x in mock_calls if x[0] == '().write'])
+
+
 class ShellCapture:
     """Context manager for executing a shell command and reading the command's output
 

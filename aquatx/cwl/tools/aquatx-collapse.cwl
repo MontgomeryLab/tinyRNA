@@ -9,34 +9,36 @@ inputs:
   input_file:
     type: File
     inputBinding:
-      position: 2
+      position: 0
       prefix: -i
 
-  out_file:
+  out_prefix:
     type: string
     inputBinding:
-      position: 2
+      position: 1
       prefix: -o
 
   threshold:
     type: int?
+    default: 0
     inputBinding:
       position: 2
       prefix: -t
 
-  keep_low_counts:
-    type: string?
+  compress:
+    type: boolean?
+    default: false
     inputBinding:
-      position: 2
-      prefix: -k
+      position: 3
+      prefix: -c
 
 outputs:
   collapsed_fa:
     type: File
     outputBinding:
-      glob: $(inputs.out_file)
+      glob: $(inputs.out_prefix)_collapsed.fa*
 
   low_counts_fa:
     type: File?
     outputBinding:
-      glob: $(inputs.keep_low_counts)
+      glob: $(inputs.out_prefix)_collapsed_lowcounts.fa*
