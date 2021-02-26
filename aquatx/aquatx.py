@@ -28,6 +28,7 @@ import shutil
 import os
 
 from pkg_resources import resource_filename
+from aquatx.srna.Configuration import Configuration
 from argparse import ArgumentParser
 
 

@@ -29,16 +29,15 @@ run_time: ''
 # edit before running the workflow. 
 #
 # Directions:
-# 1. Fill out the sample sheet with files to process + naming scheme. [sample_sheet_template.csv]
-# 2. Fill out the reference sheet with reference files and corresponding optional masks [reference_sheet_template.csv]
-# 3. Rename the files and list them here. If you DO NOT rename them, they will be renamed for you.  
-# 4. Add an output identifier for summary files and databases
+# 1. Fill out the sample sheet with files to process + naming scheme. [samples.csv]
+# 2. Fill out the reference sheet with reference files and parameters of interest [features.csv]
+# 3. Add an output identifier for summary files and databases
 # 
 ######-------------------------------------------------------------------------------######
  
 ##-- Relative path to sample & reference sheets (relative to this config file) --##
-sample_sheet_file: '../../aquatx/extras/sample_sheet_template.csv'
-reference_sheet_file: '../../aquatx/extras/reference_sheet_template.csv'
+samples_csv: '../../aquatx/extras/samples.csv'
+features_csv: '../../aquatx/extras/features.csv'
 
 ##-- The prefix for your bowtie index, include relative path (relative to this config file) --##
 ebwt: 'tests/testdata/references/c_elegans_ws230'
@@ -199,6 +198,7 @@ un: ''
 #
 ######-------------------------------------------------------------------------------######
 
+### --- OLD COUNTER OPTIONS ---
 ##-- If True: save intermediate table with all information --##
 intermed_file: False
 
@@ -207,10 +207,8 @@ intermed_file: False
 out_prefix: ''
 # reference gffs
 ref_annotations: ''
-# mask gffs
-mask_annotations: ''
-# turn on/off counting antisense alignments
-antisense: ''
+# count alignments on the sense, antisense, or both strands
+strand: ''
 
 ######--------------------------- MERGE SAMPLES OPTIONS ---------------------------######
 #
