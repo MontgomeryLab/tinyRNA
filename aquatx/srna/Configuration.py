@@ -24,7 +24,7 @@ class Configuration:
         self.process_reference_sheet()
 
     def process_sample_sheet(self):
-        sample_sheet = self.joinpath(self.dir, self.get('sample_sheet_file'))
+        sample_sheet = self.joinpath(self.dir, self.get('samples_csv'))
         from_here = os.path.dirname(sample_sheet)
 
         with open(sample_sheet, 'r', encoding='utf-8-sig') as sf:
@@ -32,12 +32,13 @@ class Configuration:
             ext = 'gz' if self.get('compress') else ''
             for row in csv_reader:
                 sample_basename = self.prefix(os.path.basename(row['Input FastQ/A Files']))
+                fastq_file = self.joinpath(from_here, row['Input FastQ/A Files'])
                 group_name = row['Sample/Group Name']
                 rep_number = row['Replicate number']
 
                 self.append_to('report_title', f"{group_name}_replicate_{rep_number}_fastp_report")
                 self.append_to('out_prefix', f"{group_name}_replicate_{rep_number}")
-                self.append_to('in_fq', self.cwl_file(self.joinpath(from_here, row['Input FastQ/A Files'])))
+                self.append_to('in_fq', self.cwl_file(fastq_file))
 
                 self.append_to('out_fq', sample_basename + '_cleaned.fastq')
                 self.append_to('uniq_seq_file', sample_basename + '_collapsed.fa' + ext)
@@ -47,18 +48,19 @@ class Configuration:
                 self.append_to('html', sample_basename + '_qc.html')
 
     def process_reference_sheet(self):
-        reference_sheet = self.joinpath(self.dir, self.get('reference_sheet_file'))
+        reference_sheet = self.joinpath(self.dir, self.get('features_csv'))
         from_here = os.path.dirname(reference_sheet)
 
         with open(reference_sheet, 'r', encoding='utf-8-sig') as rf:
             csv_reader = csv.DictReader(rf, delimiter=',')
             for row in csv_reader:
+                gff_file = self.joinpath(from_here, row['Feature Source'])
                 self.append_to('identifier', row['Identifier'])
                 self.append_to('srna_class', row['Class'])
                 self.append_to('strand', row['Strand (sense/antisense/both)'])
-                self.append_to('ref_annotations', row['Feature Source'])
+                self.append_to('ref_annotations', self.cwl_file(gff_file))
                 self.append_to('hierarchy', row['Hierarchy'])
-                self.append_to('endnt', row["5' End Nucleotide"])
+                self.append_to('5end_nt', row["5' End Nucleotide"])
                 self.append_to('length', row['Length'])
 
     def setup(self):
@@ -76,7 +78,7 @@ class Configuration:
 
         # Per-file settings lists to be populated by process_sample_sheet() and process_reference_sheet()
         self.set_default_dict({per_file_setting_key: [] for per_file_setting_key in
-            ['identifier', 'srna_class', 'strand', 'hierarchy', 'endnt', 'length', 'ref_annotations', 'un'
+            ['identifier', 'srna_class', 'strand', 'hierarchy', '5end_nt', 'length', 'ref_annotations', 'un',
              'in_fq', 'out_fq', 'uniq_seq_file', 'out_prefix', 'outfile', 'report_title', 'json', 'html']
         })
 
@@ -127,7 +129,7 @@ class Configuration:
             target.append(val)
             return target
         else:
-            print("Tried appending to a non-existent key.", file=sys.stderr)
+            print(f"Tried appending to a non-existent key: {key}", file=sys.stderr)
 
     """========== HELPERS =========="""
 
@@ -153,11 +155,22 @@ class Configuration:
         else:
             return infile
 
-    def write_config_file(self, filename: str = None) -> None:
+    def write_processed_config(self, filename: str = None) -> str:
         if filename is None: filename = self.get_outfile_name(self.inf)
 
         with open(filename, 'w') as outconf:
             self.yaml.dump(self.config, outconf)
+
+        return filename
+
+    def create_run_directory(self) -> str:
+        run_dir = self.get("run_directory")
+        if not os.path.isdir(run_dir):
+            os.mkdir(run_dir)
+
+        return run_dir
+
+    """========== COMMAND LINE =========="""
 
     def get_args(self):
         """Get the input arguments"""

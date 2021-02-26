@@ -153,7 +153,7 @@ def setup_config(input_file):
         config_settings['output_prefix'] = config_settings['run_prefix']
 
     # Path specification should be relative to the config file, not relative to the script's CWD
-    sample_sheet_path = os.path.dirname(input_file) + os.sep + config_settings['sample_sheet_file']
+    sample_sheet_path = os.path.dirname(input_file) + os.sep + config_settings[' samples_csv']
     config_settings = process_sample_sheet(sample_sheet_path, config_settings)
 
     config_settings['output_file_stats'] = config_settings['output_prefix'] + '_run_stats.csv'

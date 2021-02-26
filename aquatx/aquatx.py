@@ -17,12 +17,13 @@ A configuration file should be supplied for the run subcommand (required)
 and for the setup-cwl subcommand (optional; alternatively you may use the
 word "None" or "none" to obtain only the workflow files). This config file
 will be processed and rewritten to reflect the workflow inputs defined under
-the keys `sample_sheet_file` and `reference_sheet_file` (use get-template for
+the keys ` samples_csv` and `reference_sheet_file` (use get-template for
 more info). Config files that share the same name as the template config file
 will be renamed.
 """
 
 import aquatx.srna.configuration_setup
+import cwltool.factory
 import subprocess
 import shutil
 import os
@@ -63,7 +64,7 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
 
     The provided configuration file will be processed and rewritten to reflect the content
     of the sample and reference csv files. The location of these files is defined under the
-    config file's `sample_sheet_file` and `reference_sheet_file` keys. Config files named
+    config file's ` samples_csv` and `reference_sheet_file` keys. Config files named
     "run_config_template.yml" will be left unmodified, and the processed config will
     instead be written under a file whose name reflects the current date and time.
 
@@ -75,10 +76,22 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
     print("Running the end-to-end analysis...")
 
     # First get the configuration file set up for this run
-    workflow_conf_file = aquatx.srna.configuration_setup.setup_config(config_file)
+    config = Configuration(config_file)
+    run_dir = config.create_run_directory()
+    wf_conf_file = config.write_processed_config()
 
     # Run with cwltool
-    subprocess.run(f"cwltool {aquatx_cwl_path}/workflows/aquatx_wf.cwl {workflow_conf_file}", shell=True)
+    subprocess.run(f"cwltool --outdir {run_dir} {aquatx_cwl_path}/workflows/aquatx_wf.cwl {wf_conf_file}", shell=True)
+
+    # runtime_context = cwltool.factory.RuntimeContext()
+    # runtime_context.outdir = os.path.join('.', config.get('run_directory'))
+    # runtime_context.on_error = "continue"
+    #
+    # loading_context = cwltool.factory.LoadingContext()
+    # loading_context.jobdefaults = config.config
+    #
+    # cwl = cwltool.factory.Factory(runtime_context=runtime_context, loading_context=loading_context)
+    # cwl.make(f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl")
 
 
 def get_template(aquatx_extras_path: str) -> None:
@@ -91,14 +104,9 @@ def get_template(aquatx_extras_path: str) -> None:
     """
 
     print("Copying template input files to current directory...")
-    template_files = [
-        'run_config_template.yml',
-        'samples.csv',
-        'features.csv'
-    ]
 
     # Copy template files to the current working directory
-    for template in template_files:
+    for template in ['run_config_template.yml', 'samples.csv', 'features.csv']:
         shutil.copyfile(f"{aquatx_extras_path}/{template}", f"{os.getcwd()}/{template}")
 
 
@@ -116,7 +124,7 @@ def setup_cwl(aquatx_cwl_path: str, config_file: str) -> None:
     # If the word "None" or "none" is supplied, simply copy workflow files. No config file processing.
     if config_file not in ('None', 'none'):
         # Set up the config file
-        processed_config_location = aquatx.srna.configuration_setup.setup_config(config_file)
+        processed_config_location = Configuration(config_file).write_processed_config()
         print("The processed configuration file is located at: " + processed_config_location)
 
     # Copy the entire cwl directory to the current working directory
