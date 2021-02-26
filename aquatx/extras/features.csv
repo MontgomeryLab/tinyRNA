@@ -1,0 +1,6 @@
+Identifier,Class,Strand (sense/antisense/both),Feature Source,Hierarchy,5' End Nucleotide,Length
+Class,CSR,antisense,../../tests/testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3,1,G,30
+Class,WAGO,antisense,../../tests/testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3,2,all,16-35
+Class,miRNA,sense,../../tests/testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3,2,C,any
+Class,piRNA,sense,../../tests/testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3,5,G,25
+Class,unknown,both,../../tests/testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3,4,U,20

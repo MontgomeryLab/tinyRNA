@@ -62,10 +62,7 @@ class test_aquatx(unittest.TestCase):
             helpers.LambdaCapture(lambda: aquatx.get_template(self.aquatx_extras_path)),  # The pre-install invocation
             helpers.ShellCapture("aquatx get-template")                                   # The post-install command
         ]
-        template_files = [
-            'run_config_template.yml', 'sample_sheet_template.csv',
-            'reference_sheet_template.csv'
-        ]
+        template_files = ['run_config_template.yml', 'samples.csv', 'features.csv']
 
         def dir_entry_ct():
             return len(os.listdir('.'))

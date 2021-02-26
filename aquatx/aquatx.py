@@ -92,8 +92,8 @@ def get_template(aquatx_extras_path: str) -> None:
     print("Copying template input files to current directory...")
     template_files = [
         'run_config_template.yml',
-        'sample_sheet_template.csv',
-        'reference_sheet_template.csv'
+        'samples.csv',
+        'features.csv'
     ]
 
     # Copy template files to the current working directory
