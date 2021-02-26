@@ -43,7 +43,7 @@ inputs:
     doc: "query input files are FASTQ .fq/.fastq"
 
   fasta:
-    type: boolean
+    type: boolean?
     inputBinding:
       prefix: -f
       position: 1
@@ -86,7 +86,7 @@ inputs:
     doc: "input quals are from GA Pipeline ver. >= 1.3"
 
   end_to_end:
-    type: int
+    type: int?
     inputBinding:
       prefix: -v
       position: 1
@@ -116,7 +116,7 @@ inputs:
     doc: "report up to <int> good alignments per read (default: 1)"
 
   all:
-    type: boolean
+    type: boolean?
     inputBinding:
       prefix: --all
       position: 1

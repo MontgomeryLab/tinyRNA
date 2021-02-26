@@ -101,7 +101,7 @@ inputs:
       option is specified, quality filtering is disabled
 
   qualified_quality_phred:
-    type: int
+    type: int?
     inputBinding:
       prefix: --qualified_quality_phred
     default: 30
@@ -110,7 +110,7 @@ inputs:
       15 means phred quality >=Q15 is qualified. (int [=15])
 
   unqualified_percent_limit:
-    type: int
+    type: int?
     inputBinding:
       prefix: --unqualified_percent_limit
     default: 0
@@ -119,7 +119,7 @@ inputs:
       (0~100). Default 40 means 40% (int [=40])
 
   n_base_limit:
-    type: int
+    type: int?
     inputBinding:
       prefix: --n_base_limit
     default: 1
@@ -137,7 +137,7 @@ inputs:
       is specified, length filtering is disabled
   
   length_required:
-    type: int
+    type: int?
     inputBinding:
       prefix: --length_required
     default: 15
@@ -146,7 +146,7 @@ inputs:
       default is 15. (int [=15]) 
 
   length_limit:
-    type: int
+    type: int?
     inputBinding:
       prefix: --length_limit
     default: 30
@@ -173,14 +173,14 @@ inputs:
   
   # Output report options
   json:
-    type: string?
+    type: string
     inputBinding:
       prefix: --json
     doc: |
       the json format report file name (string [=fastp.json])
 
   html:
-    type: string?
+    type: string
     inputBinding:
       prefix: --html
     doc: |
@@ -196,7 +196,7 @@ inputs:
   
   # Parallel processing options
   thread:
-    type: int
+    type: int?
     inputBinding:
       prefix: --thread
     default: 2

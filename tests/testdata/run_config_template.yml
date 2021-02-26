@@ -19,8 +19,8 @@
 user: 'Tester'
 run_directory: './run_directory'
 run_prefix: 'test_run'
-run_date: ''
-run_time: ''
+run_date: ~
+run_time: ~
 
 ##############################  MAIN INPUT FILES FOR ANALYSIS ##############################
 #
@@ -50,7 +50,7 @@ threads: 2
 
 ##-- Final output file prefixes for overall run --##
 ##-- If none given, run_prefix is used (default: date_time_aquatx) --##
-output_prefix: ''
+output_prefix: []
 
 ######---------------------TRIMMING AND QUALITY FILTER OPTIONS ----------------------######
 #
@@ -106,11 +106,15 @@ compression: 4
 
 ###-- These options are generated from sample sheet --###
 # input fastq files
-in_fq: ''
+in_fq: []
 # output, cleaned fastq files
-out_fq: ''
+out_fq: []
 # output reports
-report_title: ''
+report_title: []
+# html report filenames
+html: []
+# json report filenames
+json: []
 
 ######--------------------------- READ COLLAPSER OPTIONS ----------------------------######
 #
@@ -129,8 +133,8 @@ threshold: 0
 compress: False
 
 ###-- These options are generated from sample sheet --###
-# output filenames
-uniq_seq_file: ''
+# prefix to be used for input's output file(s)
+uniq_seq_prefix: []
 
 ######------------------------- BOWTIE2 ALIGNMENT OPTIONS ---------------------------######
 #
@@ -185,11 +189,11 @@ sam: True
 
 ###-- These options generated from sample & reference sheet --###
 # bowtie index files
-bt_index_files: ''
+bt_index_files: []
 # output alignment file names
-outfile: ''
+outfile: []
 #unaligned read file names
-un: ''
+un: []
 
 ######--------------------------- FEATURE COUNTER OPTIONS ---------------------------######
 #
@@ -204,11 +208,21 @@ intermed_file: False
 
 ###-- These options generated from sample & reference sheet --###
 # output file prefix
-out_prefix: ''
+out_prefix: []
 # reference gffs
-ref_annotations: ''
+ref_annotations: []
+# identifiers of interest
+identifier: []
+# selection order preference for multiple alignments
+hierarchy: []
+# subclass of interest
+srna_class: []
 # count alignments on the sense, antisense, or both strands
-strand: ''
+strand: []
+# 5' end nucleotide
+5end_nt: []
+# length specification
+length: []
 
 ######--------------------------- MERGE SAMPLES OPTIONS ---------------------------######
 #
@@ -218,8 +232,8 @@ strand: ''
 ######-------------------------------------------------------------------------------######
 
 ##-- These options are generated with output_prefix --##
-output_file_stats: ''
-output_file_counts: ''
+output_file_stats: []
+output_file_counts: []
 
 
 ######---------------------- NORMALIZATION AND STATISTICS OPTIONS -------------------######

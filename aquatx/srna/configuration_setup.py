@@ -71,7 +71,7 @@ def process_sample_sheet(sample_file, config_settings):
     config_settings['html'] = sample_html
     config_settings['un'] = sample_unaligned
     config_settings['outfile'] = sample_sams
-    config_settings['uniq_seq_file'] = sample_uniq_seq
+    config_settings['uniq_seq_prefix'] = sample_uniq_seq
     config_settings['report_title'] = sample_report
     config_settings['out_fq'] = sample_out_fq
     config_settings['in_fq'] = sample_files

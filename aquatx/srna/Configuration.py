@@ -9,6 +9,9 @@ from datetime import datetime
 from shutil import copyfile
 from typing import Union
 
+from ruamel.yaml.comments import CommentedMap
+
+
 class Configuration:
     def __init__(self, input_file: str):
         self.dir = os.path.dirname(input_file) + os.sep
@@ -17,7 +20,7 @@ class Configuration:
         # Parse YAML run configuration file
         self.yaml = ruamel.yaml.YAML()
         with open(input_file, 'r') as conf:
-            self.config: dict = self.yaml.load(conf)
+            self.config: CommentedMap = self.yaml.load(conf)
 
         self.setup()
         self.process_sample_sheet()
@@ -41,11 +44,11 @@ class Configuration:
                 self.append_to('in_fq', self.cwl_file(fastq_file))
 
                 self.append_to('out_fq', sample_basename + '_cleaned.fastq')
-                self.append_to('uniq_seq_file', sample_basename + '_collapsed.fa' + ext)
                 self.append_to('outfile', sample_basename + '_aligned_seqs.sam')
                 self.append_to('un', sample_basename + '_unaligned_seqs.fa')
                 self.append_to('json', sample_basename + '_qc.json')
                 self.append_to('html', sample_basename + '_qc.html')
+                self.append_to('uniq_seq_prefix', sample_basename)
 
     def process_reference_sheet(self):
         reference_sheet = self.joinpath(self.dir, self.get('features_csv'))
@@ -79,7 +82,7 @@ class Configuration:
         # Per-file settings lists to be populated by process_sample_sheet() and process_reference_sheet()
         self.set_default_dict({per_file_setting_key: [] for per_file_setting_key in
             ['identifier', 'srna_class', 'strand', 'hierarchy', '5end_nt', 'length', 'ref_annotations', 'un',
-             'in_fq', 'out_fq', 'uniq_seq_file', 'out_prefix', 'outfile', 'report_title', 'json', 'html']
+             'in_fq', 'out_fq', 'uniq_seq_prefix', 'out_prefix', 'outfile', 'report_title', 'json', 'html']
         })
 
         self.extras = resource_filename('aquatx', 'extras/')

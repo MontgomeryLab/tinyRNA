@@ -76,12 +76,13 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
     print("Running the end-to-end analysis...")
 
     # First get the configuration file set up for this run
-    config = Configuration(config_file)
-    run_dir = config.create_run_directory()
-    wf_conf_file = config.write_processed_config()
+    config_object = Configuration(config_file)
+    run_directory = config_object.create_run_directory()
+    cwl_conf_file = config_object.write_processed_config()
 
     # Run with cwltool
-    subprocess.run(f"cwltool --outdir {run_dir} {aquatx_cwl_path}/workflows/aquatx_wf.cwl {wf_conf_file}", shell=True)
+    subprocess.run(f"cwltool --outdir {run_directory} --copy-outputs --on-error 'continue' "
+                   f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl {cwl_conf_file}", shell=True)
 
     # runtime_context = cwltool.factory.RuntimeContext()
     # runtime_context.outdir = os.path.join('.', config.get('run_directory'))

@@ -9,7 +9,7 @@ requirements:
 
 inputs:
   # multi input
-  threads: int? #
+  threads: int?
 
   # fastp inputs
   in_fq: File[]
@@ -22,20 +22,20 @@ inputs:
   trim_poly_x: boolean?
   poly_x_min_len: int?
   disable_quality_filtering: boolean?
-  qualified_quality_phred: int? #
-  unqualified_percent_limit: int? #
-  n_base_limit: int? #
+  qualified_quality_phred: int?
+  unqualified_percent_limit: int?
+  n_base_limit: int?
   disable_length_filtering: boolean?
-  length_required: int? #
-  length_limit: int? #
+  length_required: int?
+  length_limit: int?
   overrepresentation_analysis: boolean?
   overrepresentation_sampling: int?
-  json: string[]? #
-  html: string[]? #
+  json: string[]
+  html: string[]
   report_title: string[]
 
   # collapser inputs
-  uniq_seq_file: string[]
+  uniq_seq_prefix: string[]
   threshold: int?
   compress: boolean?
 
@@ -78,7 +78,7 @@ steps:
     scatter: [in1, out1, report_title, json, html]
     scatterMethod: dotproduct
     in:
-      thread: threads #
+      thread: threads
       in1: in_fq    
       out1: out_fq
       phred64: fp_phred64
@@ -89,18 +89,18 @@ steps:
       trim_poly_x: trim_poly_x
       poly_x_min_len: poly_x_min_len
       disable_quality_filtering: disable_quality_filtering
-      qualified_quality_phred: qualified_quality_phred #
-      unqualified_percent_limit: unqualified_percent_limit #
-      n_base_limit: n_base_limit #
+      qualified_quality_phred: qualified_quality_phred
+      unqualified_percent_limit: unqualified_percent_limit
+      n_base_limit: n_base_limit
       disable_length_filtering: disable_length_filtering
-      length_required: length_required #
-      length_limit: length_limit #
+      length_required: length_required
+      length_limit: length_limit
       overrepresentation_analysis: overrepresentation_analysis
       overrepresentation_sampling: overrepresentation_sampling
-      json: json #
-      html: html #
+      json: json
+      html: html
       report_title: report_title 
-    out: [fastq1, report_html]
+    out: [fastq1, report_json, report_html]
 
   collapse:
     run: ../tools/aquatx-collapse.cwl
@@ -108,7 +108,7 @@ steps:
     scatterMethod: dotproduct
     in:
       input_file: fastp/fastq1
-      out_prefix: uniq_seq_file
+      out_prefix: uniq_seq_prefix
       threshold: threshold
       compress: compress
     out: [collapsed_fa, low_counts_fa]
@@ -123,17 +123,17 @@ steps:
       reads: collapse/collapsed_fa
       outfile: outfile
       fastq: fastq
-      fasta: fasta #
+      fasta: fasta
       trim5: trim5
       trim3: trim3
       phred64: bt_phred64
       solexa: solexa
       solexa13: solexa13
-      end_to_end: end_to_end #
+      end_to_end: end_to_end
       nofw: nofw
       norc: norc
       k_aln: k_aln
-      all: all #
+      all: all
       no_unal: no_unal
       un: un
       sam: sam
@@ -186,9 +186,13 @@ outputs:
     type: File[]
     outputSource: fastp/fastq1
   
-  report_file:
+  html_report_file:
     type: File[]
     outputSource: fastp/report_html
+
+  json_report_file:
+    type: File[]
+    outputSource: fastp/report_json
 
   uniq_seqs:
     type: File[]
