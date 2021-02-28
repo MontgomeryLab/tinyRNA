@@ -22,7 +22,6 @@ more info). Config files that share the same name as the template config file
 will be renamed.
 """
 
-import aquatx.srna.configuration_setup
 import cwltool.factory
 import subprocess
 import shutil

@@ -41,7 +41,7 @@ class test_aquatx(unittest.TestCase):
                 'files': set(),
                 'tools': {
                     'files': {
-                        'aquatx-deseq.cwl', 'bowtie.cwl',
+                        'aquatx-deseq.cwl', 'bowtie.cwl', 'bowtie2.cwl',
                         'aquatx-collapse.cwl', 'bowtie-build.cwl',
                         'aquatx-count.cwl', 'aquatx-merge.cwl', 'fastp.cwl'
                     }
@@ -154,7 +154,7 @@ class test_aquatx(unittest.TestCase):
                 os.remove(config_file_location)
 
                 # Check (by name and directory structure) that the expected files/folders were produced
-                self.assertEqual(helpers.get_dir_tree('./cwl'),
+                self.assertDictEqual(helpers.get_dir_tree('./cwl'),
                                  self.expected_cwl_dir_tree)
             finally:
                 # Remove the copied workflow files even if an exception was thrown above

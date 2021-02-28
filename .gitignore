@@ -2,5 +2,5 @@
 *.swp
 *.html
 *.svg
-test_*
 .idea/*
+tests/run_dir/

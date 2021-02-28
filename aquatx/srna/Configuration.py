@@ -11,8 +11,19 @@ from typing import Union
 
 
 class ConfigBase:
-    def __init__(self, config):
+    """Base class for basic aquatx configuration operations
+
+    Attributes:
+        config: a dictionary of configuration keys and their values
+        extras: path to the package extras directory
+        dt: a date-time string for default output naming
+    """
+
+    def __init__(self, config: dict):
         self.config = config
+        self.extras = ''
+        self.dt = ''
+
 
     def get(self, key: str) -> Union[str, list, dict, None]:
         return self.config.get(key, None)
@@ -44,16 +55,19 @@ class ConfigBase:
 
     """========== HELPERS =========="""
 
-    def prefix(self, path: str) -> str:
+    @staticmethod
+    def prefix(path: str) -> str:
         """Returns everything from path except the file extension"""
         return os.path.splitext(path)[0]
 
-    def joinpath(self, path1: str, path2: str) -> str:
+    @staticmethod
+    def joinpath(path1: str, path2: str) -> str:
         """Combines two relative paths intelligently"""
         if os.path.isabs(path2): return path2
         return os.path.normpath(os.path.join(path1, path2))
 
-    def cwl_file(self, file: str) -> dict:
+    @staticmethod
+    def cwl_file(file: str) -> dict:
         """Returns a file input/output specification for the CWL config"""
         return {'class': 'File', 'path': file}
 
@@ -86,6 +100,20 @@ class ConfigBase:
 
 
 class Configuration(ConfigBase):
+    """A class for processing and updating a YAML config file for CWL
+
+    Ultimately, this class populates pipeline settings and per-file settings for pipeline steps.
+    Per-file settings are determined by samples.csv, features.csv, and the input config file.
+    Paths provided in these three files are evaluated relative to the given file.
+    Absolute paths may also be supplied.
+
+    Attributes:
+        dir: parent directory of the input file. Used for calculating paths relative to config file.
+        inf: the input file location
+        yaml: the YAML interface for reading config and writing processed config
+    """
+
+
     def __init__(self, input_file: str):
         self.dir = os.path.dirname(input_file) + os.sep
         self.inf = input_file
@@ -107,7 +135,6 @@ class Configuration(ConfigBase):
 
         with open(sample_sheet, 'r', encoding='utf-8-sig') as sf:
             csv_reader = csv.DictReader(sf, delimiter=',')
-            ext = 'gz' if self.get('compress') else ''
             for row in csv_reader:
                 sample_basename = self.prefix(os.path.basename(row['Input FastQ/A Files']))
                 fastq_file = self.joinpath(from_here, row['Input FastQ/A Files'])
@@ -169,7 +196,7 @@ class Configuration(ConfigBase):
     def setup_ebwt_idx(self):
         """Bowtie index files and prefix"""
 
-        # Bowtie index file prefix
+        # Determine prefix
         bt_idx = (self.prefix(self.get('ref_genome'))
                   if self.get('run_idx') and not self.get('ebwt')
                   else self.get('ebwt'))
@@ -184,10 +211,9 @@ class Configuration(ConfigBase):
 
     """========== COMMAND LINE =========="""
 
-    def main(self):
-        """
-        Main routine to process the run information.
-        """
+    @staticmethod
+    def main():
+        """Main routine to process the run information."""
 
         # Get input config file
         parser = argparse.ArgumentParser()
