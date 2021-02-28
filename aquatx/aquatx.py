@@ -81,7 +81,9 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
     cwl_conf_file = config_object.write_processed_config()
 
     # Run with cwltool
+    debug = False
     subprocess.run(f"cwltool --outdir {run_directory} --copy-outputs --on-error 'continue' "
+                   f"{'--leave-tmpdir --debug' if debug else ''} "
                    f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl {cwl_conf_file}", shell=True)
 
     # runtime_context = cwltool.factory.RuntimeContext()

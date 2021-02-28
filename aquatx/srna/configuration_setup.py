@@ -14,6 +14,7 @@ from pkg_resources import resource_filename
 Remaining issues observed in the processed (output) config file:
     - ebwt relative path is dropped from processed config file BUT
     it is preserved under the bt_index_files option
+        - This was intentional!
 """
 
 def get_args():
@@ -163,7 +164,7 @@ def setup_config(input_file):
     reference_sheet_path = os.path.dirname(input_file) + os.sep + config_settings['reference_sheet_file']
     config_settings = process_reference_sheet(reference_sheet_path, config_settings)
 
-    if config_settings.get('adapter_sequence', None) == 'auto_detect':
+    if config_settings.get('adapter_sequence', None) == 'auto':
         config_settings.pop('adapter_sequence')
 
     if os.path.basename(input_file) == 'run_config_template.yml':

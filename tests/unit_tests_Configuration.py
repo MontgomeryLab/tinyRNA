@@ -14,9 +14,7 @@ class MyTestCase(unittest.TestCase):
 
     def test_rundir(self):
         from aquatx.aquatx import run
-        import os
 
-        if os.path.isdir('run_directory'): os.removedirs('run_directory')
         run("../aquatx/cwl", "./testdata/run_config_template.yml")
 
 if __name__ == '__main__':
