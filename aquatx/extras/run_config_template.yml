@@ -40,7 +40,7 @@ samples_csv: 'samples.csv'
 features_csv: 'features.csv'
 
 ##-- The prefix for your bowtie index, include relative path (relative to this config file) --##
-ebwt: 'tests/testdata/references/c_elegans_ws230'
+ebwt: '../../tests/testdata/cel_ws279/chr1'
 
 ##-- If True: run bowtie-build to index the genome --##
 run_idx: False
@@ -66,7 +66,7 @@ output_prefix: []
 ######-------------------------------------------------------------------------------######
 
 ##-- Adapter sequence to trim --##
-adapter_sequence: 'auto_detect'
+adapter_sequence: 'auto'
  
 ##-- Minumum & maximum accepted lengths after trimming --##
 length_required: 15
@@ -133,7 +133,7 @@ threshold: 0
 compress: False
 
 ###-- These options are generated from sample sheet --###
-# prefix to be used for input's output file(s)
+# prefix to be used for output file (files, if non-zero threshold)
 uniq_seq_prefix: []
 
 ######------------------------- BOWTIE2 ALIGNMENT OPTIONS ---------------------------######
@@ -149,7 +149,7 @@ uniq_seq_prefix: []
 end_to_end: 0
 
 ##-- If True: report all alignments --##
-all: True
+all_aln: True
 
 ##-- Set a random seed for alignment --##
 seed: 0
@@ -162,6 +162,9 @@ fasta: True
 
 ##-- If True: output a sam file instead of stdout --##
 sam: True
+
+##-- If True: use shared mem for index; many bowtie's can share --##
+shared_memory: True
 
 ###-- Unused option inputs: Remove '#' in front to use --###
 ##-- If true: do not align to reverse-compliment reference --##

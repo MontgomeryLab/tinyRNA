@@ -54,11 +54,12 @@ inputs:
   nofw: boolean?
   norc: boolean?
   k_aln: int?
-  all: boolean?
+  all_aln: boolean?
   no_unal: boolean?
   un: string[]
   sam: boolean?
   seed: int?
+  shared_mem: boolean?
 
   #counter inputs
   ref_annotations: File[]
@@ -131,13 +132,13 @@ steps:
       solexa13: solexa13
       end_to_end: end_to_end
       nofw: nofw
-      norc: norc
       k_aln: k_aln
-      all: all
+      all_aln: all_aln
       no_unal: no_unal
       un: un
       sam: sam
       threads: threads
+      shared_memory: shared_mem
       seed: seed
     out: [sam_out, unal_seqs]
 
