@@ -27,15 +27,15 @@ inputs:
   n_base_limit: int?
   disable_length_filtering: boolean?
   length_required: int?
-  length_limit: int? 
+  length_limit: int?
   overrepresentation_analysis: boolean?
   overrepresentation_sampling: int?
-  json: string[]?
-  html: string[]?
+  json: string[]
+  html: string[]
   report_title: string[]
 
   # collapser inputs
-  uniq_seq_file: string[]
+  uniq_seq_prefix: string[]
   threshold: int?
   compress: boolean?
 
@@ -54,11 +54,12 @@ inputs:
   nofw: boolean?
   norc: boolean?
   k_aln: int?
-  all: boolean?
+  all_aln: boolean?
   no_unal: boolean?
   un: string[]
   sam: boolean?
   seed: int?
+  shared_mem: boolean?
 
   #counter inputs
   ref_annotations: File[]
@@ -100,7 +101,7 @@ steps:
       json: json
       html: html
       report_title: report_title 
-    out: [fastq1, report_html]
+    out: [fastq1, report_json, report_html]
 
   collapse:
     run: ../tools/aquatx-collapse.cwl
@@ -108,7 +109,7 @@ steps:
     scatterMethod: dotproduct
     in:
       input_file: fastp/fastq1
-      out_prefix: uniq_seq_file
+      out_prefix: uniq_seq_prefix
       threshold: threshold
       compress: compress
     out: [collapsed_fa, low_counts_fa]
@@ -131,13 +132,13 @@ steps:
       solexa13: solexa13
       end_to_end: end_to_end
       nofw: nofw
-      norc: norc
       k_aln: k_aln
-      all: all
+      all_aln: all_aln
       no_unal: no_unal
       un: un
       sam: sam
       threads: threads
+      shared_memory: shared_mem
       seed: seed
     out: [sam_out, unal_seqs]
 
@@ -186,9 +187,13 @@ outputs:
     type: File[]
     outputSource: fastp/fastq1
   
-  report_file:
+  html_report_file:
     type: File[]
     outputSource: fastp/report_html
+
+  json_report_file:
+    type: File[]
+    outputSource: fastp/report_json
 
   uniq_seqs:
     type: File[]

@@ -41,7 +41,7 @@ class test_aquatx(unittest.TestCase):
                 'files': set(),
                 'tools': {
                     'files': {
-                        'aquatx-deseq.cwl', 'bowtie.cwl',
+                        'aquatx-deseq.cwl', 'bowtie.cwl', 'bowtie2.cwl',
                         'aquatx-collapse.cwl', 'bowtie-build.cwl',
                         'aquatx-count.cwl', 'aquatx-merge.cwl', 'fastp.cwl'
                     }
@@ -62,10 +62,7 @@ class test_aquatx(unittest.TestCase):
             helpers.LambdaCapture(lambda: aquatx.get_template(self.aquatx_extras_path)),  # The pre-install invocation
             helpers.ShellCapture("aquatx get-template")                                   # The post-install command
         ]
-        template_files = [
-            'run_config_template.yml', 'sample_sheet_template.csv',
-            'reference_sheet_template.csv'
-        ]
+        template_files = ['run_config_template.yml', 'samples.csv', 'features.csv']
 
         def dir_entry_ct():
             return len(os.listdir('.'))
@@ -157,7 +154,7 @@ class test_aquatx(unittest.TestCase):
                 os.remove(config_file_location)
 
                 # Check (by name and directory structure) that the expected files/folders were produced
-                self.assertEqual(helpers.get_dir_tree('./cwl'),
+                self.assertDictEqual(helpers.get_dir_tree('./cwl'),
                                  self.expected_cwl_dir_tree)
             finally:
                 # Remove the copied workflow files even if an exception was thrown above

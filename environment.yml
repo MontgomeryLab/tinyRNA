@@ -7,7 +7,7 @@ dependencies:
   - pandas==1.2.1
   - matplotlib==3.3.2
   - fastp==0.20.1
-  - bowtie==1.0.0
+  - bowtie>=1.2.3
   - nodejs>=10.13.0
   - pip
   - pip:
