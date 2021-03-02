@@ -191,7 +191,7 @@ def tally_feature_counts(sam_alignment, ref_array_dict, class_counts, feat_count
 
     for aln_bundle in HTSeq.bundle_multiple_alignments(sam_alignment):
         # Calculate counts for multimapping
-        dup_counts = int(aln_bundle[0].read.name.split('_x')[1])
+        dup_counts = int(aln_bundle[0].read.name.split('_count=')[1])
         cor_counts = dup_counts / len(aln_bundle)
         stats_counts['_unique_sequences_aligned'] += 1
         stats_counts['_aligned_reads'] += dup_counts

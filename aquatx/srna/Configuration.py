@@ -161,7 +161,7 @@ class Configuration(ConfigBase):
             for row in csv_reader:
                 gff_file = self.joinpath(from_here, row['Feature Source'])
                 self.append_to('identifier', row['Identifier'])
-                self.append_to('srna_class', row['Class'])
+                self.append_to('srna_class', row['Feature'])
                 self.append_to('strand', row['Strand (sense/antisense/both)'])
                 self.append_to('ref_annotations', self.cwl_file(gff_file))
                 self.append_to('hierarchy', row['Hierarchy'])
