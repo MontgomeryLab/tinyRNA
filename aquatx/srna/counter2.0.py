@@ -12,6 +12,14 @@ import HTSeq
 
 _re_attr_main = re.compile("\s*([^\s=]+)[\s=]+(.*)")
 _re_attr_empty = re.compile("^\s*$")
+features: 'HTSeq.GenomicArrayOfSets'
+attributes = {}
+
+class FeatureSelector:
+    def __init__(self, selector):
+        pass
+
+
 
 def get_args():
     """
@@ -89,7 +97,7 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value = False):
         # Modification: allow for comma separated multiple-class assignment
         attribute_dict[sys.intern(idt)] = sys.intern(val) \
             if idt != 'Class' \
-            else val.split(',')
+            else [c.strip() for c in val.split(',')]
         if extra_return_first_value and i == 0:
             first_val = val
     if extra_return_first_value:
@@ -98,32 +106,67 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value = False):
         return attribute_dict
 
 
-def parse_gff_files(files: set) -> Tuple[dict, dict]:
-    # Need to patch the GFF attribute parser for our particular GFF structure (list fields)
+def parse_unified_gff(gff_files: set) -> Tuple[dict, dict]:
+    # Some features have multiple classes. Need to patch the GFF attribute parser to parse them into lists
     setattr(HTSeq.features, 'parse_GFF_attribute_string', parse_GFF_attribute_string)
 
     # HTSeq's GenomicArrays cannot be merged, but we want a unified set
     # So instead...trick GFF_Reader into thinking there's just one file
-    open_files = [open(f, 'r') for f in files]
+    open_files = [open(gff, 'r') for gff in gff_files]
     file_chain = itertools.chain.from_iterable(open_files)
 
     # Open the "unified" GFF file and process features & attributes
     gff = HTSeq.GFF_Reader(file_chain)
     feature_scan = HTSeq.make_feature_genomicarrayofsets(
-        gff, 'ID', stranded=True, additional_attributes=['Class', 'biotype']
+        gff, 'ID', additional_attributes=['Class', 'biotype'], stranded=True,
     )
 
-    for handle in open_files: handle.close()
-    return feature_scan['features'], feature_scan['attributes']
+    # Ensure entire file was read, then close it
+    for handle in open_files:
+        assert handle.tell() == handle.seek(0, 2)  # index 0 relative to end (2)
+        handle.close()
+
+    # Global to ensure that per-sam-file processes have a copy at launch
+    global features, attributes
+    features = feature_scan['features']
+    attributes = feature_scan['attributes']
+
+    return features, attributes
 
 
-def count_reads(sam_file, selectors, features, attributes):
+def assign_features(iv_seq, selectors) -> Tuple[list, list, int]:
+    seq_feat = set()
+    empty = 0
+
+    # Build set of matching features based on match intervals
+    for iv in iv_seq:
+        # Check that our features table even contains the interval in question
+        if iv.chrom not in features.chrom_vectors:
+            empty += 1
+        for iv2, fs2 in features[iv].steps():
+            seq_feat = seq_feat.union(fs2)
+
+    if len(seq_feat) == 0:
+        pass
+    else:
+        [ident for ident in features if ident in selectors['Identity']]
+
+        if selectors['Identity'] in seq_feat:
+            if seq_feat[selectors['Identity']] == selectors['Feature']:
+
+
+
+    return [],[],empty
+
+
+def count_reads(sam_file, selectors):
 
     # CIGAR match characters (including alignment match, sequence match, and
     # sequence mismatch
     com = ('M', '=', 'X')
     counts = {feat: 0 for feat in sorted(attributes.keys())}
-    empty = ambiguous = notaligned = nonunique = 0
+    ambiguous = notaligned = nonunique = 0
+    read_seq = HTSeq.BAM_Reader(sam_file)
 
     nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
     stats_counts = {stat: 0 for stat in
@@ -132,9 +175,6 @@ def count_reads(sam_file, selectors, features, attributes):
                      '_ambiguous_alignments_classes', '_ambiguous_reads_classes', '_ambiguous_alignments_features',
                      '_ambiguous_reads_features', '_no_feature']}
 
-    read_seq = HTSeq.BAM_Reader(sam_file)
-
-    read: HTSeq.SAM_Alignment
     for bundle in HTSeq.bundle_multiple_alignments(read_seq):
         # Calculate counts for multimapping
         dup_counts = int(bundle[0].read.name.split('=')[1])
@@ -149,35 +189,37 @@ def count_reads(sam_file, selectors, features, attributes):
         # fill in 5p nt/length matrix
         nt_len_mat[str(bundle[0].read)[0]][len(bundle[0].read)] += dup_counts
 
-        for read in bundle:
-            if not read.aligned:
-                notaligned += 1
-                continue
-            try:
-                if read.optional_field('NH') > 1:
-                    print(f"Not unique: {read.read}")
-                    nonunique += 1
-            except KeyError:
-                pass
+        # bundle counts
+        bundle_feats = Counter()
+        bundle_class = Counter()
 
-            # Multi-mapping
-            feature_set = set()
-            iv_seq = (co.ref_iv for co in read.cigar if co.type in com and co.size > 0)
-            for iv in iv_seq:
-                if iv.chrom not in features.chrom_vectors:
-                    empty += 1
-                for iv2, fs2 in features[iv].steps():
-                    feature_set = feature_set.union(fs2)
-            print(len(feature_set))
-            if feature_set is None or len(feature_set) == 0:  # No feature
-                empty += 1
-            elif len(feature_set) > 1:
-                ambiguous += 1
+        alignment: HTSeq.SAM_Alignment
+        for alignment in bundle:
+            # Obtain all matching intervals between the read and genome
+            # This ought to be a single short interval for our purposes, but just in case...
+            iv_seq = (co.ref_iv for co in alignment.cigar if co.type in com and co.size > 0)
+
+            # Then perform selective assignment
+            selected_features, selected_classes, empty = assign_features(iv_seq, selectors)
+            stats_counts['_no_feature'] += empty * cor_counts
+
+            if len(selected_classes) > 1:
+                bundle_class["ambiguous"] += cor_counts
+            if selected_features is None or len(selected_features) == 0:  # No feature
+                stats_counts['_no_feature'] += cor_counts
+            else:
+                for feat in selected_features:
+                    bundle_feats[feat] += cor_counts / len(selected_features)
 
             # Finally, count
-            for fsi in list(feature_set):
+            for fsi in list(selected_features):
                 counts[fsi] += 1
                 print(fsi)
+
+        if len(bundle_class) != 0:
+            class_counts["ambiguous"] += sum(bundle_class.values())
+            stats_counts['_ambiguous_alignments_classes'] += 1
+            stats_counts['_ambiguous_reads_classes'] += dup_counts
 
     # print(counts)
     print(f"empty {empty} ambiguous {ambiguous} notaligned {notaligned} nonunique {nonunique}")
@@ -188,15 +230,16 @@ def main():
     args = get_args()
 
     # Load selection configuration
-    gff_files, selectors = load_config(args.config)
+    gff_file_set, selectors = load_config(args.config)
 
-    # Build list of features and associated attributes
-    features, attributes = parse_gff_files(gff_files)
+    # Build features table, global for multiprocessing
+    parse_unified_gff(gff_file_set)
 
-    # Count reads
+    # Prepare for multiprocessing pool
     sam_files = [sam.strip() for sam in args.input_files.split(',')]
-    pool_args = [[sam, selectors, features, attributes] for sam in sam_files]
+    pool_args = [[sam, selectors] for sam in sam_files]
 
+    # Perform counts
     if len(sam_files) > 1:
         with multiprocessing.Pool(len(sam_files)) as pool:
             results = pool.starmap(count_reads, pool_args)
