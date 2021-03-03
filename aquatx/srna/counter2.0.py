@@ -10,15 +10,14 @@ from typing import Tuple, List, Set
 
 import HTSeq
 
+# For parse_GFF_attribute_string()
 _re_attr_main = re.compile("\s*([^\s=]+)[\s=]+(.*)")
 _re_attr_empty = re.compile("^\s*$")
+
+# Global variables for copy-on-write multiprocessing
 features: 'HTSeq.GenomicArrayOfSets'
-attributes = {}
-
-class FeatureSelector:
-    def __init__(self, selector):
-        pass
-
+selector: 'Selector'
+attributes: dict
 
 
 def get_args():
@@ -46,9 +45,9 @@ def get_args():
     return args
 
 
-def load_config(file: str) -> Tuple[Set[str], List[dict]]:
+def load_config(file: str) -> Set[str]:
     gff_files = set()
-    selectors = []
+    rules = []
 
     short = {
         'Strand (sense/antisense/both)': 'Strand',
@@ -61,9 +60,11 @@ def load_config(file: str) -> Tuple[Set[str], List[dict]]:
         for row in csv_reader:
             selector = {short.get(col, col): row[col] for col in row}
             gff_files.add(selector['Source'])
-            selectors.append(selector)
+            rules.append(selector)
 
-    return gff_files, selectors
+    global selector
+    selector = Selector(rules)
+    return gff_files
 
 
 def parse_GFF_attribute_string(attrStr, extra_return_first_value = False):
@@ -118,7 +119,7 @@ def parse_unified_gff(gff_files: set) -> Tuple[dict, dict]:
     # Open the "unified" GFF file and process features & attributes
     gff = HTSeq.GFF_Reader(file_chain)
     feature_scan = HTSeq.make_feature_genomicarrayofsets(
-        gff, 'ID', additional_attributes=['Class', 'biotype'], stranded=True,
+        gff, 'ID', additional_attributes=[Selector.attrib.keys()], stranded=True,
     )
 
     # Ensure entire file was read, then close it
@@ -134,7 +135,32 @@ def parse_unified_gff(gff_files: set) -> Tuple[dict, dict]:
     return features, attributes
 
 
-def assign_features(iv_seq, selectors) -> Tuple[list, list, int]:
+class Selector:
+    # Index in attributes dict entries
+    attrib = {'Class': 0, 'biotype': 1}
+
+    proto_struct = {
+
+    }
+
+    # types: binary, range, list, wildcard
+    # assemble work units for ruleset at construction time and execute chain upon choose()
+
+    # figure out how to quickly and easily expose relevant feature attributes for selection
+    # figure out how to match those exposures for quick and effective filtering
+
+    def __init__(self, rules):
+        pass
+
+    def choose(self, feat_set):
+        # Invert?
+        attrib_dict = {attrib: feat for feat in feat_set for attrib in enumerate(attributes[feat])}
+
+    def binary_select(self, feat_set):
+        pass
+
+
+def assign_features(iv_seq) -> Tuple[list, list, int]:
     seq_feat = set()
     empty = 0
 
@@ -149,12 +175,7 @@ def assign_features(iv_seq, selectors) -> Tuple[list, list, int]:
     if len(seq_feat) == 0:
         pass
     else:
-        [ident for ident in features if ident in selectors['Identity']]
-
-        if selectors['Identity'] in seq_feat:
-            if seq_feat[selectors['Identity']] == selectors['Feature']:
-
-
+        pass
 
     return [],[],empty
 
@@ -165,7 +186,6 @@ def count_reads(sam_file, selectors):
     # sequence mismatch
     com = ('M', '=', 'X')
     counts = {feat: 0 for feat in sorted(attributes.keys())}
-    ambiguous = notaligned = nonunique = 0
     read_seq = HTSeq.BAM_Reader(sam_file)
 
     nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
@@ -200,7 +220,7 @@ def count_reads(sam_file, selectors):
             iv_seq = (co.ref_iv for co in alignment.cigar if co.type in com and co.size > 0)
 
             # Then perform selective assignment
-            selected_features, selected_classes, empty = assign_features(iv_seq, selectors)
+            selected_features, selected_classes, empty = assign_features(iv_seq)
             stats_counts['_no_feature'] += empty * cor_counts
 
             if len(selected_classes) > 1:
@@ -216,28 +236,22 @@ def count_reads(sam_file, selectors):
                 counts[fsi] += 1
                 print(fsi)
 
-        if len(bundle_class) != 0:
-            class_counts["ambiguous"] += sum(bundle_class.values())
-            stats_counts['_ambiguous_alignments_classes'] += 1
-            stats_counts['_ambiguous_reads_classes'] += dup_counts
-
-    # print(counts)
-    print(f"empty {empty} ambiguous {ambiguous} notaligned {notaligned} nonunique {nonunique}")
+    print(counts)
 
 
 def main():
     # Get command line arguments.
     args = get_args()
 
-    # Load selection configuration
-    gff_file_set, selectors = load_config(args.config)
+    # Load config csv, selector stored globally
+    gff_file_set = load_config(args.config)
 
     # Build features table, global for multiprocessing
     parse_unified_gff(gff_file_set)
 
     # Prepare for multiprocessing pool
     sam_files = [sam.strip() for sam in args.input_files.split(',')]
-    pool_args = [[sam, selectors] for sam in sam_files]
+    pool_args = [[sam] for sam in sam_files]
 
     # Perform counts
     if len(sam_files) > 1:
