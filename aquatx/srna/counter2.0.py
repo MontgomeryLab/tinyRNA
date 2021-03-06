@@ -120,7 +120,7 @@ def parse_unified_gff(gff_files: set) -> Tuple[dict, dict]:
     # Open the "unified" GFF file and process features & attributes
     gff = HTSeq.GFF_Reader(file_chain)
     feature_scan = HTSeq.make_feature_genomicarrayofsets(
-        gff, 'ID', additional_attributes=list(Selector.ident_idx.keys()), stranded=True
+        gff, 'ID', additional_attributes=[k[0] for k in Selector.ident_idx], stranded=True
     )
 
     # Ensure entire file was read, then close it
@@ -128,7 +128,7 @@ def parse_unified_gff(gff_files: set) -> Tuple[dict, dict]:
         assert handle.tell() == handle.seek(0, 2)  # index 0 relative to end (2)
         handle.close()
 
-    # Global to ensure that per-sam-file processes have a copy at launch
+    # Global to ensure that multi-processing workers have a reference
     global features, attributes
     features = feature_scan['features']
     attributes = feature_scan['attributes']
@@ -138,16 +138,8 @@ def parse_unified_gff(gff_files: set) -> Tuple[dict, dict]:
 
 class Selector:
     # Keys determine which attributes are extracted when parsing GFF files (case must match GFF)
-    # Values indicate corresponding index within each feature in the attributes[] table
-    ident_idx = {'Class': 0, 'biotype': 1}
-
-    class Rule(object):
-        def __init__(self, target, rule_idx):
-            self.target = target
-            self.idx = rule_idx
-
-        def __hash__(self):
-            return hash(self.target)
+    # Values indicate corresponding index within each feature in the resulting attributes[] table
+    ident_idx = [('Class', 0), ('biotype', 1)]
 
     # filter types: tuple membership, range, list, wildcard
     # Identifier/Class: need to lookup in attributes table
@@ -157,58 +149,74 @@ class Selector:
         self.interest = ['Identity', 'Strand', '5pnt', 'Length']
         # The ruleset provided, sorted by hierarchy
         self.rule_def = sorted(rules, key=lambda x: int(x['Hierarchy']))
-        # For each interest, create a corresponding dictionary of rules and their indexes in rule_def
+        # For each interest, create dict of preference: [associated rule indexes]
         self.int_sets = []
         for step in self.interest:
-            step_interest_to_rule_idx = defaultdict(list)
-            for i, rule in enumerate(self.rule_def):
-                step_interest_to_rule_idx[rule[step]].append(i)
-            self.int_sets.append(dict(step_interest_to_rule_idx))
+            inverted_rules = defaultdict(list)
+            for index, rule in enumerate(self.rule_def):
+                inverted_rules[rule[step]].append(index)
+            self.int_sets.append(dict(inverted_rules))
 
-    def choose(self, feat_set, strand, endnt, length):
-        step = iter(self.int_sets)
-
-        # Select features that match on Identity
-        identity = next(step)
-        # Match on identity (there may be multiple rule matches per feature)
-        identity_hits = [(feat, identity[(id, attr)])
+    def identity_choice(self, feat_set, interests):
+        # For each feature, match across all identity interests
+        identity_hits = [(feat, interests[(id, attr)])
                          for feat in feat_set
-                         for id, i in Selector.ident_idx.items()
+                         for id, i in Selector.ident_idx
                          for attr in attributes[feat][i]
-                         if (id, attr) in identity]
-        # -> [(feature, [matched rule indexes]), ...]
+                         if (id, attr) in interests]
+        # -> [(feature, [matched rule indexes,...]), ...]
 
-        if not identity_hits:
-            choices = set('Unknown')
+        choices, finalists = set(), set()
+
+        if len(identity_hits) < len(feat_set):
+            choices.add('Unknown')
         if len(identity_hits) == 1 and len(identity_hits[0][1]) == 1:
             # Only one feature matched only one rule
-            choices = set(identity_hits[0][0])
-            if len(identity_hits) != len(feat_set): choices.add('Unknown')
-            return choices # Hidden returns... FIX THIS
+            finalists.add(identity_hits[0][0])
         else:
             # Perform any possible hierarchy-based eliminations
-            # Hit rank is list of (hierarchy, (feature, matched rule index) )
             ranks = [self.rule_def[rule]['Hierarchy'] for hit in identity_hits for rule in hit[1]]
-            # Gives (feature, rule, hierarchy) -- HORRIBLE
-            hit_rank = list(zip([hit[0] for hit in identity_hits for _ in hit[1]], [rule for hit in identity_hits for rule in hit[1]], ranks))
-            hit_rank_set = set(ranks)
+            rank_set = set(ranks)
+            # Flatten identity_hits and add hierarchy to each tuple
+            get_rank = lambda x: x[0]
+            hit_rank = [z for z in zip(ranks,
+                        (f[0] for f in identity_hits for _ in f),
+                        (r for i in identity_hits for r in i[1]))]
+            # -> [(hierarchy, feature, rule), ...]
 
-            if len(hit_rank) == len(hit_rank_set):
-                # No matching rules share the same hierarchy. Selection can stop here.
-                hit_rank.sort(key=lambda x: x[0])
-                chosen_feature = hit_rank[0][0]
-                choices = {chosen_feature}
-                # This should probably happen at the end for all cases
-                if len(identity_hits) != len(feat_set): choices.add('Unknown')
-                if len(hit_rank) != 1: choices.add('Filtered')
-                return choices # Hidden returns... FIX THIS
+            if len(hit_rank) == len(rank_set):
+                finalists.add(min(hit_rank, key=get_rank))
             else:
                 # Two or more hits share the same hierarchy.
-                # If the remaining features cannot be eliminated by selection, count them both
-                pass
+                min_rank = min(rank_set)
+                finalists.add(hit for hit in hit_rank if get_rank(hit) == min_rank)
 
-        strand = next(step)
-        strand_step = []
+        if len(finalists) < len(identity_hits): choices.add('Unknown')
+        return choices, finalists
+
+    def is_complete(self, choices: set, finalists: set) -> bool:
+        if len(finalists) == 1:
+            choices.add(finalists.pop())
+            return True
+        else:
+            return len(finalists) == 0
+
+    def choose(self, feat_set, strand, endnt, length) -> set:
+        step = iter(self.int_sets)
+
+        # Identity
+        identity_interests = next(step)
+        choices, finalists = self.identity_choice(feat_set, identity_interests)
+        if not finalists: return choices
+
+        # Strand
+        strand_interests = next(step)
+        for feat in finalists:
+            # Todo: convert features.csv input value to HTSeq's native representation
+            if strand != self.rule_def[feat[2]]['Strand']:
+                finalists.remove(feat)
+                choices.add('Unknown')
+        if not finalists: return choices
 
 
 def assign_features(alignment) -> Tuple[list, list, int]:
