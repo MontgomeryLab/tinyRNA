@@ -5,7 +5,8 @@ import operator
 import re
 import sys
 import csv
-from collections import Counter
+from collections import Counter, defaultdict
+from operator import itemgetter
 from typing import Tuple, List, Set
 
 import HTSeq
@@ -15,14 +16,14 @@ _re_attr_main = re.compile("\s*([^\s=]+)[\s=]+(.*)")
 _re_attr_empty = re.compile("^\s*$")
 
 # Global variables for copy-on-write multiprocessing
-features: 'HTSeq.GenomicArrayOfSets'
-selector: 'Selector'
-attributes: dict
+features: 'HTSeq.GenomicArrayOfSets' = None
+selector: 'Selector' = None
+attributes: dict = {}
 
 
 def get_args():
     """
-    Get input arguments from the user/command line.
+    Get input arguments from the user/command liobjectne.
 
     Requires the user provide a SAM file, a GFF file, and an output
     prefix to save output tables and plots using.
@@ -49,25 +50,25 @@ def load_config(file: str) -> Set[str]:
     gff_files = set()
     rules = []
 
-    short = {
-        'Strand (sense/antisense/both)': 'Strand',
-        'Feature Source': 'Source',
-        "5' End Nucleotide": '5pnt'
-    }
-
     with open(file, 'r', encoding='utf-8-sig') as f:
-        csv_reader = csv.DictReader(f, delimiter=',')
+        fieldnames = ("Identifier", "Feature", "Strand", "Source", "Hierarchy", "5pnt", "Length")
+        csv_reader = csv.DictReader(f, fieldnames=fieldnames, delimiter=',')
+        next(csv_reader)  # Skip header line
         for row in csv_reader:
-            selector = {short.get(col, col): row[col] for col in row}
-            gff_files.add(selector['Source'])
-            rules.append(selector)
+            rule = {col: row[col] for col in row if col not in ["Identifier", "Feature", "Source"]}
+            rule['Identity'] = (row['Identifier'], row['Feature'])
+            rules.append(rule)
+            gff_files.add(row['Source'])
+
+    for rule in rules:
+        rule['Hierarchy'] = int(rule['Hierarchy'])
 
     global selector
     selector = Selector(rules)
     return gff_files
 
 
-def parse_GFF_attribute_string(attrStr, extra_return_first_value = False):
+def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
     """Parses a GFF attribute string and returns it as a dictionary.
 
     This is a slight modification of the same method found in HTSeq.features.
@@ -119,7 +120,7 @@ def parse_unified_gff(gff_files: set) -> Tuple[dict, dict]:
     # Open the "unified" GFF file and process features & attributes
     gff = HTSeq.GFF_Reader(file_chain)
     feature_scan = HTSeq.make_feature_genomicarrayofsets(
-        gff, 'ID', additional_attributes=[Selector.attrib.keys()], stranded=True,
+        gff, 'ID', additional_attributes=list(Selector.ident_idx.keys()), stranded=True
     )
 
     # Ensure entire file was read, then close it
@@ -136,32 +137,88 @@ def parse_unified_gff(gff_files: set) -> Tuple[dict, dict]:
 
 
 class Selector:
-    # Index in attributes dict entries
-    attrib = {'Class': 0, 'biotype': 1}
+    # Keys determine which attributes are extracted when parsing GFF files (case must match GFF)
+    # Values indicate corresponding index within each feature in the attributes[] table
+    ident_idx = {'Class': 0, 'biotype': 1}
 
-    proto_struct = {
+    class Rule(object):
+        def __init__(self, target, rule_idx):
+            self.target = target
+            self.idx = rule_idx
 
-    }
+        def __hash__(self):
+            return hash(self.target)
 
-    # types: binary, range, list, wildcard
-    # assemble work units for ruleset at construction time and execute chain upon choose()
+    # filter types: tuple membership, range, list, wildcard
+    # Identifier/Class: need to lookup in attributes table
+    # Strand, 5pnt, Length: provided by assign_features()
 
-    # figure out how to quickly and easily expose relevant feature attributes for selection
-    # figure out how to match those exposures for quick and effective filtering
+    def __init__(self, rules: List[dict]):
+        self.interest = ['Identity', 'Strand', '5pnt', 'Length']
+        # The ruleset provided, sorted by hierarchy
+        self.rule_def = sorted(rules, key=lambda x: int(x['Hierarchy']))
+        # For each interest, create a corresponding dictionary of rules and their indexes in rule_def
+        self.int_sets = []
+        for step in self.interest:
+            step_interest_to_rule_idx = defaultdict(list)
+            for i, rule in enumerate(self.rule_def):
+                step_interest_to_rule_idx[rule[step]].append(i)
+            self.int_sets.append(dict(step_interest_to_rule_idx))
 
-    def __init__(self, rules):
-        pass
+    def choose(self, feat_set, strand, endnt, length):
+        step = iter(self.int_sets)
 
-    def choose(self, feat_set):
-        # Invert?
-        attrib_dict = {attrib: feat for feat in feat_set for attrib in enumerate(attributes[feat])}
+        # Select features that match on Identity
+        identity = next(step)
+        # Match on identity (there may be multiple rule matches per feature)
+        identity_hits = [(feat, identity[(id, attr)])
+                         for feat in feat_set
+                         for id, i in Selector.ident_idx.items()
+                         for attr in attributes[feat][i]
+                         if (id, attr) in identity]
+        # -> [(feature, [matched rule indexes]), ...]
 
-    def binary_select(self, feat_set):
-        pass
+        if not identity_hits:
+            choices = set('Unknown')
+        if len(identity_hits) == 1 and len(identity_hits[0][1]) == 1:
+            # Only one feature matched only one rule
+            choices = set(identity_hits[0][0])
+            if len(identity_hits) != len(feat_set): choices.add('Unknown')
+            return choices # Hidden returns... FIX THIS
+        else:
+            # Perform any possible hierarchy-based eliminations
+            # Hit rank is list of (hierarchy, (feature, matched rule index) )
+            ranks = [self.rule_def[rule]['Hierarchy'] for hit in identity_hits for rule in hit[1]]
+            # Gives (feature, rule, hierarchy) -- HORRIBLE
+            hit_rank = list(zip([hit[0] for hit in identity_hits for _ in hit[1]], [rule for hit in identity_hits for rule in hit[1]], ranks))
+            hit_rank_set = set(ranks)
+
+            if len(hit_rank) == len(hit_rank_set):
+                # No matching rules share the same hierarchy. Selection can stop here.
+                hit_rank.sort(key=lambda x: x[0])
+                chosen_feature = hit_rank[0][0]
+                choices = {chosen_feature}
+                # This should probably happen at the end for all cases
+                if len(identity_hits) != len(feat_set): choices.add('Unknown')
+                if len(hit_rank) != 1: choices.add('Filtered')
+                return choices # Hidden returns... FIX THIS
+            else:
+                # Two or more hits share the same hierarchy.
+                # If the remaining features cannot be eliminated by selection, count them both
+                pass
+
+        strand = next(step)
+        strand_step = []
 
 
-def assign_features(iv_seq) -> Tuple[list, list, int]:
-    seq_feat = set()
+def assign_features(alignment) -> Tuple[list, list, int]:
+    # CIGAR match characters
+    com = ('M', '=', 'X')
+    # Generator for all match intervals between the read and genome
+    # This ought to be a single short interval for our purposes, but just in case...
+    iv_seq = (co.ref_iv for co in alignment.cigar if co.type in com and co.size > 0)
+
+    feature_set = set()
     empty = 0
 
     # Build set of matching features based on match intervals
@@ -170,24 +227,23 @@ def assign_features(iv_seq) -> Tuple[list, list, int]:
         if iv.chrom not in features.chrom_vectors:
             empty += 1
         for iv2, fs2 in features[iv].steps():
-            seq_feat = seq_feat.union(fs2)
+            feature_set = feature_set.union(fs2)
 
-    if len(seq_feat) == 0:
+    if len(feature_set) == 0:
         pass
     else:
-        pass
+        strand = alignment.iv.strand
+        nt5end = chr(alignment.read.seq[0])
+        length = len(alignment.read)
+        assignment = selector.choose(feature_set, strand, nt5end, length)
 
-    return [],[],empty
+    return [], [], empty
 
 
-def count_reads(sam_file, selectors):
-
-    # CIGAR match characters (including alignment match, sequence match, and
-    # sequence mismatch
-    com = ('M', '=', 'X')
-    counts = {feat: 0 for feat in sorted(attributes.keys())}
+def count_reads(sam_file):
     read_seq = HTSeq.BAM_Reader(sam_file)
 
+    counts = {feat: 0 for feat in sorted(attributes.keys())}
     nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
     stats_counts = {stat: 0 for stat in
                     ['_aligned_reads', '_aligned_reads_unique_mapping', '_aligned_reads_multi_mapping',
@@ -215,12 +271,8 @@ def count_reads(sam_file, selectors):
 
         alignment: HTSeq.SAM_Alignment
         for alignment in bundle:
-            # Obtain all matching intervals between the read and genome
-            # This ought to be a single short interval for our purposes, but just in case...
-            iv_seq = (co.ref_iv for co in alignment.cigar if co.type in com and co.size > 0)
-
-            # Then perform selective assignment
-            selected_features, selected_classes, empty = assign_features(iv_seq)
+            # Perform selective assignment
+            selected_features, selected_classes, empty = assign_features(alignment)
             stats_counts['_no_feature'] += empty * cor_counts
 
             if len(selected_classes) > 1:
