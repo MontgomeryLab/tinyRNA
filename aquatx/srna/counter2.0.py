@@ -139,14 +139,14 @@ def parse_unified_gff(gff_files: set) -> Tuple[dict, dict]:
     return features, attributes
 
 
-def assign_features(alignment) -> Tuple[list, list, int]:
+def assign_features(alignment) -> Tuple[set, int]:
     # CIGAR match characters
     com = ('M', '=', 'X')
     # Generator for all match intervals between the read and genome
     # This ought to be a single short interval for our purposes, but just in case...
     iv_seq = (co.ref_iv for co in alignment.cigar if co.type in com and co.size > 0)
 
-    feature_set = set()
+    feature_set, assignment = set(), set()
     empty = 0
 
     # Build set of matching features based on match intervals
@@ -165,7 +165,7 @@ def assign_features(alignment) -> Tuple[list, list, int]:
         length = len(alignment.read)
         assignment = selector.choose(feature_set, strand, nt5end, length)
 
-    return [], [], empty
+    return assignment, empty
 
 
 def count_reads(sam_file):
@@ -200,11 +200,11 @@ def count_reads(sam_file):
         alignment: HTSeq.SAM_Alignment
         for alignment in bundle:
             # Perform selective assignment
-            selected_features, selected_classes, empty = assign_features(alignment)
+            selected_features, empty = assign_features(alignment)
             stats_counts['_no_feature'] += empty * cor_counts
 
-            if len(selected_classes) > 1:
-                bundle_class["ambiguous"] += cor_counts
+            # if len(selected_classes) > 1:
+            #     bundle_class["ambiguous"] += cor_counts
             if selected_features is None or len(selected_features) == 0:  # No feature
                 stats_counts['_no_feature'] += cor_counts
             else:
@@ -214,7 +214,6 @@ def count_reads(sam_file):
             # Finally, count
             for fsi in list(selected_features):
                 counts[fsi] += 1
-                print(fsi)
 
     print(counts)
 

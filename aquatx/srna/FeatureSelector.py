@@ -1,28 +1,12 @@
-import itertools
-import re
 from collections import defaultdict
-from typing import List, Iterator
+from typing import List
+import re
 
 
-class FiltExec:
-    """Executable filter unit to allow for wildcards and pipelining"""
-    def __init__(self, rule: Iterator, step, index):
-        self.rule = tuple(rule) if rule is not None else None
-        self.exec = lambda x: x in self.rule if rule is not None else lambda x: True
-        self.step = step
-        self.idx  = index
-
-    def __call__(self, query, *args, **kwargs):
-        return self.exec(query)
-
-    def __iter__(self):
-        return iter(self.rule) if self.rule is not None else iter({True})
-
-    def __hash__(self):
-        return hash(self.rule) + hash(self.idx)
-
-    def __repr__(self):
-        return "%s: rule [%d]" % (str(self.rule), self.idx)
+class Wildcard:
+    @staticmethod
+    def __contains__(val): return True
+    def __repr__(self): return "all"
 
 
 class FeatureSelector:
@@ -36,68 +20,46 @@ class FeatureSelector:
 
     def __init__(self, rules: List[dict]):
         self.interest = ('Identity', 'Strand', '5pnt', 'Length')
-        self.attributes, self.int_sets = [], []
         self.rules_table = sorted(rules, key=lambda x: int(x['Hierarchy']))
-        self.compile_filters()
-        # For each interest, create dict of preference: [associated rule indexes]
-        for step in self.interest:
-            inverted_rules = defaultdict(list)
-            for row, rule in enumerate(self.rules_table):
-                inverted_rules[rule[step]].append(row)
-            self.int_sets.append(dict(inverted_rules))
+        self.build_filters()
+        self.attributes = []
+
+        # Inverted ident rules: (Identifier,Feature) as key, [rule index(es)] as val
+        # This allows us to do O(1) identity matching for each candidate feature
+        # Subsequent matching is then performed only against identity-matched rows
+        self.inv_ident = defaultdict(list)
+        for i, rule in enumerate(self.rules_table):
+            self.inv_ident[rule['Identity']].append(i)
 
     def choose(self, feat_set, strand, endnt, length) -> set:
-        step = iter(self.int_sets)
-
         # Identity
-        identity_interests = next(step)
-        choices, finalists = self.identity_choice(feat_set, identity_interests)
+        choices, finalists = self.choose_identities(feat_set)
         if not finalists: return choices
 
         # Strand, 5pnt, and Length filtering uses simpler logic
         for step, read in zip(self.interest[1:], [strand, endnt, length]):
             eliminations = set()
             for feat in finalists:
-                rule_at_feat = feat[2]
-                if read not in self.rules_table[rule_at_feat][step]:
+                matched_rule_idx = feat[2]
+                if read not in self.rules_table[matched_rule_idx][step]:
                     eliminations.add(feat)
                     choices.add('Filtered')
             finalists -= eliminations
-            if not finalists: return choices
+            if not finalists:
+                return choices
 
-    def compile_filters(self):
-        range_match = re.compile(r"(\d+)-(\d+)")
-        for i,row in enumerate(self.rules_table):
-            for step in ["5pnt", "Length"]:
-                rule = row[step]
-                if "all" in rule.lower():
-                    # Wildcard filter
-                    row[step] = lambda x: True
-                    continue
+        choices.update({f[1] for f in finalists})
+        return choices
 
-                rule = rule.split(',')
-                if step is "5pnt":
-                    rule = map(lambda x: x.strip().upper(), rule)
-                else:
-                    # Length supports intermixed lists and ranges
-                    lengths = []
-                    for piece in rule:
-                        if '-' not in piece:
-                            lengths.append(int(piece))
-                            continue
-                        lo, hi = range_match.findall(piece)[0]
-                        lengths.extend([*range(int(lo), int(hi)+1)])
-                    rule = map(int, lengths)
+    def choose_identities(self, feat_set):
+        """Performs the initial selection using identity rules (Identifier, Feature)"""
 
-                row[step] = FiltExec(rule, step, i)
-
-    def identity_choice(self, feat_set, interests):
         # For each feature, match across all identity interests
-        identity_hits = [(feat, interests[(id, attr)])
+        identity_hits = [(feat, self.inv_ident[(ident, attr)])
                          for feat in feat_set
-                         for id, i in self.ident_idx
+                         for ident, i in self.ident_idx
                          for attr in self.attributes[feat][i]
-                         if (id, attr) in interests]
+                         if (ident, attr) in self.inv_ident]
         # -> [(feature, [matched rule indexes, ...]), ...]
 
         choices, finalists = set(), set()
@@ -106,8 +68,11 @@ class FeatureSelector:
             choices.add('Unknown')
         if len(identity_hits) == 1 and len(identity_hits[0][1]) == 1:
             # Only one feature matched only one rule
-            finalists.add(identity_hits[0][0])
-        else:
+            feat = identity_hits[0][0]
+            rule = identity_hits[0][1][0]
+            rank = self.rules_table[rule]['Hierarchy']
+            finalists.add((rank, feat, rule))
+        elif len(identity_hits) > 1:
             # Perform any possible hierarchy-based eliminations
             ranks = [self.rules_table[rule]['Hierarchy'] for hit in identity_hits for rule in hit[1]]
             rank_set = set(ranks)
@@ -125,8 +90,43 @@ class FeatureSelector:
                 min_rank = min(rank_set)
                 finalists.update(hit for hit in hit_rank if get_rank(hit) == min_rank)
 
-        if len(finalists) < len(identity_hits): choices.add('Unknown')
+        if len(finalists) < len(identity_hits): choices.add('Filtered')
         return choices, finalists
 
+    def build_filters(self):
+        """Builds single/list/range/wildcard membership-matching filters
+
+        Any combination of the above filter types may be present in each rule.
+        These filter types are only supported for 5' End Nucleotide and Length.
+        """
+
+        range_match = re.compile(r"(\d+)-(\d+)")
+        for row in self.rules_table:
+            for step in ["5pnt", "Length"]:
+                rule = row[step]
+                if "all" in rule.lower():
+                    # Infinite membership ~
+                    row[step] = Wildcard()
+                    continue
+
+                rule = rule.split(',')
+                if step == "5pnt":
+                    rule = map(lambda x: x.strip().upper(), rule)
+                else:
+                    # Length supports intermixed lists and ranges
+                    lengths = []
+                    for piece in rule:
+                        if '-' not in piece:
+                            lengths.append(int(piece))
+                            continue
+                        lo, hi = range_match.findall(piece)[0]
+                        lengths.extend([*range(int(lo), int(hi) + 1)])
+                    rule = map(int, lengths)
+
+                row[step] = tuple(rule)
+
     def set_attributes_table(self, attributes):
+        """Attributes are not available at construction time; add later"""
         self.attributes = attributes
+        self.attributes['Filtered'] = None
+        self.attributes['Unknown'] = None
