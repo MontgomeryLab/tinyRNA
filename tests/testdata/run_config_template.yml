@@ -50,7 +50,7 @@ threads: 2
 
 ##-- Final output file prefixes for overall run --##
 ##-- If none given, run_prefix is used (default: date_time_aquatx) --##
-output_prefix: []
+output_prefix: ~
 
 ######---------------------TRIMMING AND QUALITY FILTER OPTIONS ----------------------######
 #
@@ -234,8 +234,8 @@ length: []
 ######-------------------------------------------------------------------------------######
 
 ##-- These options are generated with output_prefix --##
-output_file_stats: []
-output_file_counts: []
+output_file_stats: ~
+output_file_counts: ~
 
 
 ######---------------------- NORMALIZATION AND STATISTICS OPTIONS -------------------######

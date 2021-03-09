@@ -32,10 +32,18 @@ class ConfigBase:
         self.config[key] = val
         return val
 
+    def set_if_not(self, key: str, val: Union[str, list, dict]) -> Union[str, list, dict]:
+        """Apply the setting if it has not been previously set"""
+        if not self.get(key):
+            return self.set(key, val)
+        else:
+            return self.get(key)
+
     def set_default_dict(self, setting_dict: dict) -> None:
         """Apply each setting in setting_dict if it has not been previously set"""
         for key, val in setting_dict.items():
-            self.config.setdefault(key, val)
+            # Can't use config.setdefault(), it considers None and [] "already set"
+            self.set_if_not(key, val)
 
     def append_to(self, key: str, val: Union[str, list, dict]) -> list:
         """Append a list-type setting (per-file settings)"""
