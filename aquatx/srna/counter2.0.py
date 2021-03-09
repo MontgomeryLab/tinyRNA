@@ -1,23 +1,23 @@
-import itertools
 import multiprocessing
+import itertools
 import argparse
 import operator
-import re
+import HTSeq
 import sys
 import csv
-from collections import Counter, defaultdict
-from operator import itemgetter
-from typing import Tuple, List, Set
+import re
 
-import HTSeq
+from aquatx.srna.FeatureSelector import FeatureSelector
+from collections import Counter
+from typing import Tuple, Set
 
 # For parse_GFF_attribute_string()
-_re_attr_main = re.compile("\s*([^\s=]+)[\s=]+(.*)")
-_re_attr_empty = re.compile("^\s*$")
+_re_attr_main = re.compile(r"\s*([^\s=]+)[\s=]+(.*)")
+_re_attr_empty = re.compile(r"^\s*$")
 
 # Global variables for copy-on-write multiprocessing
 features: 'HTSeq.GenomicArrayOfSets' = None
-selector: 'Selector' = None
+selector: 'FeatureSelector' = None
 attributes: dict = {}
 
 
@@ -60,11 +60,13 @@ def load_config(file: str) -> Set[str]:
             rules.append(rule)
             gff_files.add(row['Source'])
 
+    convert_strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
     for rule in rules:
         rule['Hierarchy'] = int(rule['Hierarchy'])
+        rule['Strand'] = convert_strand[rule['Strand'].lower()]
 
     global selector
-    selector = Selector(rules)
+    selector = FeatureSelector(rules)
     return gff_files
 
 
@@ -120,7 +122,7 @@ def parse_unified_gff(gff_files: set) -> Tuple[dict, dict]:
     # Open the "unified" GFF file and process features & attributes
     gff = HTSeq.GFF_Reader(file_chain)
     feature_scan = HTSeq.make_feature_genomicarrayofsets(
-        gff, 'ID', additional_attributes=[k[0] for k in Selector.ident_idx], stranded=True
+        gff, 'ID', additional_attributes=[k[0] for k in FeatureSelector.ident_idx], stranded=True
     )
 
     # Ensure entire file was read, then close it
@@ -132,91 +134,9 @@ def parse_unified_gff(gff_files: set) -> Tuple[dict, dict]:
     global features, attributes
     features = feature_scan['features']
     attributes = feature_scan['attributes']
+    selector.set_attributes_table(attributes)
 
     return features, attributes
-
-
-class Selector:
-    # Keys determine which attributes are extracted when parsing GFF files (case must match GFF)
-    # Values indicate corresponding index within each feature in the resulting attributes[] table
-    ident_idx = [('Class', 0), ('biotype', 1)]
-
-    # filter types: tuple membership, range, list, wildcard
-    # Identifier/Class: need to lookup in attributes table
-    # Strand, 5pnt, Length: provided by assign_features()
-
-    def __init__(self, rules: List[dict]):
-        self.interest = ['Identity', 'Strand', '5pnt', 'Length']
-        # The ruleset provided, sorted by hierarchy
-        self.rule_def = sorted(rules, key=lambda x: int(x['Hierarchy']))
-        # For each interest, create dict of preference: [associated rule indexes]
-        self.int_sets = []
-        for step in self.interest:
-            inverted_rules = defaultdict(list)
-            for index, rule in enumerate(self.rule_def):
-                inverted_rules[rule[step]].append(index)
-            self.int_sets.append(dict(inverted_rules))
-
-    def identity_choice(self, feat_set, interests):
-        # For each feature, match across all identity interests
-        identity_hits = [(feat, interests[(id, attr)])
-                         for feat in feat_set
-                         for id, i in Selector.ident_idx
-                         for attr in attributes[feat][i]
-                         if (id, attr) in interests]
-        # -> [(feature, [matched rule indexes,...]), ...]
-
-        choices, finalists = set(), set()
-
-        if len(identity_hits) < len(feat_set):
-            choices.add('Unknown')
-        if len(identity_hits) == 1 and len(identity_hits[0][1]) == 1:
-            # Only one feature matched only one rule
-            finalists.add(identity_hits[0][0])
-        else:
-            # Perform any possible hierarchy-based eliminations
-            ranks = [self.rule_def[rule]['Hierarchy'] for hit in identity_hits for rule in hit[1]]
-            rank_set = set(ranks)
-            # Flatten identity_hits and add hierarchy to each tuple
-            get_rank = lambda x: x[0]
-            hit_rank = [z for z in zip(ranks,
-                        (f[0] for f in identity_hits for _ in f),
-                        (r for i in identity_hits for r in i[1]))]
-            # -> [(hierarchy, feature, rule), ...]
-
-            if len(hit_rank) == len(rank_set):
-                finalists.add(min(hit_rank, key=get_rank))
-            else:
-                # Two or more hits share the same hierarchy.
-                min_rank = min(rank_set)
-                finalists.add(hit for hit in hit_rank if get_rank(hit) == min_rank)
-
-        if len(finalists) < len(identity_hits): choices.add('Unknown')
-        return choices, finalists
-
-    def is_complete(self, choices: set, finalists: set) -> bool:
-        if len(finalists) == 1:
-            choices.add(finalists.pop())
-            return True
-        else:
-            return len(finalists) == 0
-
-    def choose(self, feat_set, strand, endnt, length) -> set:
-        step = iter(self.int_sets)
-
-        # Identity
-        identity_interests = next(step)
-        choices, finalists = self.identity_choice(feat_set, identity_interests)
-        if not finalists: return choices
-
-        # Strand
-        strand_interests = next(step)
-        for feat in finalists:
-            # Todo: convert features.csv input value to HTSeq's native representation
-            if strand != self.rule_def[feat[2]]['Strand']:
-                finalists.remove(feat)
-                choices.add('Unknown')
-        if not finalists: return choices
 
 
 def assign_features(alignment) -> Tuple[list, list, int]:
@@ -231,7 +151,7 @@ def assign_features(alignment) -> Tuple[list, list, int]:
 
     # Build set of matching features based on match intervals
     for iv in iv_seq:
-        # Check that our features table even contains the interval in question
+        # Check that features[] even contains this alignment's chromosome
         if iv.chrom not in features.chrom_vectors:
             empty += 1
         for iv2, fs2 in features[iv].steps():
