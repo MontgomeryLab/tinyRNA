@@ -128,7 +128,6 @@ class Configuration(ConfigBase):
         self.setup_per_file()
         self.setup_ebwt_idx()
         self.process_sample_sheet()
-        self.process_reference_sheet()
 
     def process_sample_sheet(self):
         sample_sheet = self.joinpath(self.dir, self.get('samples_csv'))
@@ -152,29 +151,12 @@ class Configuration(ConfigBase):
                 self.append_to('json', sample_basename + '_qc.json')
                 self.append_to('html', sample_basename + '_qc.html')
                 self.append_to('uniq_seq_prefix', sample_basename)
-
-    def process_reference_sheet(self):
-        reference_sheet = self.joinpath(self.dir, self.get('features_csv'))
-        from_here = os.path.dirname(reference_sheet)
-
-        with open(reference_sheet, 'r', encoding='utf-8-sig') as rf:
-            csv_reader = csv.DictReader(rf, delimiter=',')
-            for row in csv_reader:
-                gff_file = self.joinpath(from_here, row['Feature Source'])
-                self.append_to('identifier', row['Identifier'])
-                self.append_to('srna_class', row['Feature'])
-                self.append_to('strand', row['Strand (sense/antisense/both)'])
-                self.append_to('ref_annotations', self.cwl_file(gff_file))
-                self.append_to('hierarchy', row['Hierarchy'])
-                self.append_to('5end_nt', row["5' End Nucleotide"])
-                self.append_to('length', row['Length'])
             
     def setup_per_file(self):
-        """Per-file settings lists to be populated by entries from samples_csv and features_csv"""
+        """Per-file settings lists to be populated by entries from samples_csv"""
 
         self.set_default_dict({per_file_setting_key: [] for per_file_setting_key in
-            ['identifier', 'srna_class', 'strand', 'hierarchy', '5end_nt', 'length', 'ref_annotations', 'un',
-             'in_fq', 'out_fq', 'uniq_seq_prefix', 'out_prefix', 'outfile', 'report_title', 'json', 'html']
+            ['un', 'in_fq', 'out_fq', 'uniq_seq_prefix', 'out_prefix', 'outfile', 'report_title', 'json', 'html']
         })
             
     def setup_pipeline(self):
@@ -191,6 +173,7 @@ class Configuration(ConfigBase):
         })
 
         self.extras = resource_filename('aquatx', 'extras/')
+        self.set('features_csv', self.cwl_file(self.get('features_csv')))
         self.set('output_file_stats', self.get('output_prefix') + '_run_stats.csv')
         self.set('output_file_counts', self.get('output_prefix') + '_raw_counts.csv')
 

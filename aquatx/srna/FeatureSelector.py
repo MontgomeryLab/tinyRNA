@@ -128,5 +128,5 @@ class FeatureSelector:
     def set_attributes_table(self, attributes):
         """Attributes are not available at construction time; add later"""
         self.attributes = attributes
-        self.attributes['Filtered'] = None
-        self.attributes['Unknown'] = None
+        self.attributes['Filtered'] = {}
+        self.attributes['Unknown'] = {}

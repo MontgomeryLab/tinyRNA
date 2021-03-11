@@ -1,6 +1,8 @@
 import multiprocessing
 import itertools
 import argparse
+import time
+
 import operator
 import HTSeq
 import sys
@@ -38,8 +40,6 @@ def get_args():
     parser.add_argument('-t', '--intermed-file', action='store_true',
                         help='Save the intermediate file containing all alignments and'
                              'associated features.')
-    parser.add_argument('-s', '--shared-memory', action='store_true',
-                        help='')
 
     args = parser.parse_args()
 
@@ -100,8 +100,8 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
             val = val[1:-1]
         # Modification: allow for comma separated multiple-class assignment
         attribute_dict[sys.intern(idt)] = sys.intern(val) \
-            if idt != 'Class' \
-            else [c.strip() for c in val.split(',')]
+            if ',' not in idt \
+            else tuple(c.strip() for c in val.split(','))
         if extra_return_first_value and i == 0:
             first_val = val
     if extra_return_first_value:
@@ -154,6 +154,7 @@ def assign_features(alignment) -> Tuple[set, int]:
         # Check that features[] even contains this alignment's chromosome
         if iv.chrom not in features.chrom_vectors:
             empty += 1
+            continue
         for iv2, fs2 in features[iv].steps():
             feature_set = feature_set.union(fs2)
 
@@ -215,10 +216,14 @@ def count_reads(sam_file):
             for fsi in list(selected_features):
                 counts[fsi] += 1
 
-    print(counts)
+    return {
+        'counts': counts,
+        'sam_file': sam_file
+    }
 
 
 def main():
+    start = time.time()
     # Get command line arguments.
     args = get_args()
 
@@ -226,21 +231,32 @@ def main():
     gff_file_set = load_config(args.config)
 
     # Build features table, global for multiprocessing
+    b4 = time.time()
     parse_unified_gff(gff_file_set)
+    print("GFF parsing took %.2f seconds" % (time.time() - b4))
 
     # Prepare for multiprocessing pool
     sam_files = [sam.strip() for sam in args.input_files.split(',')]
     pool_args = [[sam] for sam in sam_files]
 
     # Perform counts
+    b4 = time.time()
     if len(sam_files) > 1:
         with multiprocessing.Pool(len(sam_files)) as pool:
             results = pool.starmap(count_reads, pool_args)
         results.sort(key=operator.itemgetter('sam_file'))
     else:
         results = list(itertools.starmap(count_reads, pool_args))
+    print("Counting took %.2f seconds" % (time.time() - b4))
 
-    print(results)
+    out = {}
+    for file in results:
+        print(file['sam_file'])
+        for k,v in file['counts'].items():
+            if v:
+                out[k] = v
+        print(out)
+    print("Overall runtime took %.2f seconds" % (time.time() - start))
 
 
 if __name__ == '__main__':
