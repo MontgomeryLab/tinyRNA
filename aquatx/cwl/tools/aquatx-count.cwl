@@ -3,54 +3,32 @@
 cwlVersion: v1.0
 class: CommandLineTool
 
-requirements:
- - class: InlineJavascriptRequirement
-
 baseCommand: aquatx-count
 
 inputs:
-  input_file:
-    type: File
-    inputBinding:
-      position: 2
-      prefix: -i
-
-  ref_annotations:
+  input_files:
     type: File[]
     inputBinding:
-      position: 2
-      prefix: -r
+      prefix: -i
+      itemSeparator: ','
+      position: 0
 
-  mask_annotations:
-    type: File[]?
+  config_file:
+    type: File
     inputBinding:
-      position: 2
-      prefix: -m
-
-  antisense:
-    type: string[]?
-    inputBinding:
-      position: 2
-      prefix: -a
+      prefix: -c
+      position: 1
 
   out_prefix:
-    type: string
+    type: string[]
     inputBinding:
       position: 2
       prefix: -o
-      valueFrom: |
-        ${ 
-          if (self) {
-            return self;
-          } else {
-            return inputs.input_file.basename;
-          }
-        }
 
   intermed_file:
     type: boolean?
     inputBinding:
-      position: 2 
+      position: 3
       prefix: -t
 
 outputs:
@@ -72,6 +50,6 @@ outputs:
       glob: $(inputs.out_prefix)_stats.txt
 
   intermed_out_file:
-    type: File?
+    type: File[]?
     outputBinding:
-      glob: $(inputs.out_prefix)_out_aln_table.txt
+      glob: $(*_out_aln_table.txt)

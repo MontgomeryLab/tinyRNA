@@ -208,23 +208,11 @@ un: []
 ##-- If True: save intermediate table with all information --##
 intermed_file: False
 
-###-- These options generated from sample & reference sheet --###
+###-- These options generated from sample & features sheet --###
+# the counter configuration file
+config: features_csv
 # output file prefix
 out_prefix: []
-# reference gffs
-ref_annotations: []
-# identifiers of interest
-identifier: []
-# selection order preference for multiple alignments
-hierarchy: []
-# subclass of interest
-srna_class: []
-# count alignments on the sense, antisense, or both strands
-strand: []
-# 5' end nucleotide
-5end_nt: []
-# length specification
-length: []
 
 ######--------------------------- MERGE SAMPLES OPTIONS ---------------------------######
 #
