@@ -10,9 +10,6 @@ class Wildcard:
 
 
 class FeatureSelector:
-    # Keys determine which attributes are extracted when parsing GFF files (case must match GFF)
-    # Values indicate corresponding index within each feature in the resulting attributes[] table
-    ident_idx = [('Class', 0), ('biotype', 1)]
 
     # filter types: membership, range, list, wildcard
     # Identifier/Class: need to lookup in attributes table
@@ -37,7 +34,7 @@ class FeatureSelector:
         if not finalists: return choices
 
         # Strand, 5pnt, and Length filtering uses simpler logic
-        for step, read in zip(self.interest[1:], [strand, endnt, length]):
+        for step, read in zip(self.interest[1:], (strand, endnt, length)):
             eliminations = set()
             for feat in finalists:
                 matched_rule_idx = feat[2]
@@ -55,11 +52,11 @@ class FeatureSelector:
         """Performs the initial selection using identity rules (Identifier, Feature)"""
 
         # For each feature, match across all identity interests
-        identity_hits = [(feat, self.inv_ident[(ident, attr)])
-                         for feat in feat_set
-                         for ident, i in self.ident_idx
+        identity_hits = [(feat, self.inv_ident[(key, attr)])
+                         for feat, type in feat_set
+                         for i, key in self.attr_order
                          for attr in self.attributes[feat][i]
-                         if (ident, attr) in self.inv_ident]
+                         if (key, attr) in self.inv_ident]
         # -> [(feature, [matched rule indexes, ...]), ...]
 
         choices, finalists = set(), set()
@@ -125,8 +122,9 @@ class FeatureSelector:
 
                 row[step] = tuple(rule)
 
-    def set_attributes_table(self, attributes):
+    def set_attributes_table(self, attributes, attrs_of_interest):
         """Attributes are not available at construction time; add later"""
         self.attributes = attributes
+        self.attr_order = tuple(enumerate(attrs_of_interest))
         self.attributes['Filtered'] = {}
         self.attributes['Unknown'] = {}

@@ -10,7 +10,7 @@ import csv
 import re
 
 from aquatx.srna.FeatureSelector import FeatureSelector
-from collections import Counter
+from collections import Counter, OrderedDict
 from typing import Tuple, Set
 
 # For parse_GFF_attribute_string()
@@ -18,7 +18,7 @@ _re_attr_main = re.compile(r"\s*([^\s=]+)[\s=]+(.*)")
 _re_attr_empty = re.compile(r"^\s*$")
 
 # Global variables for copy-on-write multiprocessing
-features: 'HTSeq.GenomicArrayOfSets' = None
+features: 'HTSeq.GenomicArrayOfSets' = HTSeq.GenomicArrayOfSets("auto", stranded=True)
 selector: 'FeatureSelector' = None
 attributes: dict = {}
 
@@ -46,19 +46,19 @@ def get_args():
     return args
 
 
-def load_config(file: str) -> Set[str]:
+def load_config(file: str) -> Set[Tuple[str, str]]:
     gff_files = set()
     rules = []
 
     with open(file, 'r', encoding='utf-8-sig') as f:
-        fieldnames = ("Identifier", "Feature", "Strand", "Source", "Hierarchy", "5pnt", "Length")
+        fieldnames = ("ID", "Key", "Value", "Strand", "Source", "Hierarchy", "5pnt", "Length")
         csv_reader = csv.DictReader(f, fieldnames=fieldnames, delimiter=',')
         next(csv_reader)  # Skip header line
         for row in csv_reader:
-            rule = {col: row[col] for col in row if col not in ["Identifier", "Feature", "Source"]}
-            rule['Identity'] = (row['Identifier'], row['Feature'])
+            rule = {col: row[col] for col in row if col not in ["ID", "Key", "Value", "Source"]}
+            rule['Identity'] = (row['Key'], row['Value'])
             rules.append(rule)
-            gff_files.add(row['Source'])
+            gff_files.add((row['Source'], row['ID']))
 
     convert_strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
     for rule in rules:
@@ -100,7 +100,7 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
             val = val[1:-1]
         # Modification: allow for comma separated multiple-class assignment
         attribute_dict[sys.intern(idt)] = sys.intern(val) \
-            if ',' not in idt \
+            if ',' not in val \
             else tuple(c.strip() for c in val.split(','))
         if extra_return_first_value and i == 0:
             first_val = val
@@ -110,33 +110,42 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
         return attribute_dict
 
 
-def parse_unified_gff(gff_files: set) -> Tuple[dict, dict]:
-    # Some features have multiple classes. Need to patch the GFF attribute parser to parse them into lists
+def build_reference_tables(gff_files):
+    """A simplified and slightly modified version of HTSeq.create_genomicarrayofsets
+
+    This modification changes the information stored in an interval's step vector
+    within the features table. This stores (feature ID, feature type) tuples rather
+    than the feature ID alone.
+    """
+
+    # Patch HTSeq's GFF attribute parser for comma separated attribute value lists
     setattr(HTSeq.features, 'parse_GFF_attribute_string', parse_GFF_attribute_string)
 
-    # HTSeq's GenomicArrays cannot be merged, but we want a unified set
-    # So instead...trick GFF_Reader into thinking there's just one file
-    open_files = [open(gff, 'r') for gff in gff_files]
-    file_chain = itertools.chain.from_iterable(open_files)
+    # Hacky hack since Python doesn't offer an OrderedSet
+    attrs_of_interest = [*OrderedDict({attr['Identity'][0]: None for attr in selector.rules_table}).keys()]
 
-    # Open the "unified" GFF file and process features & attributes
-    gff = HTSeq.GFF_Reader(file_chain)
-    feature_scan = HTSeq.make_feature_genomicarrayofsets(
-        gff, 'ID', additional_attributes=[k[0] for k in FeatureSelector.ident_idx], stranded=True
-    )
+    feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+    attrs = {}
 
-    # Ensure entire file was read, then close it
-    for handle in open_files:
-        assert handle.tell() == handle.seek(0, 2)  # index 0 relative to end (2)
-        handle.close()
+    for file, a_id in gff_files:
+        gff = HTSeq.GFF_Reader(file)
+        for f in gff:
+            try:
+                feature_id = f.attr[a_id]
+            except KeyError:
+                raise ValueError("Feature %s does not contain a '%s' attribute." % (f.name, a_id))
+            if f.iv.strand == ".":
+                raise ValueError("Feature %s at %s does not have strand information." % (f.name, f.iv))
+
+            feats[f.iv] += (feature_id, f.type)
+            attrs[feature_id] = [
+                f.attr[attr] if attr in f.attr else ''
+                for attr in attrs_of_interest]
 
     # Global to ensure that multi-processing workers have a reference
     global features, attributes
-    features = feature_scan['features']
-    attributes = feature_scan['attributes']
-    selector.set_attributes_table(attributes)
-
-    return features, attributes
+    features, attributes = feats, attrs
+    selector.set_attributes_table(attributes, attrs_of_interest)
 
 
 def assign_features(alignment) -> Tuple[set, int]:
@@ -147,32 +156,33 @@ def assign_features(alignment) -> Tuple[set, int]:
     iv_seq = (co.ref_iv for co in alignment.cigar if co.type in com and co.size > 0)
 
     feature_set, assignment = set(), set()
-    empty = 0
+    total_features = 0
 
     # Build set of matching features based on match intervals
     for iv in iv_seq:
         # Check that features[] even contains this alignment's chromosome
         if iv.chrom not in features.chrom_vectors:
-            empty += 1
+            assignment.add('Empty')
             continue
         for iv2, fs2 in features[iv].steps():
-            feature_set = feature_set.union(fs2)
+            feature_set |= fs2
+            total_features += len(fs2)
 
-    if len(feature_set) == 0:
-        pass
-    else:
+    if total_features > len(feature_set):
+        print(f"{total_features} > {len(feature_set)} for feature_set {feature_set}")
+    if len(feature_set):
         strand = alignment.iv.strand
         nt5end = chr(alignment.read.seq[0])
         length = len(alignment.read)
-        assignment = selector.choose(feature_set, strand, nt5end, length)
+        assignment |= selector.choose(feature_set, strand, nt5end, length)
 
-    return assignment, empty
+    return assignment, total_features
 
 
 def count_reads(sam_file):
     read_seq = HTSeq.BAM_Reader(sam_file)
 
-    counts = {feat: 0 for feat in sorted(attributes.keys())}
+    counts = {feat: 0 for feat in sorted(attributes.keys(), key=lambda x: x[0])}
     nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
     stats_counts = {stat: 0 for stat in
                     ['_aligned_reads', '_aligned_reads_unique_mapping', '_aligned_reads_multi_mapping',
@@ -201,8 +211,8 @@ def count_reads(sam_file):
         alignment: HTSeq.SAM_Alignment
         for alignment in bundle:
             # Perform selective assignment
-            selected_features, empty = assign_features(alignment)
-            stats_counts['_no_feature'] += empty * cor_counts
+            selected_features, total_feat = assign_features(alignment)
+            # stats_counts['_no_feature'] += empty * cor_counts
 
             # if len(selected_classes) > 1:
             #     bundle_class["ambiguous"] += cor_counts
@@ -210,7 +220,7 @@ def count_reads(sam_file):
                 stats_counts['_no_feature'] += cor_counts
             else:
                 for feat in selected_features:
-                    bundle_feats[feat] += cor_counts / len(selected_features)
+                    bundle_feats[feat] += cor_counts / total_feat
 
             # Finally, count
             for fsi in list(selected_features):
@@ -232,7 +242,7 @@ def main():
 
     # Build features table, global for multiprocessing
     b4 = time.time()
-    parse_unified_gff(gff_file_set)
+    build_reference_tables(gff_file_set)
     print("GFF parsing took %.2f seconds" % (time.time() - b4))
 
     # Prepare for multiprocessing pool

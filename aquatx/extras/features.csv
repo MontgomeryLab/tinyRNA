@@ -1,6 +1,7 @@
-Identifier,Feature,Strand (sense/antisense/both),Feature Source,Hierarchy,5' End Nucleotide,Length
-Class,CSR,antisense,../../tests/testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3,1,G,30
-Class,WAGO,antisense,../../tests/testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3,2,all,16-35
-Class,miRNA,sense,../../tests/testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3,2,"C,G,U",all
-Biotype,transposon,both,../../tests/testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3,5,G,"25,26"
-Class,unknown,both,../../tests/testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3,4,U,20
+ID Attribute,Attribute Key,Attribute Value,Strand (sense/antisense/both),Feature Source,Hierarchy,5' End Nucleotide,Length
+ID,Class,CSR,antisense,../../tests/testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3,1,G,30
+Alias,Class,WAGO,antisense,../../tests/testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3,2,all,16-35
+ID,Class,miRNA,sense,../../tests/testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3,7,"C,G,U",all
+ID,biotype,transposon,both,../../tests/testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3,5,G,"25,26"
+ID,Class,unknown,both,../../tests/testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3,2,all,all
+ID,Class,unknown,both,../../tests/testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3,2,U,20
