@@ -1,15 +1,16 @@
-import multiprocessing
 import itertools
 import argparse
 import time
 
 import operator
+import numpy as np
 import HTSeq
 import sys
 import csv
 import re
 
 from aquatx.srna.FeatureSelector import FeatureSelector
+from multiprocessing import Pool, Queue
 from collections import Counter, OrderedDict
 from typing import Tuple, Set
 
@@ -75,8 +76,8 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
 
     This is a slight modification of the same method found in HTSeq.features.
     It has been adapted to allow features to have multiple classes, which are
-    stored as a list rather than a comma separated string. This should save
-    some CPU time down the road.
+    split and stored as a tuple rather than a comma separated string. This
+    should save some CPU time down the road.
 
     If 'extra_return_first_value' is set, a pair is returned: the dictionary
     and the value of the first attribute. This might be useful if this is the
@@ -84,7 +85,7 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
     """
     attribute_dict = {}
     first_val = "_unnamed_"
-    for i, attr in enumerate(HTSeq._HTSeq.quotesafe_split(attrStr.rstrip('\n').encode())):
+    for i, attr in enumerate(HTSeq._HTSeq.quotesafe_split(attrStr.rstrip().encode())):
         attr = attr.decode()
         if _re_attr_empty.match(attr):
             continue
@@ -99,7 +100,7 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
         if val.startswith('"') and val.endswith('"'):
             val = val[1:-1]
         # Modification: allow for comma separated multiple-class assignment
-        attribute_dict[sys.intern(idt)] = sys.intern(val) \
+        attribute_dict[sys.intern(idt)] = (sys.intern(val),) \
             if ',' not in val \
             else tuple(c.strip() for c in val.split(','))
         if extra_return_first_value and i == 0:
@@ -110,7 +111,7 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
         return attribute_dict
 
 
-def build_reference_tables(gff_files):
+def build_reference_tables(gff_files: Set[Tuple[str, str]]) -> None:
     """A simplified and slightly modified version of HTSeq.create_genomicarrayofsets
 
     This modification changes the information stored in an interval's step vector
@@ -118,33 +119,30 @@ def build_reference_tables(gff_files):
     than the feature ID alone.
     """
 
-    # Patch HTSeq's GFF attribute parser for comma separated attribute value lists
+    # Patch the GFF attribute parser to support comma separated attribute value lists
     setattr(HTSeq.features, 'parse_GFF_attribute_string', parse_GFF_attribute_string)
 
-    # Hacky hack since Python doesn't offer an OrderedSet
-    attrs_of_interest = [*OrderedDict({attr['Identity'][0]: None for attr in selector.rules_table}).keys()]
+    # Obtain an ordered list of unique attributes of interest from selector's Identity rules
+    attrs_of_interest = list(np.unique([attr['Identity'][0] for attr in selector.rules_table]))
 
     feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
-    attrs = {}
+    attributes = {}
 
-    for file, a_id in gff_files:
+    for file, preferred_id in gff_files:
         gff = HTSeq.GFF_Reader(file)
         for f in gff:
             try:
-                feature_id = f.attr[a_id]
-            except KeyError:
-                raise ValueError("Feature %s does not contain a '%s' attribute." % (f.name, a_id))
-            if f.iv.strand == ".":
-                raise ValueError("Feature %s at %s does not have strand information." % (f.name, f.iv))
+                feature_id = f.attr[preferred_id]
+                if f.iv.strand == ".":
+                    raise ValueError("Feature %s at %s in %s does not have strand information." % (f.name, f.iv, file))
 
-            feats[f.iv] += (feature_id, f.type)
-            attrs[feature_id] = [
-                f.attr[attr] if attr in f.attr else ''
-                for attr in attrs_of_interest]
+                feats[f.iv] += (feature_id, f.type)
+                attributes[feature_id] = [(attr, f.attr.get(attr, '')) for attr in attrs_of_interest]
+            except KeyError as ke:
+                raise ValueError("Feature %s does not contain a '%s' attribute in %s" % (f.name, ke, file))
 
-    # Global to ensure that multi-processing workers have a reference
-    global features, attributes
-    features, attributes = feats, attrs
+    global features
+    features = feats
     selector.set_attributes_table(attributes, attrs_of_interest)
 
 
@@ -156,7 +154,6 @@ def assign_features(alignment) -> Tuple[set, int]:
     iv_seq = (co.ref_iv for co in alignment.cigar if co.type in com and co.size > 0)
 
     feature_set, assignment = set(), set()
-    total_features = 0
 
     # Build set of matching features based on match intervals
     for iv in iv_seq:
@@ -166,23 +163,20 @@ def assign_features(alignment) -> Tuple[set, int]:
             continue
         for iv2, fs2 in features[iv].steps():
             feature_set |= fs2
-            total_features += len(fs2)
 
-    if total_features > len(feature_set):
-        print(f"{total_features} > {len(feature_set)} for feature_set {feature_set}")
     if len(feature_set):
         strand = alignment.iv.strand
         nt5end = chr(alignment.read.seq[0])
         length = len(alignment.read)
         assignment |= selector.choose(feature_set, strand, nt5end, length)
 
-    return assignment, total_features
+    return assignment, len(feature_set)
 
 
-def count_reads(sam_file):
+def count_reads(sam_file: str):
     read_seq = HTSeq.BAM_Reader(sam_file)
 
-    counts = {feat: 0 for feat in sorted(attributes.keys(), key=lambda x: x[0])}
+    counts = {feat: 0 for feat in sorted(selector.attributes.keys(), key=lambda x: x[0])}
     nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
     stats_counts = {stat: 0 for stat in
                     ['_aligned_reads', '_aligned_reads_unique_mapping', '_aligned_reads_multi_mapping',
@@ -212,10 +206,9 @@ def count_reads(sam_file):
         for alignment in bundle:
             # Perform selective assignment
             selected_features, total_feat = assign_features(alignment)
-            # stats_counts['_no_feature'] += empty * cor_counts
 
-            # if len(selected_classes) > 1:
-            #     bundle_class["ambiguous"] += cor_counts
+            if len({x[selector.feat] for x in selected_features}) > 1:
+                bundle_class["ambiguous"] += cor_counts
             if selected_features is None or len(selected_features) == 0:  # No feature
                 stats_counts['_no_feature'] += cor_counts
             else:
@@ -223,13 +216,18 @@ def count_reads(sam_file):
                     bundle_feats[feat] += cor_counts / total_feat
 
             # Finally, count
-            for fsi in list(selected_features):
-                counts[fsi] += 1
+            for fsi in selected_features:
+                counts[fsi[selector.feat]] += 1
 
+    # Todo: return via multiprocessing queue
+    #  Then assemble/write intermediate outputs here while the main process merges counts from queue
     return {
         'counts': counts,
         'sam_file': sam_file
     }
+
+def disperse_and_aggregate():
+    pass
 
 
 def main():
@@ -252,7 +250,7 @@ def main():
     # Perform counts
     b4 = time.time()
     if len(sam_files) > 1:
-        with multiprocessing.Pool(len(sam_files)) as pool:
+        with Pool(len(sam_files)) as pool:
             results = pool.starmap(count_reads, pool_args)
         results.sort(key=operator.itemgetter('sam_file'))
     else:
