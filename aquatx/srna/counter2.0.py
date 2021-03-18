@@ -9,9 +9,9 @@ import sys
 import csv
 import re
 
-from aquatx.srna.FeatureSelector import FeatureSelector
+from aquatx.srna.FeatureSelector import FeatureSelector, StatsCollector
 from multiprocessing import Pool, Queue
-from collections import Counter, OrderedDict
+from collections import Counter
 from typing import Tuple, Set
 
 # For parse_GFF_attribute_string()
@@ -119,6 +119,8 @@ def build_reference_tables(gff_files: Set[Tuple[str, str]]) -> None:
     than the feature ID alone.
     """
 
+    b4_4 = time.time() # Cloud Atlas
+
     # Patch the GFF attribute parser to support comma separated attribute value lists
     setattr(HTSeq.features, 'parse_GFF_attribute_string', parse_GFF_attribute_string)
 
@@ -144,6 +146,8 @@ def build_reference_tables(gff_files: Set[Tuple[str, str]]) -> None:
     global features
     features = feats
     selector.set_attributes_table(attributes, attrs_of_interest)
+
+    print("GFF parsing took %.2f seconds" % (time.time() - b4_4))
 
 
 def assign_features(alignment) -> Tuple[set, int]:
@@ -173,61 +177,24 @@ def assign_features(alignment) -> Tuple[set, int]:
     return assignment, len(feature_set)
 
 
-def count_reads(sam_file: str):
-    read_seq = HTSeq.BAM_Reader(sam_file)
+def count_reads(sam_file: str, return_queue, intermediate_file):
 
-    counts = {feat: 0 for feat in sorted(selector.attributes.keys(), key=lambda x: x[0])}
-    nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
-    stats_counts = {stat: 0 for stat in
-                    ['_aligned_reads', '_aligned_reads_unique_mapping', '_aligned_reads_multi_mapping',
-                     '_unique_sequences_aligned', '_reads_unique_features', '_alignments_unique_features',
-                     '_ambiguous_alignments_classes', '_ambiguous_reads_classes', '_ambiguous_alignments_features',
-                     '_ambiguous_reads_features', '_no_feature']}
+    read_seq = HTSeq.BAM_Reader(sam_file)
+    stats = StatsCollector(selector)
 
     for bundle in HTSeq.bundle_multiple_alignments(read_seq):
-        # Calculate counts for multimapping
-        dup_counts = int(bundle[0].read.name.split('=')[1])
-        cor_counts = dup_counts / len(bundle)
-        stats_counts['_unique_sequences_aligned'] += 1
-        stats_counts['_aligned_reads'] += dup_counts
-        if len(bundle) > 1:
-            stats_counts['_aligned_reads_multi_mapping'] += dup_counts
-        else:
-            stats_counts['_aligned_reads_unique_mapping'] += dup_counts
+        bundle_hash = stats.count_bundle(bundle)
 
-        # fill in 5p nt/length matrix
-        nt_len_mat[str(bundle[0].read)[0]][len(bundle[0].read)] += dup_counts
-
-        # bundle counts
-        bundle_feats = Counter()
-        bundle_class = Counter()
-
-        alignment: HTSeq.SAM_Alignment
         for alignment in bundle:
             # Perform selective assignment
-            selected_features, total_feat = assign_features(alignment)
+            stats.count_alignment(bundle_hash, *assign_features(alignment))
+            # Todo: record intermediates if requested
 
-            if len({x[selector.feat] for x in selected_features}) > 1:
-                bundle_class["ambiguous"] += cor_counts
-            if selected_features is None or len(selected_features) == 0:  # No feature
-                stats_counts['_no_feature'] += cor_counts
-            else:
-                for feat in selected_features:
-                    bundle_feats[feat] += cor_counts / total_feat
+        stats.finalize_bundle(bundle_hash)
 
-            # Finally, count
-            for fsi in selected_features:
-                counts[fsi[selector.feat]] += 1
-
-    # Todo: return via multiprocessing queue
-    #  Then assemble/write intermediate outputs here while the main process merges counts from queue
-    return {
-        'counts': counts,
-        'sam_file': sam_file
-    }
-
-def disperse_and_aggregate():
-    pass
+    return_queue.put(stats)
+    # Todo: write intermediate files after returning the collected counts to
+    #  parent process for merging
 
 
 def main():
@@ -239,31 +206,31 @@ def main():
     gff_file_set = load_config(args.config)
 
     # Build features table, global for multiprocessing
-    b4 = time.time()
     build_reference_tables(gff_file_set)
-    print("GFF parsing took %.2f seconds" % (time.time() - b4))
 
     # Prepare for multiprocessing pool
+    ret_queue = Queue()
     sam_files = [sam.strip() for sam in args.input_files.split(',')]
-    pool_args = [[sam] for sam in sam_files]
+    work_args = [[sam, ret_queue, args.intermed_file] for sam in sam_files]
 
     # Perform counts
-    b4 = time.time()
+    b4_4 = time.time()
     if len(sam_files) > 1:
         with Pool(len(sam_files)) as pool:
-            results = pool.starmap(count_reads, pool_args)
-        results.sort(key=operator.itemgetter('sam_file'))
+            pool.starmap(count_reads, work_args)
     else:
-        results = list(itertools.starmap(count_reads, pool_args))
-    print("Counting took %.2f seconds" % (time.time() - b4))
+        itertools.starmap(count_reads, work_args)
 
-    out = {}
-    for file in results:
-        print(file['sam_file'])
-        for k,v in file['counts'].items():
-            if v:
-                out[k] = v
-        print(out)
+    # Collect counts from all pool workers and merge
+    counts = StatsCollector(selector)
+    for i in range(len(sam_files)):
+        sam_stats = ret_queue.get()
+        counts.merge(sam_stats)
+
+    print("Counting and merging took %.2f seconds" % (time.time() - b4_4))
+
+    # Write final outputs
+    counts.write_reports(args.out_prefix)
     print("Overall runtime took %.2f seconds" % (time.time() - start))
 
 
