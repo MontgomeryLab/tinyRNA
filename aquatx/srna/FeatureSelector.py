@@ -1,7 +1,9 @@
 from collections import defaultdict, Counter
 from typing import List, Tuple, FrozenSet
 from dataclasses import dataclass
-from HTSeq import SAM_Alignment
+
+import HTSeq
+import pandas as pd
 import re
 
 
@@ -133,6 +135,10 @@ class FeatureSelector:
         attributes[('Unknown',)] = {}
         self.attributes = attributes
 
+    @classmethod
+    def get_hit_indexes(cls):
+        return cls.rank, cls.rule, cls.feat, cls.type
+
 
 class StatsCollector:
     @dataclass
@@ -144,17 +150,19 @@ class StatsCollector:
         dup_counts: int
         cor_counts: float
 
-    def __init__(self, selector):
-        self.select = selector
+    rank, rule, feat, type = FeatureSelector.get_hit_indexes()
+
+    def __init__(self):
+        self.type_counts = Counter()
+        self.feat_counts = Counter()
         self.nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
-        self.counts = {feat: 0 for feat in sorted(selector.attributes.keys(), key=lambda x: x[0])}
-        self.bundle_counts = {}
-        self.class_counts = Counter()
         self.stats_counts = {stat: 0 for stat in
                         ['_aligned_reads', '_aligned_reads_unique_mapping', '_aligned_reads_multi_mapping',
                          '_unique_sequences_aligned', '_reads_unique_features', '_alignments_unique_features',
                          '_ambiguous_alignments_classes', '_ambiguous_reads_classes', '_ambiguous_alignments_features',
                          '_ambiguous_reads_features', '_no_feature']}
+        self.bundle_counts = {}
+        self.alignments: List[Tuple] = []
 
     def count_bundle(self, aln_bundle: iter) -> int:
         bundle_size = len(aln_bundle)
@@ -178,48 +186,100 @@ class StatsCollector:
 
         return bundle_hash
 
-    # Needs work
-    def count_alignment(self, bundle_hash, selected_feats, n_candidates):
+    def count_and_save_alignment(self, aln: HTSeq.SAM_Alignment, bundle_hash: int, hits: set, n_cand: int) -> None:
+        bundle = self.bundle_counts[bundle_hash]
+        record = (aln.read, bundle.cor_counts, aln.iv.strand, aln.iv.start, aln.iv.end,
+                  ';'.join(map(lambda x: x[self.feat], hits)),
+                  ';'.join(map(lambda x: x[self.type], hits)))
+        self.alignments.append(record)
+        return self.count_alignment(bundle_hash, hits, n_cand)
+
+    def count_alignment(self, bundle_hash: int, selected_feats: set, n_candidates: int) -> None:
         bundle = self.bundle_counts[bundle_hash]
         selection_size = len(selected_feats)
-        unique_feats = {f[self.select.feat] for f in selected_feats}
-        unique_types = {t[self.select.type] for t in selected_feats}
+        unique_feats = {f[self.feat] for f in selected_feats}
+        unique_types = {t[self.type] for t in selected_feats}
 
         if len(unique_types) > 1:
             bundle.type_counts["ambiguous"] += bundle.cor_counts
-        elif len(unique_feats) > 1:
-            for feat in selected_feats:
-                feat = feat[self.select.feat]
-                bundle.feat_counts[feat] += bundle.cor_counts / selection_size
+        if selection_size == 1 and next(iter(selected_feats))[self.feat] == 'Unknown':
+            self.stats_counts['_no_feature'] += bundle.cor_counts
         else:
-            single = selected_feats.pop()
-            if selection_size == 1 and single[self.select.feat] == 'Unknown':
-                self.stats_counts['_no_feature'] += bundle.cor_counts
-            else:
-                bundle.type_counts[single[self.select.type]] += bundle.cor_counts
-                bundle.feat_counts[single[self.select.feat]] += bundle.cor_counts
+            for hit in selected_feats:
+                bundle.feat_counts[hit[self.feat]] += bundle.cor_counts / n_candidates
+                bundle.type_counts[hit[self.type]] += bundle.cor_counts / n_candidates
 
-    def finalize_bundle(self, bundle_hash):
+    # This needs further refinement
+    def finalize_bundle(self, bundle_hash: int) -> None:
         bundle = self.bundle_counts[bundle_hash]
 
         if len(bundle.type_counts) > 1:
-            self.class_counts["ambiguous"] += sum(bundle.type_counts.values())
+            self.type_counts["ambiguous"] += sum(bundle.type_counts.values())
             self.stats_counts['_ambiguous_alignments_classes'] += 1
             self.stats_counts['_ambiguous_reads_classes'] += bundle.dup_counts
         elif len(bundle.feat_counts) > 1:
-            # Needs further conversion
-            key = next(iter(bundle.type_counts))
+            # Implied: len(type_counts) is 1
             self.stats_counts['_ambiguous_alignments_features'] += 1
             self.stats_counts['_ambiguous_reads_features'] += bundle.dup_counts
-            self.class_counts[key] += bundle.type_counts[key]
+            key = next(iter(bundle.type_counts))
+            self.type_counts[key] += bundle.type_counts[key]
             for key, value in bundle.feat_counts.items():
-                bundle.feat_counts += value
+                self.feat_counts[key] += value
+        else:
+            # Implied: type_counts and feat_counts may each be either 1 or 0
+            try:
+                key = next(iter(bundle.type_counts))
+                self.type_counts[key] += bundle.type_counts[key]
+                key = next(iter(bundle.feat_counts))
+                self.feat_counts[key] += bundle.feat_counts[key]
+                self.stats_counts['_alignments_unique_features'] += 1
+                self.stats_counts['_reads_unique_features'] += 1
+            except StopIteration:
+                pass
 
-    def write_reports(self, prefix):
-        pass
+    def write_report_files(self, prefix):
+        self.write_summary_statistics(prefix)
+        self.write_type_counts(prefix)
+        self.write_feat_counts(prefix)
+        self.write_nt_len_mat(prefix)
 
-    def merge(self, other):
-        pass
+    def write_summary_statistics(self, prefix):
+        with open(prefix + '_stats.txt', 'w') as out:
+            out.write('Summary Statistics\n')
+            out.writelines("%s\t%d" % (key, val) for key,val in self.stats_counts.items())
+            out.write('_no_feature\t' + self.feat_counts['_no_feature'])
+
+    def write_intermediate_file(self, prefix):
+        with open(prefix + '_out_aln_table.txt', 'w') as intermed:
+            intermed.writelines(
+                # read, cor_counts, strand, start, end, feat1;feat2;... type1;type2;...
+                map(lambda rec: "%s\t%d\t%c\t%d\t%d\t%s\t%s" % rec, self.alignments)
+            )
+
+    def write_type_counts(self, prefix):
+        class_counts_df = pd.DataFrame.from_dict(self.type_counts, orient='index').reset_index()
+        class_counts_df.to_csv(prefix + '_out_class_counts.csv', index=False, header=False)
+
+    def write_feat_counts(self, prefix):
+        feat_counts_df = pd.DataFrame.from_dict(self.feat_counts, orient='index').reset_index().drop('_no_feature')
+        feat_counts_df.to_csv(prefix + '_out_feature_counts.txt', sep='\t', index=False, header=False)
+
+    def write_nt_len_mat(self, prefix):
+        pd.DataFrame(self.nt_len_mat).to_csv(prefix + '_out_nt_len_dist.csv')
+
+    def get_mp_return(self) -> Tuple[Counter, Counter, dict, dict]:
+        """Produces a tuple of only relevant stats, for efficiency of serialization upon MP return"""
+        return self.feat_counts, self.type_counts, self.stats_counts, self.nt_len_mat
+
+    def merge(self, other: 'StatsCollector'):
+        self.feat_counts.update(other.feat_counts)
+        self.type_counts.update(other.type_counts)
+
+        for stat, count in other.stats_counts:
+            self.stats_counts[stat] += count
+
+        for nt, counter in other.nt_len_mat:
+            self.nt_len_mat[nt].update(counter)
 
     """
 	stats_counts:

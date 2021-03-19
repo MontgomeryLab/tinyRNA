@@ -1,8 +1,9 @@
 import itertools
 import argparse
+import queue
 import time
 
-import operator
+import multiprocessing as mp
 import numpy as np
 import HTSeq
 import sys
@@ -10,8 +11,6 @@ import csv
 import re
 
 from aquatx.srna.FeatureSelector import FeatureSelector, StatsCollector
-from multiprocessing import Pool, Queue
-from collections import Counter
 from typing import Tuple, Set
 
 # For parse_GFF_attribute_string()
@@ -177,25 +176,49 @@ def assign_features(alignment) -> Tuple[set, int]:
     return assignment, len(feature_set)
 
 
-def count_reads(sam_file: str, return_queue, intermediate_file):
+def count_reads(sam_file: str, return_queue: mp.Queue, intermediate_file: bool = False):
 
     read_seq = HTSeq.BAM_Reader(sam_file)
-    stats = StatsCollector(selector)
+    stats = StatsCollector()
+    if intermediate_file:
+        assign_and_count = lambda: stats.count_and_save_alignment(alignment, bundle_hash, *assign_features(alignment))
+    else:
+        assign_and_count = lambda: stats.count_alignment(bundle, *assign_features(alignment))
 
     for bundle in HTSeq.bundle_multiple_alignments(read_seq):
         bundle_hash = stats.count_bundle(bundle)
-
         for alignment in bundle:
-            # Perform selective assignment
-            stats.count_alignment(bundle_hash, *assign_features(alignment))
-            # Todo: record intermediates if requested
-
+            assign_and_count()
         stats.finalize_bundle(bundle_hash)
 
-    return_queue.put(stats)
-    # Todo: write intermediate files after returning the collected counts to
-    #  parent process for merging
+    # Place results in the multiprocessing queue to be merged by parent process
+    return_queue.put(stats.get_mp_return())
 
+    if intermediate_file:
+        with open(intermediate_file, 'w') as intermed:
+            intermed.writelines(
+                # read, cor_counts, strand, start, end, feat1;feat2;... type1;type2;...
+                map(lambda rec: "%s\t%d\t%c\t%d\t%d\t%s\t%s" % rec, stats.alignments)
+            )
+
+
+def disperse_and_aggregate(sam_files, work_args, ret_queue):
+    b4_4 = time.time()
+
+    if len(sam_files) > 1:
+        with mp.Pool(len(sam_files)) as pool:
+            pool.starmap(count_reads, work_args)
+    else:
+        itertools.starmap(count_reads, work_args)
+
+    # Collect counts from all pool workers and merge
+    merged_counts = StatsCollector()
+    for _ in sam_files:
+        sam_stats = ret_queue.get()
+        merged_counts.merge(sam_stats)
+
+    print("Counting and merging took %.2f seconds" % (time.time() - b4_4))
+    return merged_counts
 
 def main():
     start = time.time()
@@ -209,30 +232,16 @@ def main():
     build_reference_tables(gff_file_set)
 
     # Prepare for multiprocessing pool
-    ret_queue = Queue()
     sam_files = [sam.strip() for sam in args.input_files.split(',')]
-    work_args = [[sam, ret_queue, args.intermed_file] for sam in sam_files]
+    ret_queue = mp.Manager().Queue() if len(sam_files) > 1 else queue.Queue()
+    work_args = [(sam, ret_queue, args.intermed_file) for sam in sam_files]
 
-    # Perform counts
-    b4_4 = time.time()
-    if len(sam_files) > 1:
-        with Pool(len(sam_files)) as pool:
-            pool.starmap(count_reads, work_args)
-    else:
-        itertools.starmap(count_reads, work_args)
-
-    # Collect counts from all pool workers and merge
-    counts = StatsCollector(selector)
-    for i in range(len(sam_files)):
-        sam_stats = ret_queue.get()
-        counts.merge(sam_stats)
-
-    print("Counting and merging took %.2f seconds" % (time.time() - b4_4))
+    # Assign and count features using multiprocessing and merge results
+    merged_counts = disperse_and_aggregate(sam_files, work_args, ret_queue)
 
     # Write final outputs
-    counts.write_reports(args.out_prefix)
+    merged_counts.write_report_files(args.out_prefix)
     print("Overall runtime took %.2f seconds" % (time.time() - start))
-
 
 if __name__ == '__main__':
     main()
