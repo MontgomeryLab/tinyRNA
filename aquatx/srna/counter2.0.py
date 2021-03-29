@@ -1,5 +1,6 @@
 import itertools
 import argparse
+import os
 import queue
 import time
 
@@ -35,12 +36,13 @@ def get_args():
                         help='comma separated list of input sam files to count features for')
     parser.add_argument('-c', '--config', metavar='CONFIGFILE', required=True,
                         help='the csv features configuration file')
-    parser.add_argument('-o', '--out-prefix', metavar='OUTPUTPREFIX',
+    parser.add_argument('-o', '--out-prefix', metavar='OUTPUTPREFIX', required=True,
                         help='output prefix to use for file names')
     parser.add_argument('-t', '--intermed-file', action='store_true',
                         help='Save the intermediate file containing all alignments and'
                              'associated features.')
 
+    global args
     args = parser.parse_args()
 
     return args
@@ -118,7 +120,7 @@ def build_reference_tables(gff_files: Set[Tuple[str, str]]) -> None:
     than the feature ID alone.
     """
 
-    b4_4 = time.time() # Cloud Atlas
+    b4_4 = time.time()  # Cloud Atlas
 
     # Patch the GFF attribute parser to support comma separated attribute value lists
     setattr(HTSeq.features, 'parse_GFF_attribute_string', parse_GFF_attribute_string)
@@ -162,7 +164,7 @@ def assign_features(alignment) -> Tuple[set, int]:
     for iv in iv_seq:
         # Check that features[] even contains this alignment's chromosome
         if iv.chrom not in features.chrom_vectors:
-            assignment.add('Empty')
+            assignment.add(selector.empty)
             continue
         for iv2, fs2 in features[iv].steps():
             feature_set |= fs2
@@ -172,44 +174,47 @@ def assign_features(alignment) -> Tuple[set, int]:
         nt5end = chr(alignment.read.seq[0])
         length = len(alignment.read)
         assignment |= selector.choose(feature_set, strand, nt5end, length)
+    else:
+        assignment.add(selector.empty)
 
     return assignment, len(feature_set)
 
 
-def count_reads(sam_file: str, return_queue: mp.Queue, intermediate_file: bool = False):
+def count_reads(sam_file: str, return_queue: mp.Queue, intermediate_file: bool = False, out_prefix: str = None):
 
     read_seq = HTSeq.BAM_Reader(sam_file)
-    stats = StatsCollector()
-    if intermediate_file:
-        assign_and_count = lambda: stats.count_and_save_alignment(alignment, bundle_hash, *assign_features(alignment))
-    else:
-        assign_and_count = lambda: stats.count_alignment(bundle, *assign_features(alignment))
+    stats = StatsCollector(out_prefix, intermediate_file)
 
+    # For each sequence in the sam file...
     for bundle in HTSeq.bundle_multiple_alignments(read_seq):
-        bundle_hash = stats.count_bundle(bundle)
-        for alignment in bundle:
-            assign_and_count()
-        stats.finalize_bundle(bundle_hash)
+        stats.count_bundle(bundle)
 
+        # For each alignment of the given sequence...
+        for alignment in bundle:
+            hits, n_candidates = assign_features(alignment)
+            if n_candidates > 0 and len(hits):
+                stats.count_alignment(alignment, hits, n_candidates)
+
+    stats.finalize_bundles()
     # Place results in the multiprocessing queue to be merged by parent process
-    return_queue.put(stats.get_mp_return())
+    # We only want to return pertinent/minimal stats since this will be pickled
+    return_queue.put(stats)
 
     if intermediate_file:
-        with open(intermediate_file, 'w') as intermed:
-            intermed.writelines(
-                # read, cor_counts, strand, start, end, feat1;feat2;... type1;type2;...
-                map(lambda rec: "%s\t%d\t%c\t%d\t%d\t%s\t%s" % rec, stats.alignments)
-            )
+        im_prefix = os.path.splitext(os.path.basename(sam_file))[0]
+        stats.write_intermediate_file(im_prefix)
 
 
-def disperse_and_aggregate(sam_files, work_args, ret_queue):
+def map_and_reduce(sam_files, work_args, ret_queue):
     b4_4 = time.time()
 
+    # Use a multiprocessing pool if multiple sam files were provided
+    # Otherwise perform counts in this process
     if len(sam_files) > 1:
         with mp.Pool(len(sam_files)) as pool:
             pool.starmap(count_reads, work_args)
     else:
-        itertools.starmap(count_reads, work_args)
+        count_reads(*work_args[0])
 
     # Collect counts from all pool workers and merge
     merged_counts = StatsCollector()
@@ -234,10 +239,10 @@ def main():
     # Prepare for multiprocessing pool
     sam_files = [sam.strip() for sam in args.input_files.split(',')]
     ret_queue = mp.Manager().Queue() if len(sam_files) > 1 else queue.Queue()
-    work_args = [(sam, ret_queue, args.intermed_file) for sam in sam_files]
+    work_args = [(sam, ret_queue, args.intermed_file, args.out_prefix) for sam in sam_files]
 
     # Assign and count features using multiprocessing and merge results
-    merged_counts = disperse_and_aggregate(sam_files, work_args, ret_queue)
+    merged_counts = map_and_reduce(sam_files, work_args, ret_queue)
 
     # Write final outputs
     merged_counts.write_report_files(args.out_prefix)
