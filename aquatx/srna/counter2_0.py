@@ -48,11 +48,11 @@ def get_args():
     return args
 
 
-def load_config(file: str) -> Set[Tuple[str, str]]:
+def load_config(features_csv: str) -> Set[Tuple[str, str]]:
     gff_files = set()
     rules = []
 
-    with open(file, 'r', encoding='utf-8-sig') as f:
+    with open(features_csv, 'r', encoding='utf-8-sig') as f:
         fieldnames = ("ID", "Key", "Value", "Strand", "Source", "Hierarchy", "5pnt", "Length")
         csv_reader = csv.DictReader(f, fieldnames=fieldnames, delimiter=',')
         next(csv_reader)  # Skip header line
@@ -60,6 +60,7 @@ def load_config(file: str) -> Set[Tuple[str, str]]:
             rule = {col: row[col] for col in row if col not in ["ID", "Key", "Value", "Source"]}
             rule['Identity'] = (row['Key'], row['Value'])
             rules.append(rule)
+
             gff_files.add((row['Source'], row['ID']))
 
     convert_strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
@@ -173,7 +174,8 @@ def assign_features(alignment) -> Tuple[set, int]:
         strand = alignment.iv.strand
         nt5end = chr(alignment.read.seq[0])
         length = len(alignment.read)
-        assignment |= selector.choose(feature_set, strand, nt5end, length)
+        choices, uncounted = selector.choose(feature_set, strand, nt5end, length)
+        assignment |= choices
     else:
         assignment.add(selector.empty)
 
@@ -187,13 +189,13 @@ def count_reads(sam_file: str, return_queue: mp.Queue, intermediate_file: bool =
 
     # For each sequence in the sam file...
     for bundle in HTSeq.bundle_multiple_alignments(read_seq):
-        stats.count_bundle(bundle)
+        bundle_stat = stats.count_bundle(bundle)
 
         # For each alignment of the given sequence...
         for alignment in bundle:
             hits, n_candidates = assign_features(alignment)
             if n_candidates > 0 and len(hits):
-                stats.count_alignment(alignment, hits, n_candidates)
+                stats.count_bundle_alignments(bundle_stat, alignment, hits, n_candidates)
 
     stats.finalize_bundles()
     # Place results in the multiprocessing queue to be merged by parent process

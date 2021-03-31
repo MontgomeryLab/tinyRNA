@@ -4,3 +4,4 @@
 *.svg
 .idea/*
 tests/run_dir/
+*/fil-result/*

@@ -31,36 +31,38 @@ class FeatureSelector:
 
         # Inverted ident rules: (Attrib Key, Attrib Val) as key, [rule matches] as val
         # This allows us to do O(1) identity matching for each candidate feature
-        # Subsequent matching is then performed only against identity-matched rows
+        # Subsequent matching (also O(1)) is performed only against identity-matched rows
         inverted_identities = defaultdict(list)
         for i, rule in enumerate(self.rules_table):
             inverted_identities[rule['Identity']].append(i)
         self.inv_ident = dict(inverted_identities)
 
-    def choose(self, feat_set, strand, endnt, length) -> set:
+    def choose(self, feat_set, strand, endnt, length) -> Tuple[set, set]:
         # Perform an efficient first-round
-        choices, finalists = self.choose_identities(feat_set)
-        if not finalists: return choices
+        finalists, uncounted = self.choose_identities(feat_set)
+        if not finalists: return finalists, uncounted
 
         # Strand, 5pnt, and Length filtering uses simpler logic
-        eliminated = set()
+        choices, eliminated = set(), set()
         for step, read in zip(self.interest[1:], (strand, endnt, length)):
             for hit in finalists:
                 if read not in self.rules_table[hit[self.rule]][step]:
                     eliminated.add(hit)
-                    choices.add(self.filtered)
+                    uncounted.add(self.filtered)
+
             finalists -= eliminated
             eliminated.clear()
-            if not finalists:
-                return choices
 
+            if not finalists: return choices, uncounted
+
+        # Remaining finalists have passed all filters
         choices.update(finalists)
-        return choices
+        return choices, uncounted
 
     def choose_identities(self, feats_set):
         """Performs the initial selection using identity rules (attribute key, value)"""
 
-        choices, finalists = set(), set()
+        finalists, uncounted = set(), set()
 
         # For each feature, match across all identity interests
         identity_hits = [(self.rules_table[rule]['Hierarchy'], rule, feat, type)
@@ -86,9 +88,9 @@ class FeatureSelector:
                 finalists.update(hit for hit in identity_hits if hit[self.rank] == min_rank)
 
         ih_unique = {hit[self.feat] for hit in identity_hits}
-        if len(finalists) < len(ih_unique): choices.add(self.filtered)
-        if len(ih_unique) < len(feats_set): choices.add(self.unknown)
-        return choices, finalists
+        if len(finalists) < len(ih_unique): uncounted.add(self.filtered)
+        if len(ih_unique) < len(feats_set): uncounted.add(self.unknown)
+        return finalists, uncounted
 
     def build_filters(self):
         """Builds single/list/range/wildcard membership-matching filters
@@ -132,9 +134,10 @@ class FeatureSelector:
     def set_attributes_table(self, attributes, attrs_of_interest):
         """Attributes are not available at construction time; add later"""
 
-        attributes[('Filtered',)] = {}
-        attributes[('Unknown',)] = {}
-        attributes[('Empty',)] = {}
+        # Todo: I don't believe this is necessary with most recent changes. Investigate.
+        attributes[self.filtered[self.feat]] = {}
+        attributes[self.unknown[self.feat]] = {}
+        attributes[self.empty[self.feat]] = {}
         self.attributes = attributes
 
     @classmethod
@@ -145,13 +148,13 @@ class FeatureSelector:
 class StatsCollector:
     class Bundle:
         def __init__(self, size, dup_counts, cor_counts):
-            self.feats = Counter()
-            self.types = Counter()
+            self.feat_count = 0
+            self.type_count = 0
             self.bundle_len = size
             self.dup_counts = dup_counts
             self.cor_counts = cor_counts
 
-    rank, rule, feat, type = FeatureSelector.get_hit_indexes()
+    rank, rule, feat, type  = FeatureSelector.get_hit_indexes()
 
     def __init__(self, out_prefix: str = None, save_intermediate_file: bool = False):
         self.type_counts = Counter()
@@ -167,14 +170,14 @@ class StatsCollector:
         self.out_prefix = out_prefix
         self.bundle_counts = {}
 
-    def count_bundle(self, aln_bundle: iter) -> int:
+    def count_bundle(self, aln_bundle: iter) -> 'Bundle':
         bundle_read = aln_bundle[0].read
         bundle_size = len(aln_bundle)
-        bundle_seq = bundle_read.seq
 
         # Calculate counts for multi-mapping
         dup_counts = int(bundle_read.name.split('=')[1])
         cor_counts = dup_counts / bundle_size
+        bundle_seq = bundle_read.seq
 
         # fill in 5p nt/length matrix
         self.nt_len_mat[chr(bundle_seq[0])][len(bundle_seq)] += dup_counts
@@ -187,25 +190,27 @@ class StatsCollector:
         # Save bundle stats to later update with per-alignment stats
         if bundle_seq in self.bundle_counts:
             print(f"Duplicate bundle found!! {bundle_seq}")
-        self.bundle_counts[bundle_seq] = self.Bundle(bundle_size, dup_counts, cor_counts)
+        return self.Bundle(bundle_size, dup_counts, cor_counts)
 
-        return bundle_seq
-
-    def count_alignment(self, aln: HTSeq.SAM_Alignment, hits: set, n_candidates: int) -> None:
-        bundle = self.bundle_counts[aln.read.seq]
-        unique_feats = {f[self.feat] for f in hits}
+    def count_bundle_alignments(self, bundle: 'Bundle', aln: HTSeq.SAM_Alignment, hits: set, n_candidates: int) -> None:
         unique_types = {t[self.type] for t in hits}
 
         if len(unique_types) > 1:
-            bundle.types["ambiguous"] += bundle.cor_counts
-        if len(hits) == 1 and next(iter(hits))[self.feat] == ('Unknown',):
+            self.type_counts["ambiguous"] += bundle.cor_counts
+        if len(hits) == 1 and next(iter(hits))[self.feat] == FeatureSelector.unknown[self.feat]:
             self.stats_counts['_no_feature'] += bundle.cor_counts
         else:
             for hit in hits:
-                bundle.feats[hit[self.feat]] += bundle.cor_counts / n_candidates
-                bundle.types[hit[self.type]] += bundle.cor_counts / n_candidates
+
+                if hit[self.feat] not in self.feat_counts: bundle.feat_count += 1
+                if hit[self.type] not in self.type_counts: bundle.type_count += 1
+
+                feature_corrected_count = bundle.cor_counts / n_candidates
+                self.feat_counts[hit[self.feat]] += feature_corrected_count
+                self.type_counts[hit[self.type]] += feature_corrected_count
 
         if self.save_intermediate_file:
+            # read, cor_counts, strand, start, end, feat1a/feat1b;feat2;... type1;type2;type3;...
             record = (aln.read, bundle.cor_counts, aln.iv.strand, aln.iv.start, aln.iv.end,
                       ';'.join(map('/'.join, map(lambda x: x[self.feat], hits))),
                       ';'.join(map(lambda x: x[self.type], hits)))
@@ -213,24 +218,21 @@ class StatsCollector:
 
     def finalize_bundles(self) -> None:
         for bundle in self.bundle_counts.values():
-            if len(bundle.types) > 1:
-                self.type_counts["ambiguous"] += sum(bundle.types.values())
+            if bundle.type_count > 1:
+                self.type_counts["ambiguous"] += bundle.type_count
                 self.stats_counts['_ambiguous_alignments_classes'] += 1
                 self.stats_counts['_ambiguous_reads_classes'] += bundle.dup_counts
-            if len(bundle.feats) > 1:
+            if bundle.feat_count > 1:
                 self.stats_counts['_ambiguous_alignments_features'] += 1
                 self.stats_counts['_ambiguous_reads_features'] += bundle.dup_counts
             else:
                 self.stats_counts['_alignments_unique_features'] += 1
                 self.stats_counts['_reads_unique_features'] += 1
 
-            self.type_counts.update(bundle.types)
-            self.feat_counts.update(bundle.feats)
-
     def write_intermediate_file(self, prefix):
         with open(f"{self.out_prefix}_{prefix}_out_aln_table.txt", 'w') as imf:
             imf.writelines(
-                # read, cor_counts, strand, start, end, feat1;feat2;... type1;type2;...
+                # read, cor_counts, strand, start, end, feat;feat;... type;type;...
                 map(lambda rec: "%s\t%d\t%c\t%d\t%d\t%s\t%s\n" % rec, self.alignments)
             )
 
@@ -244,7 +246,7 @@ class StatsCollector:
     def write_summary_statistics(self, prefix):
         with open(prefix + '_stats.txt', 'w') as out:
             out.write('Summary Statistics\n')
-            out.writelines("%s\t%d\n" % (key, val) for key,val in self.stats_counts.items())
+            out.writelines("%s\t%d\n" % (key, val) for key, val in self.stats_counts.items())
             out.write('_no_feature\t' + str(self.feat_counts['_no_feature']))
 
     def write_type_counts(self, prefix):
