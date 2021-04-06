@@ -6,7 +6,7 @@ import HTSeq
 
 import aquatx.srna.counter2_0 as counter
 
-class MyTestCase(unittest.TestCase):
+class CounterTests(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         # Simply for convenience for loading files during setup
@@ -22,6 +22,12 @@ class MyTestCase(unittest.TestCase):
 
         self.strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
 
+        # ID, Key, Value, Strand, Source, Hierarchy, 5pnt, Length
+        self.csv_row_dict = {'id_attr': "Alias", "at_key": "Class", "at_val": "CSR", 'strand': "antisense",
+                             'gff': "./testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3", 'rank': "1",
+                             'nt': '"C,G,U"', "length": "all"}
+
+
 
     # === HELPERS ===
 
@@ -32,6 +38,13 @@ class MyTestCase(unittest.TestCase):
         attr_str = self.get_gff_attr_string(file_content)
         return counter.parse_GFF_attribute_string(attr_str)
 
+    def features_csv(self, rules) -> str:
+        header = "\uFEFFID Attribute,Attribute Key,Attribute Value,Strand (sense/antisense/both),Feature Source,Hierarchy,5' End Nucleotide,Length"
+        return '\n'.join([header, *map(','.join, rules)])
+    
+    def feat_csv_test_row(self):
+        return ','.join(self.csv_row_dict.values())
+        
     # === TESTS ===
 
     """Were only the correct attribute keys present in the parser result?"""
@@ -52,7 +65,7 @@ class MyTestCase(unittest.TestCase):
         self.assertTrue(all([type(val) == tuple for val in attr.values()]))
         self.assertTrue(all([type(key) == str for key in attr.keys()]))
 
-    """Were list values, and non-list values, properly parsed?"""
+    """Were list values, and non-list values, parsed as such?"""
 
     def test_gff_attr_list_vals(self):
         attr = self.get_gff_attr_parsed(self.short_gff)
@@ -61,30 +74,38 @@ class MyTestCase(unittest.TestCase):
         self.assertTrue(all([len(val) == 1 for key, val in attr.items() if key != "Class"]))
         self.assertEqual(len(attr['Class']), 2)
 
-    def features_csv(self, rules: List[list]) -> str:
-        header = "\uFEFFID Attribute,Attribute Key,Attribute Value,Strand (sense/antisense/both),Feature Source,Hierarchy,5' End Nucleotide,Length"
-        return '\n'.join([header, *map(','.join, rules)])
-
     """Does load_config correctly parse a single-entry features.csv config file?"""
 
-    @patch('aquatx.srna.counter2_0.FeatureSelector')
-    def test_load_config_single(self, feat_select):
+    def test_load_config_single(self):
         # Features CSV with a single rule/row
-        id_attr, at_key, at_val = "Alias", "Class", "CSR"
-        strand, rank, nt, length = "antisense", "1", '"C,G,U"', "all"
-        gff = './testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3'
-        csv = self.features_csv([[id_attr, at_key, at_val, strand, gff, rank, nt, length]])
+        row = self.csv_row_dict.values()
+        csv = self.features_csv([row])
 
+        with patch('aquatx.srna.counter2_0.open', mock_open(read_data=csv)):
+            ruleset, gff_files = counter.load_config('/dev/null')
+
+        r = self.csv_row_dict
+        expected_return = {(r['gff'], r['id_attr'])}
+        expected_ruleset = [{'Strand': self.strand[r['strand']], 'Hierarchy': int(r['rank']), '5pnt': r['nt'].strip('"'),
+                             'Length': r['length'], 'Identity': (r['at_key'], r['at_val'])}]
+
+        self.assertEqual(expected_return, gff_files)
+        self.assertEqual(expected_ruleset, ruleset)
+
+    """Does load_config correctly handle duplicate rules?"""
+
+    def test_load_config_duplicate_rules(self, feat_select):
+        # Features CSV with two duplicate rules/rows
+        row = self.csv_row_dict.values()
+        csv = self.features_csv([[row], [row]])
+        
         with patch('aquatx.srna.counter2_0.open', mock_open(read_data=csv)):
             gff_files = counter.load_config('/dev/null')
 
-        expected_return = {(gff, id_attr)}
-        expected_ruleset = [{'Strand': self.strand[strand], 'Hierarchy': int(rank), '5pnt': nt.strip('"'), 'Length': length, 'Identity': (at_key, at_val)}]
+    """"""
 
-        self.assertEqual(expected_return, gff_files)
-        self.assertEqual(call(expected_ruleset), feat_select.call_args)
-
-
+    def test_ref_tables_(self):
+        pass
 
     def test_BAM_reader(self):
         samfile = "./testdata/counter/short.sam"

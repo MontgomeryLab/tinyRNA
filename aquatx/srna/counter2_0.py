@@ -9,13 +9,19 @@ import csv
 
 from aquatx.srna.FeatureSelector import FeatureSelector, StatsCollector
 from aquatx.srna.hts_parsing import *
-from typing import Tuple, Set
+from typing import Tuple, Set, List, Dict
 
 # Global variables for copy-on-write multiprocessing
 features: 'HTSeq.GenomicArrayOfSets' = HTSeq.GenomicArrayOfSets("auto", stranded=True)
 selector: 'FeatureSelector' = None
-attributes: dict = {}
 
+# Type aliases for human readability
+Features = HTSeq.GenomicArrayOfSets  # interval -> set of associated features
+Attributes = Dict[str, list]  # feature -> feature attributes
+FeatureSources = Set[Tuple[str, str]]
+SelectionRules = List[dict]
+AssignedFeatures = set
+N_Candidates = int
 
 def get_args():
     """
@@ -38,32 +44,29 @@ def get_args():
     return parser.parse_args()
 
 
-def load_config(features_csv: str) -> Set[Tuple[str, str]]:
+def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
     gff_files = set()
     rules = []
 
     with open(features_csv, 'r', encoding='utf-8-sig') as f:
         fieldnames = ("ID", "Key", "Value", "Strand", "Source", "Hierarchy", "5pnt", "Length")
+        convert_strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
         csv_reader = csv.DictReader(f, fieldnames=fieldnames, delimiter=',')
+
         next(csv_reader)  # Skip header line
         for row in csv_reader:
-            rule = {col: row[col] for col in row if col not in ["ID", "Key", "Value", "Source"]}
+            rule = {col: row[col] for col in ["Strand", "Hierarchy", "5pnt", "Length"]}
+            rule['Hierarchy'] = int(rule['Hierarchy'])
             rule['Identity'] = (row['Key'], row['Value'])
+            rule['Strand'] = convert_strand[rule['Strand'].lower()]
             rules.append(rule)
 
             gff_files.add((row['Source'], row['ID']))
 
-    convert_strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
-    for rule in rules:
-        rule['Hierarchy'] = int(rule['Hierarchy'])
-        rule['Strand'] = convert_strand[rule['Strand'].lower()]
-
-    global selector
-    selector = FeatureSelector(rules)
-    return gff_files
+    return rules, gff_files
 
 
-def build_reference_tables(gff_files: Set[Tuple[str, str]]) -> None:
+def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> Tuple[Features, Attributes]:
     """A simplified and slightly modified version of HTSeq.create_genomicarrayofsets
 
     This modification changes the information stored in an interval's step vector
@@ -80,33 +83,30 @@ def build_reference_tables(gff_files: Set[Tuple[str, str]]) -> None:
     # Patch the GFF attribute parser to support comma separated attribute value lists
     setattr(HTSeq.features, 'parse_GFF_attribute_string', parse_GFF_attribute_string)
 
-    # Obtain an ordered list of unique attributes of interest from selector's Identity rules
-    attrs_of_interest = list(np.unique([attr['Identity'][0] for attr in selector.rules_table]))
+    # Obtain an ordered list of unique attributes of interest from selection rules
+    attrs_of_interest = list(np.unique([attr['Identity'][0] for attr in rules]))
 
     feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
-    attributes = {}
+    attrs = {}
 
     for file, preferred_id in gff_files:
         gff = HTSeq.GFF_Reader(file)
         for f in gff:
             try:
-                feature_id = f.attr[preferred_id]
                 if f.iv.strand == ".":
                     raise ValueError("Feature %s at %s in %s does not have strand information." % (f.name, f.iv, file))
 
+                feature_id = f.attr[preferred_id]
                 feats[f.iv] += (feature_id, f.type)
-                attributes[feature_id] = [(attr, f.attr.get(attr, '')) for attr in attrs_of_interest]
+                attrs[feature_id] = [(attr, f.attr[attr]) for attr in attrs_of_interest]
             except KeyError as ke:
                 raise ValueError("Feature %s does not contain a '%s' attribute in %s" % (f.name, ke, file))
 
-    global features
-    features = feats
-    selector.set_attributes_table(attributes, attrs_of_interest)
-
     print("GFF parsing took %.2f seconds" % (time.time() - b4_4))
+    return feats, attrs
 
 
-def assign_features(alignment) -> Tuple[set, int]:
+def assign_features(alignment: 'HTSeq.SAM_Alignment') -> Tuple[AssignedFeatures, N_Candidates]:
     # CIGAR match characters
     com = ('M', '=', 'X')
 
@@ -180,11 +180,13 @@ def main():
     # Get command line arguments.
     args = get_args()
 
-    # Load config csv, selector stored globally
-    gff_file_set = load_config(args.config)
+    # Load selection rules and feature sources from config
+    selection_rules, gff_file_set = load_config(args.config)
 
-    # Build features table, global for multiprocessing
-    build_reference_tables(gff_file_set)
+    # Build features table and selector, global for multiprocessing
+    global features, selector
+    features, attributes = build_reference_tables(gff_file_set, selection_rules)
+    selector = FeatureSelector(selection_rules, attributes)
 
     # Prepare for multiprocessing pool
     sam_files = [sam.strip() for sam in args.input_files.split(',')]

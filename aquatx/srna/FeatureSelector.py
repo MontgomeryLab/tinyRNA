@@ -1,5 +1,5 @@
 from collections import defaultdict, Counter
-from typing import List, Tuple, FrozenSet
+from typing import List, Tuple, FrozenSet, Dict
 from dataclasses import dataclass
 
 import HTSeq
@@ -21,15 +21,15 @@ class FeatureSelector:
     unknown  = (float('inf'), -1, ('Unknown',), 'Unknown')
     empty    = (float('inf'), -1, ('Empty',), 'Empty')
 
-    def __init__(self, rules: List[dict]):
+    def __init__(self, rules: List[dict], reference_table: Dict):
         # Todo: now that filters are type-specific rather than column specific,
         #  we can specify filter type in the input rules list such that feature selection
         #  is no longer bound to this specific interest set.
         #  This will improve the project's maintainability.
         self.interest = ('Identity', 'Strand', '5pnt', 'Length')
-        self.rules_table = sorted(rules, key=lambda x: int(x['Hierarchy']))
+        self.rules_table = sorted(rules, key=lambda x: x['Hierarchy'])
+        self.attributes = reference_table
         self.build_filters()
-        self.attributes = []
 
         # Inverted ident rules: (Attrib Key, Attrib Val) as key, [rule matches] as val
         # This allows us to do O(1) identity matching for each candidate feature
@@ -132,15 +132,6 @@ class FeatureSelector:
             for step, filt in filters:
                 if not wildcard(step):
                     row[step] = filt()
-
-    def set_attributes_table(self, attributes, attrs_of_interest):
-        """Attributes are not available at construction time; add later"""
-
-        # Todo: I don't believe this is necessary with most recent changes. Investigate.
-        attributes[self.filtered[self.feat]] = {}
-        attributes[self.unknown[self.feat]] = {}
-        attributes[self.empty[self.feat]] = {}
-        self.attributes = attributes
 
     @classmethod
     def get_hit_indexes(cls):
