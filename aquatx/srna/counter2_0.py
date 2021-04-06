@@ -1,22 +1,15 @@
-import itertools
 import argparse
-import os
 import queue
 import time
+import os
 
 import multiprocessing as mp
 import numpy as np
-import HTSeq
-import sys
 import csv
-import re
 
 from aquatx.srna.FeatureSelector import FeatureSelector, StatsCollector
+from aquatx.srna.hts_parsing import *
 from typing import Tuple, Set
-
-# For parse_GFF_attribute_string()
-_re_attr_main = re.compile(r"\s*([^\s=]+)[\s=]+(.*)")
-_re_attr_empty = re.compile(r"^\s*$")
 
 # Global variables for copy-on-write multiprocessing
 features: 'HTSeq.GenomicArrayOfSets' = HTSeq.GenomicArrayOfSets("auto", stranded=True)
@@ -42,10 +35,7 @@ def get_args():
                         help='Save the intermediate file containing all alignments and'
                              'associated features.')
 
-    global args
-    args = parser.parse_args()
-
-    return args
+    return parser.parse_args()
 
 
 def load_config(features_csv: str) -> Set[Tuple[str, str]]:
@@ -73,52 +63,16 @@ def load_config(features_csv: str) -> Set[Tuple[str, str]]:
     return gff_files
 
 
-def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
-    """Parses a GFF attribute string and returns it as a dictionary.
-
-    This is a slight modification of the same method found in HTSeq.features.
-    It has been adapted to allow features to have multiple classes, which are
-    split and stored as a tuple rather than a comma separated string. This
-    should save some CPU time down the road.
-
-    If 'extra_return_first_value' is set, a pair is returned: the dictionary
-    and the value of the first attribute. This might be useful if this is the
-    ID.
-    """
-    attribute_dict = {}
-    first_val = "_unnamed_"
-    for i, attr in enumerate(HTSeq._HTSeq.quotesafe_split(attrStr.rstrip().encode())):
-        attr = attr.decode()
-        if _re_attr_empty.match(attr):
-            continue
-        if attr.count('"') not in (0, 2):
-            raise ValueError(
-                "The attribute string seems to contain mismatched  quotes.")
-        mo = _re_attr_main.match(attr)
-        if not mo:
-            raise ValueError("Failure parsing GFF attribute line")
-        idt = mo.group(1)
-        val = mo.group(2)
-        if val.startswith('"') and val.endswith('"'):
-            val = val[1:-1]
-        # Modification: allow for comma separated multiple-class assignment
-        attribute_dict[sys.intern(idt)] = (sys.intern(val),) \
-            if ',' not in val \
-            else tuple(c.strip() for c in val.split(','))
-        if extra_return_first_value and i == 0:
-            first_val = val
-    if extra_return_first_value:
-        return attribute_dict, first_val
-    else:
-        return attribute_dict
-
-
 def build_reference_tables(gff_files: Set[Tuple[str, str]]) -> None:
     """A simplified and slightly modified version of HTSeq.create_genomicarrayofsets
 
     This modification changes the information stored in an interval's step vector
     within the features table. This stores (feature ID, feature type) tuples rather
-    than the feature ID alone.
+    than the feature ID alone. It also allows for cataloguing features by any attribute,
+    not just by ID, on a per GFF file basis.
+
+    Note: at this time if the same feature is defined in multiple GFF files using
+    different ID attributes, the feature will
     """
 
     b4_4 = time.time()  # Cloud Atlas
@@ -155,20 +109,12 @@ def build_reference_tables(gff_files: Set[Tuple[str, str]]) -> None:
 def assign_features(alignment) -> Tuple[set, int]:
     # CIGAR match characters
     com = ('M', '=', 'X')
-    # Generator for all match intervals between the read and genome
-    # This ought to be a single short interval for our purposes, but just in case...
-    iv_seq = (co.ref_iv for co in alignment.cigar if co.type in com and co.size > 0)
 
     feature_set, assignment = set(), set()
 
-    # Build set of matching features based on match intervals
-    for iv in iv_seq:
-        # Check that features[] even contains this alignment's chromosome
-        if iv.chrom not in features.chrom_vectors:
-            assignment.add(selector.empty)
-            continue
-        for iv2, fs2 in features[iv].steps():
-            feature_set |= fs2
+    iv = alignment.iv
+    for fs2 in features[iv].array[iv.start:iv.end].get_steps(values_only=True):  # Not as pretty, but much faster!
+        feature_set |= fs2
 
     if len(feature_set):
         strand = alignment.iv.strand
@@ -184,7 +130,8 @@ def assign_features(alignment) -> Tuple[set, int]:
 
 def count_reads(sam_file: str, return_queue: mp.Queue, intermediate_file: bool = False, out_prefix: str = None):
 
-    read_seq = HTSeq.BAM_Reader(sam_file)
+    # Change the following line to HTSeq.BAM_Reader(sam_file) for complete SAM records (slower)
+    read_seq = read_SAM(sam_file)
     stats = StatsCollector(out_prefix, intermediate_file)
 
     # For each sequence in the sam file...
@@ -195,9 +142,9 @@ def count_reads(sam_file: str, return_queue: mp.Queue, intermediate_file: bool =
         for alignment in bundle:
             hits, n_candidates = assign_features(alignment)
             if n_candidates > 0 and len(hits):
-                stats.count_bundle_alignments(bundle_stat, alignment, hits, n_candidates)
+                stats.count_bundle_alignments(bundle_stat, alignment, hits)
 
-    stats.finalize_bundles()
+        stats.finalize_bundle(bundle_stat)
     # Place results in the multiprocessing queue to be merged by parent process
     # We only want to return pertinent/minimal stats since this will be pickled
     return_queue.put(stats)
@@ -227,6 +174,7 @@ def map_and_reduce(sam_files, work_args, ret_queue):
     print("Counting and merging took %.2f seconds" % (time.time() - b4_4))
     return merged_counts
 
+
 def main():
     start = time.time()
     # Get command line arguments.
@@ -249,6 +197,7 @@ def main():
     # Write final outputs
     merged_counts.write_report_files(args.out_prefix)
     print("Overall runtime took %.2f seconds" % (time.time() - start))
+
 
 if __name__ == '__main__':
     main()
