@@ -92,17 +92,41 @@ class CounterTests(unittest.TestCase):
         self.assertEqual(expected_return, gff_files)
         self.assertEqual(expected_ruleset, ruleset)
 
-    """Does load_config correctly handle duplicate rules?"""
+    """Does load_config correctly handle duplicate rules? Only one rule should be returned (no duplicates)."""
 
-    def test_load_config_duplicate_rules(self, feat_select):
+    def test_load_config_duplicate_rules(self):
         # Features CSV with two duplicate rules/rows
         row = self.csv_row_dict.values()
-        csv = self.features_csv([[row], [row]])
+        csv = self.features_csv([row, row])
         
         with patch('aquatx.srna.counter2_0.open', mock_open(read_data=csv)):
-            gff_files = counter.load_config('/dev/null')
+            ruleset, gff_files = counter.load_config('/dev/null')
 
-    """"""
+        r = self.csv_row_dict
+        expected_return = {(r['gff'], r['id_attr'])}
+        expected_ruleset = [
+            {'Strand': self.strand[r['strand']], 'Hierarchy': int(r['rank']), '5pnt': r['nt'].strip('"'),
+             'Length': r['length'], 'Identity': (r['at_key'], r['at_val'])}]
+
+        self.assertEqual(expected_return, gff_files)
+        self.assertEqual(expected_ruleset, ruleset)
+
+    """DRAFT"""
+    def test_heavy(self):
+        sam = "./testdata/counter/identity_choice_test.sam"
+        gff = "./testdata/counter/identity_choice_test.gff3"
+        rules = [["Alias", "Class", "CSR", "antisense", gff, "1", "all", "all"],
+                 ["ID", "Class", "piRNA", "sense", gff, "2", "all", "all"]]
+
+        csv = self.features_csv(rules)
+        cmd = f"counter -i {sam} -c /dev/null -o test".split(" ")
+
+        with patch("aquatx.srna.counter2_0.open", mock_open(read_data=csv)):
+            with patch("sys.argv", cmd):
+                counter.main()
+
+
+
 
     def test_ref_tables_(self):
         pass

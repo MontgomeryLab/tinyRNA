@@ -22,6 +22,8 @@ FeatureSources = Set[Tuple[str, str]]
 SelectionRules = List[dict]
 AssignedFeatures = set
 N_Candidates = int
+Alias = dict
+
 
 def get_args():
     """
@@ -45,28 +47,40 @@ def get_args():
 
 
 def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
-    gff_files = set()
-    rules = []
+    """Parses features.csv to provide inputs to FeatureSelector and build_reference_tables
+
+    Args:
+        features_csv: a csv file which defines feature sources and selection rules
+
+    Returns:
+        rules: a list of dictionaries, each representing a parsed row from input
+        gff_files: a set of unique GFF files and associated ID attribute preferences
+    """
+
+    # Todo: consider how to handle case where the same GFF file has multiple rule entries
+    #  but with different ID attributes...
+    gff_files, rules = set(), list()
+    convert_strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
 
     with open(features_csv, 'r', encoding='utf-8-sig') as f:
         fieldnames = ("ID", "Key", "Value", "Strand", "Source", "Hierarchy", "5pnt", "Length")
-        convert_strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
         csv_reader = csv.DictReader(f, fieldnames=fieldnames, delimiter=',')
 
         next(csv_reader)  # Skip header line
         for row in csv_reader:
             rule = {col: row[col] for col in ["Strand", "Hierarchy", "5pnt", "Length"]}
-            rule['Hierarchy'] = int(rule['Hierarchy'])
-            rule['Identity'] = (row['Key'], row['Value'])
             rule['Strand'] = convert_strand[rule['Strand'].lower()]
-            rules.append(rule)
+            rule['Identity'] = (row['Key'], row['Value'])
+            rule['Hierarchy'] = int(rule['Hierarchy'])
 
+            # Duplicate rule entries are not allowed
+            if rule not in rules: rules.append(rule)
             gff_files.add((row['Source'], row['ID']))
 
     return rules, gff_files
 
 
-def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> Tuple[Features, Attributes]:
+def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> Tuple[Features, Attributes, Alias]:
     """A simplified and slightly modified version of HTSeq.create_genomicarrayofsets
 
     This modification changes the information stored in an interval's step vector
@@ -87,23 +101,31 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
     attrs_of_interest = list(np.unique([attr['Identity'][0] for attr in rules]))
 
     feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
-    attrs = {}
+    attrs, alias = {}, {}
 
     for file, preferred_id in gff_files:
         gff = HTSeq.GFF_Reader(file)
-        for f in gff:
+        for row in gff:
             try:
-                if f.iv.strand == ".":
-                    raise ValueError("Feature %s at %s in %s does not have strand information." % (f.name, f.iv, file))
+                if row.iv.strand == ".":
+                    raise ValueError(f"Feature {row.name} at {row.iv} in {row.file} has no strand information.")
 
-                feature_id = f.attr[preferred_id]
-                feats[f.iv] += (feature_id, f.type)
-                attrs[feature_id] = [(attr, f.attr[attr]) for attr in attrs_of_interest]
+                feature_id = row.attr["ID"]
+                feats[row.iv] += feature_id
+                attrs[feature_id] = [(attr, row.attr[attr]) for attr in attrs_of_interest]
+
+                # If an alias already exists for this feature_id, it will be renamed. Raise a warning.
+                if feature_id in alias and alias[feature_id] != row.attr[preferred_id]:
+                    current = alias[feature_id]
+                    renamed = row.attr[preferred_id]
+                    raise RuntimeWarning(f'Renaming {current} to {renamed} per ID Attribute "{preferred_id}" for {file}.')
+                if preferred_id != "ID":
+                    alias[feature_id] = row.attr[preferred_id]
             except KeyError as ke:
-                raise ValueError("Feature %s does not contain a '%s' attribute in %s" % (f.name, ke, file))
+                raise ValueError(f"Feature {row.name} does not contain a {ke} attribute in {file}")
 
     print("GFF parsing took %.2f seconds" % (time.time() - b4_4))
-    return feats, attrs
+    return feats, attrs, alias
 
 
 def assign_features(alignment: 'HTSeq.SAM_Alignment') -> Tuple[AssignedFeatures, N_Candidates]:
@@ -123,7 +145,8 @@ def assign_features(alignment: 'HTSeq.SAM_Alignment') -> Tuple[AssignedFeatures,
         choices, uncounted = selector.choose(feature_set, strand, nt5end, length)
         assignment |= choices
     else:
-        assignment.add(selector.empty)
+        # uncounted.add("Empty")
+        pass
 
     return assignment, len(feature_set)
 
@@ -185,7 +208,7 @@ def main():
 
     # Build features table and selector, global for multiprocessing
     global features, selector
-    features, attributes = build_reference_tables(gff_file_set, selection_rules)
+    features, attributes, alias = build_reference_tables(gff_file_set, selection_rules)
     selector = FeatureSelector(selection_rules, attributes)
 
     # Prepare for multiprocessing pool
@@ -197,7 +220,7 @@ def main():
     merged_counts = map_and_reduce(sam_files, work_args, ret_queue)
 
     # Write final outputs
-    merged_counts.write_report_files(args.out_prefix)
+    merged_counts.write_report_files(alias, args.out_prefix)
     print("Overall runtime took %.2f seconds" % (time.time() - start))
 
 
