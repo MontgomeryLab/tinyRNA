@@ -1,1 +1,6 @@
-Chr	Source	Type	0	27	.	-	.	ID=Gene:TestGene;Name=TestGeneBane;interpolated_map_position=-22.2222;sequence_name=ABC123.4;biotype=none;so_term_name=none_gene;curie=TestBase:TestGene;Alias=C3PO,William;Class=CSR,WAGO
+I	Source	Type	1	22	.	-	.	ID=Gene:TestGene1;Name=TestGeneBane1;interpolated_map_position=-22.2222;sequence_name=ABC123.4;biotype=none;so_term_name=none_gene;curie=TestBase:TestGene;Alias=C3PO,William;Class=CSR,WAGO
+V	Source	Type	50	72	.	+	.	ID=Gene:TestGene2a;Name=TestGene2a;interpolated_map_position=-22.2222;sequence_name=ABC123.4a;biotype=none;so_term_name=none_gene;curie=TestBase:TestGene;Alias=C3PO,William;Class=piRNA,CSR
+V	Source	Type	70	92	.	-	.	ID=Gene:TestGene2b;Name=TestGene2b;interpolated_map_position=-22.2222;sequence_name=ABC123.4b;biotype=none;so_term_name=none_gene;curie=TestBase:TestGene;Alias=C3PO,William;Class=miRNA,piRNA
+V	Source	Type	125	147	.	+	.	ID=Gene:TestGene2c;Name=TestGene2c;interpolated_map_position=-22.2222;sequence_name=ABC123.4c;biotype=none;so_term_name=none_gene;curie=TestBase:TestGene;Alias=C3PO,William;Class=ALG,CSR
+I	Source	Type	20	42	.	-	.	ID=Gene:TestGene3;Name=TestGeneBane3;interpolated_map_position=-22.2222;sequence_name=ABC123.4;biotype=none;so_term_name=none_gene;curie=TestBase:TestGene;Alias=C3PO,William;Class=unknown
+MtDNA	Source	Type	1	18	.	+	.	ID=Gene:TestGene4;Name=TestGeneBane4;interpolated_map_position=-22.2222;sequence_name=ABC123.4;biotype=none;so_term_name=none_gene;curie=TestBase:TestGene;Alias=C3PO,William;Class=CSR,unknown
