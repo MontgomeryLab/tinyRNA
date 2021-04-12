@@ -15,7 +15,9 @@ class FeatureSelector:
     The first round of selection is performed against each candidate feature's attributes.
     The target for this stage is attribute key-value pairs, referred to here as Identities.
     A candidate may match multiple identities. Each match is referred to as a Hit. If more
-    than one Hit is produced, elimination is performed using each Hit rule's hierarchy value.
+    than one Hit is produced, elimination is performed using each Hit's hierarchy/rank value.
+    Hits are tuples for performance reasons, and are of the format:
+        (hierarchy, rule, feature_id)
 
     If more than one hit remains following first round selection, a second round of selection
     is performed against sequence attributes: strand, 5' end nucleotide, and length. Rules for
@@ -84,26 +86,26 @@ class FeatureSelector:
             finalists.add(identity_hits[0])
         # Perform any possible hierarchy-based eliminations
         elif len(identity_hits) > 1:
-            rank_set = {hit[self.rank] for hit in identity_hits}
-            feat_set = {hit[self.feat] for hit in identity_hits}
+            uniq_ranks = {hit[self.rank] for hit in identity_hits}
+            uniq_feats = {hit[self.feat] for hit in identity_hits}
 
             # Scenarios:
-            # 1. len(identity_hits) == len(rank_set) == len(feat_set): unique features and ranks -- covered
-            # 2. len(identity_hits) == len(rank_set) != len(feat_set): unique ranks, 1 or more shared feat -- covered
-            # 3. len(identity_hits) == len(feat_set) != len(rank_set): unique feats, 1 or more shared rank -- covered
-            # 4. len(identity_hits) != len(rank_set) and != len(feat_set): shared feats, shared ranks, different number
-            # 5. len(identity_hits) != len(rank_set) and != len(feat_set): shared feats, shared ranks, same number
+            # 1. len(identity_hits) == len(uniq_ranks) == len(uniq_feats): unique features and ranks -- covered
+            # 2. len(identity_hits) == len(uniq_ranks) != len(uniq_feats): unique ranks, 1 or more shared feat -- covered
+            # 3. len(identity_hits) == len(uniq_feats) != len(uniq_ranks): unique feats, 1 or more shared rank -- covered
+            # 4. len(i_h) != len(u_r) and len(i_h) != len(u_f) and len(u_r) != len(u_f): shared feats, shared ranks, different number
+            # 5. len(i_h) != len(u_r) and len(i_h) != len(u_f) and len(u_r) == len(u_f): shared feats, shared ranks, same number
                 # Scenarios 4 & 5: needs further investigation/testing
 
-            if len(identity_hits) == len(rank_set) == len(feat_set):
+            if len(identity_hits) == len(uniq_ranks) == len(uniq_feats):
                 finalists.add(min(identity_hits, key=lambda x: x[self.rank]))
-            elif len(identity_hits) == len(rank_set) != len(feat_set):
+            elif len(identity_hits) == len(uniq_ranks) != len(uniq_feats):
                 min_feat = min(identity_hits, key=lambda x: x[self.rank])
                 finalists.add(min_feat)
                 finalists.update(hit for hit in identity_hits if hit[self.feat] == min_feat[self.feat])
             else:
                 # Two or more hits share the same hierarchy.
-                min_rank = min(rank_set)
+                min_rank = min(uniq_ranks)
                 finalists.update(hit for hit in identity_hits if hit[self.rank] == min_rank)
 
         ih_unique = {hit[self.feat] for hit in identity_hits}
@@ -202,9 +204,9 @@ class StatsCollector:
             self.feat_counts[hit[self.feat]] += feature_corrected_count
 
         if self.save_intermediate_file:
-            # sequence, cor_counts, strand, start, end, feat1;feat2a/feat2b/feat2c;feat3...
+            # sequence, cor_counts, strand, start, end, feat1;feat2;feat3
             self.alignments.append((aln.read, bundle.cor_counts, aln.iv.strand, aln.iv.start, aln.iv.end,
-                                    ';'.join(map('/'.join, map(lambda x: x[self.feat], hits)))))
+                                    ';'.join(map(lambda x: x[self.feat], hits))))
 
     def finalize_bundle(self, bundle) -> None:
         if bundle.feat_count > 1:
@@ -253,6 +255,7 @@ class StatsCollector:
 
         feat_counts_df = pd.DataFrame.from_dict(self.feat_counts, orient='index').reset_index()
         feat_counts_df['index'] = feat_counts_df['index'].apply(list_and_alias)
+        feat_counts_df[0] = feat_counts_df[0].round(decimals=2)
         feat_counts_df.to_csv(prefix + '_out_feature_counts.txt', sep='\t', index=False, header=False)
 
     def write_nt_len_mat(self, prefix):

@@ -111,12 +111,12 @@ class CounterTests(unittest.TestCase):
         self.assertEqual(expected_return, gff_files)
         self.assertEqual(expected_ruleset, ruleset)
 
-    """DRAFT"""
+    """DRAFT (however, this test works as expected.)"""
     def test_heavy(self):
         sam = "./testdata/counter/identity_choice_test.sam"
         gff = "./testdata/counter/identity_choice_test.gff3"
         rules = [["Alias", "Class", "CSR", "antisense", gff, "1", "all", "all"],
-                 ["ID", "Class", "piRNA", "sense", gff, "2", "all", "all"]]
+                 ["sequence_name", "Class", "piRNA", "sense", gff, "2", "all", "all"]]
 
         csv = self.features_csv(rules)
         cmd = f"counter -i {sam} -c /dev/null -o test".split(" ")
@@ -125,7 +125,25 @@ class CounterTests(unittest.TestCase):
             with patch("sys.argv", cmd):
                 counter.main()
 
+    # The components of each test:
+    #  1. The GFF file to define a feature and its attributes at an interval
+    #  2. The SAM file with a sequence alignment that overlaps a defined feature
+    #  3. A selection rule (features.csv) which selects for attributes of the feature and/or read
 
+    # Todo: consider scenario:
+    #  Two rules define two different ID Attributes, and these rules' GFF files contain some overlap of features
+    #  Is there a risk of rule conflict? No, because aliasing is only performed after all counting/selection is complete
+    #  Prior to writing the feature_counts summary file, the alias is uninvolved
+
+    # Might be observing strange behavior with HTSeq's GenomicArrayOfSets when dereferencing intervals
+    # It looks like partial interval matches are accepted when returning features for that interval
+    # Even if the overlap is by only one base... but only sometimes...
+    # Yeah. Need some tests to define this boundary. Didn't find anything helpful in HTSeq docs
+        # Ex: 2_count=22 for TestGene2b
+
+    # Parser tests:
+    #  Fully read a SAM file, once using HTSeq and once using our custom reader. Then compare each record across RELEVANT
+    #  parameters: sequence***, sequence name, interval
 
 
     def test_ref_tables_(self):

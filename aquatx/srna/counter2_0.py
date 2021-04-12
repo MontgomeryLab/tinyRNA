@@ -114,13 +114,9 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
                 feats[row.iv] += feature_id
                 attrs[feature_id] = [(attr, row.attr[attr]) for attr in attrs_of_interest]
 
-                # If an alias already exists for this feature_id, it will be renamed. Raise a warning.
-                if feature_id in alias and alias[feature_id] != row.attr[preferred_id]:
-                    current = alias[feature_id]
-                    renamed = row.attr[preferred_id]
-                    raise RuntimeWarning(f'Renaming {current} to {renamed} per ID Attribute "{preferred_id}" for {file}.')
                 if preferred_id != "ID":
-                    alias[feature_id] = row.attr[preferred_id]
+                    # Concatenate if an alias is already defined for this feature
+                    alias[feature_id] = alias.get(feature_id, tuple()) + row.attr[preferred_id]
             except KeyError as ke:
                 raise ValueError(f"Feature {row.name} does not contain a {ke} attribute in {file}")
 
@@ -128,9 +124,15 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
     return feats, attrs, alias
 
 
+def get_nt5end(alignment):
+    if alignment.iv.strand == "+":
+        return chr(alignment.read.seq[0])
+    else:
+        complement = {65: 'T', 84: 'A', 71: 'C', 67: 'G'}
+        return complement[alignment.read.seq[-1]]
+
+
 def assign_features(alignment: 'HTSeq.SAM_Alignment') -> Tuple[AssignedFeatures, N_Candidates]:
-    # CIGAR match characters
-    com = ('M', '=', 'X')
 
     feature_set, assignment = set(), set()
 
@@ -140,10 +142,10 @@ def assign_features(alignment: 'HTSeq.SAM_Alignment') -> Tuple[AssignedFeatures,
 
     if len(feature_set):
         strand = alignment.iv.strand
-        nt5end = chr(alignment.read.seq[0])
+        nt5end = get_nt5end(alignment)
         length = len(alignment.read)
         choices, uncounted = selector.choose(feature_set, strand, nt5end, length)
-        assignment |= choices
+        assignment = choices
     else:
         # uncounted.add("Empty")
         pass
