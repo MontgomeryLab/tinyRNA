@@ -2,6 +2,7 @@ import unittest
 import HTSeq
 
 from aquatx.srna.hts_parsing import *
+from aquatx.srna.counter2_0 import get_nt_5end
 
 
 class MyTestCase(unittest.TestCase):
@@ -34,6 +35,26 @@ class MyTestCase(unittest.TestCase):
         self.assertEqual(aln.read.seq, seq)
         self.assertEqual(aln.read.name, name)
         self.assertEqual(aln.read.len, len(seq))
+
+    """Does our custom SAM parser produce the same pertinent info as HTSeq's BAM_reader?
+    
+    A note on SAM files: reads are always stored 5' to 3', so antisense reads are actually
+    recorded in reverse complement. HTSeq automatically performs this conversion, but we
+    are only really concerned about a sequence's 5' end NT, so we perform this conversion
+    more surgically via get_nt_5end() for efficiency.
+    """
+
+    def test_sam_parser_comparison(self):
+        file = "./run_directory/Lib304_test_aligned_seqs.sam"
+        ours = read_SAM(file)
+        theirs = HTSeq.BAM_Reader(file)
+
+        for our, their in zip(ours, theirs):
+            self.assertEqual(our.iv, their.iv)
+            self.assertEqual(our.iv.strand, their.iv.strand)
+            self.assertEqual(get_nt_5end(our), chr(their.read.seq[0]))  # See note above
+            self.assertEqual(our.read.name, their.read.name)
+            self.assertEqual(len(our.read), len(their.read))
 
 if __name__ == '__main__':
     unittest.main()

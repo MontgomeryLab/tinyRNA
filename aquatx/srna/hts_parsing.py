@@ -3,6 +3,7 @@ import sys
 import re
 
 # For parse_GFF_attribute_string()
+# Todo: I believe _re_attr_main may fail if user GFFs have escape characters, which are valid per GFF3 specification
 _re_attr_main = re.compile(r"\s*([^\s=]+)[\s=]+(.*)")
 _re_attr_empty = re.compile(r"^\s*$")
 
@@ -56,8 +57,10 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
 
     This is a slight modification of the same method found in HTSeq.features.
     It has been adapted to allow features to have multiple classes, which are
-    split and stored as a tuple rather than a comma separated string. This
-    should save some CPU time down the road.
+    split and stored as a tuple rather than a comma separated string. For
+    downstream compatibility with membership operations
+    (e.g. (attr_key, attr_val) in feature_candidate), non-list attribute values
+    are recorded as tuples.
 
     If 'extra_return_first_value' is set, a pair is returned: the dictionary
     and the value of the first attribute. This might be useful if this is the
@@ -75,12 +78,12 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
         mo = _re_attr_main.match(attr)
         if not mo:
             raise ValueError("Failure parsing GFF attribute line")
-        idt = mo.group(1)
+        key = mo.group(1)
         val = mo.group(2)
         if val.startswith('"') and val.endswith('"'):
             val = val[1:-1]
         # Modification: allow for comma separated attribute values
-        attribute_dict[sys.intern(idt)] = (sys.intern(val),) \
+        attribute_dict[sys.intern(key)] = (sys.intern(val),) \
             if ',' not in val \
             else tuple(c.strip() for c in val.split(','))
         if extra_return_first_value and i == 0:

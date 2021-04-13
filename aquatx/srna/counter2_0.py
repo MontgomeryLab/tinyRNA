@@ -124,7 +124,7 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
     return feats, attrs, alias
 
 
-def get_nt5end(alignment):
+def get_nt_5end(alignment):
     if alignment.iv.strand == "+":
         return chr(alignment.read.seq[0])
     else:
@@ -142,7 +142,7 @@ def assign_features(alignment: 'HTSeq.SAM_Alignment') -> Tuple[AssignedFeatures,
 
     if len(feature_set):
         strand = alignment.iv.strand
-        nt5end = get_nt5end(alignment)
+        nt5end = get_nt_5end(alignment)
         length = len(alignment.read)
         choices, uncounted = selector.choose(feature_set, strand, nt5end, length)
         assignment = choices
@@ -188,7 +188,7 @@ def map_and_reduce(sam_files, work_args, ret_queue):
         with mp.Pool(len(sam_files)) as pool:
             pool.starmap(count_reads, work_args)
     else:
-        count_reads(*work_args[0])
+        count_reads(*work_args.pop())
 
     # Collect counts from all pool workers and merge
     merged_counts = StatsCollector()

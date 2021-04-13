@@ -7,6 +7,7 @@ import HTSeq
 import aquatx.srna.counter2_0 as counter
 
 class CounterTests(unittest.TestCase):
+
     @classmethod
     def setUpClass(self):
         # Simply for convenience for loading files during setup
@@ -14,9 +15,11 @@ class CounterTests(unittest.TestCase):
             with open(file, mode) as f:
                 return f.read()
 
+        self.gff_file = "./testdata/counter/identity_choice_test.gff3"
         self.short_gff_file = "./testdata/counter/short.gff3"
         self.short_gff = read(self.short_gff_file)
 
+        self.sam_file = "./testdata/counter/identity_choice_test.sam"
         self.short_sam_file = "./testdata/counter/short.sam"
         self.short_sam = read(self.short_sam_file)
 
@@ -85,11 +88,11 @@ class CounterTests(unittest.TestCase):
             ruleset, gff_files = counter.load_config('/dev/null')
 
         r = self.csv_row_dict
-        expected_return = {(r['gff'], r['id_attr'])}
+        expected_gff_ret = {(r['gff'], r['id_attr'])}
         expected_ruleset = [{'Strand': self.strand[r['strand']], 'Hierarchy': int(r['rank']), '5pnt': r['nt'].strip('"'),
                              'Length': r['length'], 'Identity': (r['at_key'], r['at_val'])}]
 
-        self.assertEqual(expected_return, gff_files)
+        self.assertEqual(expected_gff_ret, gff_files)
         self.assertEqual(expected_ruleset, ruleset)
 
     """Does load_config correctly handle duplicate rules? Only one rule should be returned (no duplicates)."""
@@ -97,64 +100,78 @@ class CounterTests(unittest.TestCase):
     def test_load_config_duplicate_rules(self):
         # Features CSV with two duplicate rules/rows
         row = self.csv_row_dict.values()
-        csv = self.features_csv([row, row])
+        csv = self.features_csv([row, row])  # Duplicate rows
         
         with patch('aquatx.srna.counter2_0.open', mock_open(read_data=csv)):
             ruleset, gff_files = counter.load_config('/dev/null')
 
         r = self.csv_row_dict
-        expected_return = {(r['gff'], r['id_attr'])}
+        expected_gff_ret = {(r['gff'], r['id_attr'])}
         expected_ruleset = [
             {'Strand': self.strand[r['strand']], 'Hierarchy': int(r['rank']), '5pnt': r['nt'].strip('"'),
              'Length': r['length'], 'Identity': (r['at_key'], r['at_val'])}]
 
-        self.assertEqual(expected_return, gff_files)
+        self.assertEqual(expected_gff_ret, gff_files)
         self.assertEqual(expected_ruleset, ruleset)
 
     """DRAFT (however, this test works as expected.)"""
-    def test_heavy(self):
-        sam = "./testdata/counter/identity_choice_test.sam"
-        gff = "./testdata/counter/identity_choice_test.gff3"
-        rules = [["Alias", "Class", "CSR", "antisense", gff, "1", "all", "all"],
-                 ["sequence_name", "Class", "piRNA", "sense", gff, "2", "all", "all"]]
-
-        csv = self.features_csv(rules)
-        cmd = f"counter -i {sam} -c /dev/null -o test".split(" ")
-
-        with patch("aquatx.srna.counter2_0.open", mock_open(read_data=csv)):
-            with patch("sys.argv", cmd):
-                counter.main()
 
     # The components of each test:
     #  1. The GFF file to define a feature and its attributes at an interval
     #  2. The SAM file with a sequence alignment that overlaps a defined feature
     #  3. A selection rule (features.csv) which selects for attributes of the feature and/or read
 
-    # Todo: consider scenario:
-    #  Two rules define two different ID Attributes, and these rules' GFF files contain some overlap of features
-    #  Is there a risk of rule conflict? No, because aliasing is only performed after all counting/selection is complete
-    #  Prior to writing the feature_counts summary file, the alias is uninvolved
+    def test_counter_main(self):
+        rules = [["Alias", "Class", "CSR", "antisense", self.gff_file, "1", "all", "all"],
+                 ["sequence_name", "Class", "piRNA", "sense", self.gff_file, "2", "all", "all"]]
 
-    # Might be observing strange behavior with HTSeq's GenomicArrayOfSets when dereferencing intervals
-    # It looks like partial interval matches are accepted when returning features for that interval
-    # Even if the overlap is by only one base... but only sometimes...
-    # Yeah. Need some tests to define this boundary. Didn't find anything helpful in HTSeq docs
-        # Ex: 2_count=22 for TestGene2b
+        csv = self.features_csv(rules)
+        cmd = f"counter -i {self.sam_file} -c /dev/null -o test".split(" ")
 
-    # Parser tests:
-    #  Fully read a SAM file, once using HTSeq and once using our custom reader. Then compare each record across RELEVANT
-    #  parameters: sequence***, sequence name, interval
+        with patch("aquatx.srna.counter2_0.open", mock_open(read_data=csv)):
+            with patch("sys.argv", cmd):
+                counter.main()
 
+    """Do GenomicArraysOfSets slice to step intervals that overlap, even if by just one base?"""
 
-    def test_ref_tables_(self):
-        pass
+    def test_HTSeq_iv_slice(self):
+        gas = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+        iva = HTSeq.GenomicInterval("I", 1, 10, "+")
+        ivb = HTSeq.GenomicInterval("I", 5, 15, "+")
+        ivc = HTSeq.GenomicInterval("I", 9, 20, "+")
+        gas[iva] += "TestA"
+        gas[ivb] += "TestB"
 
-    def test_BAM_reader(self):
-        samfile = "./testdata/counter/short.sam"
-        read = HTSeq.BAM_Reader(samfile)
+        """
+        iva: 1 |---TestA--| 10
+        ivb:     5 |---TestB--| 15
+        ivc:           9 |-----------| 20
+                          ^ Single base overlap: iva ∩ ivc
+        Expect:    |{A,B} |{B}|  {}  |
+        """
 
-        for rec in read:
-            print(rec)
+        matches = list(gas[ivc].array[ivc.start:ivc.end].get_steps(values_only=True))
+        self.assertEqual(matches, [{"TestA", "TestB"}, {"TestB"}, set()])
+
+    """Does build_reference_tables return the expected features, attributes, and alias for a single record GFF?"""
+
+    def test_ref_tables_single_feature(self):
+        feature_source = {(self.short_gff_file, "sequence_name")}
+        iv = HTSeq.GenomicInterval("I", 3746, 3908, "-")
+        selection_rules = [
+            {'Strand': "antisense", 'Hierarchy': 1, '5pnt': "all", 'Length': "all", 'Identity': ("Class", "CSR")},
+            {'Strand': "sense", 'Hierarchy': 2, '5pnt': "all", 'Length': "all", 'Identity': ("biotype", "snoRNA")}
+        ]
+
+        feats, attrs, alias = counter.build_reference_tables(feature_source, selection_rules)
+        steps = list(feats[iv].array[iv.start:iv.end].get_steps(values_only=True))
+
+        self.assertEqual((type(feats), type(attrs), type(alias)), (HTSeq.GenomicArrayOfSets, dict, dict))
+        self.assertEqual(steps, [{("Gene:WBGene00023193", )}])
+        self.assertEqual(attrs, {('Gene:WBGene00023193',): [('Class', ('unknown', 'additional_class')), ('biotype', ('snoRNA',))]})
+        self.assertEqual(alias, {"Gene:WBGene00023193": ("Y74C9A.6")})
+
+    # Todo: write factory functions for in-memory GFF and SAM file testing rather than tons of resource files
 
 
 if __name__ == '__main__':
