@@ -9,11 +9,14 @@ _re_attr_empty = re.compile(r"^\s*$")
 
 
 class Alignment:
+    complement = {ord('A'): 'T', ord('T'): 'A', ord('G'): 'C', ord('C'): 'G'}
+
     class Sequence:
-        def __init__(self, name, seq):
+        def __init__(self, name, seq, nt5):
             self.name = name
-            self.seq = seq
             self.len = len(seq)
+            self.seq = seq
+            self.nt5 = nt5
 
         def __repr__(self):
             return f"{self.name}, {self.seq}, {self.len}"
@@ -22,8 +25,9 @@ class Alignment:
             return self.len
 
     def __init__(self, iv, name, seq):
+        nt5 = self.complement[seq[-1]] if iv.strand == '-' else chr(seq[0])
+        self.read = self.Sequence(name, seq, nt5)
         self.iv = iv
-        self.read = self.Sequence(name, seq)
 
     def __repr__(self):
         return f"{self.read}, {self.iv}"

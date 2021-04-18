@@ -10,7 +10,7 @@ class FeatureSelector:
     """Performs hierarchical selection given a set of candidate features for a locus
 
     Two sources of data serve as targets for selection: feature attributes (sourced from
-    input GFF files), and sequence attributes (sourced from in input SAM files).
+    input GFF files), and sequence attributes (sourced from input SAM files).
 
     The first round of selection is performed against each candidate feature's attributes.
     The target for this stage is attribute key-value pairs, referred to here as Identities.
@@ -32,7 +32,7 @@ class FeatureSelector:
         #  we can specify filter type in the input rules list such that feature selection
         #  is no longer bound to this specific interest set.
         #  This will improve the project's maintainability.
-        self.interest = ('Identity', 'Strand', '5pnt', 'Length')
+        self.interest = ('Identity', 'Strand', 'nt5', 'Length')
         self.rules_table = sorted(rules, key=lambda x: x['Hierarchy'])
         self.attributes = reference_table
         self.build_filters()
@@ -45,14 +45,18 @@ class FeatureSelector:
             inverted_identities[rule['Identity']].append(i)
         self.inv_ident = dict(inverted_identities)
 
-    def choose(self, feat_set, strand, endnt, length) -> Tuple[set, set]:
+    def choose(self, feat_set, alignment) -> Tuple[set, set]:
         # Perform an efficient first-round
-        finalists, uncounted = self.choose_identities(feat_set)
+        finalists, uncounted = self.choose_identities(feat_set, alignment.iv)
         if not finalists: return finalists, uncounted
 
-        # Strand, 5pnt, and Length filtering uses simpler logic
+        strand = alignment.iv.strand
+        nt5end = alignment.read.nt5
+        length = len(alignment.read)
+
+        # Strand, nt5, and Length filtering uses simpler logic
         choices, eliminated = set(), set()
-        for step, read in zip(self.interest[1:], (strand, endnt, length)):
+        for step, read in zip(self.interest[1:], (strand, nt5end, length)):
             for hit in finalists:
                 if read not in self.rules_table[hit[self.rule]][step]:
                     eliminated.add(hit)
@@ -67,7 +71,7 @@ class FeatureSelector:
         choices.update(finalists)
         return choices, uncounted
 
-    def choose_identities(self, feats_set):
+    def choose_identities(self, feats_set, iv):
         """Performs the initial selection using identity rules (attribute key, value)"""
 
         finalists, uncounted = set(), set()
@@ -75,10 +79,17 @@ class FeatureSelector:
         # For each feature, match across all identity interests
         identity_hits = [(self.rules_table[rule]['Hierarchy'], rule, feat)
                          for feat in feats_set
-                         for attr_key, av in self.attributes[feat]
+                         for attr_key, av in self.attributes[feat[2]]
                          for attr_val in av
                          for rule in self.inv_ident.get((attr_key, attr_val), ())
                          if (attr_key, attr_val) in self.inv_ident]
+        # -> [(hierarchy, rule, (start, end, feature)), ...]
+
+        # Only accept perfect interval matches for rules requiring such
+        identity_hits = [hit for hit in identity_hits
+                         if (self.rules_table[hit[self.rule]]["Strict"]
+                         and hit[self.feat][0] >= iv.start and hit[self.feat][1] <= iv.end)
+                         or not self.rules_table[hit[self.rule]]["Strict"]]
         # -> [(hierarchy, rule, feature), ...]
 
         # Only one feature matched only one rule
@@ -131,7 +142,7 @@ class FeatureSelector:
                 return True
 
         def nt_filter() -> Tuple:
-            rule = row["5pnt"].split(',')
+            rule = row["nt5"].split(',')
             return tuple(map(lambda x: x.strip().upper(), rule))
 
         def numerical_filter() -> FrozenSet[int]:
@@ -146,7 +157,7 @@ class FeatureSelector:
 
             return frozenset(lengths)
 
-        filters = [("5pnt", nt_filter), ("Length", numerical_filter)]
+        filters = [("nt5", nt_filter), ("Length", numerical_filter)]
         for row in self.rules_table:
             for step, filt in filters:
                 if not wildcard(step):
@@ -188,7 +199,7 @@ class StatsCollector:
         bundle_seq = bundle_read.seq
 
         # fill in 5p nt/length matrix
-        self.nt_len_mat[chr(bundle_seq[0])][len(bundle_seq)] += dup_counts
+        self.nt_len_mat[bundle_read.nt5][len(bundle_seq)] += dup_counts
 
         self.stats_counts['_aligned_reads'] += dup_counts
         self.stats_counts['_unique_sequences_aligned'] += 1
@@ -203,6 +214,8 @@ class StatsCollector:
             if hit[self.feat] not in self.feat_counts: bundle.feat_count += 1
             self.feat_counts[hit[self.feat]] += feature_corrected_count
 
+        # Todo: this will record antisense sequences as reverse complement
+        #  Do we need intermediate files? Is it worth converting?
         if self.save_intermediate_file:
             # sequence, cor_counts, strand, start, end, feat1;feat2;feat3
             self.alignments.append((aln.read, bundle.cor_counts, aln.iv.strand, aln.iv.start, aln.iv.end,

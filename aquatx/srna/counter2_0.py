@@ -57,21 +57,21 @@ def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
         gff_files: a set of unique GFF files and associated ID attribute preferences
     """
 
-    # Todo: consider how to handle case where the same GFF file has multiple rule entries
-    #  but with different ID attributes...
     gff_files, rules = set(), list()
     convert_strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
 
     with open(features_csv, 'r', encoding='utf-8-sig') as f:
-        fieldnames = ("ID", "Key", "Value", "Strand", "Source", "Hierarchy", "5pnt", "Length")
+        fieldnames = ("ID", "Key", "Value", "Hierarchy", "Strand", "nt5", "Length", "Strict", "Source")
         csv_reader = csv.DictReader(f, fieldnames=fieldnames, delimiter=',')
 
         next(csv_reader)  # Skip header line
         for row in csv_reader:
-            rule = {col: row[col] for col in ["Strand", "Hierarchy", "5pnt", "Length"]}
-            rule['Strand'] = convert_strand[rule['Strand'].lower()]
-            rule['Identity'] = (row['Key'], row['Value'])
-            rule['Hierarchy'] = int(rule['Hierarchy'])
+            rule = {col: row[col] for col in ["Strand", "Hierarchy", "nt5", "Length", "Strict"]}
+            rule['5pnt'] = rule['nt5'].upper().translate({'U': 'T'})  # Convert RNA base to cDNA base
+            rule['Strand'] = convert_strand[rule['Strand'].lower()]    # Convert sense/antisense to +/-
+            rule['Identity'] = (row['Key'], row['Value'])              # Create identity tuple
+            rule['Hierarchy'] = int(rule['Hierarchy'])                 # Convert hierarchy to number
+            rule['Strict'] = rule['Strict'] == 'Full'                  # Convert strict intersection to boolean
 
             # Duplicate rule entries are not allowed
             if rule not in rules: rules.append(rule)
@@ -112,11 +112,16 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
 
                 feature_id = row.attr["ID"]
                 feats[row.iv] += feature_id
-                attrs[feature_id] = [(attr, row.attr[attr]) for attr in attrs_of_interest]
+                feat_attrs = [(attr, row.attr[attr]) for attr in attrs_of_interest]
+                if feature_id in attrs and attrs[feature_id] != feat_attrs:
+                    # Concatenate across attrs_of_interest
+                    for attr in attrs_of_interest:
+                        attrs[feature_id] = attrs.get(feature_id, ()) + (attr, row.attr[attr])
+                attrs[feature_id] = feat_attrs
 
                 if preferred_id != "ID":
                     # Concatenate if an alias is already defined for this feature
-                    alias[feature_id] = alias.get(feature_id, tuple()) + row.attr[preferred_id]
+                    alias[feature_id] = alias.get(feature_id, ()) + row.attr[preferred_id]
             except KeyError as ke:
                 raise ValueError(f"Feature {row.name} does not contain a {ke} attribute in {file}")
 
@@ -124,38 +129,28 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
     return feats, attrs, alias
 
 
-def get_nt_5end(alignment):
-    if alignment.iv.strand == "+":
-        return chr(alignment.read.seq[0])
-    else:
-        complement = {65: 'T', 84: 'A', 71: 'C', 67: 'G'}
-        return complement[alignment.read.seq[-1]]
-
-
 def assign_features(alignment: 'HTSeq.SAM_Alignment') -> Tuple[AssignedFeatures, N_Candidates]:
 
     feature_set, assignment = set(), set()
-
     iv = alignment.iv
-    for fs2 in features[iv].array[iv.start:iv.end].get_steps(values_only=True):  # Not as pretty, but much faster!
-        feature_set |= fs2
+
+    for fs_tuple in (features.chrom_vectors[iv.chrom][iv.strand]  # GenomicArrayOfSets -> ChromVector
+                             .array[iv.start:iv.end]              # ChromVector -> StepVector
+                             .get_steps(merge_steps=True)):       # StepVector -> (iv_start, iv_end, {features})
+
+        feature_set.add(fs_tuple)
 
     if len(feature_set):
-        strand = alignment.iv.strand
-        nt5end = get_nt_5end(alignment)
-        length = len(alignment.read)
-        choices, uncounted = selector.choose(feature_set, strand, nt5end, length)
-        assignment = choices
-    else:
-        # uncounted.add("Empty")
-        pass
+        assignment, uncounted = selector.choose(feature_set, alignment)
 
     return assignment, len(feature_set)
 
 
 def count_reads(sam_file: str, return_queue: mp.Queue, intermediate_file: bool = False, out_prefix: str = None):
 
-    # Change the following line to HTSeq.BAM_Reader(sam_file) for complete SAM records (slower)
+    # For complete SAM records (slower):
+    # 1. Change the following line to HTSeq.BAM_Reader(sam_file)
+    # 2. Change assign_features to always source nt5end from chr(alignment.read.seq[0])
     read_seq = read_SAM(sam_file)
     stats = StatsCollector(out_prefix, intermediate_file)
 

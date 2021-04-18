@@ -29,7 +29,7 @@ class CounterTests(unittest.TestCase):
         self.csv_row_dict = {'id_attr': "Alias", "at_key": "Class", "at_val": "CSR", 'strand': "antisense",
                              'gff': "./testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3", 'rank': "1",
                              'nt': '"C,G,U"', "length": "all"}
-
+        # Todo: update all CSV references per new columns
 
 
     # === HELPERS ===
@@ -78,7 +78,7 @@ class CounterTests(unittest.TestCase):
         self.assertEqual(len(attr['Class']), 2)
 
     """Does load_config correctly parse a single-entry features.csv config file?"""
-
+    # Todo: test if uracil is correctly converted to thymine for handling cDNA input
     def test_load_config_single(self):
         # Features CSV with a single rule/row
         row = self.csv_row_dict.values()
@@ -143,15 +143,23 @@ class CounterTests(unittest.TestCase):
         gas[ivb] += "TestB"
 
         """
-        iva: 1 |---TestA--| 10
-        ivb:     5 |---TestB--| 15
-        ivc:           9 |-----------| 20
-                          ^ Single base overlap: iva ∩ ivc
-        Expect:    |{A,B} |{B}|  {}  |
+        iva:  1 |--TestA--| 10
+        ivb:      5 |---TestB--| 15
+        ivc:          9 |-----------| 20
+                         ^ Single base overlap: iva ∩ ivc
+        Expect:       9 |-|{B}-|-{}-| 20
+                     [9, 10)   [15,20)
+                         ^ {A ∩ B}
         """
 
         matches = list(gas[ivc].array[ivc.start:ivc.end].get_steps(values_only=True))
+        matches_with_cooridnates = list(gas[ivc].steps())
         self.assertEqual(matches, [{"TestA", "TestB"}, {"TestB"}, set()])
+        self.assertEqual(matches_with_cooridnates[0][0], HTSeq.GenomicInterval("I", 9,10,'+'))
+        self.assertEqual(matches_with_cooridnates[1][0], HTSeq.GenomicInterval("I", 10,15,'+'))
+        self.assertEqual(matches_with_cooridnates[2][0], HTSeq.GenomicInterval("I", 15,20,'+'))
+        gas.write_bedgraph_file("bgraph_test_sense.wig", "+")
+
 
     """Does build_reference_tables return the expected features, attributes, and alias for a single record GFF?"""
 
@@ -159,17 +167,24 @@ class CounterTests(unittest.TestCase):
         feature_source = {(self.short_gff_file, "sequence_name")}
         iv = HTSeq.GenomicInterval("I", 3746, 3908, "-")
         selection_rules = [
-            {'Strand': "antisense", 'Hierarchy': 1, '5pnt': "all", 'Length': "all", 'Identity': ("Class", "CSR")},
-            {'Strand': "sense", 'Hierarchy': 2, '5pnt': "all", 'Length': "all", 'Identity': ("biotype", "snoRNA")}
+            {'Identity': ("Class", "CSR"), 'Strand': "antisense", 'Hierarchy': 1, '5pnt': "all", 'Length': "all"},
+            {'Identity': ("biotype", "snoRNA"), 'Strand': "sense", 'Hierarchy': 2, '5pnt': "all", 'Length': "all"}
         ]
 
         feats, attrs, alias = counter.build_reference_tables(feature_source, selection_rules)
         steps = list(feats[iv].array[iv.start:iv.end].get_steps(values_only=True))
 
         self.assertEqual((type(feats), type(attrs), type(alias)), (HTSeq.GenomicArrayOfSets, dict, dict))
-        self.assertEqual(steps, [{("Gene:WBGene00023193", )}])
+        self.assertEqual(steps, [{("Gene:WBGene00023193",)}])
         self.assertEqual(attrs, {('Gene:WBGene00023193',): [('Class', ('unknown', 'additional_class')), ('biotype', ('snoRNA',))]})
-        self.assertEqual(alias, {"Gene:WBGene00023193": ("Y74C9A.6")})
+        self.assertEqual(alias, {("Gene:WBGene00023193",): ("Y74C9A.6",)})
+
+    """Does build_reference_tables throw a key error when an Identity rule or ID Attribute refers to a missing attribute?"""
+
+    def test_ref_tables_missing_attribute(self):
+        feature_source = {(self.short_gff_file, "bad_ID_attribute")}
+        selection_rules = []
+
 
     # Todo: write factory functions for in-memory GFF and SAM file testing rather than tons of resource files
 
