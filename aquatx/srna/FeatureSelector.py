@@ -26,15 +26,16 @@ class FeatureSelector:
     """
 
     rank, rule, feat = 0, 1, 2
+    attributes = {}
 
     def __init__(self, rules: List[dict], reference_table: Dict):
         # Todo: now that filters are type-specific rather than column specific,
         #  we can specify filter type in the input rules list such that feature selection
         #  is no longer bound to this specific interest set.
         #  This will improve the project's maintainability.
+        FeatureSelector.attributes = reference_table
         self.interest = ('Identity', 'Strand', 'nt5', 'Length')
         self.rules_table = sorted(rules, key=lambda x: x['Hierarchy'])
-        self.attributes = reference_table
         self.build_filters()
 
         # Inverted ident rules: (Attrib Key, Attrib Val) as key, [rule matches] as val
@@ -71,25 +72,29 @@ class FeatureSelector:
         choices.update(finalists)
         return choices, uncounted
 
-    def choose_identities(self, feats_set, iv):
+    # Todo: this is called n times if feat_iv has n features associated with it
+    #  when really each feat_iv needs only one verification. Not yet sure if this is possible from within list comp
+    def is_appropriate_overlap(self, rule, feat_iv, iv):
+        # Only accept perfect interval matches for rules requiring such
+        if self.rules_table[rule]["Strict"]:
+            return feat_iv[0] >= iv.start and feat_iv[1] <= iv.end
+        else:
+            return True
+
+    def choose_identities(self, feats_set, aln_iv):
         """Performs the initial selection using identity rules (attribute key, value)"""
 
         finalists, uncounted = set(), set()
 
         # For each feature, match across all identity interests
         identity_hits = [(self.rules_table[rule]['Hierarchy'], rule, feat)
-                         for feat in feats_set
-                         for attr_key, av in self.attributes[feat[2]]
+                         for feat_iv in feats_set
+                         for feat in feat_iv[2]
+                         for attr_key, av in FeatureSelector.attributes[feat]
                          for attr_val in av
                          for rule in self.inv_ident.get((attr_key, attr_val), ())
-                         if (attr_key, attr_val) in self.inv_ident]
-        # -> [(hierarchy, rule, (start, end, feature)), ...]
-
-        # Only accept perfect interval matches for rules requiring such
-        identity_hits = [hit for hit in identity_hits
-                         if (self.rules_table[hit[self.rule]]["Strict"]
-                         and hit[self.feat][0] >= iv.start and hit[self.feat][1] <= iv.end)
-                         or not self.rules_table[hit[self.rule]]["Strict"]]
+                         if (attr_key, attr_val) in self.inv_ident
+                         and self.is_appropriate_overlap(rule, feat_iv, aln_iv)]
         # -> [(hierarchy, rule, feature), ...]
 
         # Only one feature matched only one rule
@@ -178,14 +183,16 @@ class StatsCollector:
 
     rank, rule, feat = FeatureSelector.get_hit_indexes()
 
-    def __init__(self, out_prefix: str = None, save_intermediate_file: bool = False):
+    def __init__(self, lib_name: str, out_prefix: str = None, save_intermediate_file: bool = False):
         self.feat_counts = Counter()
         self.nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
         self.stats_counts = {stat: 0 for stat in
                         ['_aligned_reads', '_aligned_reads_unique_mapping', '_aligned_reads_multi_mapping',
                          '_unique_sequences_aligned', '_reads_unique_features', '_alignments_unique_features',
                          '_ambiguous_alignments_features', '_ambiguous_reads_features', '_no_feature']}
+        self.feat_counts_df = pd.DataFrame(index=FeatureSelector.attributes.keys())
         self.save_intermediate_file = save_intermediate_file
+        self.library_name = lib_name
         self.out_prefix = out_prefix
         self.alignments = []
 
@@ -229,8 +236,8 @@ class StatsCollector:
             self.stats_counts['_alignments_unique_features'] += 1
             self.stats_counts['_reads_unique_features'] += 1
 
-    def write_intermediate_file(self, prefix):
-        with open(f"{self.out_prefix}_{prefix}_out_aln_table.txt", 'w') as imf:
+    def write_intermediate_file(self):
+        with open(f"{self.out_prefix}_{self.library_name}_out_aln_table.txt", 'w') as imf:
             imf.writelines(
                 # sequence, cor_counts, strand, start, end, feat1a/feat1b;feat2;...
                 map(lambda rec: "%s\t%f\t%c\t%d\t%d\t%s\n" % rec, self.alignments)
@@ -248,28 +255,31 @@ class StatsCollector:
             out.writelines("%s\t%d\n" % (key, val) for key, val in self.stats_counts.items())
 
     def write_feat_counts(self, alias, prefix):
-        """Writes selected features and their associated counts to `prefix`_out_feature_counts.txt
+        """Writes selected features and their associated counts to `prefix`_out_feature_counts.csv
+
+        The resulting table will have the following columns:
+            - Feature ID: the "ID" attribute of the
 
         If a features.csv rule defined an ID Attribute other than "ID", then the associated features will
-        be aliased to their corresponding ID Attribute value and the feature's true "ID" will be indicated
-        next to it in parentheses. If an aliased or unaliased feature identifier is of list type, then the
-        list of names will be joined on forward slash.
+        be aliased to their corresponding ID Attribute value and displayed in the Feature Name column, and
+        the feature's true "ID" will be indicated in the Feature ID column. If multiple aliases exist for
+        a feature then they will be joined by ", " in the Feature Name column.
 
         For example, if the rule contained an ID Attribute which aliases gene1 to abc123,def456,123.456,
         then the feature column of the output file for this feature will read:
-            abc123/def456/123.456 (gene1)
+            abc123, def456, 123.456 	gene1
         """
 
-        def list_and_alias(feat):
-            if feat in alias:
-                return '/'.join(alias[feat]) + f" ({feat[0]})"
-            else:
-                return '/'.join(feat)
+        # Round all counts columns to 2 decimal places
+        summary = self.feat_counts_df.round(decimals=2)
+        # Rearrange columns in sorted order, where each column represents a library/worker counting result
+        summary = summary.reindex(sorted(summary.columns), axis="columns")
+        # Add Feature Name column, which is the feature alias (default is Feature ID if no alias exists)
+        summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(alias.get(feat, feat))))
+        # Sort by index, make index its own column, and rename it to Feature ID
+        summary = summary.sort_index().reset_index().rename(columns={"index": "Feature ID"})
 
-        feat_counts_df = pd.DataFrame.from_dict(self.feat_counts, orient='index').reset_index()
-        feat_counts_df['index'] = feat_counts_df['index'].apply(list_and_alias)
-        feat_counts_df[0] = feat_counts_df[0].round(decimals=2)
-        feat_counts_df.to_csv(prefix + '_out_feature_counts.txt', sep='\t', index=False, header=False)
+        summary.to_csv(prefix + '_out_feature_counts.csv', sep='\t', index=False)
 
     def write_nt_len_mat(self, prefix):
         pd.DataFrame(self.nt_len_mat).to_csv(prefix + '_out_nt_len_dist.csv')
@@ -279,7 +289,9 @@ class StatsCollector:
         return self.feat_counts, self.stats_counts, self.nt_len_mat
 
     def merge(self, other: 'StatsCollector'):
-        self.feat_counts.update(other.feat_counts)
+        # Add incoming feature counts as a new column of the data frame
+        # Since other.feat_counts is a Counter object, unrecorded features default to 0 on lookup
+        self.feat_counts_df[f"{other.library_name}"] = self.feat_counts_df.index.map(other.feat_counts)
 
         for stat, count in other.stats_counts.items():
             self.stats_counts[stat] += count

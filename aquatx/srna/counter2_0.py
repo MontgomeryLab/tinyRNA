@@ -24,10 +24,12 @@ AssignedFeatures = set
 N_Candidates = int
 Alias = dict
 
-
+# Todo: better way of handling Library titles. Filename or Report Title from run config?
+#  input-file + out prefix combo? "-i Lib303.sam N2_rep_1, Lib311.sam mut-16(pk710)"
+#  just pass in samples.csv? "-i samples.csv" however filenames will have changed by pipeline...
 def get_args():
     """
-    Get input arguments from the user/command liobjectne.
+    Get input arguments from the user/command line.
 
     Requires the user provide a SAM file, a GFF file, and an output
     prefix to save output tables and plots using.
@@ -68,10 +70,10 @@ def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
         for row in csv_reader:
             rule = {col: row[col] for col in ["Strand", "Hierarchy", "nt5", "Length", "Strict"]}
             rule['5pnt'] = rule['nt5'].upper().translate({'U': 'T'})  # Convert RNA base to cDNA base
-            rule['Strand'] = convert_strand[rule['Strand'].lower()]    # Convert sense/antisense to +/-
-            rule['Identity'] = (row['Key'], row['Value'])              # Create identity tuple
-            rule['Hierarchy'] = int(rule['Hierarchy'])                 # Convert hierarchy to number
-            rule['Strict'] = rule['Strict'] == 'Full'                  # Convert strict intersection to boolean
+            rule['Strand'] = convert_strand[rule['Strand'].lower()]   # Convert sense/antisense to +/-
+            rule['Identity'] = (row['Key'], row['Value'])             # Create identity tuple
+            rule['Hierarchy'] = int(rule['Hierarchy'])                # Convert hierarchy to number
+            rule['Strict'] = rule['Strict'] == 'Full'                 # Convert strict intersection to boolean
 
             # Duplicate rule entries are not allowed
             if rule not in rules: rules.append(rule)
@@ -106,24 +108,29 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
     for file, preferred_id in gff_files:
         gff = HTSeq.GFF_Reader(file)
         for row in gff:
-            try:
-                if row.iv.strand == ".":
-                    raise ValueError(f"Feature {row.name} at {row.iv} in {row.file} has no strand information.")
+            if row.iv.strand == ".":
+                raise ValueError(f"Feature {row.name} at {row.iv} in {row.file} has no strand information.")
 
-                feature_id = row.attr["ID"]
+            try:
+                # Add feature_id -> feature_interval record
+                feature_id = row.attr["ID"][0]
                 feats[row.iv] += feature_id
-                feat_attrs = [(attr, row.attr[attr]) for attr in attrs_of_interest]
-                if feature_id in attrs and attrs[feature_id] != feat_attrs:
-                    # Concatenate across attrs_of_interest
-                    for attr in attrs_of_interest:
-                        attrs[feature_id] = attrs.get(feature_id, ()) + (attr, row.attr[attr])
-                attrs[feature_id] = feat_attrs
+                row_feat_attrs = [(interest, row.attr[interest]) for interest in attrs_of_interest]
 
                 if preferred_id != "ID":
-                    # Concatenate if an alias is already defined for this feature
+                    # If an alias already exists for this feature, append to feature's aliases
                     alias[feature_id] = alias.get(feature_id, ()) + row.attr[preferred_id]
             except KeyError as ke:
                 raise ValueError(f"Feature {row.name} does not contain a {ke} attribute in {file}")
+
+            if feature_id in attrs and row_feat_attrs != attrs[feature_id]:
+                # If an attribute record already exists for this feature, and this row provides new attributes,
+                #  append the new attribute values to the existing values
+                cur_feat_attrs = attrs[feature_id]
+                row_feat_attrs = [(cur[0], cur[1] + new[1]) for cur, new in zip(cur_feat_attrs, row_feat_attrs)]
+
+            # Add feature_id -> feature_alias_tuple record
+            attrs[feature_id] = row_feat_attrs
 
     print("GFF parsing took %.2f seconds" % (time.time() - b4_4))
     return feats, attrs, alias
@@ -131,28 +138,35 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
 
 def assign_features(alignment: 'HTSeq.SAM_Alignment') -> Tuple[AssignedFeatures, N_Candidates]:
 
-    feature_set, assignment = set(), set()
+    feat_set, assignment = list(), set()
     iv = alignment.iv
 
     for fs_tuple in (features.chrom_vectors[iv.chrom][iv.strand]  # GenomicArrayOfSets -> ChromVector
                              .array[iv.start:iv.end]              # ChromVector -> StepVector
                              .get_steps(merge_steps=True)):       # StepVector -> (iv_start, iv_end, {features})
 
-        feature_set.add(fs_tuple)
+        if len(fs_tuple[2]):
+            feat_set.append(fs_tuple)
 
-    if len(feature_set):
-        assignment, uncounted = selector.choose(feature_set, alignment)
+    if len(feat_set):
+        assignment, uncounted = selector.choose(feat_set, alignment)
 
-    return assignment, len(feature_set)
+    return assignment, len(feat_set)
+
+
+def get_library_name(sam_file):
+    filename = os.path.splitext(os.path.basename(sam_file))[0]
+    return filename.replace("_aligned_seqs", "")
 
 
 def count_reads(sam_file: str, return_queue: mp.Queue, intermediate_file: bool = False, out_prefix: str = None):
 
     # For complete SAM records (slower):
     # 1. Change the following line to HTSeq.BAM_Reader(sam_file)
-    # 2. Change assign_features to always source nt5end from chr(alignment.read.seq[0])
+    # 2. Change FeatureSelector.choose() to assign nt5end from chr(alignment.read.seq[0])
     read_seq = read_SAM(sam_file)
-    stats = StatsCollector(out_prefix, intermediate_file)
+    lib_name = get_library_name(sam_file)
+    stats = StatsCollector(lib_name, out_prefix, intermediate_file)
 
     # For each sequence in the sam file...
     for bundle in HTSeq.bundle_multiple_alignments(read_seq):
@@ -170,12 +184,11 @@ def count_reads(sam_file: str, return_queue: mp.Queue, intermediate_file: bool =
     return_queue.put(stats)
 
     if intermediate_file:
-        im_prefix = os.path.splitext(os.path.basename(sam_file))[0]
-        stats.write_intermediate_file(im_prefix)
+        stats.write_intermediate_file()
 
 
 def map_and_reduce(sam_files, work_args, ret_queue):
-    b4_4 = time.time()
+    mapred_start = time.time()
 
     # Use a multiprocessing pool if multiple sam files were provided
     # Otherwise perform counts in this process
@@ -186,12 +199,12 @@ def map_and_reduce(sam_files, work_args, ret_queue):
         count_reads(*work_args.pop())
 
     # Collect counts from all pool workers and merge
-    merged_counts = StatsCollector()
+    merged_counts = StatsCollector("Summary")
     for _ in sam_files:
         sam_stats = ret_queue.get()
         merged_counts.merge(sam_stats)
 
-    print("Counting and merging took %.2f seconds" % (time.time() - b4_4))
+    print("Counting and merging took %.2f seconds" % (time.time() - mapred_start))
     return merged_counts
 
 
