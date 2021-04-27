@@ -25,11 +25,10 @@ class CounterTests(unittest.TestCase):
 
         self.strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
 
-        # ID, Key, Value, Strand, Source, Hierarchy, 5pnt, Length
+        # ID, Key, Value, Hierarchy, Strand, 5pnt, Length, Match, Source
         self.csv_row_dict = {'id_attr': "Alias", 'at_key': "Class", 'at_val': "CSR", 'rank': "1", 'strand': "antisense",
                              'nt5': '"C,G,U"', 'length': "all", 'match': "Partial",
                              'gff': "./testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3"}
-        # Todo: update all CSV references per new columns
 
 
     # === HELPERS ===
@@ -78,7 +77,7 @@ class CounterTests(unittest.TestCase):
         self.assertEqual(len(attr['Class']), 2)
 
     """Does load_config correctly parse a single-entry features.csv config file?"""
-    # Todo: test if uracil is correctly converted to thymine for handling cDNA input
+
     def test_load_config_single(self):
         # Features CSV with a single rule/row
         row = self.csv_row_dict.values()
@@ -113,6 +112,18 @@ class CounterTests(unittest.TestCase):
 
         self.assertEqual(expected_gff_ret, gff_files)
         self.assertEqual(expected_ruleset, ruleset)
+
+    """Does load_config convert uracil to thymine for proper matching with cDNA sequences?"""
+
+    def test_load_config_rna_to_cDNA(self):
+        row = self.csv_row_dict
+        row['nt5'] = 'U'
+        csv = self.features_csv([row.values()])
+
+        with patch('aquatx.srna.counter2_0.open', mock_open(read_data=csv)):
+            ruleset, _ = counter.load_config('/dev/null')
+
+        self.assertEqual(ruleset[0]['nt5'], 'T')
 
     """DRAFT (however, this test works as expected.)"""
 
@@ -166,8 +177,8 @@ class CounterTests(unittest.TestCase):
         feature_source = {(self.short_gff_file, "sequence_name")}
         iv = HTSeq.GenomicInterval("I", 3746, 3908, "-")
         selection_rules = [
-            {'Identity': ("Class", "CSR"), 'Strand': "antisense", 'Hierarchy': 1, '5pnt': "all", 'Length': "all"},
-            {'Identity': ("biotype", "snoRNA"), 'Strand': "sense", 'Hierarchy': 2, '5pnt': "all", 'Length': "all"}
+            {'Identity': ("Class", "CSR"), 'Strand': "antisense", 'Hierarchy': 1, '5pnt': "all", 'Length': "all", 'Strict': False},
+            {'Identity': ("biotype", "snoRNA"), 'Strand': "sense", 'Hierarchy': 2, '5pnt': "all", 'Length': "all", 'Strict': False}
         ]
 
         feats, attrs, alias = counter.build_reference_tables(feature_source, selection_rules)
@@ -178,12 +189,28 @@ class CounterTests(unittest.TestCase):
         self.assertEqual(attrs, {'Gene:WBGene00023193': [('Class', ('unknown', 'additional_class')), ('biotype', ('snoRNA',))]})
         self.assertEqual(alias, {"Gene:WBGene00023193": ("Y74C9A.6",)})
 
-    """Does build_reference_tables throw a key error when an Identity rule or ID Attribute refers to a missing attribute?"""
+    """Does build_reference_tables raise ValueError when an ID Attribute refers to a missing attribute?"""
 
-    def test_ref_tables_missing_attribute(self):
+    def test_ref_tables_missing_ID_attribute(self):
         feature_source = {(self.short_gff_file, "bad_ID_attribute")}
         selection_rules = []
 
+        with self.assertRaises(ValueError):
+            counter.build_reference_tables(feature_source, selection_rules)
+
+    """Does build_reference_tables raise ValueError when a selection rule refers to a missing attribute?"""
+
+    def test_ref_tables_missing_identity(self):
+        feature_source = {(self.short_gff_file, "bad_ID_attribute")}
+        selection_rules = [
+            {'Identity': ("BAD", "BAD"), 'Strand': "antisense", 'Hierarchy': 1, '5pnt': "all", 'Length': "all", 'Strict': False},
+        ]
+
+        with self.assertRaises(ValueError):
+            counter.build_reference_tables(feature_source, selection_rules)
+
+    """Does build_reference_tables properly concatenate aliases if there is more than one alias for a feature?"""
+    """Does build_reference_tables properly concatenate attributes if more than one GFF file defines a feature with different attributes?"""
 
     # Todo: write factory functions for in-memory GFF and SAM file testing rather than tons of resource files
 
