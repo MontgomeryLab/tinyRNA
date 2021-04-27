@@ -1,10 +1,13 @@
+import itertools
 from collections import defaultdict, Counter
-from typing import List, Tuple, FrozenSet, Dict
+from typing import List, Tuple, FrozenSet, Dict, Set
 
 import HTSeq
 import pandas as pd
 import re
 
+# Type aliases for human readability
+IntervalFeatures = Tuple[int, int, Set[str]]  # A set of features associated with an interval
 
 class FeatureSelector:
     """Performs hierarchical selection given a set of candidate features for a locus
@@ -72,30 +75,52 @@ class FeatureSelector:
         choices.update(finalists)
         return choices, uncounted
 
-    # Todo: this is called n times if feat_iv has n features associated with it
-    #  when really each feat_iv needs only one verification. Not yet sure if this is possible from within list comp
-    def is_appropriate_overlap(self, rule, feat_iv, iv):
+    @staticmethod
+    def is_perfect_iv_match(feat_start, feat_end, aln_iv):
         # Only accept perfect interval matches for rules requiring such
-        if self.rules_table[rule]["Strict"]:
-            return feat_iv[0] >= iv.start and feat_iv[1] <= iv.end
-        else:
-            return True
+        return feat_start >= aln_iv.start and feat_end <= aln_iv.end
 
-    def choose_identities(self, feats_set, aln_iv):
-        """Performs the initial selection using identity rules (attribute key, value)"""
+    def choose_identities(self, feats_list: List[IntervalFeatures], aln_iv: 'HTSeq.GenomicInterval'):
+        """Performs the initial selection on the basis of identity rules: attribute (key, value)
 
-        finalists, uncounted = set(), set()
+        Feature candidates are supplied to this function via feats_list. This is a list
+        of tuples, each representing features associated with an in interval which
+        overlapped the alignment interval. The interval in this tuple may be a partial
+        (incomplete) overlap with the alignment.
 
-        # For each feature, match across all identity interests
-        identity_hits = [(self.rules_table[rule]['Hierarchy'], rule, feat)
-                         for feat_iv in feats_set
-                         for feat in feat_iv[2]
-                         for attr_key, av in FeatureSelector.attributes[feat]
-                         for attr_val in av
-                         for rule in self.inv_ident.get((attr_key, attr_val), ())
-                         if (attr_key, attr_val) in self.inv_ident
-                         and self.is_appropriate_overlap(rule, feat_iv, aln_iv)]
-        # -> [(hierarchy, rule, feature), ...]
+        The list of IntervalFeatures takes the following form:
+            [(iv_A_start, iv_A_end, {features, associated, with, iv_A, ... }),
+             (iv_B_start, iv_B_end, {features, associated, with, iv_B, ... }), ... ]
+            Where iv_A and iv_B overlap aln_iv by at least 1 base
+
+        Args:
+            feats_list: a list of tuples, each representing features associated with
+                an interval which overlapped the alignment interval. See above.
+            aln_iv: the GenomicInterval of the alignment to which we are trying to
+                assign features.
+
+        Returns:
+
+        """
+
+        finalists, uncounted, identity_hits = set(), set(), list()
+
+        for iv_feats in feats_list:
+            # Check for perfect interval match only once per feature/alignment tuple
+            perfect_iv_match = self.is_perfect_iv_match(iv_feats[0], iv_feats[1], aln_iv)
+            for feat in iv_feats[2]:
+                for attrib in FeatureSelector.attributes[feat]:
+                    # If multiple values are associated with the attribute key, create their tuple products
+                    for feat_ident in itertools.product([attrib[0]], attrib[1]):
+                        try:
+                            # Check if rules are defined for this feature identity
+                            for rule in self.inv_ident[feat_ident]:
+                                if not perfect_iv_match and self.rules_table[rule]['Strict']:
+                                    continue
+                                identity_hits.append((self.rules_table[rule]['Hierarchy'], rule, feat))
+                        except KeyError:
+                            pass
+        # -> identity_hits: [(hierarchy, rule, feature), ...]
 
         # Only one feature matched only one rule
         if len(identity_hits) == 1:
@@ -126,7 +151,7 @@ class FeatureSelector:
 
         ih_unique = {hit[self.feat] for hit in identity_hits}
         if len(finalists) < len(ih_unique): uncounted.add("Filtered")  # Todo: this logic is incorrect. Is relevant?
-        if len(ih_unique) < len(feats_set): uncounted.add("Unknown")
+        if len(ih_unique) < len(feats_list): uncounted.add("Unknown")
         return finalists, uncounted
 
     def build_filters(self):
@@ -279,7 +304,7 @@ class StatsCollector:
         # Sort by index, make index its own column, and rename it to Feature ID
         summary = summary.sort_index().reset_index().rename(columns={"index": "Feature ID"})
 
-        summary.to_csv(prefix + '_out_feature_counts.csv', sep='\t', index=False)
+        summary.to_csv(prefix + '_out_feature_counts.csv', index=False)
 
     def write_nt_len_mat(self, prefix):
         pd.DataFrame(self.nt_len_mat).to_csv(prefix + '_out_nt_len_dist.csv')

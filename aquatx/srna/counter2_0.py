@@ -69,7 +69,7 @@ def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
         next(csv_reader)  # Skip header line
         for row in csv_reader:
             rule = {col: row[col] for col in ["Strand", "Hierarchy", "nt5", "Length", "Strict"]}
-            rule['5pnt'] = rule['nt5'].upper().translate({'U': 'T'})  # Convert RNA base to cDNA base
+            rule['nt5'] = rule['nt5'].upper().translate({'U': 'T'})   # Convert RNA base to cDNA base
             rule['Strand'] = convert_strand[rule['Strand'].lower()]   # Convert sense/antisense to +/-
             rule['Identity'] = (row['Key'], row['Value'])             # Create identity tuple
             rule['Hierarchy'] = int(rule['Hierarchy'])                # Convert hierarchy to number
@@ -94,7 +94,7 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
     different ID attributes, the feature will
     """
 
-    b4_4 = time.time()  # Cloud Atlas
+    start_time = time.time()
 
     # Patch the GFF attribute parser to support comma separated attribute value lists
     setattr(HTSeq.features, 'parse_GFF_attribute_string', parse_GFF_attribute_string)
@@ -115,7 +115,7 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
                 # Add feature_id -> feature_interval record
                 feature_id = row.attr["ID"][0]
                 feats[row.iv] += feature_id
-                row_feat_attrs = [(interest, row.attr[interest]) for interest in attrs_of_interest]
+                row_attrs = [(interest, row.attr[interest]) for interest in attrs_of_interest]
 
                 if preferred_id != "ID":
                     # If an alias already exists for this feature, append to feature's aliases
@@ -123,35 +123,34 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
             except KeyError as ke:
                 raise ValueError(f"Feature {row.name} does not contain a {ke} attribute in {file}")
 
-            if feature_id in attrs and row_feat_attrs != attrs[feature_id]:
+            if feature_id in attrs and row_attrs != attrs[feature_id]:
                 # If an attribute record already exists for this feature, and this row provides new attributes,
                 #  append the new attribute values to the existing values
-                cur_feat_attrs = attrs[feature_id]
-                row_feat_attrs = [(cur[0], cur[1] + new[1]) for cur, new in zip(cur_feat_attrs, row_feat_attrs)]
+                cur_attrs = attrs[feature_id]
+                row_attrs = [(cur[0], cur[1] + new[1]) for cur, new in zip(cur_attrs, row_attrs)]
 
             # Add feature_id -> feature_alias_tuple record
-            attrs[feature_id] = row_feat_attrs
+            attrs[feature_id] = row_attrs
 
-    print("GFF parsing took %.2f seconds" % (time.time() - b4_4))
+    print("GFF parsing took %.2f seconds" % (time.time() - start_time))
     return feats, attrs, alias
 
 
 def assign_features(alignment: 'HTSeq.SAM_Alignment') -> Tuple[AssignedFeatures, N_Candidates]:
 
-    feat_set, assignment = list(), set()
+    feat_matches, assignment = list(), set()
     iv = alignment.iv
 
-    for fs_tuple in (features.chrom_vectors[iv.chrom][iv.strand]  # GenomicArrayOfSets -> ChromVector
-                             .array[iv.start:iv.end]              # ChromVector -> StepVector
-                             .get_steps(merge_steps=True)):       # StepVector -> (iv_start, iv_end, {features})
+    for match_tuple in (features.chrom_vectors[iv.chrom][iv.strand]  # GenomicArrayOfSets -> ChromVector
+                                .array[iv.start:iv.end]              # ChromVector -> StepVector
+                                .get_steps(merge_steps=True)):       # StepVector -> (iv_start, iv_end, {features})
+        if len(match_tuple[2]):
+            feat_matches.append(match_tuple)
 
-        if len(fs_tuple[2]):
-            feat_set.append(fs_tuple)
+    if len(feat_matches):
+        assignment, uncounted = selector.choose(feat_matches, alignment)
 
-    if len(feat_set):
-        assignment, uncounted = selector.choose(feat_set, alignment)
-
-    return assignment, len(feat_set)
+    return assignment, len(feat_matches)
 
 
 def get_library_name(sam_file):
@@ -198,13 +197,16 @@ def map_and_reduce(sam_files, work_args, ret_queue):
     else:
         count_reads(*work_args.pop())
 
+    print("Counting took %.2f seconds" % (time.time() - mapred_start))
+    merge_start = time.time()
+
     # Collect counts from all pool workers and merge
     merged_counts = StatsCollector("Summary")
     for _ in sam_files:
         sam_stats = ret_queue.get()
         merged_counts.merge(sam_stats)
 
-    print("Counting and merging took %.2f seconds" % (time.time() - mapred_start))
+    print("Merging took %.2f seconds" % (time.time() - merge_start))
     return merged_counts
 
 
