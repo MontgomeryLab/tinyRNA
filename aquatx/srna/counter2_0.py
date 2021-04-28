@@ -69,11 +69,11 @@ def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
         next(csv_reader)  # Skip header line
         for row in csv_reader:
             rule = {col: row[col] for col in ["Strand", "Hierarchy", "nt5", "Length", "Strict"]}
-            rule['nt5'] = rule['nt5'].upper().translate({'U': 'T'})   # Convert RNA base to cDNA base
-            rule['Strand'] = convert_strand[rule['Strand'].lower()]   # Convert sense/antisense to +/-
-            rule['Identity'] = (row['Key'], row['Value'])             # Create identity tuple
-            rule['Hierarchy'] = int(rule['Hierarchy'])                # Convert hierarchy to number
-            rule['Strict'] = rule['Strict'] == 'Full'                 # Convert strict intersection to boolean
+            rule['nt5'] = rule['nt5'].upper().translate({ord('U'): 'T'})  # Convert RNA base to cDNA base
+            rule['Strand'] = convert_strand[rule['Strand'].lower()]       # Convert sense/antisense to +/-
+            rule['Identity'] = (row['Key'], row['Value'])                 # Create identity tuple
+            rule['Hierarchy'] = int(rule['Hierarchy'])                    # Convert hierarchy to number
+            rule['Strict'] = rule['Strict'] == 'Full'                     # Convert strict intersection to boolean
 
             # Duplicate rule entries are not allowed
             if rule not in rules: rules.append(rule)
@@ -109,7 +109,7 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
         gff = HTSeq.GFF_Reader(file)
         for row in gff:
             if row.iv.strand == ".":
-                raise ValueError(f"Feature {row.name} at {row.iv} in {row.file} has no strand information.")
+                raise ValueError(f"Feature {row.name} in {file} has no strand information.")
 
             try:
                 # Add feature_id -> feature_interval record
@@ -117,6 +117,7 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
                 feats[row.iv] += feature_id
                 row_attrs = [(interest, row.attr[interest]) for interest in attrs_of_interest]
 
+                # Add feature_id -> feature_alias_tuple record
                 if preferred_id != "ID":
                     # If an alias already exists for this feature, append to feature's aliases
                     alias[feature_id] = alias.get(feature_id, ()) + row.attr[preferred_id]
@@ -129,7 +130,7 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
                 cur_attrs = attrs[feature_id]
                 row_attrs = [(cur[0], cur[1] + new[1]) for cur, new in zip(cur_attrs, row_attrs)]
 
-            # Add feature_id -> feature_alias_tuple record
+            # Add feature_id -> feature_attributes record
             attrs[feature_id] = row_attrs
 
     print("GFF parsing took %.2f seconds" % (time.time() - start_time))

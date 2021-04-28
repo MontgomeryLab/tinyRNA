@@ -15,12 +15,14 @@ class CounterTests(unittest.TestCase):
             with open(file, mode) as f:
                 return f.read()
 
-        self.gff_file = "./testdata/counter/identity_choice_test.gff3"
-        self.short_gff_file = "./testdata/counter/short.gff3"
+        self.res = "./testdata/counter"
+
+        self.gff_file = f"{self.res}/identity_choice_test.gff3"
+        self.short_gff_file = f"{self.res}/single.gff3"
         self.short_gff = read(self.short_gff_file)
 
-        self.sam_file = "./testdata/counter/identity_choice_test.sam"
-        self.short_sam_file = "./testdata/counter/short.sam"
+        self.sam_file = f"{self.res}/identity_choice_test.sam"
+        self.short_sam_file = f"{self.res}/single.sam"
         self.short_sam = read(self.short_sam_file)
 
         self.strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
@@ -88,7 +90,7 @@ class CounterTests(unittest.TestCase):
 
         r = self.csv_row_dict
         expected_gff_ret = {(r['gff'], r['id_attr'])}
-        expected_ruleset = [{'Strand': self.strand[r['strand']], 'Hierarchy': int(r['rank']), 'nt5': r['nt5'].strip('"'),
+        expected_ruleset = [{'Strand': self.strand[r['strand']], 'Hierarchy': int(r['rank']), 'nt5': 'C,G,T',
                              'Length': r['length'], 'Identity': (r['at_key'], r['at_val']), 'Strict': r['match'] == 'Full'}]
 
         self.assertEqual(expected_gff_ret, gff_files)
@@ -107,7 +109,7 @@ class CounterTests(unittest.TestCase):
         r = self.csv_row_dict
         expected_gff_ret = {(r['gff'], r['id_attr'])}
         expected_ruleset = [
-            {'Strand': self.strand[r['strand']], 'Hierarchy': int(r['rank']), 'nt5': r['nt5'].strip('"'),
+            {'Strand': self.strand[r['strand']], 'Hierarchy': int(r['rank']), 'nt5': 'C,G,T',
              'Length': r['length'], 'Identity': (r['at_key'], r['at_val']), 'Strict': r['match'] == 'Full'}]
 
         self.assertEqual(expected_gff_ret, gff_files)
@@ -116,7 +118,7 @@ class CounterTests(unittest.TestCase):
     """Does load_config convert uracil to thymine for proper matching with cDNA sequences?"""
 
     def test_load_config_rna_to_cDNA(self):
-        row = self.csv_row_dict
+        row = self.csv_row_dict.copy()
         row['nt5'] = 'U'
         csv = self.features_csv([row.values()])
 
@@ -177,8 +179,8 @@ class CounterTests(unittest.TestCase):
         feature_source = {(self.short_gff_file, "sequence_name")}
         iv = HTSeq.GenomicInterval("I", 3746, 3908, "-")
         selection_rules = [
-            {'Identity': ("Class", "CSR"), 'Strand': "antisense", 'Hierarchy': 1, '5pnt': "all", 'Length': "all", 'Strict': False},
-            {'Identity': ("biotype", "snoRNA"), 'Strand': "sense", 'Hierarchy': 2, '5pnt': "all", 'Length': "all", 'Strict': False}
+            {'Identity': ("Class", "CSR"), 'Strand': "N/A", 'Hierarchy': "N/A", '5pnt': "N/A", 'Length': "N/A", 'Strict': "N/A"},
+            {'Identity': ("biotype", "snoRNA"), 'Strand': "N/A", 'Hierarchy': "N/A", '5pnt': "N/A", 'Length': "N/A", 'Strict': "N/A"}
         ]
 
         feats, attrs, alias = counter.build_reference_tables(feature_source, selection_rules)
@@ -192,25 +194,59 @@ class CounterTests(unittest.TestCase):
     """Does build_reference_tables raise ValueError when an ID Attribute refers to a missing attribute?"""
 
     def test_ref_tables_missing_ID_attribute(self):
-        feature_source = {(self.short_gff_file, "bad_ID_attribute")}
+        bad = "bad_ID_attribute"
+        feature_source = {(self.short_gff_file, bad)}
         selection_rules = []
 
-        with self.assertRaises(ValueError):
+        expected_err = f"Feature Gene:WBGene00023193 does not contain a '{bad}' attribute in {self.short_gff_file}"
+        with self.assertRaisesRegex(ValueError, expected_err):
             counter.build_reference_tables(feature_source, selection_rules)
 
     """Does build_reference_tables raise ValueError when a selection rule refers to a missing attribute?"""
 
     def test_ref_tables_missing_identity(self):
-        feature_source = {(self.short_gff_file, "bad_ID_attribute")}
-        selection_rules = [
-            {'Identity': ("BAD", "BAD"), 'Strand': "antisense", 'Hierarchy': 1, '5pnt': "all", 'Length': "all", 'Strict': False},
-        ]
+        bad = "BAD_attribute_key"
+        feature_source = {(self.short_gff_file, "ID")}
+        selection_rules = [{'Identity': (bad, "BAD_attribute_value")}]
 
-        with self.assertRaises(ValueError):
+        expected_err = f"Feature Gene:WBGene00023193 does not contain a '{bad}' attribute in {self.short_gff_file}"
+        with self.assertRaisesRegex(ValueError, expected_err):
+            counter.build_reference_tables(feature_source, selection_rules)
+
+    """Does build_reference_tables raise ValueError when it encounters a GFF entry without strand information?"""
+
+    def test_ref_tables_unstranded(self):
+        gff_file = f"{self.res}/unstranded.gff3"
+        feature_source = {(gff_file, "ID")}
+        selection_rules = []
+
+        expected_err = f"Feature Gene:WBGene00023193 in {gff_file} has no strand information."
+        with self.assertRaisesRegex(ValueError, expected_err):
             counter.build_reference_tables(feature_source, selection_rules)
 
     """Does build_reference_tables properly concatenate aliases if there is more than one alias for a feature?"""
+
+    def test_ref_tables_alias_concat(self):
+        feature_source = {(self.short_gff_file, "ID"), (self.short_gff_file, "sequence_name")}
+        selection_rules = []
+
+        expected_alias = {"Gene:WBGene00023193": ("Y74C9A.6",)}
+        _, _, alias = counter.build_reference_tables(feature_source, selection_rules)
+
+        self.assertDictEqual(expected_alias, alias)
+
     """Does build_reference_tables properly concatenate attributes if more than one GFF file defines a feature with different attributes?"""
+    # Todo: this is not an adequate test. This is only testing for list-type attribute values, which has technically
+    #  already been covered in test_ref_tables_single_feature()
+    def test_ref_tables_attr_concat(self):
+        feature_source = {(self.short_gff_file, "ID")}
+        selection_rules = [{'Identity': ("Class", "CSR"), 'Strand': "N/A", 'Hierarchy': "N/A", '5pnt': "N/A",
+                            'Length': "N/A", 'Strict': "N/A"}]
+
+        expected_attrs = {"Gene:WBGene00023193": [('Class', ('unknown', 'additional_class'))]}
+        _, attrs, _ = counter.build_reference_tables(feature_source, selection_rules)
+
+        self.assertDictEqual(expected_attrs, attrs)
 
     # Todo: write factory functions for in-memory GFF and SAM file testing rather than tons of resource files
 

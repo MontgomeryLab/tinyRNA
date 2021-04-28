@@ -1,14 +1,12 @@
 import unittest
-import HTSeq
 
 from aquatx.srna.hts_parsing import *
-from aquatx.srna.counter2_0 import get_nt_5end
 
 
 class MyTestCase(unittest.TestCase):
     def test_something(self):
         self.assertEqual(True, False)
-        self.short_sam_file = "./testdata/counter/short.sam"
+        self.short_sam_file = "testdata/counter/single.sam"
 
     """Did SAM_reader correctly skip header values and parse all pertinent info from a single record SAM file?"""
 
