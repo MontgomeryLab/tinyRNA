@@ -127,24 +127,6 @@ class CounterTests(unittest.TestCase):
 
         self.assertEqual(ruleset[0]['nt5'], 'T')
 
-    """DRAFT (however, this test works as expected.)"""
-
-    # The components of each test:
-    #  1. The GFF file to define a feature and its attributes at an interval
-    #  2. The SAM file with a sequence alignment that overlaps a defined feature
-    #  3. A selection rule (features.csv) which selects for attributes of the feature and/or read
-
-    def test_counter_main(self):
-        rules = [["Alias", "Class", "CSR", "1", "antisense", "all", "all", "Full", self.gff_file],
-                 ["sequence_name", "Class", "piRNA", "2", "sense", "all", "all", "Partial", self.gff_file]]
-
-        csv = self.features_csv(rules)
-        cmd = f"counter -i {self.sam_file} -c /dev/null -o test".split(" ")
-
-        with patch("aquatx.srna.counter2_0.open", mock_open(read_data=csv)):
-            with patch("sys.argv", cmd):
-                counter.main()
-
     """Do GenomicArraysOfSets slice to step intervals that overlap, even if by just one base?"""
 
     def test_HTSeq_iv_slice(self):
@@ -152,6 +134,7 @@ class CounterTests(unittest.TestCase):
         iva = HTSeq.GenomicInterval("I", 1, 10, "+")
         ivb = HTSeq.GenomicInterval("I", 5, 15, "+")
         ivc = HTSeq.GenomicInterval("I", 9, 20, "+")
+        ivd = HTSeq.GenomicInterval("I", 2, 4, "+")
         gas[iva] += "TestA"
         gas[ivb] += "TestB"
 
@@ -159,6 +142,7 @@ class CounterTests(unittest.TestCase):
         iva:  1 |--TestA--| 10
         ivb:      5 |---TestB--| 15
         ivc:          9 |-----------| 20
+        ivd:   2 |--| 4
                          ^ Single base overlap: iva ∩ ivc
         Expect:       9 |-|{B}-|-{}-| 20
                      [9, 10)   [15,20)
@@ -188,8 +172,8 @@ class CounterTests(unittest.TestCase):
 
         self.assertEqual((type(feats), type(attrs), type(alias)), (HTSeq.GenomicArrayOfSets, dict, dict))
         self.assertEqual(steps, [{"Gene:WBGene00023193"}])
-        self.assertEqual(attrs, {'Gene:WBGene00023193': [('Class', ('unknown', 'additional_class')), ('biotype', ('snoRNA',))]})
-        self.assertEqual(alias, {"Gene:WBGene00023193": ("Y74C9A.6",)})
+        self.assertEqual(attrs, {'Gene:WBGene00023193': [('Class', ("unknown", "additional_class")), ('biotype', ("snoRNA",))]})
+        self.assertEqual(alias, {'Gene:WBGene00023193': ('Y74C9A.6',)})
 
     """Does build_reference_tables raise ValueError when an ID Attribute refers to a missing attribute?"""
 
@@ -199,6 +183,7 @@ class CounterTests(unittest.TestCase):
         selection_rules = []
 
         expected_err = f"Feature Gene:WBGene00023193 does not contain a '{bad}' attribute in {self.short_gff_file}"
+
         with self.assertRaisesRegex(ValueError, expected_err):
             counter.build_reference_tables(feature_source, selection_rules)
 
@@ -210,6 +195,7 @@ class CounterTests(unittest.TestCase):
         selection_rules = [{'Identity': (bad, "BAD_attribute_value")}]
 
         expected_err = f"Feature Gene:WBGene00023193 does not contain a '{bad}' attribute in {self.short_gff_file}"
+
         with self.assertRaisesRegex(ValueError, expected_err):
             counter.build_reference_tables(feature_source, selection_rules)
 
@@ -221,6 +207,7 @@ class CounterTests(unittest.TestCase):
         selection_rules = []
 
         expected_err = f"Feature Gene:WBGene00023193 in {gff_file} has no strand information."
+
         with self.assertRaisesRegex(ValueError, expected_err):
             counter.build_reference_tables(feature_source, selection_rules)
 
@@ -236,18 +223,44 @@ class CounterTests(unittest.TestCase):
         self.assertDictEqual(expected_alias, alias)
 
     """Does build_reference_tables properly concatenate attributes if more than one GFF file defines a feature with different attributes?"""
-    # Todo: this is not an adequate test. This is only testing for list-type attribute values, which has technically
-    #  already been covered in test_ref_tables_single_feature()
+
     def test_ref_tables_attr_concat(self):
-        feature_source = {(self.short_gff_file, "ID")}
-        selection_rules = [{'Identity': ("Class", "CSR"), 'Strand': "N/A", 'Hierarchy': "N/A", '5pnt': "N/A",
+        feature_source = {(self.short_gff_file, "ID"), (f"{self.res}/single2.gff3", "ID")}
+        selection_rules = [{'Identity': ("Name", "N/A"), 'Strand': "N/A", 'Hierarchy': "N/A", '5pnt': "N/A",
                             'Length': "N/A", 'Strict': "N/A"}]
 
-        expected_attrs = {"Gene:WBGene00023193": [('Class', ('unknown', 'additional_class'))]}
         _, attrs, _ = counter.build_reference_tables(feature_source, selection_rules)
+        expected_attrs = {"Gene:WBGene00023193": [('Name', ("WBGene00023193", "WBGene00023193b"))]}
+        actual_attrs = attrs['Gene:WBGene00023193'][1][1]
 
-        self.assertDictEqual(expected_attrs, attrs)
+        # The ordering of values for key 'Name' is non-deterministic since iteration of feature_source {set} is not
+        #  This doesn't matter for our use, membership matching of ('Name', ("WBGene00023193")) and ('Name', ("WBGene00023193b"))
+        #  will be performed against FeatureSelector's ruleset for Identities
+        self.assertIn('WBGene00023193', actual_attrs)
+        self.assertIn('WBGene00023193b', actual_attrs)
+        self.assertEqual(2, len(actual_attrs))
 
+    """Does assign_features """
+
+    """DRAFT (however, this test works as expected.)"""
+
+    # The components of each test:
+    #  1. The GFF file to define a feature and its attributes at an interval
+    #  2. The SAM file with a sequence alignment that overlaps a defined feature
+    #  3. A selection rule (features.csv) which selects for attributes of the feature and/or read
+
+    def test_counter_main(self):
+        rules = [["Alias", "Class", "CSR", "1", "antisense", "all", "all", "Full", self.gff_file],
+                 ["sequence_name", "Class", "piRNA", "2", "sense", "all", "all", "Partial", self.gff_file]]
+
+        csv = self.features_csv(rules)
+        cmd = f"counter -i {self.sam_file} -c /dev/null -o test".split(" ")
+
+        with patch("aquatx.srna.counter2_0.open", mock_open(read_data=csv)):
+            with patch("sys.argv", cmd):
+                counter.main()
+
+    # Todo: additional test for build_ref_tables: what happens when "Class" is and is not defined in features.csv?
     # Todo: write factory functions for in-memory GFF and SAM file testing rather than tons of resource files
 
 

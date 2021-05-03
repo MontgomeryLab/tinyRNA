@@ -78,7 +78,7 @@ class FeatureSelector:
     @staticmethod
     def is_perfect_iv_match(feat_start, feat_end, aln_iv):
         # Only accept perfect interval matches for rules requiring such
-        return feat_start >= aln_iv.start and feat_end <= aln_iv.end
+        return feat_start <= aln_iv.start and feat_end >= aln_iv.end
 
     def choose_identities(self, feats_list: List[IntervalFeatures], aln_iv: 'HTSeq.GenomicInterval'):
         """Performs the initial selection on the basis of identity rules: attribute (key, value)
@@ -106,7 +106,7 @@ class FeatureSelector:
         finalists, uncounted, identity_hits = set(), set(), list()
 
         for iv_feats in feats_list:
-            # Check for perfect interval match only once per feature/alignment tuple
+            # Check for perfect interval match only once per feature_set/alignment tuple
             perfect_iv_match = self.is_perfect_iv_match(iv_feats[0], iv_feats[1], aln_iv)
             for feat in iv_feats[2]:
                 for attrib in FeatureSelector.attributes[feat]:
@@ -301,6 +301,9 @@ class StatsCollector:
         summary = summary.reindex(sorted(summary.columns), axis="columns")
         # Add Feature Name column, which is the feature alias (default is Feature ID if no alias exists)
         summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(alias.get(feat, feat))))
+        # Add Classes column for classes associated with the given feature
+        feat_class_map = lambda feat: ', '.join(FeatureSelector.attributes[feat][0][1])
+        summary.insert(1, "Feature Class", summary.index.map(feat_class_map, feat_class_map))
         # Sort by index, make index its own column, and rename it to Feature ID
         summary = summary.sort_index().reset_index().rename(columns={"index": "Feature ID"})
 

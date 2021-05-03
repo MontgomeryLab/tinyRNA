@@ -20,6 +20,7 @@ Features = HTSeq.GenomicArrayOfSets  # interval -> set of associated features
 Attributes = Dict[str, list]  # feature -> feature attributes
 FeatureSources = Set[Tuple[str, str]]
 SelectionRules = List[dict]
+SAM_input = Tuple[str, str]
 AssignedFeatures = set
 N_Candidates = int
 Alias = dict
@@ -35,8 +36,8 @@ def get_args():
     prefix to save output tables and plots using.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input-files', metavar='SAMFILES', required=True,
-                        help='comma separated list of input sam files to count features for')
+    parser.add_argument('-i', '--input-csv', metavar='SAMPLES', required=True,
+                        help='the csv samples file/library list')
     parser.add_argument('-c', '--config', metavar='CONFIGFILE', required=True,
                         help='the csv features configuration file')
     parser.add_argument('-o', '--out-prefix', metavar='OUTPUTPREFIX', required=True,
@@ -46,6 +47,37 @@ def get_args():
                              'associated features.')
 
     return parser.parse_args()
+
+
+def load_samples(samples_csv: str):
+    def get_input_filename(csv_row_file):
+        """The input samples.csv may contain either fastq or sam files"""
+
+        sample_file_ext = os.path.splitext(csv_row_file)[1].lower()
+        if sample_file_ext == ".fastq":
+            # Note: these fastq files MUST be included as an input (but not argument) for the CWL step
+            return os.path.splitext(csv_row_file)[0] + "_aligned_seqs.sam"
+        elif sample_file_ext == ".sam":
+            if not os.path.isabs(csv_row_file):
+                raise ValueError("The following file must be expressed as an absolute path:\n%s" % (csv_row_file,))
+            return csv_row_file
+
+    # Eventually want {group}_replicate_{replicate_number}
+
+    inputs = list()
+
+    with open(samples_csv, 'r', encoding='utf-8-sig') as f:
+        fieldnames = ("File", "Group", "Replicate")
+        csv_reader = csv.DictReader(f, fieldnames=fieldnames, delimiter=',')
+
+        next(csv_reader)  # Skip header line
+        for row in csv_reader:
+            library_name = f"{row['Group']}_{row['Replicate']}"
+            library_file_name = get_input_filename(row['File'])
+
+            inputs.append((library_file_name, library_name))
+
+    return inputs
 
 
 def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
@@ -100,7 +132,7 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
     setattr(HTSeq.features, 'parse_GFF_attribute_string', parse_GFF_attribute_string)
 
     # Obtain an ordered list of unique attributes of interest from selection rules
-    attrs_of_interest = list(np.unique([attr['Identity'][0] for attr in rules]))
+    attrs_of_interest = list(np.unique(["Class"] + [attr['Identity'][0] for attr in rules]))
 
     feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
     attrs, alias = {}, {}
@@ -159,13 +191,13 @@ def get_library_name(sam_file):
     return filename.replace("_aligned_seqs", "")
 
 
-def count_reads(sam_file: str, return_queue: mp.Queue, intermediate_file: bool = False, out_prefix: str = None):
+def count_reads(sam_tuple: SAM_input, return_queue: mp.Queue, intermediate_file: bool = False, out_prefix: str = None):
 
     # For complete SAM records (slower):
     # 1. Change the following line to HTSeq.BAM_Reader(sam_file)
     # 2. Change FeatureSelector.choose() to assign nt5end from chr(alignment.read.seq[0])
-    read_seq = read_SAM(sam_file)
-    lib_name = get_library_name(sam_file)
+    read_seq = read_SAM(sam_tuple[0])
+    lib_name = sam_tuple[1]
     stats = StatsCollector(lib_name, out_prefix, intermediate_file)
 
     # For each sequence in the sam file...
@@ -219,15 +251,17 @@ def main():
     # Load selection rules and feature sources from config
     selection_rules, gff_file_set = load_config(args.config)
 
+    # Determine SAM inputs and their associated library names
+    sam_files = load_samples(args.input_csv)
+
     # Build features table and selector, global for multiprocessing
     global features, selector
     features, attributes, alias = build_reference_tables(gff_file_set, selection_rules)
     selector = FeatureSelector(selection_rules, attributes)
 
     # Prepare for multiprocessing pool
-    sam_files = [sam.strip() for sam in args.input_files.split(',')]
     ret_queue = mp.Manager().Queue() if len(sam_files) > 1 else queue.Queue()
-    work_args = [(sam, ret_queue, args.intermed_file, args.out_prefix) for sam in sam_files]
+    work_args = [(assignment, ret_queue, args.intermed_file, args.out_prefix) for assignment in sam_files]
 
     # Assign and count features using multiprocessing and merge results
     merged_counts = map_and_reduce(sam_files, work_args, ret_queue)
