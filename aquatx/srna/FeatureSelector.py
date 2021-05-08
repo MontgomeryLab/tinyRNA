@@ -4,6 +4,8 @@ from typing import List, Tuple, FrozenSet, Dict, Set
 
 import HTSeq
 import pandas as pd
+import json
+import os
 import re
 
 # Type aliases for human readability
@@ -16,7 +18,7 @@ class FeatureSelector:
     input GFF files), and sequence attributes (sourced from input SAM files).
 
     The first round of selection is performed against each candidate feature's attributes.
-    The target for this stage is attribute key-value pairs, referred to here as Identities.
+    The target for this stage is feature attribute key-value pairs, referred to here as Identities.
     A candidate may match multiple identities. Each match is referred to as a Hit. If more
     than one Hit is produced, elimination is performed using each Hit's hierarchy/rank value.
     Hits are tuples for performance reasons, and are of the format:
@@ -104,14 +106,16 @@ class FeatureSelector:
         """
 
         finalists, uncounted, identity_hits = set(), set(), list()
+        start, end, features = 0, 1, 2
+        key, value = 0, 1
 
         for iv_feats in feats_list:
             # Check for perfect interval match only once per feature_set/alignment tuple
-            perfect_iv_match = self.is_perfect_iv_match(iv_feats[0], iv_feats[1], aln_iv)
-            for feat in iv_feats[2]:
+            perfect_iv_match = self.is_perfect_iv_match(iv_feats[start], iv_feats[end], aln_iv)
+            for feat in iv_feats[features]:
                 for attrib in FeatureSelector.attributes[feat]:
                     # If multiple values are associated with the attribute key, create their tuple products
-                    for feat_ident in itertools.product([attrib[0]], attrib[1]):
+                    for feat_ident in itertools.product([attrib[key]], attrib[value]):
                         try:
                             # Check if rules are defined for this feature identity
                             for rule in self.inv_ident[feat_ident]:
@@ -198,89 +202,138 @@ class FeatureSelector:
         return cls.rank, cls.rule, cls.feat
 
 
-class StatsCollector:
+class LibraryStats:
     class Bundle:
-        def __init__(self, size, dup_counts, cor_counts):
+        def __init__(self, loci_count, read_count, corr_count):
+            self.loci_count = loci_count
+            self.read_count = read_count
+            self.corr_count = corr_count
+            self.assignments = set()
             self.feat_count = 0
-            self.bundle_len = size
-            self.dup_counts = dup_counts
-            self.cor_counts = cor_counts
 
     rank, rule, feat = FeatureSelector.get_hit_indexes()
 
-    def __init__(self, lib_name: str, out_prefix: str = None, save_intermediate_file: bool = False):
+    summary_categories = ['Total Assigned Reads', 'Total Assigned Sequences',
+                          'Assigned Single-Mapping Reads', 'Assigned Multi-Mapping Reads',
+                          'Reads Assigned to Single Feature', 'Sequences Assigned to Single Feature',
+                          'Reads Assigned to Multiple Features', 'Sequences Assigned to Multiple Features',
+                          'Total Unassigned Reads', 'Total Unassigned Sequences']
+
+    def __init__(self, library: dict, out_prefix: str = None, save_intermediate_file: bool = False):
+        self.library = library
+        self.out_prefix = out_prefix
+        self.save_intermediate_file = save_intermediate_file
+
         self.feat_counts = Counter()
         self.nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
-        self.stats_counts = {stat: 0 for stat in
-                        ['_aligned_reads', '_aligned_reads_unique_mapping', '_aligned_reads_multi_mapping',
-                         '_unique_sequences_aligned', '_reads_unique_features', '_alignments_unique_features',
-                         '_ambiguous_alignments_features', '_ambiguous_reads_features', '_no_feature']}
-        self.feat_counts_df = pd.DataFrame(index=FeatureSelector.attributes.keys())
-        self.save_intermediate_file = save_intermediate_file
-        self.library_name = lib_name
-        self.out_prefix = out_prefix
+        self.library_stats = {stat: 0 for stat in LibraryStats.summary_categories}
         self.alignments = []
 
     def count_bundle(self, aln_bundle: iter) -> 'Bundle':
         bundle_read = aln_bundle[0].read
-        bundle_size = len(aln_bundle)
+        loci_counts = len(aln_bundle)
 
         # Calculate counts for multi-mapping
-        dup_counts = int(bundle_read.name.split('=')[1])
-        cor_counts = dup_counts / bundle_size
-        bundle_seq = bundle_read.seq
+        read_counts = int(bundle_read.name.split('=')[1])
+        corr_counts = read_counts / loci_counts
 
-        # fill in 5p nt/length matrix
-        self.nt_len_mat[bundle_read.nt5][len(bundle_seq)] += dup_counts
+        # Fill in 5p nt/length matrix
+        sequence = bundle_read.seq
+        self.nt_len_mat[bundle_read.nt5][len(sequence)] += read_counts
 
-        self.stats_counts['_aligned_reads'] += dup_counts
-        self.stats_counts['_unique_sequences_aligned'] += 1
-        self.stats_counts['_aligned_reads_multi_mapping'] += dup_counts * (bundle_size > 1)
-        self.stats_counts['_aligned_reads_unique_mapping'] += dup_counts * (bundle_size == 1)  # Made ya look
+        return self.Bundle(loci_counts, read_counts, corr_counts)
 
-        return self.Bundle(bundle_size, dup_counts, cor_counts)
+    def count_bundle_alignments(self, bundle: 'Bundle', aln: HTSeq.SAM_Alignment, assignments: set) -> None:
+        assigned_count = len(assignments)
 
-    def count_bundle_alignments(self, bundle: 'Bundle', aln: HTSeq.SAM_Alignment, hits: set) -> None:
-        for hit in hits:
-            feature_corrected_count = bundle.cor_counts / len(hits)
-            if hit[self.feat] not in self.feat_counts: bundle.feat_count += 1
-            self.feat_counts[hit[self.feat]] += feature_corrected_count
+        if assigned_count == 0:
+            self.library_stats['Total Unassigned Reads'] += bundle.corr_count
+        if assigned_count == 1:
+            self.library_stats['Reads Assigned to Single Feature'] += bundle.corr_count
+        if assigned_count > 1:
+            self.library_stats['Reads Assigned to Multiple Features'] += bundle.corr_count
+        if assigned_count > 0:
+            self.library_stats['Total Assigned Reads'] += bundle.corr_count
+
+            feature_corrected_count = bundle.corr_count / assigned_count
+            bundle.feat_count += len(assignments)
+            bundle.assignments |= assignments
+
+            for hit in assignments:
+                self.feat_counts[hit[self.feat]] += feature_corrected_count
 
         # Todo: this will record antisense sequences as reverse complement
         #  Do we need intermediate files? Is it worth converting?
         if self.save_intermediate_file:
             # sequence, cor_counts, strand, start, end, feat1;feat2;feat3
-            self.alignments.append((aln.read, bundle.cor_counts, aln.iv.strand, aln.iv.start, aln.iv.end,
-                                    ';'.join(map(lambda x: x[self.feat], hits))))
+            self.alignments.append((aln.read, bundle.corr_count, aln.iv.strand, aln.iv.start, aln.iv.end,
+                                    ';'.join(map(lambda x: x[self.feat], assignments))))
 
     def finalize_bundle(self, bundle) -> None:
-        if bundle.feat_count > 1:
-            self.stats_counts['_ambiguous_alignments_features'] += 1
-            self.stats_counts['_ambiguous_reads_features'] += bundle.dup_counts
+        assignment_count = len(bundle.assignments)
+
+        if assignment_count == 0:
+            self.library_stats['Total Unassigned Sequences'] += 1
         else:
-            self.stats_counts['_alignments_unique_features'] += 1
-            self.stats_counts['_reads_unique_features'] += 1
+            self.library_stats['Total Assigned Sequences'] += 1
+
+            self.library_stats['Sequences Assigned to Single Feature'] += 1 * (assignment_count == 1)
+            self.library_stats['Sequences Assigned to Multiple Features'] += 1 * (bundle.feat_count > 1)
+            self.library_stats['Assigned Single-Mapping Reads'] += bundle.read_count * (bundle.loci_count == 1)
+            self.library_stats['Assigned Multi-Mapping Reads'] += bundle.read_count * (bundle.loci_count > 1)
 
     def write_intermediate_file(self):
-        with open(f"{self.out_prefix}_{self.library_name}_out_aln_table.txt", 'w') as imf:
+        with open(f"{self.out_prefix}_{self.library['Name']}_aln_table.txt", 'w') as imf:
             imf.writelines(
                 # sequence, cor_counts, strand, start, end, feat1a/feat1b;feat2;...
                 map(lambda rec: "%s\t%f\t%c\t%d\t%d\t%s\n" % rec, self.alignments)
             )
 
+
+class SummaryStats:
+    def __init__(self, libraries, out_prefix):
+        self.out_prefix = out_prefix
+        self.libraries = libraries
+
+        self.pipeline_stats_df = pd.DataFrame(index=["Total Reads", "Retained Reads", "Unique", "Mapped", "Aligned"])
+        self.feat_counts_df = pd.DataFrame(index=FeatureSelector.attributes.keys())
+        self.lib_stats_df = pd.DataFrame(index=LibraryStats.summary_categories)
+        self.nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
+        self.report_pipeline_stats = self.is_pipeline_invocation()
+
+    def is_pipeline_invocation(self):
+        for library in self.libraries:
+            lib_basename = os.path.splitext(os.path.basename(library['File']))[0]
+            fastp_logfile = lib_basename + "_qc.json"
+            if not os.path.isfile(fastp_logfile):
+                return False
+            else:
+                library['fastp_log'] = fastp_logfile
+                library['collapsed'] = lib_basename + "_collapsed.fa"
+
+        return True
+
     def write_report_files(self, alias, prefix=None):
         if prefix is None: prefix = self.out_prefix
         self.write_summary_statistics(prefix)
+        self.write_pipeline_statistics(prefix)
         self.write_feat_counts(alias, prefix)
         self.write_nt_len_mat(prefix)
 
     def write_summary_statistics(self, prefix):
-        with open(prefix + '_stats.txt', 'w') as out:
-            out.write('Summary Statistics\n')
-            out.writelines("%s\t%d\n" % (key, val) for key, val in self.stats_counts.items())
+        # Round all counts to 2 decimal places
+        self.lib_stats_df = self.lib_stats_df.round(decimals=2)
+        # Rearrange columns in sorted order, where each column represents a library/worker counting result
+        self.lib_stats_df = self.lib_stats_df.reindex(sorted(self.lib_stats_df.columns), axis="columns")
+
+        self.lib_stats_df.to_csv(prefix + '_alignment_stats.csv')
+
+    def write_pipeline_statistics(self, prefix):
+        # Determine if the necessary logfiles are present
+        pass
 
     def write_feat_counts(self, alias, prefix):
-        """Writes selected features and their associated counts to `prefix`_out_feature_counts.csv
+        """Writes selected features and their associated counts to {prefix}_out_feature_counts.csv
 
         The resulting table will have the following columns:
             - Feature ID: the "ID" attribute of the
@@ -303,69 +356,37 @@ class StatsCollector:
         summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(alias.get(feat, feat))))
         # Add Classes column for classes associated with the given feature
         feat_class_map = lambda feat: ', '.join(FeatureSelector.attributes[feat][0][1])
-        summary.insert(1, "Feature Class", summary.index.map(feat_class_map, feat_class_map))
+        summary.insert(1, "Feature Class", summary.index.map(feat_class_map))
         # Sort by index, make index its own column, and rename it to Feature ID
         summary = summary.sort_index().reset_index().rename(columns={"index": "Feature ID"})
 
-        summary.to_csv(prefix + '_out_feature_counts.csv', index=False)
+        summary.to_csv(prefix + '_feature_counts.csv', index=False)
 
     def write_nt_len_mat(self, prefix):
-        pd.DataFrame(self.nt_len_mat).to_csv(prefix + '_out_nt_len_dist.csv')
+        pd.DataFrame(self.nt_len_mat).to_csv(prefix + '_nt_len_dist.csv')
 
-    def get_mp_return(self) -> Tuple[Counter, dict, dict]:
-        """Produces a tuple of only relevant stats, for efficiency of serialization upon MP return"""
-        return self.feat_counts, self.stats_counts, self.nt_len_mat
-
-    def merge(self, other: 'StatsCollector'):
+    def add_library(self, other: 'LibraryStats'):
         # Add incoming feature counts as a new column of the data frame
         # Since other.feat_counts is a Counter object, unrecorded features default to 0 on lookup
-        self.feat_counts_df[f"{other.library_name}"] = self.feat_counts_df.index.map(other.feat_counts)
-
-        for stat, count in other.stats_counts.items():
-            self.stats_counts[stat] += count
+        self.feat_counts_df[other.library["Name"]] = self.feat_counts_df.index.map(other.feat_counts)
+        self.lib_stats_df[other.library["Name"]] = self.lib_stats_df.index.map(other.library_stats)
 
         for nt, counter in other.nt_len_mat.items():
             self.nt_len_mat[nt].update(counter)
 
-    """
-	stats_counts:
-	• Before feature assignment (upon acquisition of each bundle)
-		○ _unique_sequences_aligned: increment once per unique read (bundle)
-		○ _aligned_reads: increment by dup counts (fasta header) for each bundle, regardless
-		○ _aligned_reads_multi_mapping: increment by dup counts if bundle length is > 1
-		○ _aligned_reads_unique_mapping: increment by dup counts if bundle is singular
-		○ _no_feature: increment by cor counts if no features were assigned
-    • After feature assignment (per-bundle)
-		○ See bundle_feats and bundle_class below
-	• After feature assignment (after processing each bundle completely)
-		○ _reads_unique_features: increment by 1 if bundle_class and bundle_feats lengths are each == 1
-		○ _alignments_unique_features: increment by 1 if bundle_class and bundle_feats lengths are each == 1
-		○ _ambiguous_alignments_classes: increment by 1 if bundle_class length is > 1
-		○ _ambiguous_reads_classes: increment by dup counts if bundle_class length is > 1
-		○ _ambiguous_alignments_features: increment by 1 if bundle_feats length is > 1
-        ○_ambiguous_reads_features: increment by dup counts if bundle_feats length is > 1
+        if self.report_pipeline_stats:
+            with open(other.library['fastp_log'], 'r') as f:
+                fastp_summary = json.load(f)['summary']
 
-	bundle_feats (per-bundle)
-		• feature: at aln_feats.item(), increment by cor counts (this is for the case that assigned features is 1)
+            unique_count = os.popen(f"wc -l {other.library['collapsed']}").read()
 
-	bundle_class (per-bundle)
-		• ambiguous: for all (unique) classes, if length > 1 then increment by 1
-		• class: at aln_classes.item(), increment by cor counts if assigned classes length > 1
+            other_summary = {
+                "Total Reads": fastp_summary['before_filtering']['total_reads'],
+                "Retained Reads": fastp_summary['after_filtering']['total_reads'],
+                "Unique Reads": os.popen("""6 spaces, line count, space"""),
+                "Mapped": other.library_stats["Total Assigned Sequences"]
+                          + other.library_stats["Total Unassigned Sequences"],
+                "Aligned Reads": other.library_stats["Total Assigned Sequences"]
+            }
 
-	class_counts (after processing each bundle)
-		• ambiguous: increment by sum of bundle_class values if bundle_class length is greater than 1
-
-	STATS FILES:
-	• If intermediate files (args.out_prefix + '_out_aln_table.txt'):
-		○ For each alignment in the bundle, write tab delimited:
-			Aln.read	Cor_counts	Aln.iv.strand	Aln.iv.start	Aln.iv.end	C1;C2;...	F1;F2;...
-	• At conclusion of counting (args.out_prefix + '_stats.txt')
-		○ Header: Summary Statistics
-		○ Tab delimited stat -> count, one per line
-		○ Tab delimited _no_feature -> count, one per line
-	• Final CSV outputs from pandas DataFrames
-		○ Class_counts (args.out_prefix + '_out_class_counts.csv')
-		○ Feature_counts (args.out_prefix + '_out_feature_counts.txt')
-		○ Nt_len_mat (args.out_prefix + '_out_nt_len_dist.csv')
-
-    """
+            self.pipeline_stats_df[other.library["Name"]] = self.pipeline_stats_df.index.map(other_summary)

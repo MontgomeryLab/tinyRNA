@@ -1,29 +1,22 @@
+import multiprocessing as mp
 import argparse
+import HTSeq
 import queue
 import time
+import csv
 import os
 
-import multiprocessing as mp
-import numpy as np
-import csv
-
-from aquatx.srna.FeatureSelector import FeatureSelector, StatsCollector
-from aquatx.srna.hts_parsing import *
-from typing import Tuple, Set, List, Dict
+from aquatx.srna.FeatureSelector import FeatureSelector, LibraryStats, SummaryStats
+from aquatx.srna.hts_parsing import read_SAM, build_reference_tables, SelectionRules, FeatureSources
+from typing import Tuple
 
 # Global variables for copy-on-write multiprocessing
 features: 'HTSeq.GenomicArrayOfSets' = HTSeq.GenomicArrayOfSets("auto", stranded=True)
 selector: 'FeatureSelector' = None
 
 # Type aliases for human readability
-Features = HTSeq.GenomicArrayOfSets  # interval -> set of associated features
-Attributes = Dict[str, list]  # feature -> feature attributes
-FeatureSources = Set[Tuple[str, str]]
-SelectionRules = List[dict]
-SAM_input = Tuple[str, str]
 AssignedFeatures = set
 N_Candidates = int
-Alias = dict
 
 # Todo: better way of handling Library titles. Filename or Report Title from run config?
 #  input-file + out prefix combo? "-i Lib303.sam N2_rep_1, Lib311.sam mut-16(pk710)"
@@ -54,6 +47,7 @@ def load_samples(samples_csv: str):
         """The input samples.csv may contain either fastq or sam files"""
 
         sample_file_ext = os.path.splitext(csv_row_file)[1].lower()
+
         if sample_file_ext == ".fastq":
             # Note: these fastq files MUST be included as an input (but not argument) for the CWL step
             return os.path.splitext(csv_row_file)[0] + "_aligned_seqs.sam"
@@ -61,8 +55,9 @@ def load_samples(samples_csv: str):
             if not os.path.isabs(csv_row_file):
                 raise ValueError("The following file must be expressed as an absolute path:\n%s" % (csv_row_file,))
             return csv_row_file
-
-    # Eventually want {group}_replicate_{replicate_number}
+        else:
+            raise ValueError("Input filenames defined in your samples CSV file must have a .fastq or sam extension.\n"
+                             "The following file contained neither:\n%s" % (csv_row_file,))
 
     inputs = list()
 
@@ -72,10 +67,11 @@ def load_samples(samples_csv: str):
 
         next(csv_reader)  # Skip header line
         for row in csv_reader:
-            library_name = f"{row['Group']}_{row['Replicate']}"
+            library_name = f"{row['Group']}_replicate_{row['Replicate']}"
             library_file_name = get_input_filename(row['File'])
+            record = {"Name": library_name, "File": library_file_name}
 
-            inputs.append((library_file_name, library_name))
+            inputs.append(record)
 
     return inputs
 
@@ -114,61 +110,6 @@ def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
     return rules, gff_files
 
 
-def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> Tuple[Features, Attributes, Alias]:
-    """A simplified and slightly modified version of HTSeq.create_genomicarrayofsets
-
-    This modification changes the information stored in an interval's step vector
-    within the features table. This stores (feature ID, feature type) tuples rather
-    than the feature ID alone. It also allows for cataloguing features by any attribute,
-    not just by ID, on a per GFF file basis.
-
-    Note: at this time if the same feature is defined in multiple GFF files using
-    different ID attributes, the feature will
-    """
-
-    start_time = time.time()
-
-    # Patch the GFF attribute parser to support comma separated attribute value lists
-    setattr(HTSeq.features, 'parse_GFF_attribute_string', parse_GFF_attribute_string)
-
-    # Obtain an ordered list of unique attributes of interest from selection rules
-    attrs_of_interest = list(np.unique(["Class"] + [attr['Identity'][0] for attr in rules]))
-
-    feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
-    attrs, alias = {}, {}
-
-    for file, preferred_id in gff_files:
-        gff = HTSeq.GFF_Reader(file)
-        for row in gff:
-            if row.iv.strand == ".":
-                raise ValueError(f"Feature {row.name} in {file} has no strand information.")
-
-            try:
-                # Add feature_id -> feature_interval record
-                feature_id = row.attr["ID"][0]
-                feats[row.iv] += feature_id
-                row_attrs = [(interest, row.attr[interest]) for interest in attrs_of_interest]
-
-                # Add feature_id -> feature_alias_tuple record
-                if preferred_id != "ID":
-                    # If an alias already exists for this feature, append to feature's aliases
-                    alias[feature_id] = alias.get(feature_id, ()) + row.attr[preferred_id]
-            except KeyError as ke:
-                raise ValueError(f"Feature {row.name} does not contain a {ke} attribute in {file}")
-
-            if feature_id in attrs and row_attrs != attrs[feature_id]:
-                # If an attribute record already exists for this feature, and this row provides new attributes,
-                #  append the new attribute values to the existing values
-                cur_attrs = attrs[feature_id]
-                row_attrs = [(cur[0], cur[1] + new[1]) for cur, new in zip(cur_attrs, row_attrs)]
-
-            # Add feature_id -> feature_attributes record
-            attrs[feature_id] = row_attrs
-
-    print("GFF parsing took %.2f seconds" % (time.time() - start_time))
-    return feats, attrs, alias
-
-
 def assign_features(alignment: 'HTSeq.SAM_Alignment') -> Tuple[AssignedFeatures, N_Candidates]:
 
     feat_matches, assignment = list(), set()
@@ -186,19 +127,13 @@ def assign_features(alignment: 'HTSeq.SAM_Alignment') -> Tuple[AssignedFeatures,
     return assignment, len(feat_matches)
 
 
-def get_library_name(sam_file):
-    filename = os.path.splitext(os.path.basename(sam_file))[0]
-    return filename.replace("_aligned_seqs", "")
-
-
-def count_reads(sam_tuple: SAM_input, return_queue: mp.Queue, intermediate_file: bool = False, out_prefix: str = None):
+def count_reads(library: dict, return_queue: mp.Queue, intermediate_file: bool = False, out_prefix: str = None):
 
     # For complete SAM records (slower):
     # 1. Change the following line to HTSeq.BAM_Reader(sam_file)
     # 2. Change FeatureSelector.choose() to assign nt5end from chr(alignment.read.seq[0])
-    read_seq = read_SAM(sam_tuple[0])
-    lib_name = sam_tuple[1]
-    stats = StatsCollector(lib_name, out_prefix, intermediate_file)
+    read_seq = read_SAM(library["File"])
+    stats = LibraryStats(library, out_prefix, intermediate_file)
 
     # For each sequence in the sam file...
     for bundle in HTSeq.bundle_multiple_alignments(read_seq):
@@ -234,13 +169,14 @@ def map_and_reduce(sam_files, work_args, ret_queue):
     merge_start = time.time()
 
     # Collect counts from all pool workers and merge
-    merged_counts = StatsCollector("Summary")
+    out_prefix = work_args[-1]
+    summary_stats = SummaryStats(sam_files, out_prefix)
     for _ in sam_files:
-        sam_stats = ret_queue.get()
-        merged_counts.merge(sam_stats)
+        lib_stats = ret_queue.get()
+        summary_stats.add_library(lib_stats)
 
     print("Merging took %.2f seconds" % (time.time() - merge_start))
-    return merged_counts
+    return summary_stats
 
 
 def main():
