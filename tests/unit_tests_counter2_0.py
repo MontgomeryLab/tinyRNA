@@ -28,10 +28,11 @@ class CounterTests(unittest.TestCase):
         self.strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
 
         # ID, Key, Value, Hierarchy, Strand, 5pnt, Length, Match, Source
-        self.csv_row_dict = {'id_attr': "Alias", 'at_key': "Class", 'at_val': "CSR", 'rank': "1", 'strand': "antisense",
-                             'nt5': '"C,G,U"', 'length': "all", 'match': "Partial",
-                             'gff': "./testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3"}
+        self.csv_feat_row_dict = {'id_attr': "Alias", 'at_key': "Class", 'at_val': "CSR", 'rank': "1",
+                                  'strand': "antisense", 'nt5': '"C,G,U"', 'length': "all", 'match': "Partial",
+                                  'gff': "./testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3"}
 
+        self.csv_samp_row_dict = {'file': self.short_sam_file, 'group': "test_group", 'rep': "0"}
 
     # === HELPERS ===
 
@@ -42,12 +43,17 @@ class CounterTests(unittest.TestCase):
         attr_str = self.get_gff_attr_string(gff_file_content)
         return counter.parse_GFF_attribute_string(attr_str)
 
-    def features_csv(self, rules) -> str:
-        header = "\uFEFFID Attribute,Attribute Key,Attribute Value,Hierarchy,Strand (sense/antisense/both),5' End Nucleotide,Length,Match,Feature Source"
-        return '\n'.join([header, *map(','.join, rules)])
+    def csv(self, type, rows):
+        header = "\uFEFF"
+        if type == "features.csv":
+            header = "\uFEFFID Attribute,Attribute Key,Attribute Value,Hierarchy,Strand (sense/antisense/both),5' End Nucleotide,Length,Match,Feature Source"
+        elif type == "samples.csv":
+            header = "\uFEFFInput FastQ/A Files,Sample/Group Name,Replicate number"
+
+        return '\n'.join([header, *map(','.join, rows)])
     
     def feat_csv_test_row(self):
-        return ','.join(self.csv_row_dict.values())
+        return ','.join(self.csv_feat_row_dict.values())
         
     # === TESTS ===
 
@@ -82,13 +88,13 @@ class CounterTests(unittest.TestCase):
 
     def test_load_config_single(self):
         # Features CSV with a single rule/row
-        row = self.csv_row_dict.values()
-        csv = self.features_csv([row])
+        row = self.csv_feat_row_dict.values()
+        csv = self.csv("features.csv", [row])
 
         with patch('aquatx.srna.counter2_0.open', mock_open(read_data=csv)):
             ruleset, gff_files = counter.load_config('/dev/null')
 
-        r = self.csv_row_dict
+        r = self.csv_feat_row_dict
         expected_gff_ret = {(r['gff'], r['id_attr'])}
         expected_ruleset = [{'Strand': self.strand[r['strand']], 'Hierarchy': int(r['rank']), 'nt5': 'C,G,T',
                              'Length': r['length'], 'Identity': (r['at_key'], r['at_val']), 'Strict': r['match'] == 'Full'}]
@@ -100,13 +106,13 @@ class CounterTests(unittest.TestCase):
 
     def test_load_config_duplicate_rules(self):
         # Features CSV with two duplicate rules/rows
-        row = self.csv_row_dict.values()
-        csv = self.features_csv([row, row])  # Duplicate rows
+        row = self.csv_feat_row_dict.values()
+        csv = self.csv("features.csv", [row, row])  # Duplicate rows
         
         with patch('aquatx.srna.counter2_0.open', mock_open(read_data=csv)):
             ruleset, gff_files = counter.load_config('/dev/null')
 
-        r = self.csv_row_dict
+        r = self.csv_feat_row_dict
         expected_gff_ret = {(r['gff'], r['id_attr'])}
         expected_ruleset = [
             {'Strand': self.strand[r['strand']], 'Hierarchy': int(r['rank']), 'nt5': 'C,G,T',
@@ -118,14 +124,30 @@ class CounterTests(unittest.TestCase):
     """Does load_config convert uracil to thymine for proper matching with cDNA sequences?"""
 
     def test_load_config_rna_to_cDNA(self):
-        row = self.csv_row_dict.copy()
+        row = self.csv_feat_row_dict.copy()
         row['nt5'] = 'U'
-        csv = self.features_csv([row.values()])
+        csv = self.csv("features.csv", [row.values()])
 
         with patch('aquatx.srna.counter2_0.open', mock_open(read_data=csv)):
             ruleset, _ = counter.load_config('/dev/null')
 
         self.assertEqual(ruleset[0]['nt5'], 'T')
+
+    """Does load_samples correctly parse a single record samples.csv?"""
+
+    def test_load_samples_single(self):
+        row = self.csv_samp_row_dict
+        csv = self.csv("samples.csv", [row.values()])
+
+        with patch('aquatx.srna.counter2_0.open', mock_open(read_data=csv)):
+            inputs = counter.load_samples('/dev/null')
+
+        expected_lib_name = f"{row['group']}_replicate_{row['rep']}"
+        expected_result = [(self.short_sam_file, expected_lib_name)]
+        self.assertEqual(expected_result, inputs)
+
+
+    """Does load_samples throw ValueError if a non-absolute path to a SAM file is provided?"""
 
     """Do GenomicArraysOfSets slice to step intervals that overlap, even if by just one base?"""
 
@@ -253,7 +275,7 @@ class CounterTests(unittest.TestCase):
         rules = [["Alias", "Class", "CSR", "1", "antisense", "all", "all", "Full", self.gff_file],
                  ["sequence_name", "Class", "piRNA", "2", "sense", "all", "all", "Partial", self.gff_file]]
 
-        csv = self.features_csv(rules)
+        csv = self.csv("features.csv", rules)
         cmd = f"counter -i {self.sam_file} -c /dev/null -o test".split(" ")
 
         with patch("aquatx.srna.counter2_0.open", mock_open(read_data=csv)):
