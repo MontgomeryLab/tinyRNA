@@ -6,11 +6,10 @@ class: CommandLineTool
 baseCommand: aquatx-count
 
 inputs:
-  input_files:
-    type: File[]
+  samples_file:
+    type: File
     inputBinding:
       prefix: -i
-      itemSeparator: ','
       position: 0
 
   config_file:
@@ -20,7 +19,7 @@ inputs:
       position: 1
 
   out_prefix:
-    type: string[]
+    type: string
     inputBinding:
       position: 2
       prefix: -o
@@ -31,25 +30,26 @@ inputs:
       position: 3
       prefix: -t
 
+  fastp_logs:
+    type: File[]?
+
 outputs:
   feature_counts:
     type: File
     outputBinding:
-      glob: $(inputs.out_prefix)_out_feature_counts.txt
+      glob: $(inputs.out_prefix)_feature_counts.csv
 
   other_counts:
     type: File[]
     outputBinding:
-      glob:
-        - $(inputs.out_prefix)_out_nt_len_dist.csv
-        - $(inputs.out_prefix)_out_class_counts.csv
+      glob: $(inputs.out_prefix)_nt_len_dist.csv
 
   stats_file:
     type: File
     outputBinding:
-      glob: $(inputs.out_prefix)_stats.txt
+      glob: $(inputs.out_prefix)_alignment_stats.csv
 
   intermed_out_file:
     type: File[]?
     outputBinding:
-      glob: $(*_out_aln_table.txt)
+      glob: $(*_aln_table.txt)

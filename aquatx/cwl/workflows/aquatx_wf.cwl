@@ -63,14 +63,10 @@ inputs:
   shared_mem: boolean?
 
   #counter inputs
-  out_prefix: string[]
+  output_prefix: string
+  samples_csv: File
   features_csv: File
   intermed_file: boolean?
-
-  # merge and deseq
-  output_file_stats: string
-  output_file_counts: string
-  output_prefix: string
 
 steps:
   fastp:
@@ -144,10 +140,11 @@ steps:
   counts:
     run: ../tools/aquatx-count.cwl
     in:
-      input_files: bowtie/sam_out
+      samples_file: samples_csv
       config_file: features_csv
-      out_prefix: out_prefix
+      out_prefix: output_prefix
       intermed_file: intermed_file
+      fastp_logs: report_html
     out: [feature_counts, other_counts, stats_file, intermed_out_file]
 
   deseq2:
@@ -178,7 +175,6 @@ outputs:
     type: File[]
     outputSource: bowtie/sam_out
 
-  # No, that's not a typo. This is how CWL does 2d arrays...
   other_count_files:
     type: File[]
     outputSource: counts/other_counts
