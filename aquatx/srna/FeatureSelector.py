@@ -11,6 +11,7 @@ import re
 # Type aliases for human readability
 IntervalFeatures = Tuple[int, int, Set[str]]  # A set of features associated with an interval
 
+
 class FeatureSelector:
     """Performs hierarchical selection given a set of candidate features for a locus
 
@@ -291,46 +292,53 @@ class LibraryStats:
 
 
 class SummaryStats:
+
+    summary_categories = ["Total Reads", "Retained Reads", "Unique Sequences", "Mapped Sequences", "Aligned Reads"]
+
     def __init__(self, libraries, out_prefix):
         self.out_prefix = out_prefix
         self.libraries = libraries
 
-        self.pipeline_stats_df = pd.DataFrame(index=["Total Reads", "Retained Reads", "Unique", "Mapped", "Aligned"])
+        self.pipeline_stats_df = pd.DataFrame(index=SummaryStats.summary_categories)
         self.feat_counts_df = pd.DataFrame(index=FeatureSelector.attributes.keys())
         self.lib_stats_df = pd.DataFrame(index=LibraryStats.summary_categories)
         self.nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
         self.report_pipeline_stats = self.is_pipeline_invocation()
 
     def is_pipeline_invocation(self):
+        """Check for pipeline outputs from previous steps in working directory"""
+
         for library in self.libraries:
-            lib_basename = os.path.splitext(os.path.basename(library['File']))[0]
+            sam_basename = os.path.splitext(os.path.basename(library['File']))[0]
+            lib_basename = sam_basename.replace("_aligned_seqs", "")
             fastp_logfile = lib_basename + "_qc.json"
-            if not os.path.isfile(fastp_logfile):
+            collapsed_fa = lib_basename + "_collapsed.fa"
+
+            if not os.path.isfile(fastp_logfile) or not os.path.isfile(collapsed_fa):
                 return False
             else:
                 library['fastp_log'] = fastp_logfile
-                library['collapsed'] = lib_basename + "_collapsed.fa"
+                library['collapsed'] = collapsed_fa
 
         return True
 
     def write_report_files(self, alias, prefix=None):
         if prefix is None: prefix = self.out_prefix
-        self.write_summary_statistics(prefix)
+        self.write_alignment_statistics(prefix)
         self.write_pipeline_statistics(prefix)
         self.write_feat_counts(alias, prefix)
         self.write_nt_len_mat(prefix)
 
-    def write_summary_statistics(self, prefix):
-        # Round all counts to 2 decimal places
-        self.lib_stats_df = self.lib_stats_df.round(decimals=2)
-        # Rearrange columns in sorted order, where each column represents a library/worker counting result
-        self.lib_stats_df = self.lib_stats_df.reindex(sorted(self.lib_stats_df.columns), axis="columns")
-
+    def write_alignment_statistics(self, prefix):
+        # Sort columns by title and round all counts to 2 decimal places
+        self.lib_stats_df = self.sort_cols_and_round(self.lib_stats_df)
         self.lib_stats_df.to_csv(prefix + '_alignment_stats.csv')
 
     def write_pipeline_statistics(self, prefix):
-        # Determine if the necessary logfiles are present
-        pass
+        if self.report_pipeline_stats:
+            # Sort columns by title and round all counts to 2 decimal places
+            self.pipeline_stats_df = self.sort_cols_and_round(self.pipeline_stats_df)
+            self.pipeline_stats_df.to_csv(prefix + '_summary_stats.csv')
 
     def write_feat_counts(self, alias, prefix):
         """Writes selected features and their associated counts to {prefix}_out_feature_counts.csv
@@ -348,10 +356,8 @@ class SummaryStats:
             abc123, def456, 123.456 	gene1
         """
 
-        # Round all counts columns to 2 decimal places
-        summary = self.feat_counts_df.round(decimals=2)
-        # Rearrange columns in sorted order, where each column represents a library/worker counting result
-        summary = summary.reindex(sorted(summary.columns), axis="columns")
+        # Sort columns by title and round all counts to 2 decimal places
+        summary = self.sort_cols_and_round(self.feat_counts_df)
         # Add Feature Name column, which is the feature alias (default is Feature ID if no alias exists)
         summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(alias.get(feat, feat))))
         # Add Classes column for classes associated with the given feature
@@ -375,18 +381,47 @@ class SummaryStats:
             self.nt_len_mat[nt].update(counter)
 
         if self.report_pipeline_stats:
-            with open(other.library['fastp_log'], 'r') as f:
-                fastp_summary = json.load(f)['summary']
-
-            unique_count = os.popen(f"wc -l {other.library['collapsed']}").read()
+            total_reads, retained_reads = self.get_fastp_stats(other.library['fastp_log'])
+            unique_sequences = self.get_collapser_stats(other.library['collapsed'])
+            mapped_seqs = other.library_stats["Total Assigned Sequences"] + other.library_stats["Total Unassigned Sequences"]
+            aligned_reads = other.library_stats["Total Assigned Reads"]
 
             other_summary = {
-                "Total Reads": fastp_summary['before_filtering']['total_reads'],
-                "Retained Reads": fastp_summary['after_filtering']['total_reads'],
-                "Unique Reads": os.popen("""6 spaces, line count, space"""),
-                "Mapped": other.library_stats["Total Assigned Sequences"]
-                          + other.library_stats["Total Unassigned Sequences"],
-                "Aligned Reads": other.library_stats["Total Assigned Sequences"]
+                "Total Reads": total_reads,
+                "Retained Reads": retained_reads,
+                "Unique Sequences": unique_sequences,
+                "Mapped Sequences": mapped_seqs,
+                "Aligned Reads": aligned_reads
             }
 
             self.pipeline_stats_df[other.library["Name"]] = self.pipeline_stats_df.index.map(other_summary)
+
+    @staticmethod
+    def get_fastp_stats(logfile):
+        with open(logfile, 'r') as f:
+            fastp_summary = json.load(f)['summary']
+
+        total_reads = fastp_summary['before_filtering']['total_reads']
+        retained_reads = fastp_summary['after_filtering']['total_reads']
+
+        return total_reads, retained_reads
+
+    @staticmethod
+    def get_collapser_stats(collapsed):
+        with open(collapsed, 'r') as f:
+            # Get file size and seek to 75 bytes from end
+            size = f.seek(0, 2)
+            f.seek(size - 75)
+
+            # Read the last 75 bytes of the collapsed fasta
+            tail = f.read(75)
+
+        # Parse unique sequence count from the final fasta header
+        from_pos = tail.rfind(">") + 1
+        to_pos = tail.rfind("_count=")
+        return tail[from_pos:to_pos]
+
+    @staticmethod
+    def sort_cols_and_round(df):
+        sorted_columns = sorted(df.columns)
+        return df.round(decimals=2).reindex(sorted_columns, axis="columns")

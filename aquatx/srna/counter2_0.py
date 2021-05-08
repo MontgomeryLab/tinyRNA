@@ -137,15 +137,14 @@ def count_reads(library: dict, return_queue: mp.Queue, intermediate_file: bool =
 
     # For each sequence in the sam file...
     for bundle in HTSeq.bundle_multiple_alignments(read_seq):
-        bundle_stat = stats.count_bundle(bundle)
+        bundle_stats = stats.count_bundle(bundle)
 
         # For each alignment of the given sequence...
         for alignment in bundle:
             hits, n_candidates = assign_features(alignment)
-            if n_candidates > 0 and len(hits):
-                stats.count_bundle_alignments(bundle_stat, alignment, hits)
+            stats.count_bundle_alignments(bundle_stats, alignment, hits)
 
-        stats.finalize_bundle(bundle_stat)
+        stats.finalize_bundle(bundle_stats)
     # Place results in the multiprocessing queue to be merged by parent process
     # We only want to return pertinent/minimal stats since this will be pickled
     return_queue.put(stats)
@@ -154,29 +153,28 @@ def count_reads(library: dict, return_queue: mp.Queue, intermediate_file: bool =
         stats.write_intermediate_file()
 
 
-def map_and_reduce(sam_files, work_args, ret_queue):
+def map_and_reduce(libraries, work_args, ret_queue):
     mapred_start = time.time()
 
     # Use a multiprocessing pool if multiple sam files were provided
     # Otherwise perform counts in this process
-    if len(sam_files) > 1:
-        with mp.Pool(len(sam_files)) as pool:
+    if len(libraries) > 1:
+        with mp.Pool(len(libraries)) as pool:
             pool.starmap(count_reads, work_args)
     else:
-        count_reads(*work_args.pop())
+        count_reads(*work_args[0])
 
     print("Counting took %.2f seconds" % (time.time() - mapred_start))
     merge_start = time.time()
 
     # Collect counts from all pool workers and merge
-    out_prefix = work_args[-1]
-    summary_stats = SummaryStats(sam_files, out_prefix)
-    for _ in sam_files:
+    summary = SummaryStats(libraries, work_args[0][-1])
+    for _ in libraries:
         lib_stats = ret_queue.get()
-        summary_stats.add_library(lib_stats)
+        summary.add_library(lib_stats)
 
     print("Merging took %.2f seconds" % (time.time() - merge_start))
-    return summary_stats
+    return summary
 
 
 def main():
@@ -184,11 +182,11 @@ def main():
     # Get command line arguments.
     args = get_args()
 
+    # Determine SAM inputs and their associated library names
+    libraries = load_samples(args.input_csv)
+
     # Load selection rules and feature sources from config
     selection_rules, gff_file_set = load_config(args.config)
-
-    # Determine SAM inputs and their associated library names
-    sam_files = load_samples(args.input_csv)
 
     # Build features table and selector, global for multiprocessing
     global features, selector
@@ -196,11 +194,11 @@ def main():
     selector = FeatureSelector(selection_rules, attributes)
 
     # Prepare for multiprocessing pool
-    ret_queue = mp.Manager().Queue() if len(sam_files) > 1 else queue.Queue()
-    work_args = [(assignment, ret_queue, args.intermed_file, args.out_prefix) for assignment in sam_files]
+    ret_queue = mp.Manager().Queue() if len(libraries) > 1 else queue.Queue()
+    work_args = [(assignment, ret_queue, args.intermed_file, args.out_prefix) for assignment in libraries]
 
     # Assign and count features using multiprocessing and merge results
-    merged_counts = map_and_reduce(sam_files, work_args, ret_queue)
+    merged_counts = map_and_reduce(libraries, work_args, ret_queue)
 
     # Write final outputs
     merged_counts.write_report_files(alias, args.out_prefix)
