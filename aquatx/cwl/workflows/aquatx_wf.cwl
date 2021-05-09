@@ -145,6 +145,7 @@ steps:
       out_prefix: output_prefix
       intermed_file: intermed_file
       fastp_logs: report_html
+      collapsed_fa: collapsed_fa
     out: [feature_counts, other_counts, stats_file, intermed_out_file]
 
   deseq2:

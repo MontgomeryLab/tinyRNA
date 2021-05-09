@@ -30,7 +30,11 @@ inputs:
       position: 3
       prefix: -t
 
+  # These optional inputs are for producing pipeline summary statistics at the conclusion of counting
   fastp_logs:
+    type: File[]?
+
+  collapsed_fa:
     type: File[]?
 
 outputs:
