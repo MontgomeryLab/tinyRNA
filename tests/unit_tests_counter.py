@@ -4,7 +4,7 @@ from unittest.mock import patch, mock_open, call, Mock
 
 import HTSeq
 
-import aquatx.srna.counter2_0 as counter
+import aquatx.srna.counter as counter
 
 class CounterTests(unittest.TestCase):
 
@@ -57,7 +57,7 @@ class CounterTests(unittest.TestCase):
         row = self.csv_feat_row_dict.values()
         csv = self.csv("features.csv", [row])
 
-        with patch('aquatx.srna.counter2_0.open', mock_open(read_data=csv)):
+        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
             ruleset, gff_files = counter.load_config('/dev/null')
 
         r = self.csv_feat_row_dict
@@ -75,7 +75,7 @@ class CounterTests(unittest.TestCase):
         row = self.csv_feat_row_dict.values()
         csv = self.csv("features.csv", [row, row])  # Duplicate rows
         
-        with patch('aquatx.srna.counter2_0.open', mock_open(read_data=csv)):
+        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
             ruleset, gff_files = counter.load_config('/dev/null')
 
         r = self.csv_feat_row_dict
@@ -94,7 +94,7 @@ class CounterTests(unittest.TestCase):
         row['nt5'] = 'U'
         csv = self.csv("features.csv", [row.values()])
 
-        with patch('aquatx.srna.counter2_0.open', mock_open(read_data=csv)):
+        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
             ruleset, _ = counter.load_config('/dev/null')
 
         self.assertEqual(ruleset[0]['nt5'], 'T')
@@ -105,7 +105,7 @@ class CounterTests(unittest.TestCase):
         row = self.csv_samp_row_dict
         csv = self.csv("samples.csv", [row.values()])
 
-        with patch('aquatx.srna.counter2_0.open', mock_open(read_data=csv)):
+        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
             inputs = counter.load_samples('/dev/null')
 
         expected_lib_name = f"{row['group']}_replicate_{row['rep']}"
@@ -163,7 +163,7 @@ class CounterTests(unittest.TestCase):
         csv = self.csv("features.csv", rules)
         cmd = f"counter -i {self.sam_file} -c /dev/null -o test".split(" ")
 
-        with patch("aquatx.srna.counter2_0.open", mock_open(read_data=csv)):
+        with patch("aquatx.srna.counter.open", mock_open(read_data=csv)):
             with patch("sys.argv", cmd):
                 counter.main()
 
