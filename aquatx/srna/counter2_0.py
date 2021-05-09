@@ -6,7 +6,8 @@ import time
 import csv
 import os
 
-from aquatx.srna.FeatureSelector import FeatureSelector, LibraryStats, SummaryStats
+from aquatx.srna.FeatureSelector import FeatureSelector
+from aquatx.srna.statistics import LibraryStats, SummaryStats
 from aquatx.srna.hts_parsing import read_SAM, build_reference_tables, SelectionRules, FeatureSources
 from typing import Tuple
 
@@ -56,7 +57,7 @@ def load_samples(samples_csv: str):
                 raise ValueError("The following file must be expressed as an absolute path:\n%s" % (csv_row_file,))
             return csv_row_file
         else:
-            raise ValueError("Input filenames defined in your samples CSV file must have a .fastq or sam extension.\n"
+            raise ValueError("The filenames defined in your samples CSV file must have a .fastq or .sam extension.\n"
                              "The following file contained neither:\n%s" % (csv_row_file,))
 
     inputs = list()
@@ -115,14 +116,13 @@ def assign_features(alignment: 'HTSeq.SAM_Alignment') -> Tuple[AssignedFeatures,
     feat_matches, assignment = list(), set()
     iv = alignment.iv
 
-    for match_tuple in (features.chrom_vectors[iv.chrom][iv.strand]  # GenomicArrayOfSets -> ChromVector
-                                .array[iv.start:iv.end]              # ChromVector -> StepVector
-                                .get_steps(merge_steps=True)):       # StepVector -> (iv_start, iv_end, {features})
-        if len(match_tuple[2]):
-            feat_matches.append(match_tuple)
+    feat_matches = [match for match in
+                    (features.chrom_vectors[iv.chrom][iv.strand]  # GenomicArrayOfSets -> ChromVector
+                             .array[iv.start:iv.end]              # ChromVector -> StepVector
+                             .get_steps(merge_steps=True))]       # StepVector -> (iv_start, iv_end, {features})]
 
     if len(feat_matches):
-        assignment, uncounted = selector.choose(feat_matches, alignment)
+        assignment = selector.choose(feat_matches, alignment)
 
     return assignment, len(feat_matches)
 
@@ -145,8 +145,8 @@ def count_reads(library: dict, return_queue: mp.Queue, intermediate_file: bool =
             stats.count_bundle_alignments(bundle_stats, alignment, hits)
 
         stats.finalize_bundle(bundle_stats)
+
     # Place results in the multiprocessing queue to be merged by parent process
-    # We only want to return pertinent/minimal stats since this will be pickled
     return_queue.put(stats)
 
     if intermediate_file:
