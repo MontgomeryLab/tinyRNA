@@ -36,13 +36,6 @@ class CounterTests(unittest.TestCase):
 
     # === HELPERS ===
 
-    def get_gff_attr_string(self, file_content):
-        return file_content.split('\t')[-1]
-
-    def parse_gff_attr(self, gff_file_content):
-        attr_str = self.get_gff_attr_string(gff_file_content)
-        return counter.parse_GFF_attribute_string(attr_str)
-
     def csv(self, type, rows):
         header = "\uFEFF"
         if type == "features.csv":
@@ -56,33 +49,6 @@ class CounterTests(unittest.TestCase):
         return ','.join(self.csv_feat_row_dict.values())
         
     # === TESTS ===
-
-    """Were only the correct attribute keys present in the parser result?"""
-
-    def test_gff_attr_keys(self):
-        attr = self.parse_gff_attr(self.short_gff)
-        expected_keys = ["ID", "Name", "interpolated_map_position", "sequence_name",
-                         "biotype", "so_term_name", "curie", "Alias", "Class"]
-
-        self.assertEqual(list(attr.keys()), expected_keys)
-
-    """Were keys and values of the correct type in the parser result?"""
-
-    def test_gff_attr_kv_types(self):
-        attr = self.parse_gff_attr(self.short_gff)
-
-        # All attribute values should be tuples, all attribute keys should be strs
-        self.assertTrue(all([type(val) == tuple for val in attr.values()]))
-        self.assertTrue(all([type(key) == str for key in attr.keys()]))
-
-    """Were list values, and non-list values, parsed as such?"""
-
-    def test_gff_attr_list_vals(self):
-        attr = self.parse_gff_attr(self.short_gff)
-
-        # Comma-separated list values are supported for all attributes, not just the Class attribute
-        self.assertTrue(all([len(val) == 1 for key, val in attr.items() if key != "Class"]))
-        self.assertEqual(len(attr['Class']), 2)
 
     """Does load_config correctly parse a single-entry features.csv config file?"""
 
@@ -179,88 +145,7 @@ class CounterTests(unittest.TestCase):
         self.assertEqual(matches_with_cooridnates[2][0], HTSeq.GenomicInterval("I", 15,20,'+'))
 
 
-    """Does build_reference_tables return the expected features, attributes, and alias for a single record GFF?"""
 
-    def test_ref_tables_single_feature(self):
-        feature_source = {(self.short_gff_file, "sequence_name")}
-        iv = HTSeq.GenomicInterval("I", 3746, 3908, "-")
-        selection_rules = [
-            {'Identity': ("Class", "CSR"), 'Strand': "N/A", 'Hierarchy': "N/A", '5pnt': "N/A", 'Length': "N/A", 'Strict': "N/A"},
-            {'Identity': ("biotype", "snoRNA"), 'Strand': "N/A", 'Hierarchy': "N/A", '5pnt': "N/A", 'Length': "N/A", 'Strict': "N/A"}
-        ]
-
-        feats, attrs, alias = counter.build_reference_tables(feature_source, selection_rules)
-        steps = list(feats[iv].array[iv.start:iv.end].get_steps(values_only=True))
-
-        self.assertEqual((type(feats), type(attrs), type(alias)), (HTSeq.GenomicArrayOfSets, dict, dict))
-        self.assertEqual(steps, [{"Gene:WBGene00023193"}])
-        self.assertEqual(attrs, {'Gene:WBGene00023193': [('Class', ("unknown", "additional_class")), ('biotype', ("snoRNA",))]})
-        self.assertEqual(alias, {'Gene:WBGene00023193': ('Y74C9A.6',)})
-
-    """Does build_reference_tables raise ValueError when an ID Attribute refers to a missing attribute?"""
-
-    def test_ref_tables_missing_ID_attribute(self):
-        bad = "bad_ID_attribute"
-        feature_source = {(self.short_gff_file, bad)}
-        selection_rules = []
-
-        expected_err = f"Feature Gene:WBGene00023193 does not contain a '{bad}' attribute in {self.short_gff_file}"
-
-        with self.assertRaisesRegex(ValueError, expected_err):
-            counter.build_reference_tables(feature_source, selection_rules)
-
-    """Does build_reference_tables raise ValueError when a selection rule refers to a missing attribute?"""
-
-    def test_ref_tables_missing_identity(self):
-        bad = "BAD_attribute_key"
-        feature_source = {(self.short_gff_file, "ID")}
-        selection_rules = [{'Identity': (bad, "BAD_attribute_value")}]
-
-        expected_err = f"Feature Gene:WBGene00023193 does not contain a '{bad}' attribute in {self.short_gff_file}"
-
-        with self.assertRaisesRegex(ValueError, expected_err):
-            counter.build_reference_tables(feature_source, selection_rules)
-
-    """Does build_reference_tables raise ValueError when it encounters a GFF entry without strand information?"""
-
-    def test_ref_tables_unstranded(self):
-        gff_file = f"{self.res}/unstranded.gff3"
-        feature_source = {(gff_file, "ID")}
-        selection_rules = []
-
-        expected_err = f"Feature Gene:WBGene00023193 in {gff_file} has no strand information."
-
-        with self.assertRaisesRegex(ValueError, expected_err):
-            counter.build_reference_tables(feature_source, selection_rules)
-
-    """Does build_reference_tables properly concatenate aliases if there is more than one alias for a feature?"""
-
-    def test_ref_tables_alias_concat(self):
-        feature_source = {(self.short_gff_file, "ID"), (self.short_gff_file, "sequence_name")}
-        selection_rules = []
-
-        expected_alias = {"Gene:WBGene00023193": ("Y74C9A.6",)}
-        _, _, alias = counter.build_reference_tables(feature_source, selection_rules)
-
-        self.assertDictEqual(expected_alias, alias)
-
-    """Does build_reference_tables properly concatenate attributes if more than one GFF file defines a feature with different attributes?"""
-
-    def test_ref_tables_attr_concat(self):
-        feature_source = {(self.short_gff_file, "ID"), (f"{self.res}/single2.gff3", "ID")}
-        selection_rules = [{'Identity': ("Name", "N/A"), 'Strand': "N/A", 'Hierarchy': "N/A", '5pnt': "N/A",
-                            'Length': "N/A", 'Strict': "N/A"}]
-
-        _, attrs, _ = counter.build_reference_tables(feature_source, selection_rules)
-        expected_attrs = {"Gene:WBGene00023193": [('Name', ("WBGene00023193", "WBGene00023193b"))]}
-        actual_attrs = attrs['Gene:WBGene00023193'][1][1]
-
-        # The ordering of values for key 'Name' is non-deterministic since iteration of feature_source {set} is not
-        #  This doesn't matter for our use, membership matching of ('Name', ("WBGene00023193")) and ('Name', ("WBGene00023193b"))
-        #  will be performed against FeatureSelector's ruleset for Identities
-        self.assertIn('WBGene00023193', actual_attrs)
-        self.assertIn('WBGene00023193b', actual_attrs)
-        self.assertEqual(2, len(actual_attrs))
 
     """Does assign_features """
 
