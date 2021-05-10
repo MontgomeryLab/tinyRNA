@@ -1,25 +1,20 @@
 import unittest
 
 from aquatx.srna.hts_parsing import *
+from tests.unit_tests_counter import resources
+import tests.unit_test_helpers as helpers
 
 
 class MyTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(self):
-        # Simply for convenience for loading files during setup
-        def read(file, mode='r'):
-            with open(file, mode) as f:
-                return f.read()
+        self.gff_file = f"{resources}/identity_choice_test.gff3"
+        self.short_gff_file = f"{resources}/single.gff3"
+        self.short_gff = helpers.read(self.short_gff_file)
 
-        self.res = "./testdata/counter"
-
-        self.gff_file = f"{self.res}/identity_choice_test.gff3"
-        self.short_gff_file = f"{self.res}/single.gff3"
-        self.short_gff = read(self.short_gff_file)
-
-        self.sam_file = f"{self.res}/identity_choice_test.sam"
-        self.short_sam_file = f"{self.res}/single.sam"
-        self.short_sam = read(self.short_sam_file)
+        self.sam_file = f"{resources}/identity_choice_test.sam"
+        self.short_sam_file = f"{resources}/single.sam"
+        self.short_sam = helpers.read(self.short_sam_file)
 
     # === HELPERS ===
 
@@ -153,7 +148,7 @@ class MyTestCase(unittest.TestCase):
     """Does build_reference_tables raise ValueError when it encounters a GFF entry without strand information?"""
 
     def test_ref_tables_unstranded(self):
-        gff_file = f"{self.res}/unstranded.gff3"
+        gff_file = f"{resources}/unstranded.gff3"
         feature_source = {(gff_file, "ID")}
         selection_rules = []
 
@@ -176,7 +171,7 @@ class MyTestCase(unittest.TestCase):
     """Does build_reference_tables properly concatenate attributes if more than one GFF file defines a feature with different attributes?"""
 
     def test_ref_tables_attr_concat(self):
-        feature_source = {(self.short_gff_file, "ID"), (f"{self.res}/single2.gff3", "ID")}
+        feature_source = {(self.short_gff_file, "ID"), (f"{resources}/single2.gff3", "ID")}
         selection_rules = [{'Identity': ("Name", "N/A"), 'Strand': "N/A", 'Hierarchy': "N/A", '5pnt': "N/A",
                             'Length': "N/A", 'Strict': "N/A"}]
 
@@ -190,6 +185,8 @@ class MyTestCase(unittest.TestCase):
         self.assertIn('WBGene00023193', actual_attrs)
         self.assertIn('WBGene00023193b', actual_attrs)
         self.assertEqual(2, len(actual_attrs))
+
+    # Todo: additional test for build_ref_tables: what happens when "Class" is and is not defined in features.csv?
 
 if __name__ == '__main__':
     unittest.main()

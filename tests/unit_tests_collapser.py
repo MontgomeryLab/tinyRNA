@@ -3,7 +3,7 @@ import json
 import sys
 import os
 
-from tests.unit_test_helpers import reset_mocks, ShellCapture, reassemble_gz_w
+from tests.unit_test_helpers import read, reset_mocks, ShellCapture, reassemble_gz_w
 from unittest.mock import patch, MagicMock, call, mock_open, Mock
 from collections import OrderedDict
 from io import StringIO
@@ -16,11 +16,6 @@ class MyTestCase(unittest.TestCase):
         # Change CWD to test folder if test was invoked from project root (ex: by Travis)
         if os.path.basename(os.getcwd()) == 'aquatx-srna':
             os.chdir(f".{os.sep}tests")
-
-        # Simply for convenience for loading files during setup
-        def read(file, mode='r'):
-            with open(file, mode) as f:
-                return f.read()
 
         # Test-length files
         self.fastq_file = 'testdata/cel_montgomery/Lib303_test.fastq'

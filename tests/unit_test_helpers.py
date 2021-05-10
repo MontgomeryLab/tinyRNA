@@ -69,11 +69,18 @@ def get_dir_checksum_tree(root_path: str) -> dict:
         for folder in dirs: context[folder] = {}
         for file in files:
             path = f"{top}{os.sep}{file}"
-            with open(path, 'rb') as f:
-                # Add (file, hash) tuple
-                context['files'].add((file, hashlib.md5(f.read()).hexdigest()))
+            file_content = read(path)
+
+            # Add (file, hash) tuple
+            context['files'].add((file, hashlib.md5(file_content).hexdigest()))
 
     return dir_tree
+
+
+# Simply reads and returns the contents of the specified file
+def read(file, mode='r'):
+    with open(file, mode) as f:
+        return f.read()
 
 
 # Convenience function for resetting mocks between subtests

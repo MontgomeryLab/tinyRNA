@@ -1,29 +1,24 @@
 import unittest
-from typing import List
-from unittest.mock import patch, mock_open, call, Mock
-
 import HTSeq
 
+from unittest.mock import patch, mock_open
 import aquatx.srna.counter as counter
+import tests.unit_test_helpers as helpers
+
+resources = "./testdata/counter"
+
 
 class CounterTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(self):
-        # Simply for convenience for loading files during setup
-        def read(file, mode='r'):
-            with open(file, mode) as f:
-                return f.read()
+        self.gff_file = f"{resources}/identity_choice_test.gff3"
+        self.short_gff_file = f"{resources}/single.gff3"
+        self.short_gff = helpers.read(self.short_gff_file)
 
-        self.res = "./testdata/counter"
-
-        self.gff_file = f"{self.res}/identity_choice_test.gff3"
-        self.short_gff_file = f"{self.res}/single.gff3"
-        self.short_gff = read(self.short_gff_file)
-
-        self.sam_file = f"{self.res}/identity_choice_test.sam"
-        self.short_sam_file = f"{self.res}/single.sam"
-        self.short_sam = read(self.short_sam_file)
+        self.sam_file = f"{resources}/identity_choice_test.sam"
+        self.short_sam_file = f"{resources}/single.sam"
+        self.short_sam = helpers.read(self.short_sam_file)
 
         self.strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
 
@@ -32,11 +27,12 @@ class CounterTests(unittest.TestCase):
                                   'strand': "antisense", 'nt5': '"C,G,U"', 'length': "all", 'match': "Partial",
                                   'gff': "./testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3"}
 
-        self.csv_samp_row_dict = {'file': self.short_sam_file, 'group': "test_group", 'rep': "0"}
+        self.csv_samp_row_dict = {'file': "test_file.fastq", 'group': "test_group", 'rep': "0"}
 
     # === HELPERS ===
 
-    def csv(self, type, rows):
+    @staticmethod
+    def csv(type, rows):
         header = "\uFEFF"
         if type == "features.csv":
             header = "\uFEFFID Attribute,Attribute Key,Attribute Value,Hierarchy,Strand (sense/antisense/both),5' End Nucleotide,Length,Match,Feature Source"
@@ -102,18 +98,56 @@ class CounterTests(unittest.TestCase):
     """Does load_samples correctly parse a single record samples.csv?"""
 
     def test_load_samples_single(self):
-        row = self.csv_samp_row_dict
+        inp_file = "test.fastq"
+        exp_file = "test_aligned_seqs.sam"
+
+        row = {'File': inp_file, 'Group': "test_group", 'Rep': "0"}
         csv = self.csv("samples.csv", [row.values()])
 
         with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
             inputs = counter.load_samples('/dev/null')
 
-        expected_lib_name = f"{row['group']}_replicate_{row['rep']}"
-        expected_result = [(self.short_sam_file, expected_lib_name)]
+        expected_lib_name = f"{row['Group']}_replicate_{row['Rep']}"
+        expected_result = [{'File': exp_file, 'Name': expected_lib_name}]
         self.assertEqual(expected_result, inputs)
 
+    """Does load_samples correctly handle duplicate samples? There should be no duplicates."""
+
+    def test_load_samples_duplicate(self):
+        row = {'File': "test.fastq", 'Group': "test_group", 'Rep': "0"}.values()
+        csv = self.csv("samples.csv", [row, row])
+
+        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+            inputs = counter.load_samples('/dev/null')
+
+        self.assertEqual(1, len(inputs))
 
     """Does load_samples throw ValueError if a non-absolute path to a SAM file is provided?"""
+
+    def test_load_samples_nonabs_path(self):
+        bad = "./dne.sam"
+        row = [bad, "test_group", "0"]
+        csv = self.csv("samples.csv", [row])
+
+        expected_error = "The following file must be expressed as an absolute path:\n" + bad
+
+        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+            with self.assertRaisesRegex(ValueError, expected_error):
+                counter.load_samples('/dev/null')
+
+    """Does load_samples throw ValueError if sample filename does not have a .fastq or .sam extension?"""
+
+    def test_load_samples_bad_extension(self):
+        bad = "./bad_extension.xyz"
+        row = [bad, "test_group", "0"]
+        csv = self.csv("samples.csv", [row])
+
+        expected_error = "The filenames defined in your samples CSV file must have a .fastq or .sam extension.\n" \
+                         "The following filename contained neither:\n" + bad
+
+        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+            with self.assertRaisesRegex(ValueError, expected_error):
+                counter.load_samples('/dev/null')
 
     """Do GenomicArraysOfSets slice to step intervals that overlap, even if by just one base?"""
 
@@ -144,12 +178,7 @@ class CounterTests(unittest.TestCase):
         self.assertEqual(matches_with_cooridnates[1][0], HTSeq.GenomicInterval("I", 10,15,'+'))
         self.assertEqual(matches_with_cooridnates[2][0], HTSeq.GenomicInterval("I", 15,20,'+'))
 
-
-
-
-    """Does assign_features """
-
-    """DRAFT (however, this test works as expected.)"""
+    """DRAFT (this test is no longer valid following the addition of load_samples().)"""
 
     # The components of each test:
     #  1. The GFF file to define a feature and its attributes at an interval
@@ -167,7 +196,7 @@ class CounterTests(unittest.TestCase):
             with patch("sys.argv", cmd):
                 counter.main()
 
-    # Todo: additional test for build_ref_tables: what happens when "Class" is and is not defined in features.csv?
+
     # Todo: write factory functions for in-memory GFF and SAM file testing rather than tons of resource files
 
 

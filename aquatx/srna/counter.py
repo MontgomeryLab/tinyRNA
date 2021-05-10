@@ -58,7 +58,7 @@ def load_samples(samples_csv: str):
             return csv_row_file
         else:
             raise ValueError("The filenames defined in your samples CSV file must have a .fastq or .sam extension.\n"
-                             "The following file contained neither:\n%s" % (csv_row_file,))
+                             "The following filename contained neither:\n%s" % (csv_row_file,))
 
     inputs = list()
 
@@ -72,7 +72,7 @@ def load_samples(samples_csv: str):
             library_file_name = get_input_filename(row['File'])
             record = {"Name": library_name, "File": library_file_name}
 
-            inputs.append(record)
+            if record not in inputs: inputs.append(record)
 
     return inputs
 
