@@ -1,10 +1,13 @@
 import pandas as pd
-import HTSeq
 import json
+import sys
 import os
 
+from typing import Tuple, Union
 from collections import Counter
+
 from aquatx.srna.FeatureSelector import FeatureSelector
+from aquatx.srna.hts_parsing import Alignment
 
 
 class LibraryStats:
@@ -32,7 +35,7 @@ class LibraryStats:
         self.library_stats = {stat: 0 for stat in LibraryStats.summary_categories}
         self.alignments = []
 
-    def count_bundle(self, aln_bundle: iter) -> 'Bundle':
+    def count_bundle(self, aln_bundle: iter) -> Bundle:
         bundle_read = aln_bundle[0].read
         loci_counts = len(aln_bundle)
 
@@ -46,7 +49,7 @@ class LibraryStats:
 
         return self.Bundle(loci_counts, read_counts, corr_counts)
 
-    def count_bundle_alignments(self, bundle: 'Bundle', aln: HTSeq.SAM_Alignment, assignments: set) -> None:
+    def count_bundle_alignments(self, bundle: Bundle, aln: Alignment, assignments: set) -> None:
         assigned_count = len(assignments)
 
         if assigned_count == 0:
@@ -74,7 +77,7 @@ class LibraryStats:
             self.alignments.append((aln.read, bundle.corr_count, aln.iv.strand, aln.iv.start, aln.iv.end,
                                     ';'.join(assignments)))
 
-    def finalize_bundle(self, bundle) -> None:
+    def finalize_bundle(self, bundle: Bundle) -> None:
         assignment_count = len(bundle.assignments)
 
         if assignment_count == 0:
@@ -87,7 +90,7 @@ class LibraryStats:
             self.library_stats['Assigned Single-Mapping Reads'] += bundle.read_count * (bundle.loci_count == 1)
             self.library_stats['Assigned Multi-Mapping Reads'] += bundle.read_count * (bundle.loci_count > 1)
 
-    def write_intermediate_file(self):
+    def write_intermediate_file(self) -> None:
         with open(f"{self.out_prefix}_{self.library['Name']}_aln_table.txt", 'w') as imf:
             imf.writelines(
                 # sequence, cor_counts, strand, start, end, feat1a/feat1b;feat2;...
@@ -109,7 +112,7 @@ class SummaryStats:
         self.nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
         self.report_pipeline_stats = self.is_pipeline_invocation()
 
-    def is_pipeline_invocation(self):
+    def is_pipeline_invocation(self) -> bool:
         """Check working directory for pipeline outputs from previous steps"""
 
         for library in self.libraries:
@@ -126,27 +129,27 @@ class SummaryStats:
 
         return True
 
-    def write_report_files(self, alias, prefix=None):
+    def write_report_files(self, alias: dict, prefix=None) -> None:
         if prefix is None: prefix = self.out_prefix
         self.write_alignment_statistics(prefix)
         self.write_pipeline_statistics(prefix)
         self.write_feat_counts(alias, prefix)
         self.write_nt_len_mat(prefix)
 
-    def write_alignment_statistics(self, prefix):
+    def write_alignment_statistics(self, prefix: str) -> None:
         # Sort columns by title and round all counts to 2 decimal places
         self.lib_stats_df = self.sort_cols_and_round(self.lib_stats_df)
         self.lib_stats_df.index.name = "Alignment Statistics"
         self.lib_stats_df.to_csv(prefix + '_alignment_stats.csv')
 
-    def write_pipeline_statistics(self, prefix):
+    def write_pipeline_statistics(self, prefix: str) -> None:
         if self.report_pipeline_stats:
             # Sort columns by title and round all counts to 2 decimal places
             self.pipeline_stats_df = self.sort_cols_and_round(self.pipeline_stats_df)
             self.pipeline_stats_df.index.name = "Summary Statistics"
             self.pipeline_stats_df.to_csv(prefix + '_summary_stats.csv')
 
-    def write_feat_counts(self, alias, prefix):
+    def write_feat_counts(self, alias: dict, prefix: str) -> None:
         """Writes selected features and their associated counts to {prefix}_out_feature_counts.csv
 
         The resulting table will have the following columns:
@@ -174,10 +177,10 @@ class SummaryStats:
 
         summary.to_csv(prefix + '_feature_counts.csv', index=False)
 
-    def write_nt_len_mat(self, prefix):
+    def write_nt_len_mat(self, prefix: str) -> None:
         pd.DataFrame(self.nt_len_mat).to_csv(prefix + '_nt_len_dist.csv')
 
-    def add_library(self, other: 'LibraryStats'):
+    def add_library(self, other: LibraryStats) -> None:
         # Add incoming feature counts as a new column of the data frame
         # Since other.feat_counts is a Counter object, unrecorded features default to 0 on lookup
         self.feat_counts_df[other.library["Name"]] = self.feat_counts_df.index.map(other.feat_counts)
@@ -188,9 +191,9 @@ class SummaryStats:
 
         if self.report_pipeline_stats:
             mapped_seqs = other.library_stats["Total Assigned Sequences"] + other.library_stats["Total Unassigned Sequences"]
-            total_reads, retained_reads = self.get_fastp_stats(other.library['fastp_log'])
-            unique_seqs = self.get_collapser_stats(other.library['collapsed'])
             aligned_reads = other.library_stats["Total Assigned Reads"]
+            total_reads, retained_reads = self.get_fastp_stats(other)
+            unique_seqs = self.get_collapser_stats(other)
 
             other_summary = {
                 "Total Reads": total_reads,
@@ -203,18 +206,23 @@ class SummaryStats:
             self.pipeline_stats_df[other.library["Name"]] = self.pipeline_stats_df.index.map(other_summary)
 
     @staticmethod
-    def get_fastp_stats(logfile):
-        with open(logfile, 'r') as f:
-            fastp_summary = json.load(f)['summary']
+    def get_fastp_stats(other: LibraryStats) -> Tuple[Union[int,str], Union[int,str]]:
+        try:
+            with open(other.library['fastp_log'], 'r') as f:
+                fastp_summary = json.load(f)['summary']
 
-        total_reads = fastp_summary['before_filtering']['total_reads']
-        retained_reads = fastp_summary['after_filtering']['total_reads']
+            total_reads = fastp_summary['before_filtering']['total_reads']
+            retained_reads = fastp_summary['after_filtering']['total_reads']
+        except (KeyError, json.JSONDecodeError):
+            print("Unable to parse fastp json logs for Summary Statistics.", file=sys.stderr)
+            print("Associated file: " + other.library['File'], file=sys.stderr)
+            return "err", "err"
 
         return total_reads, retained_reads
 
     @staticmethod
-    def get_collapser_stats(collapsed):
-        with open(collapsed, 'r') as f:
+    def get_collapser_stats(other: LibraryStats) -> Union[int, str]:
+        with open(other.library['collapsed'], 'r') as f:
             # Get file size and seek to 75 bytes from end
             size = f.seek(0, 2)
             f.seek(size - 75)
@@ -225,9 +233,15 @@ class SummaryStats:
         # Parse unique sequence count from the final fasta header
         from_pos = tail.rfind(">") + 1
         to_pos = tail.rfind("_count=")
-        return tail[from_pos:to_pos]
+
+        try:
+            return int(tail[from_pos:to_pos])
+        except ValueError:
+            print("Unable to parse collapsed fasta associated with for Summary Statistics.", file=sys.stderr)
+            print("Associated file: " + other.library['File'], file=sys.stderr)
+            return "err"
 
     @staticmethod
-    def sort_cols_and_round(df):
+    def sort_cols_and_round(df: pd.DataFrame) -> pd.DataFrame:
         sorted_columns = sorted(df.columns)
         return df.round(decimals=2).reindex(sorted_columns, axis="columns")

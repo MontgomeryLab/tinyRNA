@@ -6,9 +6,10 @@ import time
 import csv
 import os
 
+import aquatx.srna.hts_parsing as parser
 from aquatx.srna.FeatureSelector import FeatureSelector
 from aquatx.srna.statistics import LibraryStats, SummaryStats
-from aquatx.srna.hts_parsing import read_SAM, build_reference_tables, SelectionRules, FeatureSources
+from aquatx.srna.hts_parsing import SelectionRules, FeatureSources
 from typing import Tuple
 
 # Global variables for copy-on-write multiprocessing
@@ -111,7 +112,7 @@ def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
     return rules, gff_files
 
 
-def assign_features(alignment: 'HTSeq.SAM_Alignment') -> Tuple[AssignedFeatures, N_Candidates]:
+def assign_features(alignment: 'parser.Alignment') -> Tuple[AssignedFeatures, N_Candidates]:
 
     feat_matches, assignment = list(), set()
     iv = alignment.iv
@@ -119,8 +120,11 @@ def assign_features(alignment: 'HTSeq.SAM_Alignment') -> Tuple[AssignedFeatures,
     feat_matches = [match for match in
                     (features.chrom_vectors[iv.chrom][iv.strand]  # GenomicArrayOfSets -> ChromVector
                              .array[iv.start:iv.end]              # ChromVector -> StepVector
-                             .get_steps(merge_steps=True))]       # StepVector -> (iv_start, iv_end, {features})]
+                             .get_steps(merge_steps=True))        # StepVector -> (iv_start, iv_end, {features})]
+                    # If an alignment does not map to a feature, an empty set is returned at tuple position 2
+                    if len(match[2]) != 0]
 
+    # If features are associated with the alignment interval, perform selection
     if len(feat_matches):
         assignment = selector.choose(feat_matches, alignment)
 
@@ -132,14 +136,16 @@ def count_reads(library: dict, return_queue: mp.Queue, intermediate_file: bool =
     # For complete SAM records (slower):
     # 1. Change the following line to HTSeq.BAM_Reader(sam_file)
     # 2. Change FeatureSelector.choose() to assign nt5end from chr(alignment.read.seq[0])
-    read_seq = read_SAM(library["File"])
+    read_seq = parser.read_SAM(library["File"])
     stats = LibraryStats(library, out_prefix, intermediate_file)
 
     # For each sequence in the sam file...
+    # Note: HTSeq only performs bundling. The alignments are our own Alignment objects
     for bundle in HTSeq.bundle_multiple_alignments(read_seq):
         bundle_stats = stats.count_bundle(bundle)
 
         # For each alignment of the given sequence...
+        alignment: parser.Alignment
         for alignment in bundle:
             hits, n_candidates = assign_features(alignment)
             stats.count_bundle_alignments(bundle_stats, alignment, hits)
@@ -190,7 +196,7 @@ def main():
 
     # Build features table and selector, global for multiprocessing
     global features, selector
-    features, attributes, alias = build_reference_tables(gff_file_set, selection_rules)
+    features, attributes, alias = parser.build_reference_tables(gff_file_set, selection_rules)
     selector = FeatureSelector(selection_rules, attributes)
 
     # Prepare for multiprocessing pool

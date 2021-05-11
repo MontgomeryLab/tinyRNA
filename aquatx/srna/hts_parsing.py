@@ -30,7 +30,7 @@ class Alignment:
             self.nt5 = nt5
 
         def __repr__(self):
-            return f"{self.name}, {self.seq}, {self.len}"
+            return f"<Sequence Object: '{self.name}', {self.seq} ({self.len} bases)"
 
         def __len__(self):
             return self.len
@@ -41,7 +41,7 @@ class Alignment:
         self.iv = iv
 
     def __repr__(self):
-        return f"{self.read}, {self.iv}"
+        return f"<Alignment Object: Read '{self.read.name}' aligned to {self.iv}"
 
 
 def read_SAM(file):

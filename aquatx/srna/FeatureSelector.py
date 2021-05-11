@@ -95,16 +95,15 @@ class FeatureSelector:
         """
 
         finalists, identity_hits = set(), list()
-        start, end, features = 0, 1, 2
-        key, value = 0, 1
+        start, end, features = 0, 1, 2  # IntervalFeatures tuple indexes
 
         for iv_feats in feats_list:
-            # Check for perfect interval match only once per feature_set/alignment tuple
+            # Check for perfect interval match only once per IntervalFeatures
             perfect_iv_match = self.is_perfect_iv_match(iv_feats[start], iv_feats[end], aln_iv)
             for feat in iv_feats[features]:
                 for attrib in FeatureSelector.attributes[feat]:
-                    # If multiple values are associated with the attribute key, create their tuple products
-                    for feat_ident in itertools.product([attrib[key]], attrib[value]):
+                    # If multiple values are associated with the attribute key, create their key/value products
+                    for feat_ident in itertools.product([attrib[0]], attrib[1]):
                         try:
                             # Check if rules are defined for this feature identity
                             for rule in self.inv_ident[feat_ident]:
@@ -173,5 +172,3 @@ class FeatureSelector:
     @classmethod
     def get_hit_indexes(cls):
         return cls.rank, cls.rule, cls.feat
-
-

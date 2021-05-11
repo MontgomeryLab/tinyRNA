@@ -1,9 +1,13 @@
+import multiprocessing as mp
 import unittest
 import HTSeq
+import queue
 
-from unittest.mock import patch, mock_open
-import aquatx.srna.counter as counter
+from unittest.mock import patch, mock_open, call, MagicMock
+
 import tests.unit_test_helpers as helpers
+import aquatx.srna.counter as counter
+from aquatx.srna.hts_parsing import Alignment, read_SAM
 
 resources = "./testdata/counter"
 
@@ -45,6 +49,75 @@ class CounterTests(unittest.TestCase):
         return ','.join(self.csv_feat_row_dict.values())
         
     # === TESTS ===
+
+    """Does load_samples correctly parse a single record samples.csv?"""
+
+    def test_load_samples_single(self):
+        inp_file = "test.fastq"
+        exp_file = "test_aligned_seqs.sam"
+
+        row = {'File': inp_file, 'Group': "test_group", 'Rep': "0"}
+        csv = self.csv("samples.csv", [row.values()])
+
+        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+            inputs = counter.load_samples('/dev/null')
+
+        expected_lib_name = f"{row['Group']}_replicate_{row['Rep']}"
+        expected_result = [{'File': exp_file, 'Name': expected_lib_name}]
+        self.assertEqual(expected_result, inputs)
+
+    """Does load_samples correctly handle duplicate samples? There should be no duplicates."""
+
+    def test_load_samples_duplicate(self):
+        row = {'File': "test.fastq", 'Group': "N/A", 'Rep': "N/A"}
+        csv = self.csv("samples.csv", [row.values(), row.values()])
+
+        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+            inputs = counter.load_samples('/dev/null')
+
+        self.assertEqual(1, len(inputs))
+
+    """Does load_samples correctly handle SAM filenames?"""
+
+    def test_load_samples_sam(self):
+        sam_filename = "/fake/absolute/path/sample.sam"
+        row = {'File': sam_filename, 'Group': "test_group", 'Rep': "0"}
+        csv = self.csv("samples.csv", [row.values()])
+
+        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+            inputs = counter.load_samples('/dev/null')
+
+        expected_lib_name = f"{row['Group']}_replicate_{row['Rep']}"
+        expected_result = [{'File': sam_filename, 'Name': expected_lib_name}]
+
+        self.assertEqual(expected_result, inputs)
+
+    """Does load_samples throw ValueError if a non-absolute path to a SAM file is provided?"""
+
+    def test_load_samples_nonabs_path(self):
+        bad = "./dne.sam"
+        row = [bad, "test_group", "0"]
+        csv = self.csv("samples.csv", [row])
+
+        expected_error = "The following file must be expressed as an absolute path:\n" + bad
+
+        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+            with self.assertRaisesRegex(ValueError, expected_error):
+                counter.load_samples('/dev/null')
+
+    """Does load_samples throw ValueError if sample filename does not have a .fastq or .sam extension?"""
+
+    def test_load_samples_bad_extension(self):
+        bad = "./bad_extension.xyz"
+        row = [bad, "test_group", "0"]
+        csv = self.csv("samples.csv", [row])
+
+        expected_error = "The filenames defined in your samples CSV file must have a .fastq or .sam extension.\n" \
+                         "The following filename contained neither:\n" + bad
+
+        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+            with self.assertRaisesRegex(ValueError, expected_error):
+                counter.load_samples('/dev/null')
 
     """Does load_config correctly parse a single-entry features.csv config file?"""
 
@@ -95,60 +168,6 @@ class CounterTests(unittest.TestCase):
 
         self.assertEqual(ruleset[0]['nt5'], 'T')
 
-    """Does load_samples correctly parse a single record samples.csv?"""
-
-    def test_load_samples_single(self):
-        inp_file = "test.fastq"
-        exp_file = "test_aligned_seqs.sam"
-
-        row = {'File': inp_file, 'Group': "test_group", 'Rep': "0"}
-        csv = self.csv("samples.csv", [row.values()])
-
-        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
-            inputs = counter.load_samples('/dev/null')
-
-        expected_lib_name = f"{row['Group']}_replicate_{row['Rep']}"
-        expected_result = [{'File': exp_file, 'Name': expected_lib_name}]
-        self.assertEqual(expected_result, inputs)
-
-    """Does load_samples correctly handle duplicate samples? There should be no duplicates."""
-
-    def test_load_samples_duplicate(self):
-        row = {'File': "test.fastq", 'Group': "test_group", 'Rep': "0"}.values()
-        csv = self.csv("samples.csv", [row, row])
-
-        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
-            inputs = counter.load_samples('/dev/null')
-
-        self.assertEqual(1, len(inputs))
-
-    """Does load_samples throw ValueError if a non-absolute path to a SAM file is provided?"""
-
-    def test_load_samples_nonabs_path(self):
-        bad = "./dne.sam"
-        row = [bad, "test_group", "0"]
-        csv = self.csv("samples.csv", [row])
-
-        expected_error = "The following file must be expressed as an absolute path:\n" + bad
-
-        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
-            with self.assertRaisesRegex(ValueError, expected_error):
-                counter.load_samples('/dev/null')
-
-    """Does load_samples throw ValueError if sample filename does not have a .fastq or .sam extension?"""
-
-    def test_load_samples_bad_extension(self):
-        bad = "./bad_extension.xyz"
-        row = [bad, "test_group", "0"]
-        csv = self.csv("samples.csv", [row])
-
-        expected_error = "The filenames defined in your samples CSV file must have a .fastq or .sam extension.\n" \
-                         "The following filename contained neither:\n" + bad
-
-        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
-            with self.assertRaisesRegex(ValueError, expected_error):
-                counter.load_samples('/dev/null')
-
     """Do GenomicArraysOfSets slice to step intervals that overlap, even if by just one base?"""
 
     def test_HTSeq_iv_slice(self):
@@ -178,24 +197,68 @@ class CounterTests(unittest.TestCase):
         self.assertEqual(matches_with_cooridnates[1][0], HTSeq.GenomicInterval("I", 10,15,'+'))
         self.assertEqual(matches_with_cooridnates[2][0], HTSeq.GenomicInterval("I", 15,20,'+'))
 
-    """DRAFT (this test is no longer valid following the addition of load_samples().)"""
+    """Does assign_features return features that overlap the query interval by a single base?"""
 
-    # The components of each test:
-    #  1. The GFF file to define a feature and its attributes at an interval
-    #  2. The SAM file with a sequence alignment that overlaps a defined feature
-    #  3. A selection rule (features.csv) which selects for attributes of the feature and/or read
+    def test_assign_features_single_base_overlap(self):
+        features = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+        iv_feat = HTSeq.GenomicInterval("I", 0, 2, "+")  # The "feature"
+        iv_olap = HTSeq.GenomicInterval("I", 1, 2, "+")  # A single-base overlapping feature
+        iv_none = HTSeq.GenomicInterval("I", 2, 3, "+")  # A non-overlapping interval
 
-    def test_counter_main(self):
-        rules = [["Alias", "Class", "CSR", "1", "antisense", "all", "all", "Full", self.gff_file],
-                 ["sequence_name", "Class", "piRNA", "2", "sense", "all", "all", "Partial", self.gff_file]]
+        features[iv_feat] += 'The "feature"'
+        features[iv_none] += "Non-overlapping feature"
 
-        csv = self.csv("features.csv", rules)
-        cmd = f"counter -i {self.sam_file} -c /dev/null -o test".split(" ")
+        olap_alignment = Alignment(iv_olap, "Single base overlap", b"A")
 
-        with patch("aquatx.srna.counter.open", mock_open(read_data=csv)):
-            with patch("sys.argv", cmd):
-                counter.main()
+        with patch.object(counter, "selector") as selector:
+            counter.features = features
+            counter.assign_features(olap_alignment)
 
+        expected_match_list = [(1, 2, {'The "feature"'})]
+        selector.choose.assert_called_once_with(expected_match_list, olap_alignment)
+
+    """Does assign_features correctly handle alignments with zero feature matches?"""
+
+    def test_assign_features_no_match(self):
+        features = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+        iv_feat = HTSeq.GenomicInterval("I", 0, 2, "+")
+        iv_none = HTSeq.GenomicInterval("I", 2, 3, "+")
+
+        features[iv_feat] += "Should not match"
+        none_alignment = Alignment(iv_none, "Non-overlap", b"A")
+
+        with patch.object(counter, "selector") as selector:
+            counter.features = features
+            counter.assign_features(none_alignment)
+
+        selector.choose.assert_not_called()
+
+    """Does count_reads properly handle a single record library?"""
+
+    @patch.object(counter, "LibraryStats", autospec=True)
+    @patch.object(counter, "assign_features", return_value=({'mock_feat'}, 1))
+    def test_count_reads_generic(self, assign_features, LibraryStats):
+        library = {'File': self.short_sam_file, 'Name': 'short'}
+        alignment = next(read_SAM(library['File']))
+        ret_q = queue.Queue()
+
+        expected_LibStat_count_bundle_call = call().count_bundle([alignment])
+        bundle = LibraryStats.count_bundle.return_value = MagicMock()
+        # LibraryStats.count_bundle = MagicMock()
+        # LibraryStats.count_bundle_alignments = MagicMock()
+        # LibraryStats.finalize_bundle = MagicMock
+
+        expected_LibStats_calls = [
+            call(library, None, False),
+            expected_LibStat_count_bundle_call,
+            call().count_bundle_alignments(bundle),
+            call().finalize_bundle(bundle)
+        ]
+
+        counter.count_reads(library, ret_q)
+
+        assign_features.assert_called_once()
+        LibraryStats.assert_has_calls(expected_LibStats_calls)
 
     # Todo: write factory functions for in-memory GFF and SAM file testing rather than tons of resource files
 
