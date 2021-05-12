@@ -117,6 +117,7 @@ See the [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. To see what is active
 ## Authors
 
 * **Kristen Brown** - Colorado State University - [biokcb](https://github.com/biokcb)
+* **Alex Tate** - Colorado State University - [AlexTate](https://github.com/AlexTate)
 
 See also the list of [contributors](https://github.com/MontgomeryLab/aquatx-srna/contributors) who participated in this project.
 
