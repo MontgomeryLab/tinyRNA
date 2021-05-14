@@ -40,8 +40,9 @@ class ConfigBase:
             return self.get(key)
 
     def set_default_dict(self, setting_dict: dict) -> None:
-        """Apply each setting in the input dictionary if it has not been previously set"""
+        """Apply each setting in setting_dict if it has not been previously set"""
         for key, val in setting_dict.items():
+            # Can't use config.setdefault(), it considers None and [] "already set"
             self.set_if_not(key, val)
 
     def append_to(self, key: str, val: Union[str, list, dict]) -> list:
@@ -52,6 +53,13 @@ class ConfigBase:
             return target
         else:
             print(f"Tried appending to a non-existent key: {key}", file=sys.stderr)
+
+    def append_if_absent(self, key: str, val: Union[str, list, dict]) -> list:
+        """Append to list-type setting if the value is not already present"""
+        target = self.get(key)
+        if not val in target:
+            target.append(val)
+        return target
 
     """========== HELPERS =========="""
 
@@ -70,6 +78,11 @@ class ConfigBase:
     def cwl_file(file: str) -> dict:
         """Returns a file input/output specification for the CWL config"""
         return {'class': 'File', 'path': file}
+
+    @staticmethod
+    def cwl_dir(dir: str) -> dict:
+        """Returns a directory specificaion for the CWL config"""
+        return {'class': 'Directory', 'path': dir}
 
     def create_run_directory(self) -> str:
         """Create the destination directory for pipeline outputs"""
@@ -127,10 +140,10 @@ class Configuration(ConfigBase):
         self.setup_per_file()
         self.setup_ebwt_idx()
         self.process_sample_sheet()
-        self.process_reference_sheet()
+        self.process_feature_sheet()
 
     def process_sample_sheet(self):
-        sample_sheet = self.joinpath(self.dir, self.get('samples_csv'))
+        sample_sheet = self.joinpath(self.dir, self.get('samples_csv')['path'])
         from_here = os.path.dirname(sample_sheet)
 
         with open(sample_sheet, 'r', encoding='utf-8-sig') as sf:
@@ -142,7 +155,6 @@ class Configuration(ConfigBase):
                 rep_number = row['Replicate number']
 
                 self.append_to('report_title', f"{group_name}_replicate_{rep_number}_fastp_report")
-                self.append_to('out_prefix', f"{group_name}_replicate_{rep_number}")
                 self.append_to('in_fq', self.cwl_file(fastq_file))
 
                 self.append_to('out_fq', sample_basename + '_cleaned.fastq')
@@ -152,28 +164,24 @@ class Configuration(ConfigBase):
                 self.append_to('html', sample_basename + '_qc.html')
                 self.append_to('uniq_seq_prefix', sample_basename)
 
-    def process_reference_sheet(self):
-        reference_sheet = self.joinpath(self.dir, self.get('features_csv'))
-        from_here = os.path.dirname(reference_sheet)
+    def process_feature_sheet(self):
+        feature_sheet = self.joinpath(self.dir, self.get('features_csv')['path'])
+        from_here = os.path.dirname(feature_sheet)
 
-        with open(reference_sheet, 'r', encoding='utf-8-sig') as rf:
-            csv_reader = csv.DictReader(rf, delimiter=',')
+        with open(feature_sheet, 'r', encoding='utf-8-sig') as ff:
+            fieldnames = ("ID", "Key", "Value", "Hierarchy", "Strand", "nt5", "Length", "Strict", "Source")
+            csv_reader = csv.DictReader(ff, fieldnames=fieldnames, delimiter=',')
+
+            next(csv_reader) # Skip header line
             for row in csv_reader:
-                gff_file = self.joinpath(from_here, row['Feature Source'])
-                self.append_to('identifier', row['Identifier'])
-                self.append_to('srna_class', row['Class'])
-                self.append_to('strand', row['Strand (sense/antisense/both)'])
-                self.append_to('ref_annotations', self.cwl_file(gff_file))
-                self.append_to('hierarchy', row['Hierarchy'])
-                self.append_to('5end_nt', row["5' End Nucleotide"])
-                self.append_to('length', row['Length'])
+                gff_file = self.joinpath(from_here, row['Source'])
+                self.append_if_absent('gff_files', self.cwl_file(gff_file))
             
     def setup_per_file(self):
-        """Per-file settings lists to be populated by entries from samples_csv and features_csv"""
+        """Per-file settings lists to be populated by entries from samples_csv"""
 
         self.set_default_dict({per_file_setting_key: [] for per_file_setting_key in
-            ['identifier', 'srna_class', 'strand', 'hierarchy', '5end_nt', 'length', 'ref_annotations', 'un',
-             'in_fq', 'out_fq', 'uniq_seq_prefix', 'out_prefix', 'outfile', 'report_title', 'json', 'html']
+            ['un', 'in_fq', 'out_fq', 'uniq_seq_prefix', 'gff_files', 'outfile', 'report_title', 'json', 'html']
         })
             
     def setup_pipeline(self):

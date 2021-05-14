@@ -5,6 +5,7 @@ class: Workflow
 
 requirements:
   - class: ScatterFeatureRequirement
+  - class: SubworkflowFeatureRequirement
   - class: StepInputExpressionRequirement
 
 inputs:
@@ -62,16 +63,12 @@ inputs:
   shared_mem: boolean?
 
   #counter inputs
-  ref_annotations: File[]
-  mask_annotations: File[]?
-  antisense: string[]?
-  out_prefix: string[]
-  intermed_file: boolean?
-
-  # merge and deseq
-  output_file_stats: string
-  output_file_counts: string
   output_prefix: string
+  samples_csv: File
+  features_csv: File
+  intermed_file: boolean?
+  is_pipeline: boolean?
+  gff_files: File[]?
 
 steps:
   fastp:
@@ -144,41 +141,21 @@ steps:
 
   counts:
     run: ../tools/aquatx-count.cwl
-    scatter: [input_file, out_prefix]
-    scatterMethod: dotproduct
     in:
-      ref_annotations: ref_annotations
-      mask_annotations: mask_annotations
-      antisense: antisense
-      input_file: bowtie/sam_out
-      out_prefix: out_prefix
+      samples_csv: samples_csv
+      config_csv: features_csv
+      out_prefix: output_prefix
       intermed_file: intermed_file
+      fastp_logs: fastp/report_json
+      collapsed_fa: collapse/collapsed_fa
+      gff_files: gff_files
+      is_pipeline: is_pipeline
     out: [feature_counts, other_counts, stats_file, intermed_out_file]
-
-  merge_counts:
-    run: ../tools/aquatx-merge.cwl
-    in:
-      input_files: counts/feature_counts
-      sample_names: out_prefix
-      mode: 
-        valueFrom: "counts"
-      output_file: output_file_counts
-    out: [merged_file]
-
-  merge_stats:
-    run: ../tools/aquatx-merge.cwl
-    in:
-      input_files: counts/stats_file
-      sample_names: out_prefix
-      mode: 
-        valueFrom: "stats"
-      output_file: output_file_stats
-    out: [merged_file]
 
   deseq2:
     run: ../tools/aquatx-deseq.cwl
     in:
-      input_file: merge_counts/merged_file
+      input_file: counts/feature_counts
       outfile_prefix: output_prefix
     out: [norm_counts, comparisons]
 
@@ -202,30 +179,18 @@ outputs:
   aln_seqs:
     type: File[]
     outputSource: bowtie/sam_out
-  
+
   other_count_files:
-    type: 
-      type: array
-      items: 
-        type: array
-        items: File
+    type: File[]
     outputSource: counts/other_counts
 
-  feat_count_files:
-    type: File[]
+  feat_count_file:
+    type: File
     outputSource: counts/feature_counts
 
   count_stats:
-    type: File[]
+    type: File
     outputSource: counts/stats_file
-
-  count_merged:
-    type: File
-    outputSource: merge_counts/merged_file
-
-  stats_merged: 
-    type: File
-    outputSource: merge_stats/merged_file
 
   deseq_normed:
     type: File

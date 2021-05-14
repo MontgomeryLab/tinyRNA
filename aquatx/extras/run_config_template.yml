@@ -36,8 +36,12 @@ run_time: ~
 ######-------------------------------------------------------------------------------######
  
 ##-- Relative path to sample & reference sheets (relative to this config file) --##
-samples_csv: 'samples.csv'
-features_csv: 'features.csv'
+samples_csv:
+  class: File
+  path: 'samples.csv'
+features_csv:
+  class: File
+  path: 'features.csv'
 
 ##-- The prefix for your bowtie index, include relative path (relative to this config file) --##
 ebwt: '../../tests/testdata/cel_ws279/chr1'
@@ -50,7 +54,7 @@ threads: 2
 
 ##-- Final output file prefixes for overall run --##
 ##-- If none given, run_prefix is used (default: date_time_aquatx) --##
-output_prefix: []
+output_prefix: ~
 
 ######---------------------TRIMMING AND QUALITY FILTER OPTIONS ----------------------######
 #
@@ -208,23 +212,11 @@ un: []
 ##-- If True: save intermediate table with all information --##
 intermed_file: False
 
-###-- These options generated from sample & reference sheet --###
-# output file prefix
-out_prefix: []
-# reference gffs
-ref_annotations: []
-# identifiers of interest
-identifier: []
-# selection order preference for multiple alignments
-hierarchy: []
-# subclass of interest
-srna_class: []
-# count alignments on the sense, antisense, or both strands
-strand: []
-# 5' end nucleotide
-5end_nt: []
-# length specification
-length: []
+###-- These options generated from sample & features sheet --###
+# a list of unique GFF files defined in features.csv
+gff_files: []
+
+is_pipeline: true
 
 ######--------------------------- MERGE SAMPLES OPTIONS ---------------------------######
 #
@@ -234,8 +226,8 @@ length: []
 ######-------------------------------------------------------------------------------######
 
 ##-- These options are generated with output_prefix --##
-output_file_stats: []
-output_file_counts: []
+output_file_stats: ~
+output_file_counts: ~
 
 
 ######---------------------- NORMALIZATION AND STATISTICS OPTIONS -------------------######

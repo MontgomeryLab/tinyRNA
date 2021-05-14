@@ -1,19 +1,26 @@
-#! /usr/bin/env python
-"""
-Small RNA counter
-
-This script counts small RNA sequencing data using the HTSeq API. It assumes the
-format of feature files are GFF3 and can use a SAM/BAM alignment file. It allows
-for multiple feature file inputs, associated mask files to avoid double counting
-certain features (ie miRNA within a coding region), and whether or not to count
-both sense and antisense reads. The output is appropriate for use in other DEG
-programs such as DESeq2. Summary statistics are also produced.
-"""
-from collections import Counter
+import multiprocessing as mp
 import argparse
-import numpy as np
-import pandas as pd
 import HTSeq
+import queue
+import time
+import csv
+import os
+
+import aquatx.srna.hts_parsing as parser
+from aquatx.srna.FeatureSelector import FeatureSelector
+from aquatx.srna.statistics import LibraryStats, SummaryStats
+from aquatx.srna.hts_parsing import SelectionRules, FeatureSources
+from typing import Tuple
+
+# Global variables for copy-on-write multiprocessing
+features: 'HTSeq.GenomicArrayOfSets' = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+selector: 'FeatureSelector' = None
+pipeline = False
+
+# Type aliases for human readability
+AssignedFeatures = set
+N_Candidates = int
+
 
 def get_args():
     """
@@ -23,288 +30,207 @@ def get_args():
     prefix to save output tables and plots using.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input-file', metavar='SAMFILE', required=True,
-                        help='input sam file to count features for')
-    parser.add_argument('-r', '--ref-annotations', metavar='GTFFILE', nargs='+', required=True,
-                        help='reference gff3 files with annotations to count.')
-    parser.add_argument('-m', '--mask-file', metavar='MASKFILE', nargs='+', default=None,
-                        help='reference gff3 files with annotations to mask from counting.')
-    parser.add_argument('-o', '--out-prefix', metavar='OUTPUTPREFIX',
+    parser.add_argument('-i', '--input-csv', metavar='SAMPLES', required=True,
+                        help='the csv samples file/library list')
+    parser.add_argument('-c', '--config', metavar='CONFIGFILE', required=True,
+                        help='the csv features configuration file')
+    parser.add_argument('-o', '--out-prefix', metavar='OUTPUTPREFIX', required=True,
                         help='output prefix to use for file names')
-    parser.add_argument('-a', '--antisense', nargs='+', default=None,
-                        help='also count reads that align to the antisense'
-                             'strand and store in a separate file.')
     parser.add_argument('-t', '--intermed-file', action='store_true',
-                        help='Save the intermediate file containing all alignments and'
+                        help='Save the intermediate file containing all alignments and '
                              'associated features.')
+    parser.add_argument('-p', '--is-pipeline', action='store_true',
+                        help='Indicates that counter was invoked from the aquatx pipeline '
+                             'and that input files should be sources as such.')
 
-    args = parser.parse_args()
+    parsed_args = parser.parse_args()
 
-    return args
+    global pipeline
+    pipeline = parsed_args.is_pipeline
 
-def create_ref_array(ref_file, class_counts, feat_counts, mask_file=None, stranded=True):
-    """
-    Creates the array of features to count from a reference gff3 file. Masks reads from array
-    if desired.
+    return parser.parse_args()
 
-    Inputs:
-      ref_file: The reference gff3 file with features to counts.
-      class_counts: The dictionary for counting classes to assign a value of 0 to
-      feat_counts: The dictionary for counting features to assign a value of 0 to
-      mask_file: The associated file with features to mask from counting. Default: None
-      stranded - Boolean indicating if only sense of a feature is counted. Default: True
 
-    Outputs:
-      ref_array - the HTSeq Genomic array of sets containing features and mask features.
-    """
-    # Read in the gff files
-    feat_gff = HTSeq.GFF_Reader(ref_file)
-    # Initialize feature array
-    feat_array = HTSeq.GenomicArrayOfSets("auto", stranded=stranded)
+def load_samples(samples_csv: str):
+    def get_library_filename(csv_row_file, samples_csv):
+        """The input samples.csv may contain either fastq or sam files"""
 
-    # Add all features in the feature file to the array along with class information
-    for feat in feat_gff:
-        feat_array[feat.iv] += "class_" + feat.type + "_feature_" + feat.attr["ID"]
-        # Set value in Counter dicts to 0 so the final output contains all features, even if
-        # a library contains no reads for that feature. Required for future normalization.
-        class_counts[feat.type] = 0
-        feat_counts[feat.attr["ID"]] = 0
-    # Add mask features so intervals that overlap have > 1 feature and aren't counted
-    if mask_file is not None:
-        mask_gff = HTSeq.GFF_Reader(mask_file)
-        # Add all masked features that overlap with existing features in array
-        for mask in mask_gff:
-            # mark features as mask to distinguish them later
-            # might make sense to to step through feature array & only add if the mask overlaps
-            # with a features
-            feat_array[mask.iv] += "class_" + mask.type + "_mask_" + mask.attr["ID"]
+        file_ext = os.path.splitext(csv_row_file)[1].lower()
 
-    return feat_array, class_counts, feat_counts
-
-def create_ref_dict(ref_files, stranded=None, mask_files=None):
-    """
-    Creates a dictionary of reference genomic arrays for multiple inputs to later use for
-    assigning counts to features.
-
-    Inputs:
-        ref_files: List of reference files to count features of.
-        mask_file: List of reference files to mask features from associated ref_file. Must be
-                  in the same position as ref_file to mask from. Use None for no mask file.
-                  Default is None when no mask files are used.
-        stranded: List of booleans indicating whether these features should be counted stranded
-                  or not. Default is only count sense strands
-    Output:
-        ref_array_dict: a dictionary containing all feature arrays to be counted.
-    """
-    ref_array_dict = {}
-    class_counts = Counter()
-    feat_counts = Counter()
-
-    # Set up mask files list
-    if mask_files is not None:
-        mask_files = [None if m in 'None' else m for m in mask_files]
-    else:
-        mask_files = [None for m in ref_files]
-
-    if stranded is None:
-        stranded = [True for s in ref_files]
-    else:
-        stranded = [True if m == 'true' else False for m in stranded]
-
-    try:
-        ref_mask_files = zip(ref_files, mask_files, stranded)
-    except (ValueError, TypeError) as er:
-        print("Length of reference files, mask files, and strand input lists are uneven.")
-        raise er
-
-    # populate dict with reference arrays
-    for rf, mf, st in ref_mask_files:
-        ref_array_dict[rf], class_counts, feat_counts = create_ref_array(rf, class_counts,
-                                                                         feat_counts, mf, st)
-
-    return ref_array_dict, class_counts, feat_counts
-
-def assign_features(aln, ref_array_dict):
-    """
-    Finds a class and a feature that overlaps with the alignment of interest
-
-    Inputs:
-        aln: the alignment
-        ref_array_dict: the dictionary of feature arrays to check
-
-    Output:
-        aln_feats: List of unique features that the alignment corresponds to
-        aln_classes: List of unique classes that the alignment corresponds to
-    """
-    aln_feats = list()
-    aln_classes = list()
-
-    # Check all reference arrays for overlapping features
-    for ref_file, ref_array in ref_array_dict.items():
-        gene_ids = set()
-        for iv, val in ref_array[aln.iv].steps():
-            gene_ids |= val
-
-            # Assign only if it's one feature per interval
-            if len(gene_ids) == 1:
-                gene_id = list(gene_ids)[0]
-                if gene_id.split('_')[2] == 'mask':
-                    continue
-                else:
-                    aln_feats.append(gene_id.split('_')[3])
-                    aln_classes.append(gene_id.split('_')[1])
-
-    # Assign category if no features are found
-    if not aln_feats:
-        aln_feats.append('_no_feature')
-        aln_classes.append('_no_class')
-
-    # Drop duplicate features or classes
-    aln_feats = np.unique(np.array(aln_feats))
-    aln_classes = np.unique(np.array(aln_classes))
-
-    return aln_feats, aln_classes
-
-def tally_feature_counts(sam_alignment, ref_array_dict, class_counts, feat_counts,
-                         stats_out, write=False, outfile=None):
-    """
-    Tally the counts appropriately for different features and classes of small RNAs.
-
-    Inputs:
-        sam_alignment: The sam/bam alignment file
-        ref_array_dict: the dictionary containing reference genomic arrays
-        stats_out: file to write summary stats to
-        write: boolean indicating whether the full feature information should be written
-               Default is False.
-        outfile: the file handle to write to. Default is none, write must be True to write.
-
-    Outputs:
-        class_counts: A dataframe containing counts per possible class
-        feature_counts: A dataframe containing counts per feature
-        nt_len_mat: A dataframe containing counts per 5' nt x length
-    """
-    nt_len_mat = {'A': Counter(),
-                  'C': Counter(),
-                  'T': Counter(),
-                  'G': Counter()}
-    stats_counts = Counter()
-
-    for aln_bundle in HTSeq.bundle_multiple_alignments(sam_alignment):
-        # Calculate counts for multimapping
-        dup_counts = int(aln_bundle[0].read.name.split('_x')[1])
-        cor_counts = dup_counts / len(aln_bundle)
-        stats_counts['_unique_sequences_aligned'] += 1
-        stats_counts['_aligned_reads'] += dup_counts
-        if len(aln_bundle) > 1:
-            stats_counts['_aligned_reads_multi_mapping'] += dup_counts
+        # If the sample file has a .fastq extension, infer the name of its pipeline-produced .sam file
+        if file_ext == ".fastq" or file_ext == ".fastq.gz":
+            # Fix relative paths to be relative to sample_csv's path, rather than relative to cwd
+            csv_row_file = get_path_from_configfile(samples_csv, csv_row_file)
+            csv_row_file = os.path.splitext(csv_row_file)[0] + "_aligned_seqs.sam"
+        elif file_ext == ".sam":
+            if not os.path.isabs(csv_row_file):
+                raise ValueError("The following file must be expressed as an absolute path:\n%s" % (csv_row_file,))
         else:
-            stats_counts['_aligned_reads_unique_mapping'] += dup_counts
+            raise ValueError("The filenames defined in your samples CSV file must have a .fastq or .sam extension.\n"
+                             "The following filename contained neither:\n%s" % (csv_row_file,))
 
-        # fill in 5p nt/length matrix
-        nt_len_mat[str(aln_bundle[0].read)[0]][len(aln_bundle[0].read)] += dup_counts
+        return csv_row_file
 
-        # bundle counts
-        bundle_feats = Counter()
-        bundle_class = Counter()
+    inputs = list()
 
-        for aln in aln_bundle:
-            aln_feats, aln_classes = assign_features(aln, ref_array_dict)
-            if write and outfile is not None:
-                aln_str = '\t'.join([str(aln.read), str(cor_counts), aln.iv.strand,
-                                     str(aln.iv.start), str(aln.iv.end), ';'.join(aln_classes),
-                                     ';'.join(aln_feats)])
-                outfile.write(aln_str + '\n')
+    with open(samples_csv, 'r', encoding='utf-8-sig') as f:
+        fieldnames = ("File", "Group", "Replicate")
+        csv_reader = csv.DictReader(f, fieldnames=fieldnames, delimiter=',')
 
-            if len(aln_classes) > 1:
-                bundle_class["ambiguous"] += cor_counts
-            elif len(aln_feats) > 1:
-                for feat in aln_feats:
-                    bundle_feats[feat] += cor_counts / len(aln_feats)
-            else:
-                if aln_classes.item() == '_no_feature':
-                    stats_counts['_no_feature'] += cor_counts
-                else:
-                    bundle_class[aln_classes.item()] += cor_counts
-                    bundle_feats[aln_feats.item()] += cor_counts
+        next(csv_reader)  # Skip header line
+        for row in csv_reader:
+            library_name = f"{row['Group']}_replicate_{row['Replicate']}"
+            library_file_name = get_library_filename(row['File'], samples_csv)
+            record = {"Name": library_name, "File": library_file_name}
 
-        if len(bundle_class) > 1:
-            class_counts["ambiguous"] += sum(bundle_class.values())
-            stats_counts['_ambiguous_alignments_classes'] += 1
-            stats_counts['_ambiguous_reads_classes'] += dup_counts
-        elif len(bundle_feats) > 1:
-            key = next(iter(bundle_class))
-            stats_counts['_ambiguous_alignments_features'] += 1
-            stats_counts['_ambiguous_reads_features'] += dup_counts
-            class_counts[key] += bundle_class[key]
-            for key, value in bundle_feats.items():
-                feat_counts[key] += value
-        else:
-            try:
-                key = next(iter(bundle_class))
-                class_counts[key] += bundle_class[key]
-                key = next(iter(bundle_feats))
-                feat_counts[key] += bundle_feats[key]
-                stats_counts['_alignments_unique_features'] += 1
-                stats_counts['_reads_unique_features'] += 1
-            except StopIteration:
-                pass
+            if record not in inputs: inputs.append(record)
 
-    with open(stats_out, 'w') as out:
-        out.write('Summary Statistics\n')
-        for key, value in stats_counts.items():
-            out.write('\t'.join([key, str(value) + '\n']))
-        out.write('\t'.join(['_no_feature', feat_counts['_no_feature'] + '\n']))
+    return inputs
 
-    return class_counts, feat_counts, nt_len_mat
+
+def get_path_from_configfile(config_file, input_file):
+    if not os.path.isabs(input_file):
+        from_here = os.path.dirname(config_file)
+        input_file = os.path.normpath(os.path.join(from_here, input_file))
+
+    return input_file
+
+
+# Todo: convert FeatureSources to Tuple[str, list] to allow for just one tuple per GFF file
+#  Currently, a GFF is read once per ID attribute which doesn't make much sense (multiple read/parse of the same file)
+def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
+    """Parses features.csv to provide inputs to FeatureSelector and build_reference_tables
+
+    Args:
+        features_csv: a csv file which defines feature sources and selection rules
+
+    Returns:
+        rules: a list of dictionaries, each representing a parsed row from input
+        gff_files: a set of unique GFF files and associated ID attribute preferences
+    """
+
+    gff_files, rules = set(), list()
+    convert_strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
+
+    with open(features_csv, 'r', encoding='utf-8-sig') as f:
+        fieldnames = ("ID", "Key", "Value", "Hierarchy", "Strand", "nt5", "Length", "Strict", "Source")
+        csv_reader = csv.DictReader(f, fieldnames=fieldnames, delimiter=',')
+
+        next(csv_reader)  # Skip header line
+        for row in csv_reader:
+            rule = {col: row[col] for col in ["Strand", "Hierarchy", "nt5", "Length", "Strict"]}
+            rule['nt5'] = rule['nt5'].upper().translate({ord('U'): 'T'})  # Convert RNA base to cDNA base
+            rule['Strand'] = convert_strand[rule['Strand'].lower()]       # Convert sense/antisense to +/-
+            rule['Identity'] = (row['Key'], row['Value'])                 # Create identity tuple
+            rule['Hierarchy'] = int(rule['Hierarchy'])                    # Convert hierarchy to number
+            rule['Strict'] = rule['Strict'] == 'Full'                     # Convert strict intersection to boolean
+
+            # Duplicate rule entries are not allowed
+            if rule not in rules: rules.append(rule)
+            gff = os.path.basename(row['Source']) if pipeline else get_path_from_configfile(features_csv, row['Source'])
+            gff_files.add((gff, row['ID']))
+
+    return rules, gff_files
+
+
+def assign_features(alignment: 'parser.Alignment') -> Tuple[AssignedFeatures, N_Candidates]:
+
+    feat_matches, assignment = list(), set()
+    iv = alignment.iv
+
+    feat_matches = [match for match in
+                    (features.chrom_vectors[iv.chrom][iv.strand]  # GenomicArrayOfSets -> ChromVector
+                             .array[iv.start:iv.end]              # ChromVector -> StepVector
+                             .get_steps(merge_steps=True))        # StepVector -> (iv_start, iv_end, {features})]
+                    # If an alignment does not map to a feature, an empty set is returned at tuple position 2
+                    if len(match[2]) != 0]
+
+    # If features are associated with the alignment interval, perform selection
+    if len(feat_matches):
+        assignment = selector.choose(feat_matches, alignment)
+
+    return assignment, len(feat_matches)
+
+
+def count_reads(library: dict, return_queue: mp.Queue, intermediate_file: bool = False, out_prefix: str = None):
+
+    # For complete SAM records (slower):
+    # 1. Change the following line to HTSeq.BAM_Reader(sam_file)
+    # 2. Change FeatureSelector.choose() to assign nt5end from chr(alignment.read.seq[0])
+    read_seq = parser.read_SAM(library["File"])
+    stats = LibraryStats(library, out_prefix, intermediate_file)
+
+    # For each sequence in the sam file...
+    # Note: HTSeq only performs bundling. The alignments are our own Alignment objects
+    for bundle in HTSeq.bundle_multiple_alignments(read_seq):
+        bundle_stats = stats.count_bundle(bundle)
+
+        # For each alignment of the given sequence...
+        alignment: parser.Alignment
+        for alignment in bundle:
+            hits, n_candidates = assign_features(alignment)
+            stats.count_bundle_alignments(bundle_stats, alignment, hits)
+
+        stats.finalize_bundle(bundle_stats)
+
+    # Place results in the multiprocessing queue to be merged by parent process
+    return_queue.put(stats)
+
+    if intermediate_file:
+        stats.write_intermediate_file()
+
+
+def map_and_reduce(libraries, work_args, ret_queue):
+    mapred_start = time.time()
+
+    # Use a multiprocessing pool if multiple sam files were provided
+    # Otherwise perform counts in this process
+    if len(libraries) > 1:
+        with mp.Pool(len(libraries)) as pool:
+            pool.starmap(count_reads, work_args)
+    else:
+        count_reads(*work_args[0])
+
+    print("Counting took %.2f seconds" % (time.time() - mapred_start))
+    merge_start = time.time()
+
+    # Collect counts from all pool workers and merge
+    summary = SummaryStats(libraries, work_args[0][-1])
+    for _ in libraries:
+        lib_stats = ret_queue.get()
+        summary.add_library(lib_stats)
+
+    print("Merging took %.2f seconds" % (time.time() - merge_start))
+    return summary
+
 
 def main():
-    """
-    Main routine for small RNA counter script
-    """
-    # Step 1: Get command line arguments.
+    start = time.time()
+    # Get command line arguments.
     args = get_args()
 
-    # Step 2: Read in SAM or BAM file
-    sam_alignment = HTSeq.SAM_Reader(args.input_file)
+    # Determine SAM inputs and their associated library names
+    libraries = load_samples(args.input_csv)
 
-    # Step 3: Create feature arrays from GFF files
-    ref_array_dict, class_counts, feat_counts = create_ref_dict(args.ref_annotations,
-                                                                args.antisense,
-                                                                args.mask_file)
-    print("Processed feature arrays...")
+    # Load selection rules and feature sources from config
+    selection_rules, gff_file_set = load_config(args.config)
 
-    # Step 4: Assign alignment counts to features
-    stats_out = args.out_prefix + '_stats.txt'
+    # Build features table and selector, global for multiprocessing
+    global features, selector
+    features, attributes, alias = parser.build_reference_tables(gff_file_set, selection_rules)
+    selector = FeatureSelector(selection_rules, attributes)
 
-    # Save an intermediate file with all assigned features
-    if args.intermed_file:
-        aln_int_file = args.out_prefix + '_out_aln_table.txt'
-        aln_header = '\t'.join(['seq', 'counts', 'strand', 'start', 'end', 'classes', 'features'])
-        with open(aln_int_file, 'w') as outfile:
-            outfile.write(aln_header + '\n')
-            class_counts, feat_counts, nt_len_mat = tally_feature_counts(sam_alignment,
-                                                                         ref_array_dict,
-                                                                         class_counts,
-                                                                         feat_counts,
-                                                                         stats_out,
-                                                                         write=True,
-                                                                         outfile=outfile)
-    else:
-        # assign features
-        class_counts, feat_counts, nt_len_mat = tally_feature_counts(sam_alignment,
-                                                                     ref_array_dict,
-                                                                     class_counts,
-                                                                     feat_counts,
-                                                                     stats_out)
+    # Prepare for multiprocessing pool
+    ret_queue = mp.Manager().Queue() if len(libraries) > 1 else queue.Queue()
+    work_args = [(assignment, ret_queue, args.intermed_file, args.out_prefix) for assignment in libraries]
 
-    print("Completed feature assignment...")
-    class_counts_df = pd.DataFrame.from_dict(class_counts, orient='index').reset_index()
-    feat_counts_df = pd.DataFrame.from_dict(feat_counts, orient='index').reset_index().drop('_no_feature')
+    # Assign and count features using multiprocessing and merge results
+    merged_counts = map_and_reduce(libraries, work_args, ret_queue)
 
-    print("Writing final count files...")
-    class_counts_df.to_csv(args.out_prefix + '_out_class_counts.csv', index=False, header=False)
-    feat_counts_df.to_csv(args.out_prefix + '_out_feature_counts.txt', sep='\t', index=False, header=False)
-    pd.DataFrame(nt_len_mat).to_csv(args.out_prefix + '_out_nt_len_dist.csv')
+    # Write final outputs
+    merged_counts.write_report_files(alias, args.out_prefix)
+    print("Overall runtime took %.2f seconds" % (time.time() - start))
+
 
 if __name__ == '__main__':
     main()

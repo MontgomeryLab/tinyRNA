@@ -1,298 +1,267 @@
-#!/usr/bin/env python
-
-""" unit tests for functions in counter.py """
-
+import multiprocessing as mp
 import unittest
-import pandas as pd
-import numpy as np
-import aquatx.srna.counter as smrna
+import HTSeq
+import queue
 
-class test_get_sam_flags(unittest.TestCase):
-    """ 
-    Testing the get_sam_flags function for returning
-    the correct values, raising errors when not given ints
-    and incorrect combinations of flags
-    """
-    def test_no_flag(self):
-        self.assertEqual(smrna.get_sam_flags(0),[0])
-    def test_one_flag(self):
-        self.assertEqual(smrna.get_sam_flags(128), [128])
-    def test_two_flags(self):
-        self.assertEqual(smrna.get_sam_flags(2180),[2048,128,4])
-    # add raise error when value isn't an appropriate flag value
+from unittest.mock import patch, mock_open, call, MagicMock
 
-class test_find_strand(unittest.TestCase):
-    """
-    Testing whether or not the find_strand function
-    returns the correct value and if it raises an error
-    when incorrect values are given
-    """
-    def test_return_plus(self):
-        self.assertEqual(smrna.find_strand(2180), '+')
-    def test_return_minus(self):
-        self.assertEqual(smrna.find_strand(16), '-')
+import tests.unit_test_helpers as helpers
+import aquatx.srna.counter as counter
+from aquatx.srna.hts_parsing import Alignment, read_SAM
 
-    # add raise error if value not a list
-    # add raise error if value is empty list
+resources = "./testdata/counter"
 
-class test_sam_to_df(unittest.TestCase):
-    """
-    Testing converting a sam file to a dataframe using a
-    sam file created with certain values
-    """
-    def setUp(self):
-        self.df = pd.DataFrame([{'qname': 'seq_1_x3', 'flag': 0, 'chr': 'CHROMOSOME_I',
-                                'pos': 1738690,'seq': 'CTTCCTCATGTGCTCTGACGT'},
-                                {'qname': 'seq_2_x15', 'flag': 0, 'chr': 'CHROMOSOME_V',
-                                'pos': 3891144, 'seq': 'GTTTTCAGCTCCCTGACGTTTGGA'},
-                                {'qname': 'seq_4_x2', 'flag': 16, 'chr': 'CHROMOSOME_IV',
-                                'pos': 162, 'seq': 'AGGAATCCCCTCCATCCACACC'},
-                                {'qname': 'seq_5_x25431', 'flag': 16,'chr': 'CHROMOSOME_II',
-                                'pos': 7701848, 'seq': 'TCATTGAAGTTCGATCCAAC'},
-                                {'qname': 'seq_5_x25431', 'flag': 0, 'chr': 'CHROMOSOME_II',
-                                'pos': 770184, 'seq': 'TCATTGAAGTTCGATCCAAC'},
-                                {'qname': 'seq_7_x1', 'flag': 2048, 'chr': 'CHROMOSOME_III',
-                                'pos': 5017450, 'seq': 'GTTATGTGGTGGATGTGCCTT'}], 
-                                columns=['qname','flag','chr','pos','seq'])
-        self.df['flag'] = self.df['flag'].astype(np.int32)
-        self.df['chr'] = self.df['chr'].astype('category')
-        self.df['pos'] = self.df['pos'].astype(np.int32)
 
-    def tearDown(self):
-        del self.df
-        
-    def test_sam_df_content(self):
-        pd.testing.assert_frame_equal(self.df, smrna.sam_to_df('tests/unit_test_data/good_test.sam'))
+class CounterTests(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(self):
+        self.gff_file = f"{resources}/identity_choice_test.gff3"
+        self.short_gff_file = f"{resources}/single.gff3"
+        self.short_gff = helpers.read(self.short_gff_file)
+
+        self.sam_file = f"{resources}/identity_choice_test.sam"
+        self.short_sam_file = f"{resources}/single.sam"
+        self.short_sam = helpers.read(self.short_sam_file)
+
+        self.strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
+
+        # ID, Key, Value, Hierarchy, Strand, 5pnt, Length, Match, Source
+        self.csv_feat_row_dict = {'id_attr': "Alias", 'at_key': "Class", 'at_val': "CSR", 'rank': "1",
+                                  'strand': "antisense", 'nt5': '"C,G,U"', 'length': "all", 'match': "Partial",
+                                  'gff': "./testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3"}
+
+        self.csv_samp_row_dict = {'file': "test_file.fastq", 'group': "test_group", 'rep': "0"}
+
+    # === HELPERS ===
+
+    @staticmethod
+    def csv(type, rows):
+        header = "\uFEFF"
+        if type == "features.csv":
+            header = "\uFEFFID Attribute,Attribute Key,Attribute Value,Hierarchy,Strand (sense/antisense/both),5' End Nucleotide,Length,Match,Feature Source"
+        elif type == "samples.csv":
+            header = "\uFEFFInput FastQ/A Files,Sample/Group Name,Replicate number"
+
+        return '\n'.join([header, *map(','.join, rows)])
     
-class test_seq_counter(unittest.TestCase):
-    """
-    Testing initial processing of the sam dataframe
-    """
-    def setUp(self):
-        self.df = pd.DataFrame([{'qname': 'seq_1_x3', 'flag': 0, 'chr': 'CHROMOSOME_I',
-                                'pos': 1738690, 'seq': 'CTTCCTCATGTGCTCTGACGT', 'length': 21,
-                                'counts': 3, '5p_nt': 'C', 'strand': '+', 'num_hits': 1, 
-                                'cor_counts': 3},
-                                {'qname': 'seq_2_x15', 'flag': 0, 'chr': 'CHROMOSOME_V',
-                                'pos': 3891144, 'seq': 'GTTTTCAGCTCCCTGACGTTTGGA','length': 24,
-                                'counts': 15, '5p_nt': 'G', 'strand': '+', 'num_hits': 1,
-                                'cor_counts': 15},
-                                {'qname': 'seq_4_x2', 'flag': 16, 'chr': 'CHROMOSOME_IV',
-                                'pos': 162, 'seq': 'AGGAATCCCCTCCATCCACACC','length': 22,
-                                'counts': 2,'5p_nt': 'A','strand': '-','num_hits': 1,
-                                'cor_counts': 2},
-                                {'qname': 'seq_5_x25431', 'flag': 16,'chr': 'CHROMOSOME_II',
-                                'pos': 7701848,'seq': 'TCATTGAAGTTCGATCCAAC','length': 20,
-                                'counts': 25431,'5p_nt': 'T','strand': '-','num_hits': 2,
-                                'cor_counts': 12715.5},
-                                {'qname': 'seq_5_x25431', 'flag': 0,'chr': 'CHROMOSOME_II',
-                                'pos': 770184,'seq': 'TCATTGAAGTTCGATCCAAC','length': 20,
-                                'counts': 25431,'5p_nt': 'T','strand': '+','num_hits': 2,
-                                'cor_counts': 12715.5},
-                                {'qname': 'seq_7_x1', 'flag': 2048,'chr': 'CHROMOSOME_III',
-                                'pos': 5017450,'seq': 'GTTATGTGGTGGATGTGCCTT', 'length': 21,
-                                'counts': 1,'5p_nt': 'G','strand': '+','num_hits': 1,
-                                'cor_counts': 1} ],
-                                columns=['qname','flag','chr','pos','seq','length','counts',
-                                        '5p_nt','strand','num_hits','cor_counts'])
-                      
-        self.df['flag'] = self.df['flag'].astype(np.int32)
-        self.df['chr'] = self.df['chr'].astype('category')
-        self.df['pos'] = self.df['pos'].astype(np.int32)
-        self.df['length'] = self.df['length'].astype(np.int32)
-        self.df['counts'] = self.df['counts'].astype(np.int32)
-        self.df['5p_nt'] = self.df['5p_nt'].astype('category')
-        self.df['strand'] = self.df['strand'].astype('category')
-        self.df['cor_counts'] = self.df['cor_counts'].astype(np.float32)
-        self.df['num_hits'] = self.df['num_hits'].astype(np.int32)
-        self.testdf = smrna.sam_to_df('tests/unit_test_data/good_test.sam')
-    
-    def tearDown(self):
-        del self.df, self.testdf
-
-    def test_sam_additions_to_df(self):
-        pd.testing.assert_frame_equal(self.df, smrna.seq_counter(self.testdf))
-
-class test_nt_counter(unittest.TestCase):
-    """
-    Testing if the nucleotide/length counter returns
-    expected values based on a generated input
-    """
-    def setUp(self):
-        self.df = pd.DataFrame([{'length': 20, 'A': 0, 'C': 0, 'G': 0, 'T': 25431}, 
-                                {'length': 21, 'A': 0, 'C': 3, 'G': 1, 'T':0},
-                                {'length': 22, 'A': 2, 'C': 0, 'G': 0, 'T': 0},
-                                {'length': 24, 'A': 0, 'C': 0, 'G': 15, 'T': 0}],
-                                 columns=['length','A','C','G','T'], dtype=np.int32).set_index('length')
-        self.df.columns = pd.CategoricalIndex(['A', 'C', 'G', 'T'], categories=['A', 'C', 'G', 'T'], ordered=False, name='5p_nt', dtype='category')
-        self.testdf = smrna.sam_to_df('tests/unit_test_data/good_test.sam')
-        self.testdf = smrna.seq_counter(self.testdf)
-    def tearDown(self):
-        del self.df, self.testdf
-    def test_nt_count_df(self):
-        pd.testing.assert_frame_equal(self.df, smrna.nt_counter(self.testdf, save=False))
-
-class test_feature_reader(unittest.TestCase):
-    """ 
-    Testing if a gff file is properly read in
-    with expected headers
-    """
-    def setUp(self):
-        self.df = pd.DataFrame([{'chr': 'CHROMOSOME_I', 'source':'.', 'feature': 'miRNA',
-                                'start': 1738648, 'end': 1738679, 'score':'.', 'strand':'+', 
-                                'frame': '.', 'attr':'cel-miR-50-5p'},
-                                {'chr': 'CHROMOSOME_I', 'source':'.', 'feature': 'miRNA',
-                                'start': 1738690, 'end': 1738719, 'score':'.', 'strand':'+',
-                                'frame': '.', 'attr':'cel-miR-50-3p'},
-                                {'chr': 'CHROMOSOME_I', 'source':'.', 'feature': 'miRNA',
-                                'start': 2888510, 'end': 2888540, 'score':'.', 'strand':'-',
-                                'frame': '.', 'attr':'cel-miR-5546-5p'},
-                                {'chr': 'CHROMOSOME_I', 'source':'.', 'feature': 'miRNA',
-                                'start': 2888468, 'end': 2888497, 'score':'.', 'strand':'-',
-                                'frame': '.', 'attr':'cel-miR-5546-3p'}],
-                                columns=['chr','source','feature','start','end','score','strand','frame','attr'])
-
-    def tearDown(self):
-        del self.df
-
-    def test_read_features(self):
-        pd.testing.assert_frame_equal(self.df, smrna.feature_reader('tests/unit_test_data/good_features.gff'))
-
-class test_feature_splitter(unittest.TestCase):
-    """
-    Testing if a feature data frame or sequence data frame
-    is split properly
-    """
-    def setUp(self):
-        self.df = pd.DataFrame([{'chr': 'CHROMOSOME_I', 'source':'.', 'feature': 'miRNA',
-                                'start': 1738648, 'end': 1738679, 'score':'.', 'strand':'+',
-                                'frame': '.', 'attr':'cel-miR-50-5p'},
-                                {'chr': 'CHROMOSOME_I', 'source':'.', 'feature': 'miRNA',
-                                'start': 1738690, 'end': 1738719, 'score':'.', 'strand':'+',
-                                'frame': '.', 'attr':'cel-miR-50-3p'},
-                                {'chr': 'CHROMOSOME_I', 'source':'.', 'feature': 'miRNA',
-                                'start': 2888510, 'end': 2888540, 'score':'.', 'strand':'-',
-                                'frame': '.', 'attr':'cel-miR-5546-5p'},
-                                {'chr': 'CHROMOSOME_I', 'source':'.', 'feature': 'miRNA',
-                                'start': 2888468, 'end': 2888497, 'score':'.', 'strand':'-',
-                                'frame': '.', 'attr':'cel-miR-5546-3p'}],
-                                columns=['chr','source','feature','start','end','score','strand','frame','attr'])
-        self.dfdict = {'+': self.df.iloc[0:2], '-': self.df.iloc[2:]}
-
-        self.testdf = smrna.feature_reader('tests/unit_test_data/good_features.gff')
-
-    def tearDown(self):
-        del self.df, self.testdf
-
-    def test_strand_split(self):
-        pd.testing.assert_frame_equal(self.dfdict['+'], smrna.feature_splitter(self.testdf)['+'])
-        pd.testing.assert_frame_equal(self.dfdict['-'], smrna.feature_splitter(self.testdf)['-'])
-
-class test_assign_counts(unittest.TestCase):
-    """
-    Testing if counts are assigned properly to a feature
-    """
-    def setUp(self):
-        self.feat = pd.DataFrame({'chr': 'CHROMOSOME_I', 'feature': 'miRNA',
-                    'start': 1738648, 'end': 1738679, 'strand':'+',
-                    'frame': '.', 'attr':'cel-miR-50-5p'}, index=[0])
-        self.df = pd.DataFrame([{'qname': 'seq_1_x3', 'flag': 0, 'chr': 'CHROMOSOME_I',
-                                'pos': 1738690, 'seq': 'CTTCCTCATGTGCTCTGACGT', 'length': 21,
-                                'counts': 3, '5p_nt': 'C', 'strand': '+', 'num_hits': 1, 
-                                'cor_counts': 3},
-                                {'qname': 'seq_2_x15', 'flag': 0, 'chr': 'CHROMOSOME_V',
-                                'pos': 3891144, 'seq': 'GTTTTCAGCTCCCTGACGTTTGGA','length': 24,
-                                'counts': 15, '5p_nt': 'G', 'strand': '+', 'num_hits': 1,
-                                'cor_counts': 15},
-                                {'qname': 'seq_4_x2', 'flag': 16, 'chr': 'CHROMOSOME_IV',
-                                'pos': 162, 'seq': 'AGGAATCCCCTCCATCCACACC','length': 22,
-                                'counts': 2,'5p_nt': 'A','strand': '-','num_hits': 1,
-                                'cor_counts': 2},
-                                {'qname': 'seq_5_x25431', 'flag': 16,'chr': 'CHROMOSOME_II',
-                                'pos': 7701848,'seq': 'TCATTGAAGTTCGATCCAAC','length': 20,
-                                'counts': 25431,'5p_nt': 'T','strand': '-','num_hits': 2,
-                                'cor_counts': 12715.5},
-                                {'qname': 'seq_5_x25431', 'flag': 0,'chr': 'CHROMOSOME_II',
-                                'pos': 770184,'seq': 'TCATTGAAGTTCGATCCAAC','length': 20,
-                                'counts': 25431,'5p_nt': 'T','strand': '+','num_hits': 2,
-                                'cor_counts': 12715.5},
-                                {'qname': 'seq_7_x1', 'flag': 2048,'chr': 'CHROMOSOME_III',
-                                'pos': 5017450,'seq': 'GTTATGTGGTGGATGTGCCTT', 'length': 21,
-                                'counts': 1,'5p_nt': 'G','strand': '+','num_hits': 1,
-                                'cor_counts': 1} ],
-                                columns=['qname','flag','chr','pos','seq','length','counts',
-                                        '5p_nt','strand','num_hits','cor_counts'])                     
-    def tearDown(self):
-        del self.feat, self.df
-    def test_assigned_good_count(self):
-        # not sure the best way to test/set this up so I may end up not testing it
-        # or changing the function because apparently I don't understand fully what
-        # I am doing :)
-        print('unimplemented test. will finish this later')
-
-class test_feature_counter(unittest.TestCase):
-    """
-    Test whether or not the feature counter returns expected
-    counts based on a made up file
-    """
-    def setUp(self):
-        self.testdf = pd.DataFrame([{'qname': 'seq_1_x3', 'flag': 0, 'chr': 'CHROMOSOME_I',
-                                'pos': 1738690, 'seq': 'CTTCCTCATGTGCTCTGACGT', 'length': 21,
-                                'counts': 3, '5p_nt': 'C', 'strand': '+', 'num_hits': 1, 
-                                'cor_counts': 3},
-                                {'qname': 'seq_2_x15', 'flag': 0, 'chr': 'CHROMOSOME_V',
-                                'pos': 3891144, 'seq': 'GTTTTCAGCTCCCTGACGTTTGGA','length': 24,
-                                'counts': 15, '5p_nt': 'G', 'strand': '+', 'num_hits': 1,
-                                'cor_counts': 15},
-                                {'qname': 'seq_4_x2', 'flag': 16, 'chr': 'CHROMOSOME_IV',
-                                'pos': 162, 'seq': 'AGGAATCCCCTCCATCCACACC','length': 22,
-                                'counts': 2,'5p_nt': 'A','strand': '-','num_hits': 1,
-                                'cor_counts': 2},
-                                {'qname': 'seq_5_x25431', 'flag': 16,'chr': 'CHROMOSOME_II',
-                                'pos': 7701848,'seq': 'TCATTGAAGTTCGATCCAAC','length': 20,
-                                'counts': 25431,'5p_nt': 'T','strand': '-','num_hits': 2,
-                                'cor_counts': 12715.5},
-                                {'qname': 'seq_5_x25431', 'flag': 0,'chr': 'CHROMOSOME_II',
-                                'pos': 770184,'seq': 'TCATTGAAGTTCGATCCAAC','length': 20,
-                                'counts': 25431,'5p_nt': 'T','strand': '+','num_hits': 2,
-                                'cor_counts': 12715.5},
-                                {'qname': 'seq_7_x1', 'flag': 2048,'chr': 'CHROMOSOME_III',
-                                'pos': 5017450,'seq': 'GTTATGTGGTGGATGTGCCTT', 'length': 21,
-                                'counts': 1,'5p_nt': 'G','strand': '+','num_hits': 1,
-                                'cor_counts': 1} ],
-                                columns=['qname','flag','chr','pos','seq','length','counts',
-                                        '5p_nt','strand','num_hits','cor_counts'])                     
+    def feat_csv_test_row(self):
+        return ','.join(self.csv_feat_row_dict.values())
         
-        self.testfeat = pd.DataFrame([{'chr': 'CHROMOSOME_I', 'source':'.', 'feature': 'miRNA',
-                                'start': 1738648, 'end': 1738679, 'score':'.', 'strand':'+',
-                                'frame': '.', 'attr':'cel-miR-50-5p'},
-                                {'chr': 'CHROMOSOME_I', 'source':'.', 'feature': 'miRNA',
-                                'start': 1738690, 'end': 1738719, 'score':'.', 'strand':'+',
-                                'frame': '.', 'attr':'cel-miR-50-3p'},
-                                {'chr': 'CHROMOSOME_I', 'source':'.', 'feature': 'miRNA',
-                                'start': 2888510, 'end': 2888540, 'score':'.', 'strand':'-',
-                                'frame': '.', 'attr':'cel-miR-5546-5p'},
-                                {'chr': 'CHROMOSOME_I', 'source':'.', 'feature': 'miRNA',
-                                'start': 2888468, 'end': 2888497, 'score':'.', 'strand':'-',
-                                'frame': '.', 'attr':'cel-miR-5546-3p'}],
-                                columns=['chr','source','feature','start','end','score','strand','frame','attr'])
-        self.df = pd.DataFrame([{'chr': 'CHROMOSOME_I', 'feature': 'miRNA',
-                                'start': 1738648, 'end': 1738679, 'strand':'+',
-                                 'attr':'cel-miR-50-5p','counts':0.0},
-                                {'chr': 'CHROMOSOME_I', 'feature': 'miRNA',
-                                'start': 1738690, 'end': 1738719, 'strand':'+',
-                                 'attr':'cel-miR-50-3p','counts':3.0},
-                                {'chr': 'CHROMOSOME_I', 'feature': 'miRNA',
-                                'start': 2888510, 'end': 2888540, 'strand':'-',
-                                 'attr':'cel-miR-5546-5p', 'counts':0.0},
-                                {'chr': 'CHROMOSOME_I', 'feature': 'miRNA',
-                                'start': 2888468, 'end': 2888497, 'strand':'-',
-                                 'attr':'cel-miR-5546-3p', 'counts':0.0}],
-                                columns=['chr','feature','start','end','strand','attr','counts'])
-    def tearDown(self):
-        del self.df, self.testfeat, self.testdf
-    def test_good_feature_count(self):
-        pd.testing.assert_frame_equal(self.df, smrna.feature_counter(self.testfeat, self.testdf))
+    # === TESTS ===
+
+    """Does load_samples correctly parse a single record samples.csv?"""
+
+    def test_load_samples_single(self):
+        inp_file = "test.fastq"
+        exp_file = "test_aligned_seqs.sam"
+
+        row = {'File': inp_file, 'Group': "test_group", 'Rep': "0"}
+        csv = self.csv("samples.csv", [row.values()])
+
+        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+            inputs = counter.load_samples('/dev/null')
+
+        expected_lib_name = f"{row['Group']}_replicate_{row['Rep']}"
+        expected_result = [{'File': exp_file, 'Name': expected_lib_name}]
+        self.assertEqual(expected_result, inputs)
+
+    """Does load_samples correctly handle duplicate samples? There should be no duplicates."""
+
+    def test_load_samples_duplicate(self):
+        row = {'File': "test.fastq", 'Group': "N/A", 'Rep': "N/A"}
+        csv = self.csv("samples.csv", [row.values(), row.values()])
+
+        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+            inputs = counter.load_samples('/dev/null')
+
+        self.assertEqual(1, len(inputs))
+
+    """Does load_samples correctly handle SAM filenames?"""
+
+    def test_load_samples_sam(self):
+        sam_filename = "/fake/absolute/path/sample.sam"
+        row = {'File': sam_filename, 'Group': "test_group", 'Rep': "0"}
+        csv = self.csv("samples.csv", [row.values()])
+
+        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+            inputs = counter.load_samples('/dev/null')
+
+        expected_lib_name = f"{row['Group']}_replicate_{row['Rep']}"
+        expected_result = [{'File': sam_filename, 'Name': expected_lib_name}]
+
+        self.assertEqual(expected_result, inputs)
+
+    """Does load_samples throw ValueError if a non-absolute path to a SAM file is provided?"""
+
+    def test_load_samples_nonabs_path(self):
+        bad = "./dne.sam"
+        row = [bad, "test_group", "0"]
+        csv = self.csv("samples.csv", [row])
+
+        expected_error = "The following file must be expressed as an absolute path:\n" + bad
+
+        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+            with self.assertRaisesRegex(ValueError, expected_error):
+                counter.load_samples('/dev/null')
+
+    """Does load_samples throw ValueError if sample filename does not have a .fastq or .sam extension?"""
+
+    def test_load_samples_bad_extension(self):
+        bad = "./bad_extension.xyz"
+        row = [bad, "test_group", "0"]
+        csv = self.csv("samples.csv", [row])
+
+        expected_error = "The filenames defined in your samples CSV file must have a .fastq or .sam extension.\n" \
+                         "The following filename contained neither:\n" + bad
+
+        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+            with self.assertRaisesRegex(ValueError, expected_error):
+                counter.load_samples('/dev/null')
+
+    """Does load_config correctly parse a single-entry features.csv config file?"""
+
+    def test_load_config_single(self):
+        # Features CSV with a single rule/row
+        row = self.csv_feat_row_dict.values()
+        csv = self.csv("features.csv", [row])
+
+        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+            ruleset, gff_files = counter.load_config('/dev/null')
+
+        r = self.csv_feat_row_dict
+        expected_gff_ret = {(r['gff'], r['id_attr'])}
+        expected_ruleset = [{'Strand': self.strand[r['strand']], 'Hierarchy': int(r['rank']), 'nt5': 'C,G,T',
+                             'Length': r['length'], 'Identity': (r['at_key'], r['at_val']), 'Strict': r['match'] == 'Full'}]
+
+        self.assertEqual(expected_gff_ret, gff_files)
+        self.assertEqual(expected_ruleset, ruleset)
+
+    """Does load_config correctly handle duplicate rules? Only one rule should be returned (no duplicates)."""
+
+    def test_load_config_duplicate_rules(self):
+        # Features CSV with two duplicate rules/rows
+        row = self.csv_feat_row_dict.values()
+        csv = self.csv("features.csv", [row, row])  # Duplicate rows
+        
+        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+            ruleset, gff_files = counter.load_config('/dev/null')
+
+        r = self.csv_feat_row_dict
+        expected_gff_ret = {(r['gff'], r['id_attr'])}
+        expected_ruleset = [
+            {'Strand': self.strand[r['strand']], 'Hierarchy': int(r['rank']), 'nt5': 'C,G,T',
+             'Length': r['length'], 'Identity': (r['at_key'], r['at_val']), 'Strict': r['match'] == 'Full'}]
+
+        self.assertEqual(expected_gff_ret, gff_files)
+        self.assertEqual(expected_ruleset, ruleset)
+
+    """Does load_config convert uracil to thymine for proper matching with cDNA sequences?"""
+
+    def test_load_config_rna_to_cDNA(self):
+        row = self.csv_feat_row_dict.copy()
+        row['nt5'] = 'U'
+        csv = self.csv("features.csv", [row.values()])
+
+        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+            ruleset, _ = counter.load_config('/dev/null')
+
+        self.assertEqual(ruleset[0]['nt5'], 'T')
+
+    """Do GenomicArraysOfSets slice to step intervals that overlap, even if by just one base?"""
+
+    def test_HTSeq_iv_slice(self):
+        gas = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+        iva = HTSeq.GenomicInterval("I", 1, 10, "+")
+        ivb = HTSeq.GenomicInterval("I", 5, 15, "+")
+        ivc = HTSeq.GenomicInterval("I", 9, 20, "+")
+        ivd = HTSeq.GenomicInterval("I", 2, 4, "+")
+        gas[iva] += "TestA"
+        gas[ivb] += "TestB"
+
+        """
+        iva:  1 |--TestA--| 10
+        ivb:      5 |---TestB--| 15
+        ivc:          9 |-----------| 20
+        ivd:   2 |--| 4
+                         ^ Single base overlap: iva ∩ ivc
+        Expect:       9 |-|{B}-|-{}-| 20
+                     [9, 10)   [15,20)
+                         ^ {A ∩ B}
+        """
+
+        matches = list(gas[ivc].array[ivc.start:ivc.end].get_steps(values_only=True))
+        matches_with_cooridnates = list(gas[ivc].steps())
+        self.assertEqual(matches, [{"TestA", "TestB"}, {"TestB"}, set()])
+        self.assertEqual(matches_with_cooridnates[0][0], HTSeq.GenomicInterval("I", 9,10,'+'))
+        self.assertEqual(matches_with_cooridnates[1][0], HTSeq.GenomicInterval("I", 10,15,'+'))
+        self.assertEqual(matches_with_cooridnates[2][0], HTSeq.GenomicInterval("I", 15,20,'+'))
+
+    """Does assign_features return features that overlap the query interval by a single base?"""
+
+    def test_assign_features_single_base_overlap(self):
+        features = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+        iv_feat = HTSeq.GenomicInterval("I", 0, 2, "+")  # The "feature"
+        iv_olap = HTSeq.GenomicInterval("I", 1, 2, "+")  # A single-base overlapping feature
+        iv_none = HTSeq.GenomicInterval("I", 2, 3, "+")  # A non-overlapping interval
+
+        features[iv_feat] += 'The "feature"'
+        features[iv_none] += "Non-overlapping feature"
+
+        olap_alignment = Alignment(iv_olap, "Single base overlap", b"A")
+
+        with patch.object(counter, "selector") as selector:
+            counter.features = features
+            counter.assign_features(olap_alignment)
+
+        expected_match_list = [(1, 2, {'The "feature"'})]
+        selector.choose.assert_called_once_with(expected_match_list, olap_alignment)
+
+    """Does assign_features correctly handle alignments with zero feature matches?"""
+
+    def test_assign_features_no_match(self):
+        features = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+        iv_feat = HTSeq.GenomicInterval("I", 0, 2, "+")
+        iv_none = HTSeq.GenomicInterval("I", 2, 3, "+")
+
+        features[iv_feat] += "Should not match"
+        none_alignment = Alignment(iv_none, "Non-overlap", b"A")
+
+        with patch.object(counter, "selector") as selector:
+            counter.features = features
+            counter.assign_features(none_alignment)
+
+        selector.choose.assert_not_called()
+
+    """Does count_reads properly handle a single record library?"""
+
+    @patch.object(counter, "LibraryStats", autospec=True)
+    @patch.object(counter, "assign_features", return_value=({'mock_feat'}, 1))
+    def test_count_reads_generic(self, assign_features, LibraryStats):
+        library = {'File': self.short_sam_file, 'Name': 'short'}
+        alignment = next(read_SAM(library['File']))
+        ret_q = queue.Queue()
+
+        expected_LibStat_count_bundle_call = call().count_bundle([alignment])
+        bundle = LibraryStats.count_bundle.return_value = MagicMock()
+        # LibraryStats.count_bundle = MagicMock()
+        # LibraryStats.count_bundle_alignments = MagicMock()
+        # LibraryStats.finalize_bundle = MagicMock
+
+        expected_LibStats_calls = [
+            call(library, None, False),
+            expected_LibStat_count_bundle_call,
+            call().count_bundle_alignments(bundle),
+            call().finalize_bundle(bundle)
+        ]
+
+        counter.count_reads(library, ret_q)
+
+        assign_features.assert_called_once()
+        LibraryStats.assert_has_calls(expected_LibStats_calls)
+
+    # Todo: write factory functions for in-memory GFF and SAM file testing rather than tons of resource files
+
 
 if __name__ == '__main__':
     unittest.main()

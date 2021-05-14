@@ -4,74 +4,71 @@ cwlVersion: v1.0
 class: CommandLineTool
 
 requirements:
- - class: InlineJavascriptRequirement
+  - class: InlineJavascriptRequirement
+  - class: InitialWorkDirRequirement
+    listing: $(inputs.gff_files)
 
 baseCommand: aquatx-count
 
 inputs:
-  input_file:
+  samples_csv:
     type: File
     inputBinding:
-      position: 2
       prefix: -i
+      position: 0
 
-  ref_annotations:
-    type: File[]
+  config_csv:
+    type: File
     inputBinding:
-      position: 2
-      prefix: -r
-
-  mask_annotations:
-    type: File[]?
-    inputBinding:
-      position: 2
-      prefix: -m
-
-  antisense:
-    type: string[]?
-    inputBinding:
-      position: 2
-      prefix: -a
+      prefix: -c
+      position: 1
 
   out_prefix:
     type: string
     inputBinding:
       position: 2
       prefix: -o
-      valueFrom: |
-        ${ 
-          if (self) {
-            return self;
-          } else {
-            return inputs.input_file.basename;
-          }
-        }
 
   intermed_file:
     type: boolean?
     inputBinding:
-      position: 2 
+      position: 3
       prefix: -t
+
+  is_pipeline:
+    type: boolean?
+    inputBinding:
+      position: 4
+      prefix: -p
+
+  # Specifies the GFF files defined in features.csv
+  gff_files:  # This optional input is for pipeline execution.
+    type: File[]?
+
+  # These optional inputs are for producing pipeline summary statistics at the conclusion of counting
+  fastp_logs:
+    type: File[]?
+
+  collapsed_fa:
+    type: File[]?
 
 outputs:
   feature_counts:
     type: File
     outputBinding:
-      glob: $(inputs.out_prefix)_out_feature_counts.txt
+      glob: $(inputs.out_prefix)_feature_counts.csv
 
   other_counts:
     type: File[]
     outputBinding:
-      glob:
-        - $(inputs.out_prefix)_out_nt_len_dist.csv
-        - $(inputs.out_prefix)_out_class_counts.csv
+      glob: $(inputs.out_prefix)_nt_len_dist.csv
 
   stats_file:
     type: File
     outputBinding:
-      glob: $(inputs.out_prefix)_stats.txt
+      glob: $(inputs.out_prefix)_alignment_stats.csv
 
   intermed_out_file:
-    type: File?
+    type: File[]?
     outputBinding:
-      glob: $(inputs.out_prefix)_out_aln_table.txt
+      glob: "*_aln_table.txt"
