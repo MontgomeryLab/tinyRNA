@@ -3,16 +3,21 @@
 cwlVersion: v1.0
 class: CommandLineTool
 
+requirements:
+  - class: InlineJavascriptRequirement
+  - class: InitialWorkDirRequirement
+    listing: $(inputs.gff_files)
+
 baseCommand: aquatx-count
 
 inputs:
-  samples_file:
+  samples_csv:
     type: File
     inputBinding:
       prefix: -i
       position: 0
 
-  config_file:
+  config_csv:
     type: File
     inputBinding:
       prefix: -c
@@ -29,6 +34,16 @@ inputs:
     inputBinding:
       position: 3
       prefix: -t
+
+  is_pipeline:
+    type: boolean?
+    inputBinding:
+      position: 4
+      prefix: -p
+
+  # Specifies the GFF files defined in features.csv
+  gff_files:  # This optional input is for pipeline execution.
+    type: File[]?
 
   # These optional inputs are for producing pipeline summary statistics at the conclusion of counting
   fastp_logs:
@@ -56,4 +71,4 @@ outputs:
   intermed_out_file:
     type: File[]?
     outputBinding:
-      glob: $(*_aln_table.txt)
+      glob: "*_aln_table.txt"

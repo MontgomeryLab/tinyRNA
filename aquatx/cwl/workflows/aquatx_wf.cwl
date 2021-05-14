@@ -67,6 +67,8 @@ inputs:
   samples_csv: File
   features_csv: File
   intermed_file: boolean?
+  is_pipeline: boolean?
+  gff_files: File[]?
 
 steps:
   fastp:
@@ -140,12 +142,14 @@ steps:
   counts:
     run: ../tools/aquatx-count.cwl
     in:
-      samples_file: samples_csv
-      config_file: features_csv
+      samples_csv: samples_csv
+      config_csv: features_csv
       out_prefix: output_prefix
       intermed_file: intermed_file
-      fastp_logs: report_html
-      collapsed_fa: collapsed_fa
+      fastp_logs: fastp/report_json
+      collapsed_fa: collapse/collapsed_fa
+      gff_files: gff_files
+      is_pipeline: is_pipeline
     out: [feature_counts, other_counts, stats_file, intermed_out_file]
 
   deseq2:

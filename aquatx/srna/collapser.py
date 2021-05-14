@@ -146,12 +146,12 @@ def look_before_you_leap(out_prefix: str, gz: bool) -> (str, str):
     """Check that we'll be able to write results before we spend time on the work"""
 
     ext = '.fa.gz' if gz else '.fa'
-    candidates = [f"{out_prefix}{file}{ext}" for file in ["_collapsed", "_collapsed_lowcounts"]]
+    candidates = tuple(f"{out_prefix}{file}{ext}" for file in ["_collapsed", "_collapsed_lowcounts"])
     for file in candidates:
         if os.path.isfile(file):
             raise FileExistsError(f"Collapser critical error: {file} already exists.")
 
-    return tuple(candidates)
+    return candidates
 
 
 def fasta_interface(gz: bool) -> Tuple[callable, callable, str]:

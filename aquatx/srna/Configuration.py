@@ -54,6 +54,13 @@ class ConfigBase:
         else:
             print(f"Tried appending to a non-existent key: {key}", file=sys.stderr)
 
+    def append_if_absent(self, key: str, val: Union[str, list, dict]) -> list:
+        """Append to list-type setting if the value is not already present"""
+        target = self.get(key)
+        if not val in target:
+            target.append(val)
+        return target
+
     """========== HELPERS =========="""
 
     @staticmethod
@@ -71,6 +78,11 @@ class ConfigBase:
     def cwl_file(file: str) -> dict:
         """Returns a file input/output specification for the CWL config"""
         return {'class': 'File', 'path': file}
+
+    @staticmethod
+    def cwl_dir(dir: str) -> dict:
+        """Returns a directory specificaion for the CWL config"""
+        return {'class': 'Directory', 'path': dir}
 
     def create_run_directory(self) -> str:
         """Create the destination directory for pipeline outputs"""
@@ -128,9 +140,10 @@ class Configuration(ConfigBase):
         self.setup_per_file()
         self.setup_ebwt_idx()
         self.process_sample_sheet()
+        self.process_feature_sheet()
 
     def process_sample_sheet(self):
-        sample_sheet = self.joinpath(self.dir, self.get('samples_csv'))
+        sample_sheet = self.joinpath(self.dir, self.get('samples_csv')['path'])
         from_here = os.path.dirname(sample_sheet)
 
         with open(sample_sheet, 'r', encoding='utf-8-sig') as sf:
@@ -142,7 +155,6 @@ class Configuration(ConfigBase):
                 rep_number = row['Replicate number']
 
                 self.append_to('report_title', f"{group_name}_replicate_{rep_number}_fastp_report")
-                self.append_to('out_prefix', f"{group_name}_replicate_{rep_number}")
                 self.append_to('in_fq', self.cwl_file(fastq_file))
 
                 self.append_to('out_fq', sample_basename + '_cleaned.fastq')
@@ -151,12 +163,25 @@ class Configuration(ConfigBase):
                 self.append_to('json', sample_basename + '_qc.json')
                 self.append_to('html', sample_basename + '_qc.html')
                 self.append_to('uniq_seq_prefix', sample_basename)
+
+    def process_feature_sheet(self):
+        feature_sheet = self.joinpath(self.dir, self.get('features_csv')['path'])
+        from_here = os.path.dirname(feature_sheet)
+
+        with open(feature_sheet, 'r', encoding='utf-8-sig') as ff:
+            fieldnames = ("ID", "Key", "Value", "Hierarchy", "Strand", "nt5", "Length", "Strict", "Source")
+            csv_reader = csv.DictReader(ff, fieldnames=fieldnames, delimiter=',')
+
+            next(csv_reader) # Skip header line
+            for row in csv_reader:
+                gff_file = self.joinpath(from_here, row['Source'])
+                self.append_if_absent('gff_files', self.cwl_file(gff_file))
             
     def setup_per_file(self):
         """Per-file settings lists to be populated by entries from samples_csv"""
 
         self.set_default_dict({per_file_setting_key: [] for per_file_setting_key in
-            ['un', 'in_fq', 'out_fq', 'uniq_seq_prefix', 'out_prefix', 'outfile', 'report_title', 'json', 'html']
+            ['un', 'in_fq', 'out_fq', 'uniq_seq_prefix', 'gff_files', 'outfile', 'report_title', 'json', 'html']
         })
             
     def setup_pipeline(self):
@@ -173,7 +198,6 @@ class Configuration(ConfigBase):
         })
 
         self.extras = resource_filename('aquatx', 'extras/')
-        self.set('features_csv', self.cwl_file(self.get('features_csv')))
         self.set('output_file_stats', self.get('output_prefix') + '_run_stats.csv')
         self.set('output_file_counts', self.get('output_prefix') + '_raw_counts.csv')
 

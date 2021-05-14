@@ -36,8 +36,12 @@ run_time: ~
 ######-------------------------------------------------------------------------------######
  
 ##-- Relative path to sample & reference sheets (relative to this config file) --##
-samples_csv: 'samples.csv'
-features_csv: 'features.csv'
+samples_csv:
+  class: File
+  path: 'samples.csv'
+features_csv:
+  class: File
+  path: 'features.csv'
 
 ##-- The prefix for your bowtie index, include relative path (relative to this config file) --##
 ebwt: '../../tests/testdata/cel_ws279/chr1'
@@ -209,10 +213,10 @@ un: []
 intermed_file: False
 
 ###-- These options generated from sample & features sheet --###
-# the counter configuration file
-config: features_csv
-# output file prefix
-out_prefix: []
+# a list of unique GFF files defined in features.csv
+gff_files: []
+
+is_pipeline: true
 
 ######--------------------------- MERGE SAMPLES OPTIONS ---------------------------######
 #

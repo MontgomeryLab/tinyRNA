@@ -56,10 +56,10 @@ class LibraryStats:
             self.library_stats['Total Unassigned Reads'] += bundle.corr_count
         if assigned_count == 1:
             self.library_stats['Reads Assigned to Single Feature'] += bundle.corr_count
-            print(f"Single: {assignments}")
+            # print(f"Single: {assignments}")
         if assigned_count > 1:
             self.library_stats['Reads Assigned to Multiple Features'] += bundle.corr_count
-            print(f"Multi: {assignments}")
+            # print(f"Multi: {assignments}")
         if assigned_count > 0:
             self.library_stats['Total Assigned Reads'] += bundle.corr_count
 
@@ -102,7 +102,7 @@ class SummaryStats:
 
     summary_categories = ["Total Reads", "Retained Reads", "Unique Sequences", "Mapped Sequences", "Aligned Reads"]
 
-    def __init__(self, libraries, out_prefix):
+    def __init__(self, libraries, out_prefix, is_pipeline):
         self.out_prefix = out_prefix
         self.libraries = libraries
 

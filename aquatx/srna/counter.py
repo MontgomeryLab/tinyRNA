@@ -15,14 +15,13 @@ from typing import Tuple
 # Global variables for copy-on-write multiprocessing
 features: 'HTSeq.GenomicArrayOfSets' = HTSeq.GenomicArrayOfSets("auto", stranded=True)
 selector: 'FeatureSelector' = None
+pipeline = False
 
 # Type aliases for human readability
 AssignedFeatures = set
 N_Candidates = int
 
-# Todo: better way of handling Library titles. Filename or Report Title from run config?
-#  input-file + out prefix combo? "-i Lib303.sam N2_rep_1, Lib311.sam mut-16(pk710)"
-#  just pass in samples.csv? "-i samples.csv" however filenames will have changed by pipeline...
+
 def get_args():
     """
     Get input arguments from the user/command line.
@@ -38,28 +37,39 @@ def get_args():
     parser.add_argument('-o', '--out-prefix', metavar='OUTPUTPREFIX', required=True,
                         help='output prefix to use for file names')
     parser.add_argument('-t', '--intermed-file', action='store_true',
-                        help='Save the intermediate file containing all alignments and'
+                        help='Save the intermediate file containing all alignments and '
                              'associated features.')
+    parser.add_argument('-p', '--is-pipeline', action='store_true',
+                        help='Indicates that counter was invoked from the aquatx pipeline '
+                             'and that input files should be sources as such.')
+
+    parsed_args = parser.parse_args()
+
+    global pipeline
+    pipeline = parsed_args.is_pipeline
 
     return parser.parse_args()
 
 
 def load_samples(samples_csv: str):
-    def get_input_filename(csv_row_file):
+    def get_library_filename(csv_row_file, samples_csv):
         """The input samples.csv may contain either fastq or sam files"""
 
-        sample_file_ext = os.path.splitext(csv_row_file)[1].lower()
+        file_ext = os.path.splitext(csv_row_file)[1].lower()
 
-        if sample_file_ext == ".fastq":
-            # Note: these fastq files MUST be included as an input (but not argument) for the CWL step
-            return os.path.splitext(csv_row_file)[0] + "_aligned_seqs.sam"
-        elif sample_file_ext == ".sam":
+        # If the sample file has a .fastq extension, infer the name of its pipeline-produced .sam file
+        if file_ext == ".fastq" or file_ext == ".fastq.gz":
+            # Fix relative paths to be relative to sample_csv's path, rather than relative to cwd
+            csv_row_file = get_path_from_configfile(samples_csv, csv_row_file)
+            csv_row_file = os.path.splitext(csv_row_file)[0] + "_aligned_seqs.sam"
+        elif file_ext == ".sam":
             if not os.path.isabs(csv_row_file):
                 raise ValueError("The following file must be expressed as an absolute path:\n%s" % (csv_row_file,))
-            return csv_row_file
         else:
             raise ValueError("The filenames defined in your samples CSV file must have a .fastq or .sam extension.\n"
                              "The following filename contained neither:\n%s" % (csv_row_file,))
+
+        return csv_row_file
 
     inputs = list()
 
@@ -70,7 +80,7 @@ def load_samples(samples_csv: str):
         next(csv_reader)  # Skip header line
         for row in csv_reader:
             library_name = f"{row['Group']}_replicate_{row['Replicate']}"
-            library_file_name = get_input_filename(row['File'])
+            library_file_name = get_library_filename(row['File'], samples_csv)
             record = {"Name": library_name, "File": library_file_name}
 
             if record not in inputs: inputs.append(record)
@@ -78,6 +88,16 @@ def load_samples(samples_csv: str):
     return inputs
 
 
+def get_path_from_configfile(config_file, input_file):
+    if not os.path.isabs(input_file):
+        from_here = os.path.dirname(config_file)
+        input_file = os.path.normpath(os.path.join(from_here, input_file))
+
+    return input_file
+
+
+# Todo: convert FeatureSources to Tuple[str, list] to allow for just one tuple per GFF file
+#  Currently, a GFF is read once per ID attribute which doesn't make much sense (multiple read/parse of the same file)
 def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
     """Parses features.csv to provide inputs to FeatureSelector and build_reference_tables
 
@@ -107,7 +127,8 @@ def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
 
             # Duplicate rule entries are not allowed
             if rule not in rules: rules.append(rule)
-            gff_files.add((row['Source'], row['ID']))
+            gff = os.path.basename(row['Source']) if pipeline else get_path_from_configfile(features_csv, row['Source'])
+            gff_files.add((gff, row['ID']))
 
     return rules, gff_files
 
