@@ -15,7 +15,7 @@ from typing import Tuple
 # Global variables for copy-on-write multiprocessing
 features: 'HTSeq.GenomicArrayOfSets' = HTSeq.GenomicArrayOfSets("auto", stranded=True)
 selector: 'FeatureSelector' = None
-pipeline = False
+is_pipeline = False
 
 # Type aliases for human readability
 AssignedFeatures = set
@@ -45,8 +45,8 @@ def get_args():
 
     parsed_args = parser.parse_args()
 
-    global pipeline
-    pipeline = parsed_args.is_pipeline
+    global is_pipeline
+    is_pipeline = parsed_args.is_pipeline
 
     return parser.parse_args()
 
@@ -60,7 +60,7 @@ def load_samples(samples_csv: str):
         # If the sample file has a .fastq extension, infer the name of its pipeline-produced .sam file
         if file_ext == ".fastq" or file_ext == ".fastq.gz":
             # Fix relative paths to be relative to sample_csv's path, rather than relative to cwd
-            csv_row_file = get_path_from_configfile(samples_csv, csv_row_file)
+            csv_row_file = os.path.basename(csv_row_file) if is_pipeline else get_path_from_configfile(samples_csv, csv_row_file)
             csv_row_file = os.path.splitext(csv_row_file)[0] + "_aligned_seqs.sam"
         elif file_ext == ".sam":
             if not os.path.isabs(csv_row_file):
@@ -68,7 +68,6 @@ def load_samples(samples_csv: str):
         else:
             raise ValueError("The filenames defined in your samples CSV file must have a .fastq or .sam extension.\n"
                              "The following filename contained neither:\n%s" % (csv_row_file,))
-
         return csv_row_file
 
     inputs = list()
@@ -79,7 +78,7 @@ def load_samples(samples_csv: str):
 
         next(csv_reader)  # Skip header line
         for row in csv_reader:
-            library_name = f"{row['Group']}_replicate_{row['Replicate']}"
+            library_name = f"{row['Group']}_rep_{row['Replicate']}"
             library_file_name = get_library_filename(row['File'], samples_csv)
             record = {"Name": library_name, "File": library_file_name}
 
@@ -127,7 +126,7 @@ def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
 
             # Duplicate rule entries are not allowed
             if rule not in rules: rules.append(rule)
-            gff = os.path.basename(row['Source']) if pipeline else get_path_from_configfile(features_csv, row['Source'])
+            gff = os.path.basename(row['Source']) if is_pipeline else get_path_from_configfile(features_csv, row['Source'])
             gff_files.add((gff, row['ID']))
 
     return rules, gff_files

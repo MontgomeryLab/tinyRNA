@@ -216,8 +216,6 @@ intermed_file: False
 # a list of unique GFF files defined in features.csv
 gff_files: []
 
-is_pipeline: true
-
 ######--------------------------- MERGE SAMPLES OPTIONS ---------------------------######
 #
 # We use a custom Python script to merge outputs of the counter for further processing.

@@ -147,14 +147,19 @@ class Configuration(ConfigBase):
         from_here = os.path.dirname(sample_sheet)
 
         with open(sample_sheet, 'r', encoding='utf-8-sig') as sf:
-            csv_reader = csv.DictReader(sf, delimiter=',')
-            for row in csv_reader:
-                sample_basename = self.prefix(os.path.basename(row['Input FastQ/A Files']))
-                fastq_file = self.joinpath(from_here, row['Input FastQ/A Files'])
-                group_name = row['Sample/Group Name']
-                rep_number = row['Replicate number']
+            fieldnames = ("File", "Group", "Replicate")
+            csv_reader = csv.DictReader(sf, fieldnames=fieldnames, delimiter=',')
 
-                self.append_to('report_title', f"{group_name}_replicate_{rep_number}_fastp_report")
+            next(csv_reader)  # Skip header line
+            for row in csv_reader:
+                if os.path.splitext(row['File'])[1] != ".fastq":
+                    raise ValueError("Sample files in samples.csv must have a .fastq extension:\n%s" % (row['File'],))
+                sample_basename = self.prefix(os.path.basename(row['File']))
+                fastq_file = self.joinpath(from_here, row['File'])
+                group_name = row['Group']
+                rep_number = row['Replicate']
+
+                self.append_to('report_title', f"{group_name}_rep_{rep_number}")
                 self.append_to('in_fq', self.cwl_file(fastq_file))
 
                 self.append_to('out_fq', sample_basename + '_cleaned.fastq')

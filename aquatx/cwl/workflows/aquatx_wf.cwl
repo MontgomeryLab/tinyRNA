@@ -67,8 +67,9 @@ inputs:
   samples_csv: File
   features_csv: File
   intermed_file: boolean?
-  is_pipeline: boolean?
   gff_files: File[]?
+  aligned_seqs: File[]?
+  is_pipeline: boolean?
 
 steps:
   fastp:
@@ -142,15 +143,16 @@ steps:
   counts:
     run: ../tools/aquatx-count.cwl
     in:
+      aligned_seqs: bowtie/sam_out
+      gff_files: gff_files
       samples_csv: samples_csv
       config_csv: features_csv
       out_prefix: output_prefix
       intermed_file: intermed_file
       fastp_logs: fastp/report_json
       collapsed_fa: collapse/collapsed_fa
-      gff_files: gff_files
-      is_pipeline: is_pipeline
-    out: [feature_counts, other_counts, stats_file, intermed_out_file]
+      is_pipeline: {default: true}
+    out: [feature_counts, other_counts, alignment_stats, summary_stats, intermed_out_files]
 
   deseq2:
     run: ../tools/aquatx-deseq.cwl
@@ -188,9 +190,13 @@ outputs:
     type: File
     outputSource: counts/feature_counts
 
-  count_stats:
+  alignment_stats:
     type: File
-    outputSource: counts/stats_file
+    outputSource: counts/alignment_stats
+
+  summary_stats:
+    type: File
+    outputSource: counts/summary_stats
 
   deseq_normed:
     type: File
@@ -201,11 +207,10 @@ outputs:
     outputSource: deseq2/comparisons
 
   # Optional outputs
-  aln_table:
+  aln_tables:
     type: File[]?
-    outputSource: counts/intermed_out_file
+    outputSource: counts/intermed_out_files
 
   uniq_seqs_low:
     type: File[]?
     outputSource: collapse/low_counts_fa
-
