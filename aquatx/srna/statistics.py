@@ -102,15 +102,15 @@ class SummaryStats:
 
     summary_categories = ["Total Reads", "Retained Reads", "Unique Sequences", "Mapped Sequences", "Aligned Reads"]
 
-    def __init__(self, libraries, out_prefix, is_pipeline):
+    def __init__(self, libraries, out_prefix):
         self.out_prefix = out_prefix
         self.libraries = libraries
 
         self.pipeline_stats_df = pd.DataFrame(index=SummaryStats.summary_categories)
         self.feat_counts_df = pd.DataFrame(index=FeatureSelector.attributes.keys())
         self.lib_stats_df = pd.DataFrame(index=LibraryStats.summary_categories)
-        self.nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
         self.report_pipeline_stats = self.is_pipeline_invocation()
+        self.nt_len_mat = {}
 
     def is_pipeline_invocation(self) -> bool:
         """Check working directory for pipeline outputs from previous steps"""
@@ -122,6 +122,7 @@ class SummaryStats:
             collapsed_fa = lib_basename + "_collapsed.fa"
 
             if not os.path.isfile(fastp_logfile) or not os.path.isfile(collapsed_fa):
+                print(f"Pipeline output for {lib_basename} not found. Skipping Summary Statistics.")
                 return False
             else:
                 library['fastp_log'] = fastp_logfile
@@ -178,16 +179,16 @@ class SummaryStats:
         summary.to_csv(prefix + '_feature_counts.csv', index=False)
 
     def write_nt_len_mat(self, prefix: str) -> None:
-        pd.DataFrame(self.nt_len_mat).to_csv(prefix + '_nt_len_dist.csv')
+        for lib_name, matrix in self.nt_len_mat.items():
+            sanitized_lib_name = lib_name.replace('/', '_')
+            pd.DataFrame(matrix).fillna(0).to_csv(f'{prefix}_{sanitized_lib_name}_nt_len_dist.csv')
 
     def add_library(self, other: LibraryStats) -> None:
         # Add incoming feature counts as a new column of the data frame
         # Since other.feat_counts is a Counter object, unrecorded features default to 0 on lookup
         self.feat_counts_df[other.library["Name"]] = self.feat_counts_df.index.map(other.feat_counts)
         self.lib_stats_df[other.library["Name"]] = self.lib_stats_df.index.map(other.library_stats)
-
-        for nt, counter in other.nt_len_mat.items():
-            self.nt_len_mat[nt].update(counter)
+        self.nt_len_mat[other.library["Name"]] = other.nt_len_mat
 
         if self.report_pipeline_stats:
             mapped_seqs = other.library_stats["Total Assigned Sequences"] + other.library_stats["Total Unassigned Sequences"]
