@@ -24,6 +24,8 @@ class ConfigBase:
         self.extras = ''
         self.dt = ''
 
+    def __getitem__(self, key):
+        return self.get(key)
 
     def get(self, key: str) -> Union[str, list, dict, None]:
         return self.config.get(key, None)
@@ -152,8 +154,8 @@ class Configuration(ConfigBase):
 
             next(csv_reader)  # Skip header line
             for row in csv_reader:
-                if os.path.splitext(row['File'])[1] != ".fastq":
-                    raise ValueError("Sample files in samples.csv must have a .fastq extension:\n%s" % (row['File'],))
+                if not os.path.splitext(row['File'])[1] in [".fastq", ".gz"]:
+                    raise ValueError("Files in samples.csv must have a .fastq(.gz) extension:\n%s" % (row['File'],))
                 sample_basename = self.prefix(os.path.basename(row['File']))
                 fastq_file = self.joinpath(from_here, row['File'])
                 group_name = row['Group']
