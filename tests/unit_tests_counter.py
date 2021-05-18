@@ -1,4 +1,5 @@
 import multiprocessing as mp
+import os
 import unittest
 import HTSeq
 import queue
@@ -47,33 +48,38 @@ class CounterTests(unittest.TestCase):
     
     def feat_csv_test_row(self):
         return ','.join(self.csv_feat_row_dict.values())
+
+    def from_here(self, dummy_file, join_path):
+        return os.path.normpath(os.path.join(os.path.dirname(dummy_file), join_path))
         
     # === TESTS ===
 
     """Does load_samples correctly parse a single record samples.csv?"""
 
     def test_load_samples_single(self):
+        dummy_file = '/dev/null'
         inp_file = "test.fastq"
-        exp_file = "test_aligned_seqs.sam"
+        exp_file = self.from_here(dummy_file, "test_aligned_seqs.sam")
 
         row = {'File': inp_file, 'Group': "test_group", 'Rep': "0"}
         csv = self.csv("samples.csv", [row.values()])
 
         with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
-            inputs = counter.load_samples('/dev/null')
+            inputs = counter.load_samples(dummy_file)
 
-        expected_lib_name = f"{row['Group']}_replicate_{row['Rep']}"
+        expected_lib_name = f"{row['Group']}_rep_{row['Rep']}"
         expected_result = [{'File': exp_file, 'Name': expected_lib_name}]
         self.assertEqual(expected_result, inputs)
 
-    """Does load_samples correctly handle duplicate samples? There should be no duplicates."""
+        """Does load_samples correctly handle duplicate samples? There should be no duplicates."""
 
     def test_load_samples_duplicate(self):
         row = {'File': "test.fastq", 'Group': "N/A", 'Rep': "N/A"}
         csv = self.csv("samples.csv", [row.values(), row.values()])
 
         with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
-            inputs = counter.load_samples('/dev/null')
+            dummy_file = '/dev/null'
+            inputs = counter.load_samples(dummy_file)
 
         self.assertEqual(1, len(inputs))
 
@@ -85,9 +91,10 @@ class CounterTests(unittest.TestCase):
         csv = self.csv("samples.csv", [row.values()])
 
         with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
-            inputs = counter.load_samples('/dev/null')
+            dummy_file = '/dev/null'
+            inputs = counter.load_samples(dummy_file)
 
-        expected_lib_name = f"{row['Group']}_replicate_{row['Rep']}"
+        expected_lib_name = f"{row['Group']}_rep_{row['Rep']}"
         expected_result = [{'File': sam_filename, 'Name': expected_lib_name}]
 
         self.assertEqual(expected_result, inputs)
@@ -103,7 +110,8 @@ class CounterTests(unittest.TestCase):
 
         with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
             with self.assertRaisesRegex(ValueError, expected_error):
-                counter.load_samples('/dev/null')
+                dummy_file = '/dev/null'
+                counter.load_samples(dummy_file)
 
     """Does load_samples throw ValueError if sample filename does not have a .fastq or .sam extension?"""
 
@@ -117,7 +125,8 @@ class CounterTests(unittest.TestCase):
 
         with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
             with self.assertRaisesRegex(ValueError, expected_error):
-                counter.load_samples('/dev/null')
+                dummy_file = '/dev/null'
+                counter.load_samples(dummy_file)
 
     """Does load_config correctly parse a single-entry features.csv config file?"""
 
@@ -127,10 +136,12 @@ class CounterTests(unittest.TestCase):
         csv = self.csv("features.csv", [row])
 
         with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
-            ruleset, gff_files = counter.load_config('/dev/null')
+            dummy_file = '/dev/null'
+            ruleset, gff_files = counter.load_config(dummy_file)
 
         r = self.csv_feat_row_dict
-        expected_gff_ret = {(r['gff'], r['id_attr'])}
+        expected_gff_file = self.from_here(dummy_file, r['gff'])
+        expected_gff_ret = {(expected_gff_file, r['id_attr'])}
         expected_ruleset = [{'Strand': self.strand[r['strand']], 'Hierarchy': int(r['rank']), 'nt5': 'C,G,T',
                              'Length': r['length'], 'Identity': (r['at_key'], r['at_val']), 'Strict': r['match'] == 'Full'}]
 
@@ -145,10 +156,12 @@ class CounterTests(unittest.TestCase):
         csv = self.csv("features.csv", [row, row])  # Duplicate rows
         
         with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
-            ruleset, gff_files = counter.load_config('/dev/null')
+            dummy_filename = '/dev/null'
+            ruleset, gff_files = counter.load_config(dummy_filename)
 
         r = self.csv_feat_row_dict
-        expected_gff_ret = {(r['gff'], r['id_attr'])}
+        expected_gff_file = self.from_here(dummy_filename, r['gff'])
+        expected_gff_ret = {(expected_gff_file, r['id_attr'])}
         expected_ruleset = [
             {'Strand': self.strand[r['strand']], 'Hierarchy': int(r['rank']), 'nt5': 'C,G,T',
              'Length': r['length'], 'Identity': (r['at_key'], r['at_val']), 'Strict': r['match'] == 'Full'}]
@@ -164,7 +177,8 @@ class CounterTests(unittest.TestCase):
         csv = self.csv("features.csv", [row.values()])
 
         with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
-            ruleset, _ = counter.load_config('/dev/null')
+            dummy_file = '/dev/null'
+            ruleset, _ = counter.load_config(dummy_file)
 
         self.assertEqual(ruleset[0]['nt5'], 'T')
 
@@ -243,15 +257,16 @@ class CounterTests(unittest.TestCase):
         ret_q = queue.Queue()
 
         expected_LibStat_count_bundle_call = call().count_bundle([alignment])
-        bundle = LibraryStats.count_bundle.return_value = MagicMock()
+        bundle = LibraryStats.count_bundle.return_value
         # LibraryStats.count_bundle = MagicMock()
         # LibraryStats.count_bundle_alignments = MagicMock()
         # LibraryStats.finalize_bundle = MagicMock
 
         expected_LibStats_calls = [
+
             call(library, None, False),
             expected_LibStat_count_bundle_call,
-            call().count_bundle_alignments(bundle),
+            call().count_bundle_alignments(bundle, alignment, {'mock_feat'}),
             call().finalize_bundle(bundle)
         ]
 

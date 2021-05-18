@@ -102,32 +102,16 @@ class SummaryStats:
 
     summary_categories = ["Total Reads", "Retained Reads", "Unique Sequences", "Mapped Sequences", "Aligned Reads"]
 
-    def __init__(self, libraries, out_prefix, is_pipeline):
+    def __init__(self, out_prefix):
         self.out_prefix = out_prefix
-        self.libraries = libraries
+
+        # Will become False if an added library lacks its corresponding Collapser and Bowtie outputs
+        self.report_summary_statistics = True
 
         self.pipeline_stats_df = pd.DataFrame(index=SummaryStats.summary_categories)
         self.feat_counts_df = pd.DataFrame(index=FeatureSelector.attributes.keys())
         self.lib_stats_df = pd.DataFrame(index=LibraryStats.summary_categories)
-        self.nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
-        self.report_pipeline_stats = self.is_pipeline_invocation()
-
-    def is_pipeline_invocation(self) -> bool:
-        """Check working directory for pipeline outputs from previous steps"""
-
-        for library in self.libraries:
-            sam_basename = os.path.splitext(os.path.basename(library['File']))[0]
-            lib_basename = sam_basename.replace("_aligned_seqs", "")
-            fastp_logfile = lib_basename + "_qc.json"
-            collapsed_fa = lib_basename + "_collapsed.fa"
-
-            if not os.path.isfile(fastp_logfile) or not os.path.isfile(collapsed_fa):
-                return False
-            else:
-                library['fastp_log'] = fastp_logfile
-                library['collapsed'] = collapsed_fa
-
-        return True
+        self.nt_len_mat = {}
 
     def write_report_files(self, alias: dict, prefix=None) -> None:
         if prefix is None: prefix = self.out_prefix
@@ -143,7 +127,7 @@ class SummaryStats:
         self.lib_stats_df.to_csv(prefix + '_alignment_stats.csv')
 
     def write_pipeline_statistics(self, prefix: str) -> None:
-        if self.report_pipeline_stats:
+        if self.report_summary_statistics:
             # Sort columns by title and round all counts to 2 decimal places
             self.pipeline_stats_df = self.sort_cols_and_round(self.pipeline_stats_df)
             self.pipeline_stats_df.index.name = "Summary Statistics"
@@ -178,18 +162,18 @@ class SummaryStats:
         summary.to_csv(prefix + '_feature_counts.csv', index=False)
 
     def write_nt_len_mat(self, prefix: str) -> None:
-        pd.DataFrame(self.nt_len_mat).to_csv(prefix + '_nt_len_dist.csv')
+        for lib_name, matrix in self.nt_len_mat.items():
+            sanitized_lib_name = lib_name.replace('/', '_')
+            pd.DataFrame(matrix).fillna(0).to_csv(f'{prefix}_{sanitized_lib_name}_nt_len_dist.csv')
 
     def add_library(self, other: LibraryStats) -> None:
         # Add incoming feature counts as a new column of the data frame
         # Since other.feat_counts is a Counter object, unrecorded features default to 0 on lookup
         self.feat_counts_df[other.library["Name"]] = self.feat_counts_df.index.map(other.feat_counts)
         self.lib_stats_df[other.library["Name"]] = self.lib_stats_df.index.map(other.library_stats)
+        self.nt_len_mat[other.library["Name"]] = other.nt_len_mat
 
-        for nt, counter in other.nt_len_mat.items():
-            self.nt_len_mat[nt].update(counter)
-
-        if self.report_pipeline_stats:
+        if self.report_summary_statistics and self.library_has_pipeline_outputs(other):
             mapped_seqs = other.library_stats["Total Assigned Sequences"] + other.library_stats["Total Unassigned Sequences"]
             aligned_reads = other.library_stats["Total Assigned Reads"]
             total_reads, retained_reads = self.get_fastp_stats(other)
@@ -204,6 +188,23 @@ class SummaryStats:
             }
 
             self.pipeline_stats_df[other.library["Name"]] = self.pipeline_stats_df.index.map(other_summary)
+
+    def library_has_pipeline_outputs(self, other: LibraryStats) -> bool:
+        """Check working directory for pipeline outputs from previous steps"""
+
+        sam_basename = os.path.splitext(os.path.basename(other.library['File']))[0]
+        lib_basename = sam_basename.replace("_aligned_seqs", "")
+        fastp_logfile = lib_basename + "_qc.json"
+        collapsed_fa = lib_basename + "_collapsed.fa"
+
+        if not os.path.isfile(fastp_logfile) or not os.path.isfile(collapsed_fa):
+            print(f"Pipeline output for {lib_basename} not found. Skipping Summary Statistics.")
+            self.report_summary_statistics = False
+            return False
+        else:
+            other.library['fastp_log'] = fastp_logfile
+            other.library['collapsed'] = collapsed_fa
+            return True
 
     @staticmethod
     def get_fastp_stats(other: LibraryStats) -> Tuple[Union[int,str], Union[int,str]]:
