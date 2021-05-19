@@ -209,11 +209,16 @@ use_deseq: True
 ###########################################################################################
 
 
-samples_csv:
-  class: File
+######--------------------------- DERIVED FROM PATHS SHEET --------------------------######
+#
+# The following configuration settings are automatically derived from the sample sheet
+#
+######-------------------------------------------------------------------------------######
 
-features_csv:
-  class: File
+
+samples_csv: {}
+
+features_csv: {}
 
 ebwt: ''
 
@@ -224,6 +229,7 @@ ebwt: ''
 #
 ######-------------------------------------------------------------------------------######
 
+##-- Utilized by Fastp --##
 # input fastq files
 in_fq: [ ]
 # output, cleaned fastq files
