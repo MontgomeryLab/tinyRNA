@@ -14,7 +14,10 @@ dependencies:
   - pip:
       - htseq
       - psutil
-      - "toil[cwl]"
-      - boto
-      - boto3
+      - cwltool==3.1.20210426140515  # Previous versions fail to find output files with special characters
       - . # This allows pip to handle the installation of AQuATx via setup.py
+
+      # Toil and its dependencies. Current release breaks cwltool.
+      # - "toil[cwl]"
+      # - boto
+      # - boto3

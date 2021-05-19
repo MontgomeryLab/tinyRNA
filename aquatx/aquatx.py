@@ -29,8 +29,9 @@ import shutil
 import os
 
 from pkg_resources import resource_filename
-from aquatx.srna.Configuration import Configuration
 from argparse import ArgumentParser
+
+from aquatx.srna.Configuration import Configuration
 
 
 def get_args():
@@ -86,10 +87,12 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
                    debug=debug, parallel=config_object['run_parallel'])
     else:
         if config_object['run_parallel']:
-            # Use the toil CWL runner for parallel library processing
-            cwl_runner = f"toil-cwl-runner --outdir {run_directory} --stats " \
-                         f"{f'--debug-Worker --writeLogs {run_directory}' if debug else ''}" \
-                         f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl {cwl_conf_file}"
+            print("The Toil CWL runner is not supported at this time. You may run_parallel only with run_native.")
+            return
+            # Use the Toil CWL runner for parallel library processing
+            # cwl_runner = f"toil-cwl-runner --outdir {run_directory} --stats " \
+            #              f"{f'--debug-Worker --writeLogs {run_directory}' if debug else ''}" \
+            #              f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl {cwl_conf_file}"
         else:
             # Use the cwltool CWL runner to run one library at a time
             cwl_runner = f"cwltool --outdir {run_directory} --copy-outputs --timestamps " \
