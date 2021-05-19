@@ -47,7 +47,9 @@ class test_aquatx(unittest.TestCase):
                     }
                 },
                 'workflows': {
-                    'files': {'aquatx_wf.cwl'}
+                    'files': {
+                        'aquatx_wf.cwl', 'per-library.cwl'
+                    }
                 }
             }
         }
@@ -189,6 +191,7 @@ class test_aquatx(unittest.TestCase):
                 for i in range(10):
                     time.sleep(1)
                     sub_names = [sub.name() for sub in get_children()]
+                    print(sub_names)
                     if 'cwltool' in sub_names:
                         break
 
