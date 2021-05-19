@@ -52,6 +52,13 @@ run_idx: False
 ##-- Number of threads for multi-threaded programs --##
 threads: 2
 
+##-- (EXPERIMENTAL) If True: process each sample library in parallel --##
+##-- If run_native is False, the Toil CWL runner will be used --##
+run_parallel: False
+
+##-- (EXPERIMENTAL) If True: execute the pipeline using native cwltool python rather than command line --##
+run_native: False
+
 ##-- Final output file prefixes for overall run --##
 ##-- If none given, run_prefix is used (default: date_time_aquatx) --##
 output_prefix: ~
@@ -168,7 +175,8 @@ fasta: True
 sam: True
 
 ##-- If True: use shared mem for index; many bowtie's can share --##
-shared_memory: True
+##-- Note: this requires further configuration of your OS; see ipcs and ipcrm --#
+shared_memory: False
 
 ###-- Unused option inputs: Remove '#' in front to use --###
 ##-- If true: do not align to reverse-compliment reference --##
