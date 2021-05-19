@@ -7,6 +7,7 @@
 # If you would like to add run time information, you may add it here.
 #
 #
+#
 # 1. Add a username here to identify the person creating the runs, if desired for record keeping
 # 2. Please add a final run directory to store files - otherwise it will be generated based on
 #    initial run time and date (with added option username). 
@@ -23,6 +24,13 @@ run_time: ~
 paths_config:
   path: '../../START_HERE/paths.yml'
   class: File
+
+##-- (EXPERIMENTAL) If True: process each sample library in parallel --##
+##-- If run_native is False, the Toil CWL runner will be used --##
+run_parallel: False
+
+##-- (EXPERIMENTAL) If True: execute the pipeline using native cwltool python rather than command line --##
+run_native: False
 
 ##-- Final output file prefixes for overall run --##
 ##-- If none given, run_prefix is used (default: date_time_aquatx) --##
@@ -137,7 +145,8 @@ fasta: True
 sam: True
 
 ##-- If True: use shared mem for index; many bowtie's can share --##
-shared_memory: True
+##-- Note: this requires further configuration of your OS; see ipcs and ipcrm --#
+shared_memory: False
 
 ###-- Unused option inputs: Remove '#' in front to use --###
 ##-- If true: do not align to reverse-compliment reference --##

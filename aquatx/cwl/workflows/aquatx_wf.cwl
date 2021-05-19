@@ -6,9 +6,9 @@ class: Workflow
 requirements:
   - class: ScatterFeatureRequirement
   - class: SubworkflowFeatureRequirement
-  - class: StepInputExpressionRequirement
 
 inputs:
+
   # multi input
   threads: int?
 
@@ -60,7 +60,7 @@ inputs:
   un: string[]
   sam: boolean?
   seed: int?
-  shared_mem: boolean?
+  shared_memory: boolean?
 
   #counter inputs
   output_prefix: string
@@ -72,19 +72,20 @@ inputs:
   is_pipeline: boolean?
 
 steps:
-  fastp:
-    run: ../tools/fastp.cwl
-    scatter: [in1, out1, report_title, json, html]
+
+  counts-prep:
+    run: per-library.cwl
+    scatter: [in_fq, out_fq, json, html, report_title, uniq_seq_prefix, outfile, un]
     scatterMethod: dotproduct
     in:
-      thread: threads
-      in1: in_fq    
-      out1: out_fq
-      phred64: fp_phred64
+      # fastp
+      in_fq: in_fq
+      out_fq: out_fq
+      fp_phred64: fp_phred64
       compression: compression
       dont_overwrite: dont_overwrite
       disable_adapter_trimming: disable_adapter_trimming
-      adapter_sequence: adapter_sequence 
+      adapter_sequence: adapter_sequence
       trim_poly_x: trim_poly_x
       poly_x_min_len: poly_x_min_len
       disable_quality_filtering: disable_quality_filtering
@@ -98,34 +99,22 @@ steps:
       overrepresentation_sampling: overrepresentation_sampling
       json: json
       html: html
-      report_title: report_title 
-    out: [fastq1, report_json, report_html]
+      report_title: report_title
 
-  collapse:
-    run: ../tools/aquatx-collapse.cwl
-    scatter: [input_file, out_prefix]
-    scatterMethod: dotproduct
-    in:
-      input_file: fastp/fastq1
-      out_prefix: uniq_seq_prefix
+      # Collapser
+      uniq_seq_prefix: uniq_seq_prefix
       threshold: threshold
       compress: compress
-    out: [collapsed_fa, low_counts_fa]
 
-  bowtie:
-    run: ../tools/bowtie.cwl
-    scatter: [reads, outfile, un]
-    scatterMethod: dotproduct
-    in:
+      # Bowtie
       bt_index_files: bt_index_files
-      ebwt: ebwt 
-      reads: collapse/collapsed_fa
+      ebwt: ebwt
       outfile: outfile
       fastq: fastq
       fasta: fasta
       trim5: trim5
       trim3: trim3
-      phred64: bt_phred64
+      bt_phred64: bt_phred64
       solexa: solexa
       solexa13: solexa13
       end_to_end: end_to_end
@@ -136,21 +125,21 @@ steps:
       un: un
       sam: sam
       threads: threads
-      shared_memory: shared_mem
+      shared_memory: shared_memory
       seed: seed
-    out: [sam_out, unal_seqs]
+    out: [fastq_clean, html_report_file, json_report_file, uniq_seqs, aln_seqs, uniq_seqs_low]
 
   counts:
     run: ../tools/aquatx-count.cwl
     in:
-      aligned_seqs: bowtie/sam_out
+      aligned_seqs: counts-prep/aln_seqs
       gff_files: gff_files
       samples_csv: samples_csv
       config_csv: features_csv
       out_prefix: output_prefix
       intermed_file: intermed_file
-      fastp_logs: fastp/report_json
-      collapsed_fa: collapse/collapsed_fa
+      fastp_logs: counts-prep/json_report_file
+      collapsed_fa: counts-prep/uniq_seqs
       is_pipeline: {default: true}
     out: [feature_counts, other_counts, alignment_stats, summary_stats, intermed_out_files]
 
@@ -162,30 +151,32 @@ steps:
     out: [norm_counts, comparisons]
 
 outputs:
-  fastq_clean:  
+  # Per-library outputs
+  fastq_clean:
     type: File[]
-    outputSource: fastp/fastq1
-  
+    outputSource: counts-prep/fastq_clean
+
   html_report_file:
     type: File[]
-    outputSource: fastp/report_html
+    outputSource: counts-prep/html_report_file
 
   json_report_file:
     type: File[]
-    outputSource: fastp/report_json
+    outputSource: counts-prep/json_report_file
 
   uniq_seqs:
     type: File[]
-    outputSource: collapse/collapsed_fa
+    outputSource: counts-prep/uniq_seqs
 
   aln_seqs:
     type: File[]
-    outputSource: bowtie/sam_out
+    outputSource: counts-prep/aln_seqs
 
   other_count_files:
     type: File[]
     outputSource: counts/other_counts
 
+  # Pipeline summary outputs from aquatx-count
   feat_count_file:
     type: File
     outputSource: counts/feature_counts
@@ -210,7 +201,3 @@ outputs:
   aln_tables:
     type: File[]?
     outputSource: counts/intermed_out_files
-
-  uniq_seqs_low:
-    type: File[]?
-    outputSource: collapse/low_counts_fa
