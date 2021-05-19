@@ -18,7 +18,7 @@ class MyTestCase(unittest.TestCase):
             os.chdir(f".{os.sep}tests")
 
         # Test-length files
-        self.fastq_file = 'testdata/cel_montgomery/Lib303_test.fastq'
+        self.fastq_file = '../START_HERE/sample_data/Lib303_test.fastq'
         self.fastq_gzip = 'testdata/collapser/Lib303_test.fastq.gz'
         self.fastq_counts_dict = json.loads(read('./testdata/collapser/Lib303_counts_reference.json'))
         self.fasta = {

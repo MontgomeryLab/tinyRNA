@@ -101,14 +101,14 @@ def get_template(aquatx_extras_path: str) -> None:
 
     Args:
         aquatx_extras_path: The path to the project's extras directory. This directory
-            contains templates for the run configuration, sample inputs, and reference
-            inputs.
+            contains templates for the run configuration, sample inputs, feature selection
+            rules, and paths for all the above.
     """
 
     print("Copying template input files to current directory...")
 
     # Copy template files to the current working directory
-    for template in ['run_config_template.yml', 'samples.csv', 'features.csv']:
+    for template in ['run_config_template.yml', 'samples.csv', 'features.csv', 'paths.yml']:
         shutil.copyfile(f"{aquatx_extras_path}/{template}", f"{os.getcwd()}/{template}")
 
 

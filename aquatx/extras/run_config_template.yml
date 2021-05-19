@@ -3,9 +3,8 @@
 # For reproducibility purposes, if you do not rename this file, we will make a copy
 # with current run time and date information. 
 # 
-# Please rename this file with identifying information if you wish to trace back your run. 
-# If you would like to add run time information, you may add it here. 
-#
+# Please rename this file with identifying information for provenance.
+# If you would like to add run time information, you may add it here.
 #
 #
 # 1. Add a username here to identify the person creating the runs, if desired for record keeping
@@ -17,44 +16,25 @@
 ######-------------------------------------------------------------------------------######
 
 user: ~
-run_directory: ~
 run_prefix: ~
 run_date: ~
 run_time: ~
 
-##############################  MAIN INPUT FILES FOR ANALYSIS ##############################
-#
-# Edit this section to contain the sample sheets with file information to use in the
-# workflow. If you want to use DEFAULT settings for the workflow, this is all you need to
-# edit before running the workflow. 
-#
-# Directions:
-# 1. Fill out the sample sheet with files to process + naming scheme. [samples.csv]
-# 2. Fill out the reference sheet with reference files and parameters of interest [features.csv]
-# 3. Add an output identifier for summary files and databases
-# 
-######-------------------------------------------------------------------------------######
- 
-##-- Relative path to sample & reference sheets (relative to this config file) --##
-samples_csv:
+paths_config:
+  path: '../../START_HERE/paths.yml'
   class: File
-  path: 'samples.csv'
-features_csv:
-  class: File
-  path: 'features.csv'
-
-##-- The prefix for your bowtie index, include relative path (relative to this config file) --##
-ebwt: '../../tests/testdata/cel_ws279/chr1'
-
-##-- If True: run bowtie-build to index the genome --##
-run_idx: False
-
-##-- Number of threads for multi-threaded programs --##
-threads: 2
 
 ##-- Final output file prefixes for overall run --##
 ##-- If none given, run_prefix is used (default: date_time_aquatx) --##
 output_prefix: ~
+
+##-- Set to True and provide a reference genome .fa file to index the genome --##
+run_idx: False
+reference_genome: ~
+
+##-- Number of threads for multi-threaded programs --##
+threads: 2
+
 
 ######---------------------TRIMMING AND QUALITY FILTER OPTIONS ----------------------######
 #
@@ -68,6 +48,7 @@ output_prefix: ~
 # You may change the parameters here.
 #
 ######-------------------------------------------------------------------------------######
+
 
 ##-- Adapter sequence to trim --##
 adapter_sequence: 'auto'
@@ -108,17 +89,6 @@ compression: 4
 #disable_length_filtering: false
 #disable_adapter_trimming: false
 
-###-- These options are generated from sample sheet --###
-# input fastq files
-in_fq: []
-# output, cleaned fastq files
-out_fq: []
-# output reports
-report_title: []
-# html report filenames
-html: []
-# json report filenames
-json: []
 
 ######--------------------------- READ COLLAPSER OPTIONS ----------------------------######
 #
@@ -130,15 +100,13 @@ json: []
 #
 ######-------------------------------------------------------------------------------######
 
+
 ##-- Sequences with count <= threshold will be placed in a separate low_counts fasta --##
 threshold: 0
 
 ##-- If True: outputs will be gzip compressed --##
 compress: False
 
-###-- These options are generated from sample sheet --###
-# prefix to be used for output file (files, if non-zero threshold)
-uniq_seq_prefix: []
 
 ######------------------------- BOWTIE2 ALIGNMENT OPTIONS ---------------------------######
 #
@@ -148,6 +116,7 @@ uniq_seq_prefix: []
 # You may change the parameters here.
 #
 ######-------------------------------------------------------------------------------######
+
 
 ##-- Max allowed num of mismatches --##
 end_to_end: 0
@@ -194,13 +163,6 @@ shared_memory: True
 #solexa: false
 #solexa13: false
 
-###-- These options generated from sample & reference sheet --###
-# bowtie index files
-bt_index_files: []
-# output alignment file names
-outfile: []
-#unaligned read file names
-un: []
 
 ######--------------------------- FEATURE COUNTER OPTIONS ---------------------------######
 #
@@ -209,23 +171,8 @@ un: []
 #
 ######-------------------------------------------------------------------------------######
 
-##-- If True: save intermediate table with all information --##
+##-- If True: save intermediate table for each library with all alignment information --##
 intermed_file: False
-
-###-- These options generated from sample & features sheet --###
-# a list of unique GFF files defined in features.csv
-gff_files: []
-
-######--------------------------- MERGE SAMPLES OPTIONS ---------------------------######
-#
-# We use a custom Python script to merge outputs of the counter for further processing.
-#
-#
-######-------------------------------------------------------------------------------######
-
-##-- These options are generated with output_prefix --##
-output_file_stats: ~
-output_file_counts: ~
 
 
 ######---------------------- NORMALIZATION AND STATISTICS OPTIONS -------------------######
@@ -243,3 +190,60 @@ output_file_counts: ~
 ##-- If True: use zero-inflated model for normalization and DEG calling --##
 use_smrna_stats: False
 use_deseq: True
+
+
+#########################  AUTOMATICALLY GENERATED CONFIGURATIONS #########################
+#
+# These options are automatically generated using features.csv, samples.csv, paths.yml,
+# and the above settings in this file.
+#
+###########################################################################################
+
+
+samples_csv:
+  class: File
+
+features_csv:
+  class: File
+
+ebwt: ''
+
+
+######-------------------------- DERIVED FROM SAMPLE SHEET --------------------------######
+#
+# The following configuration settings are automatically derived from the sample sheet
+#
+######-------------------------------------------------------------------------------######
+
+# input fastq files
+in_fq: [ ]
+# output, cleaned fastq files
+out_fq: [ ]
+# output reports
+report_title: [ ]
+# html report filenames
+html: [ ]
+# json report filenames
+json: [ ]
+
+##-- Utilized by Collapser --##
+# prefix to be used for output file (files, if non-zero threshold)
+uniq_seq_prefix: [ ]
+
+###-- Utilized by Bowtie --###
+# bowtie index files
+bt_index_files: [ ]
+# output alignment file names
+outfile: [ ]
+#unaligned read file names
+un: [ ]
+
+######------------------------- DERIVED FROM FEATURES SHEET -------------------------######
+#
+# The following configuration settings are automatically derived from the sample sheet
+#
+######-------------------------------------------------------------------------------######
+
+###-- Utilized by Counter --###
+# a list of only unique GFF files
+gff_files: [ ]
