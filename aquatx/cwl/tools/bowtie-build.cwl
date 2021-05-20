@@ -25,7 +25,7 @@ inputs:
   ### OPTIONS ###
 
   fasta:
-    type: boolean
+    type: boolean?
     inputBinding: 
       position: 1
       prefix: -f

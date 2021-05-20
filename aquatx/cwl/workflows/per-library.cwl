@@ -140,6 +140,10 @@ outputs:
     type: File # unscatter
     outputSource: bowtie/sam_out
 
+  unal_seqs:
+    type: File?
+    outputSource: bowtie/unal_seqs
+
   # Optional outputs
   uniq_seqs_low:
     type: File? # unscatter

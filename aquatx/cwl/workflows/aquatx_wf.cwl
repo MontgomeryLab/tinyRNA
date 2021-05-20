@@ -1,16 +1,22 @@
 #!/usr/bin/env cwl-runner
 
-cwlVersion: v1.0
+cwlVersion: v1.2
 class: Workflow
 
 requirements:
   - class: ScatterFeatureRequirement
   - class: SubworkflowFeatureRequirement
+  - class: MultipleInputFeatureRequirement
+
 
 inputs:
 
   # multi input
   threads: int?
+
+  # bowtie build
+  run_bowtie_build: boolean?
+  reference_genome_files: File[]
 
   # fastp inputs
   in_fq: File[]
@@ -73,6 +79,15 @@ inputs:
 
 steps:
 
+  bt_build_optional:
+    run: ../tools/bowtie-build.cwl
+    when: $(inputs.run_bowtie_build)
+    in:
+      run_bowtie_build: run_bowtie_build
+      ref_in: reference_genome_files
+      ebwt_base: ebwt
+    out: [index_files]
+
   counts-prep:
     run: per-library.cwl
     scatter: [in_fq, out_fq, json, html, report_title, uniq_seq_prefix, outfile, un]
@@ -107,7 +122,9 @@ steps:
       compress: compress
 
       # Bowtie
-      bt_index_files: bt_index_files
+      bt_index_files:
+        source: [bt_build_optional/index_files, bt_index_files]
+        pickValue: first_non_null
       ebwt: ebwt
       outfile: outfile
       fastq: fastq
@@ -127,7 +144,7 @@ steps:
       threads: threads
       shared_memory: shared_memory
       seed: seed
-    out: [fastq_clean, html_report_file, json_report_file, uniq_seqs, aln_seqs, uniq_seqs_low]
+    out: [fastq_clean, html_report_file, json_report_file, uniq_seqs, uniq_seqs_low, aln_seqs, unal_seqs]
 
   counts:
     run: ../tools/aquatx-count.cwl
@@ -172,6 +189,10 @@ outputs:
     type: File[]
     outputSource: counts-prep/aln_seqs
 
+  unal_seqs:
+    type: File[]
+    outputSource: counts-prep/unal_seqs
+
   other_count_files:
     type: File[]
     outputSource: counts/other_counts
@@ -201,3 +222,7 @@ outputs:
   aln_tables:
     type: File[]?
     outputSource: counts/intermed_out_files
+
+  index_files:
+    type: File[]?
+    outputSource: bt_build_optional/index_files
