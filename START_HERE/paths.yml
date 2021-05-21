@@ -16,7 +16,13 @@ samples_csv: './samples.csv'
 features_csv: './features.csv'
 
 ##-- The prefix for your bowtie index, include relative path (relative to this config file) --##
+##-- If you do not have a bowtie index, change this to ebwt: ''
 ebwt: './bowtie_indexes/chr1'
+
+##-- If you do not have a bowtie index, provide your reference genome file(s) here --##
+##-- One file per line, with "- " at the beginning (think: bulleted list) --##
+reference_genome_files:
+- './reference_data/chr1.fa'
 
 ##-- The final output directory for files produced by the pipeline --#
 run_directory: './run_directory'

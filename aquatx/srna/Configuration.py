@@ -251,6 +251,7 @@ class Configuration(ConfigBase):
             self.paths.set('ebwt', bt_index_prefix)
             self.paths.write_processed_config()
         else:
+            # bowtie-build should only run if 'run_bowtie_build' is True AND ebwt is ''
             self.set('run_bowtie_build', False)
 
         # Bowtie index files
