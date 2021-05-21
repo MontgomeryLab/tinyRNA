@@ -3,75 +3,86 @@
 # For reproducibility purposes, if you do not rename this file, we will make a copy
 # with current run time and date information. 
 # 
-# Please rename this file with identifying information if you wish to trace back your run. 
-# If you would like to add run time information, you may add it here. 
+# Please rename this file with identifying information for provenance.
+# If you would like to add run time information, you may add it here.
 #
 #
 #
 # 1. Add a username here to identify the person creating the runs, if desired for record keeping
 # 2. Please add a final run directory to store files - otherwise it will be generated based on
-#    initial run time and date (with added option username). 
+#    initial run time and date (with added option username).
 # 3. Please add a final run output prefix to label run-specific summary reports - otherwise
 #    it will be generated based on initial run time and date (with added optional username).
 #
 ######-------------------------------------------------------------------------------######
 
-user: 'Tester'
-run_directory: './run_directory'
-run_prefix: 'test_run'
+user: Tester
+run_prefix: test_run
 run_date: ~
 run_time: ~
 
-##############################  MAIN INPUT FILES FOR ANALYSIS ##############################
-#
-# Edit this section to contain the sample sheets with file information to use in the
-# workflow. If you want to use DEFAULT settings for the workflow, this is all you need to
-# edit before running the workflow. 
-#
-# Directions:
-# 1. Fill out the sample sheet with files to process + naming scheme. [samples.csv]
-# 2. Fill out the reference sheet with reference files and parameters of interest [features.csv]
-# 3. Add an output identifier for summary files and databases
-# 
-######-------------------------------------------------------------------------------######
- 
-##-- Relative path to sample & reference sheets (relative to this config file) --##
-samples_csv:
-  class: File
-  path: '../../aquatx/extras/samples.csv'
-features_csv:
-  class: File
-  path: '../../aquatx/extras/features.csv'
+paths_config: './paths.yml'
 
-##-- The prefix for your bowtie index, include relative path (relative to this config file) --##
-ebwt: 'testdata/cel_ws279/chr1'
+##-- (EXPERIMENTAL) If True: process each sample library in parallel --##
+##-- If run_native is False, the Toil CWL runner will be used --##
+run_parallel: False
 
-##-- If True: run bowtie-build to index the genome --##
-run_idx: False
-
-##-- Number of threads for multi-threaded programs --##
-threads: 2
+##-- (EXPERIMENTAL) If True: execute the pipeline using native cwltool python rather than command line --##
+run_native: False
 
 ##-- Final output file prefixes for overall run --##
 ##-- If none given, run_prefix is used (default: date_time_aquatx) --##
 output_prefix: ~
 
-######---------------------TRIMMING AND QUALITY FILTER OPTIONS ----------------------######
+##-- If True: run bowtie-build before analyzing libraries. --##
+##-- NOTE: this option will be ignored if you do not provide ref genome file(s) in your paths config --##
+run_bowtie_build: False
+
+##-- Number of threads for multi-threaded programs --##
+threads: 2
+
+######------------------------- BOWTIE INDEX BUILD OPTIONS --------------------------######
 #
-# We use the program fastp to perform: adapter trimming (req), quality filtering (on), 
-# and QC analysis for an output QC report. See https://github.com/OpenGene/fastp for more
-# information on the fastp tool. We have limited the options available to those appropriate
-# for small RNA sequencing data. If you require an addition option, create an issue on the
-# pipeline github: https://github.com/biokcb/smallRNA/issues
-# 
+# If you do not already have bowtie indexes, they can be built for you by setting
+# run_bowtie_build (above) to true and adding your reference genome file(s) to your
+# paths_config file.
+#
 # We have specified default parameters for small RNA data based on our own "best practices".
 # You may change the parameters here.
 #
 ######-------------------------------------------------------------------------------######
 
+
+##-- SA is sampled every 2^offRate BWT chars (default: 5)
+offrate: ~
+
+##-- Convert Ns in reference to As --##
+ntoa: false
+
+##-- Don't build .3/.4.ebwt (packed reference) portion --##
+noref: false
+
+##-- Number of chars consumed in initial lookup (default: 10) --##
+ftabchars: ~
+
+
+######---------------------TRIMMING AND QUALITY FILTER OPTIONS ----------------------######
+#
+# We use the program fastp to perform: adapter trimming (req), quality filtering (on),
+# and QC analysis for an output QC report. See https://github.com/OpenGene/fastp for more
+# information on the fastp tool. We have limited the options available to those appropriate
+# for small RNA sequencing data. If you require an addition option, create an issue on the
+# pipeline github: https://github.com/biokcb/smallRNA/issues
+#
+# We have specified default parameters for small RNA data based on our own "best practices".
+# You may change the parameters here.
+#
+######-------------------------------------------------------------------------------######
+
+
 ##-- Adapter sequence to trim --##
 adapter_sequence: 'auto'
- 
+
 ##-- Minumum & maximum accepted lengths after trimming --##
 length_required: 15
 length_limit: 30
@@ -97,7 +108,7 @@ compression: 4
 #fp_phred64: False
 
 ##-- Turn on overrepresentation sampling analysis --##
-#overrepresentation_sampling: 0 
+#overrepresentation_sampling: 0
 #overrepresentation_analysis: false
 
 ##-- If true: don't overwrite the files --##
@@ -108,21 +119,10 @@ compression: 4
 #disable_length_filtering: false
 #disable_adapter_trimming: false
 
-###-- These options are generated from sample sheet --###
-# input fastq files
-in_fq: []
-# output, cleaned fastq files
-out_fq: []
-# output reports
-report_title: []
-# html report filenames
-html: []
-# json report filenames
-json: []
 
 ######--------------------------- READ COLLAPSER OPTIONS ----------------------------######
 #
-# We use a custom Python script for collapsing duplicate reads for now. There are only a 
+# We use a custom Python script for collapsing duplicate reads for now. There are only a
 # couple options and we recommend using the default (keep all reads: threshold = 0).
 #
 # We have specified default parameters for small RNA data based on our own "best practices".
@@ -130,24 +130,23 @@ json: []
 #
 ######-------------------------------------------------------------------------------######
 
+
 ##-- Sequences with count <= threshold will be placed in a separate low_counts fasta --##
 threshold: 0
 
 ##-- If True: outputs will be gzip compressed --##
 compress: False
 
-###-- These options are generated from sample sheet --###
-# prefix to be used for output file (files, if non-zero threshold)
-uniq_seq_prefix: []
 
-######------------------------- BOWTIE2 ALIGNMENT OPTIONS ---------------------------######
+######-------------------------- BOWTIE ALIGNMENT OPTIONS ---------------------------######
 #
-# We use bowtie2 for read alignment to a genome. 
+# We use bowtie for read alignment to a genome.
 #
 # We have specified default parameters for small RNA data based on our own "best practices".
 # You may change the parameters here.
 #
 ######-------------------------------------------------------------------------------######
+
 
 ##-- Max allowed num of mismatches --##
 end_to_end: 0
@@ -168,7 +167,8 @@ fasta: True
 sam: True
 
 ##-- If True: use shared mem for index; many bowtie's can share --##
-shared_memory: True
+##-- Note: this requires further configuration of your OS; see ipcs and ipcrm --#
+shared_memory: False
 
 ###-- Unused option inputs: Remove '#' in front to use --###
 ##-- If true: do not align to reverse-compliment reference --##
@@ -194,44 +194,22 @@ shared_memory: True
 #solexa: false
 #solexa13: false
 
-###-- These options generated from sample & reference sheet --###
-# bowtie index files
-bt_index_files: []
-# output alignment file names
-outfile: []
-#unaligned read file names
-un: []
 
 ######--------------------------- FEATURE COUNTER OPTIONS ---------------------------######
 #
-# We use a custom Python script that utilizes the HTSeq API to count small RNA reads. 
+# We use a custom Python script that utilizes the HTSeq API to count small RNA reads.
 #
 #
 ######-------------------------------------------------------------------------------######
 
-##-- If True: save intermediate table with all information --##
+##-- If True: save intermediate table for each library with all alignment information --##
 intermed_file: False
-
-###-- These options generated from sample & features sheet --###
-# a list of unique GFF files defined in features.csv
-gff_files: []
-
-######--------------------------- MERGE SAMPLES OPTIONS ---------------------------######
-#
-# We use a custom Python script to merge outputs of the counter for further processing.
-#
-#
-######-------------------------------------------------------------------------------######
-
-##-- These options are generated with output_prefix --##
-output_file_stats: ~
-output_file_counts: ~
 
 
 ######---------------------- NORMALIZATION AND STATISTICS OPTIONS -------------------######
 #
-# We use a custom Python script for read normalization and statistical analysis 
-# (differential gene expression) based on statistical methods developed in [ref]. If you 
+# We use a custom Python script for read normalization and statistical analysis
+# (differential gene expression) based on statistical methods developed in [ref]. If you
 # do not want to use this method and would prefer to use a method such as DESeq2 in R,
 # set use_smrna_stats to False and your output will end at the counts step.
 #
@@ -243,3 +221,65 @@ output_file_counts: ~
 ##-- If True: use zero-inflated model for normalization and DEG calling --##
 use_smrna_stats: False
 use_deseq: True
+
+
+#########################  AUTOMATICALLY GENERATED CONFIGURATIONS #########################
+#
+# These options are automatically generated using features.csv, samples.csv, paths.yml,
+# and the above settings in this file.
+#
+###########################################################################################
+
+
+######--------------------------- DERIVED FROM PATHS SHEET --------------------------######
+#
+# The following configuration settings are automatically derived from the sample sheet
+#
+######-------------------------------------------------------------------------------######
+
+run_directory: ~
+features_csv: { }
+samples_csv: { }
+reference_genome_files: [ ]
+ebwt: ~
+
+
+######-------------------------- DERIVED FROM SAMPLE SHEET --------------------------######
+#
+# The following configuration settings are automatically derived from the sample sheet
+#
+######-------------------------------------------------------------------------------######
+
+##-- Utilized by Fastp --##
+# input fastq files
+in_fq: [ ]
+# output, cleaned fastq files
+out_fq: [ ]
+# output reports
+report_title: [ ]
+# html report filenames
+html: [ ]
+# json report filenames
+json: [ ]
+
+##-- Utilized by Collapser --##
+# prefix to be used for output file (files, if non-zero threshold)
+uniq_seq_prefix: [ ]
+
+###-- Utilized by Bowtie --###
+# bowtie index files
+bt_index_files: [ ]
+# output alignment file names
+outfile: [ ]
+#unaligned read file names
+un: [ ]
+
+######------------------------- DERIVED FROM FEATURES SHEET -------------------------######
+#
+# The following configuration settings are automatically derived from the sample sheet
+#
+######-------------------------------------------------------------------------------######
+
+###-- Utilized by Counter --###
+# a list of only unique GFF files
+gff_files: [ ]

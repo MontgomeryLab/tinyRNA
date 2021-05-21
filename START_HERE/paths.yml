@@ -1,0 +1,28 @@
+##############################  MAIN INPUT FILES FOR ANALYSIS ##############################
+#
+# Edit this section to contain the sample sheets with file information to use in the
+# workflow. If you want to use DEFAULT settings for the workflow, this is all you need to
+# edit before running the workflow.
+#
+# Directions:
+# 1. Fill out the sample sheet with files to process + naming scheme. [samples.csv]
+# 2. Fill out the reference sheet with reference files and parameters of interest [features.csv]
+# 3. Add an output identifier for summary files and databases
+#
+######-------------------------------------------------------------------------------######
+
+##-- Relative path to sample & reference sheets (relative to this config file) --##
+samples_csv: './samples.csv'
+features_csv: './features.csv'
+
+##-- The prefix for your bowtie index, include relative path (relative to this config file) --##
+##-- If you do not have a bowtie index, change this to ebwt: ''
+ebwt: './bowtie_indexes/chr1'
+
+##-- If you do not have a bowtie index, provide your reference genome file(s) here --##
+##-- One file per line, with "- " at the beginning (think: bulleted list) --##
+reference_genome_files:
+- './reference_data/chr1.fa'
+
+##-- The final output directory for files produced by the pipeline --#
+run_directory: './run_directory'

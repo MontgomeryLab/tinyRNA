@@ -6,12 +6,12 @@ class: CommandLineTool
 requirements:
  - class: InitialWorkDirRequirement
    listing: $(inputs.bt_index_files)
- - class: InlineJavascriptRequirement
 
 baseCommand: bowtie
 
+# Only inputs relevant to the srna pipeline are listed
 inputs:
-  # Only inputs relevant to the srna pipeline are listed
+
   ebwt:
     type: string
     inputBinding:
@@ -189,11 +189,4 @@ outputs:
   unal_seqs:
     type: File?
     outputBinding:
-      glob: |
-        ${
-          if (inputs.un) {
-            return inputs.un;
-          } else {
-            return [];
-          }
-        }
+      glob: $(inputs.un)

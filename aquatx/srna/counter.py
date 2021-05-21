@@ -194,7 +194,8 @@ def map_and_reduce(libraries, work_args, ret_queue):
     merge_start = time.time()
 
     # Collect counts from all pool workers and merge
-    summary = SummaryStats(libraries, work_args[0][-1])
+    out_prefix = work_args[0][-1]
+    summary = SummaryStats(out_prefix)
     for _ in libraries:
         lib_stats = ret_queue.get()
         summary.add_library(lib_stats)

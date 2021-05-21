@@ -41,13 +41,15 @@ class test_aquatx(unittest.TestCase):
                 'files': set(),
                 'tools': {
                     'files': {
-                        'aquatx-deseq.cwl', 'bowtie.cwl', 'bowtie2.cwl',
-                        'aquatx-collapse.cwl', 'bowtie-build.cwl',
-                        'aquatx-count.cwl', 'aquatx-merge.cwl', 'fastp.cwl'
+                        'aquatx-deseq.cwl', 'bowtie.cwl', 'aquatx-collapse.cwl',
+                        'bowtie-build.cwl', 'aquatx-count.cwl', 'aquatx-merge.cwl',
+                        'fastp.cwl'
                     }
                 },
                 'workflows': {
-                    'files': {'aquatx_wf.cwl'}
+                    'files': {
+                        'aquatx_wf.cwl', 'per-library.cwl'
+                    }
                 }
             }
         }
@@ -62,7 +64,7 @@ class test_aquatx(unittest.TestCase):
             helpers.LambdaCapture(lambda: aquatx.get_template(self.aquatx_extras_path)),  # The pre-install invocation
             helpers.ShellCapture("aquatx get-template")                                   # The post-install command
         ]
-        template_files = ['run_config_template.yml', 'samples.csv', 'features.csv']
+        template_files = ['run_config_template.yml', 'samples.csv', 'features.csv', 'paths.yml']
 
         def dir_entry_ct():
             return len(os.listdir('.'))
@@ -74,10 +76,10 @@ class test_aquatx(unittest.TestCase):
                 with test_context as test:
                     test()
 
-                # Check that exactly 3 files were produced by the command
+                # Check that exactly 4 files were produced by the command
                 self.assertEqual(
-                    dir_entry_ct() - dir_before_count, 3,
-                    f"Abnormal number of template files. Expected 3. Function: {test_context}")
+                    dir_entry_ct() - dir_before_count, len(template_files),
+                    f"Abnormal number of template files. Expected 4. Function: {test_context}")
 
                 # Check that each expected file was produced
                 for file in template_files:
@@ -188,11 +190,12 @@ class test_aquatx(unittest.TestCase):
                 # Check for cwltool in child processes up to 5 times, waiting 1 second in between
                 for i in range(10):
                     time.sleep(1)
-                    sub_names = [sub.name() for sub in get_children()]
-                    if 'cwltool' in sub_names:
+                    sub_names = {sub.name() for sub in get_children()}
+                    print(sub_names)
+                    if 'node' in sub_names:
                         break
 
-                self.assertIn('cwltool', sub_names,
+                self.assertIn('node', sub_names,
                               f"The cwltool subprocess does not appear to have started. Function: {test_context}")
 
     """

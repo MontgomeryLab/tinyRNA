@@ -61,6 +61,7 @@ class MyTestCase(unittest.TestCase):
     this conversion more surgically for only the 5' end NT at construction time.
     """
 
+    # Todo: move all referenced .sam files to a more appropriate (and available) testdata folder
     def test_sam_parser_comparison(self):
         file = "./run_directory/Lib304_test_aligned_seqs.sam"
         ours = read_SAM(file)

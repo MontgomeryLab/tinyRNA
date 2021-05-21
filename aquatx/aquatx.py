@@ -21,15 +21,17 @@ the keys ` samples_csv` and `reference_sheet_file` (use get-template for
 more info). Config files that share the same name as the template config file
 will be renamed.
 """
-
+import cwltool.executors
 import cwltool.factory
+import cwltool.secrets
 import subprocess
 import shutil
 import os
 
 from pkg_resources import resource_filename
-from aquatx.srna.Configuration import Configuration
 from argparse import ArgumentParser
+
+from aquatx.srna.Configuration import Configuration
 
 
 def get_args():
@@ -79,21 +81,62 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
     run_directory = config_object.create_run_directory()
     cwl_conf_file = config_object.write_processed_config()
 
-    # Run with cwltool
     debug = False
-    subprocess.run(f"cwltool --outdir {run_directory} --copy-outputs --timestamps "
-                   f"{'--leave-tmpdir --debug --js-console ' if debug else ''}"
-                   f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl {cwl_conf_file}", shell=True)
+    if config_object['run_native']:  # experimental
+        run_native(config_object, aquatx_cwl_path, run_directory,
+                   debug=debug, parallel=config_object['run_parallel'])
+    else:
+        if config_object['run_parallel']:
+            print("The Toil CWL runner is not supported at this time. You may run_parallel only with run_native.")
+            return
+            # Use the Toil CWL runner for parallel library processing
+            # cwl_runner = f"toil-cwl-runner --outdir {run_directory} --stats " \
+            #              f"{f'--debug-Worker --writeLogs {run_directory}' if debug else ''}" \
+            #              f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl {cwl_conf_file}"
+        else:
+            # Use the cwltool CWL runner to run one library at a time
+            cwl_runner = f"cwltool --outdir {run_directory} --copy-outputs --timestamps " \
+                         f"{'--leave-tmpdir --debug --js-console ' if debug else ''}" \
+                         f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl {cwl_conf_file}"
 
-    # runtime_context = cwltool.factory.RuntimeContext()
-    # runtime_context.outdir = os.path.join('.', config.get('run_directory'))
-    # runtime_context.on_error = "continue"
-    #
-    # loading_context = cwltool.factory.LoadingContext()
-    # loading_context.jobdefaults = config.config
-    #
-    # cwl = cwltool.factory.Factory(runtime_context=runtime_context, loading_context=loading_context)
-    # cwl.make(f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl")
+        subprocess.run(cwl_runner, shell=True)
+
+
+def run_native(config_object, cwl_path, run_directory, debug=False, parallel=False):
+    def furnish_if_file_record(file_dict):
+        if isinstance(file_dict, dict) and file_dict.get('class', None) == 'File':
+            file_dict['basename'] = os.path.basename(file_dict['path'])
+            file_dict['location'] = file_dict['path']
+            file_dict['contents'] = None
+
+    for _, config_param in config_object.config.items():
+        if isinstance(config_param, list):
+            for config_dict in config_param:
+                furnish_if_file_record(config_dict)
+        else:
+            furnish_if_file_record(config_param)
+
+    runtime_config = {
+        'secret_store': cwltool.secrets.SecretStore(),
+        'outdir': os.path.join('.', run_directory),
+        'default_stdout': subprocess.PIPE,
+        'default_stderr': subprocess.PIPE,
+        'on_error': "continue",
+        'debug': debug
+    }
+
+    runtime_context = cwltool.factory.RuntimeContext()
+    for opt, val in runtime_config.items():
+        setattr(runtime_context, opt, val)
+
+    cwl = cwltool.factory.Factory(
+        runtime_context=runtime_context,
+        executor=cwltool.executors.MultithreadedJobExecutor()   # Run jobs in parallel
+        if parallel else cwltool.executors.SingleJobExecutor()  # Run one library at a time
+    )
+
+    pipeline = cwl.make(f"{cwl_path}/workflows/aquatx_wf.cwl")
+    pipeline(**config_object.config)
 
 
 def get_template(aquatx_extras_path: str) -> None:
@@ -101,14 +144,14 @@ def get_template(aquatx_extras_path: str) -> None:
 
     Args:
         aquatx_extras_path: The path to the project's extras directory. This directory
-            contains templates for the run configuration, sample inputs, and reference
-            inputs.
+            contains templates for the run configuration, sample inputs, feature selection
+            rules, and paths for all the above.
     """
 
     print("Copying template input files to current directory...")
 
     # Copy template files to the current working directory
-    for template in ['run_config_template.yml', 'samples.csv', 'features.csv']:
+    for template in ['run_config_template.yml', 'samples.csv', 'features.csv', 'paths.yml']:
         shutil.copyfile(f"{aquatx_extras_path}/{template}", f"{os.getcwd()}/{template}")
 
 
