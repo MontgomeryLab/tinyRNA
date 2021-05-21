@@ -2,39 +2,46 @@ import ruamel.yaml
 import argparse
 import csv
 import os
-import sys
 
 from pkg_resources import resource_filename
 from datetime import datetime
 from shutil import copyfile
-from typing import Union
+from typing import Union, Any
 
 
 class ConfigBase:
     """Base class for basic aquatx configuration operations
 
     Attributes:
-        config: a dictionary of configuration keys and their values
+        yaml: the YAML interface for reading config and writing processed config
+        config: the configuration object produced by loading the config file
+        inf: the filename of the configuration .yml file to process
+        dir: parent directory of the input file. Used for calculating paths relative to config file.
         extras: path to the package extras directory
         dt: a date-time string for default output naming
     """
 
-    def __init__(self, config: dict):
-        self.config = config
+    def __init__(self, config_file: str):
+        self.dir = os.path.dirname(config_file)
+        self.inf = config_file
         self.extras = ''
         self.dt = ''
 
-    def __getitem__(self, key):
+        self.yaml = ruamel.yaml.YAML()
+        with open(config_file, 'r') as f:
+            self.config = self.yaml.load(f)
+
+    def __getitem__(self, key: str) -> Any:
         return self.get(key)
 
-    def get(self, key: str) -> Union[str, list, dict, None]:
+    def get(self, key: str) -> Any:
         return self.config.get(key, None)
 
-    def set(self, key: str, val: Union[str, list, dict]) -> Union[str, list, dict]:
+    def set(self, key: str, val: Union[str, list, dict, bool]) -> Union[str, list, dict, bool]:
         self.config[key] = val
         return val
 
-    def set_if_not(self, key: str, val: Union[str, list, dict]) -> Union[str, list, dict]:
+    def set_if_not(self, key: str, val: Union[str, list, dict, bool]) -> Any:
         """Apply the setting if it has not been previously set"""
         if not self.get(key):
             return self.set(key, val)
@@ -47,21 +54,20 @@ class ConfigBase:
             # Can't use config.setdefault(), it considers None and [] "already set"
             self.set_if_not(key, val)
 
-    def append_to(self, key: str, val: Union[str, list, dict]) -> list:
+    def append_to(self, key: str, val: Any) -> list:
         """Append a list-type setting (per-file settings)"""
         target = self.get(key)
         if type(target) is list:
             target.append(val)
             return target
         else:
-            print(f"Tried appending to a non-existent key: {key}", file=sys.stderr)
+            raise ValueError(f"Tried appending to a non-existent key: {key}")
 
-    def append_if_absent(self, key: str, val: Union[str, list, dict]) -> list:
+    def append_if_absent(self, key: str, val: Any) -> list:
         """Append to list-type setting if the value is not already present"""
         target = self.get(key)
-        if not val in target:
-            target.append(val)
-        return target
+        if val not in target:
+            return self.append_to(key, val)
 
     """========== HELPERS =========="""
 
@@ -79,6 +85,7 @@ class ConfigBase:
     @staticmethod
     def cwl_file(file: str) -> dict:
         """Returns a file input/output specification for the CWL config"""
+        # Todo: validate that file exists at this step
         return {'class': 'File', 'path': file}
 
     @staticmethod
@@ -123,26 +130,43 @@ class Configuration(ConfigBase):
     Absolute paths may also be supplied.
 
     Attributes:
-        dir: parent directory of the input file. Used for calculating paths relative to config file.
-        inf: the input file location
-        yaml: the YAML interface for reading config and writing processed config
+        paths: the configuration object from processing the paths_config file.
+            This holds path info for other config files and prefixes, and is updated
+            appropriately if 'run_bowtie_index' is set to 'true'
     """
 
-
-    def __init__(self, input_file: str):
-        self.dir = os.path.dirname(input_file) + os.sep
-        self.inf = input_file
-
+    def __init__(self, config_file: str):
         # Parse YAML run configuration file
-        self.yaml = ruamel.yaml.YAML()
-        with open(input_file, 'r') as conf:
-            super().__init__(self.yaml.load(conf))
+        super().__init__(config_file)
 
+        self.paths = self.load_paths_config()
+        self.process_paths_sheet()
+        
         self.setup_pipeline()
         self.setup_per_file()
         self.setup_ebwt_idx()
         self.process_sample_sheet()
         self.process_feature_sheet()
+        
+    def load_paths_config(self):
+        path_sheet = self.joinpath(self.dir, self.get('paths_config'))
+        return ConfigBase(path_sheet)
+
+    def process_paths_sheet(self):
+        from_here = self.paths.dir
+
+        def to_cwl_file_class(input_file_path):
+            return self.cwl_file(
+                self.joinpath(from_here, input_file_path))
+
+        # No conversion required, simply copy
+        self.set('ebwt', self.paths['ebwt'])
+        self.set('run_directory', self.paths['run_directory'])
+
+        # Configurations that need to be converted from string to a CWL File class object
+        self.set('samples_csv', to_cwl_file_class(self.paths['samples_csv']))
+        self.set('features_csv', to_cwl_file_class(self.paths['features_csv']))
+        self.set('reference_genome_files', [to_cwl_file_class(genome) for genome in self.paths['reference_genome_files']])
 
     def process_sample_sheet(self):
         sample_sheet = self.joinpath(self.dir, self.get('samples_csv')['path'])
@@ -205,19 +229,32 @@ class Configuration(ConfigBase):
         })
 
         self.extras = resource_filename('aquatx', 'extras/')
-        self.set('output_file_stats', self.get('output_prefix') + '_run_stats.csv')
-        self.set('output_file_counts', self.get('output_prefix') + '_raw_counts.csv')
 
     def setup_ebwt_idx(self):
         """Bowtie index files and prefix"""
 
-        # Determine prefix
-        bt_idx = (self.prefix(self.get('ref_genome'))
-                  if self.get('run_idx') and not self.get('ebwt')
-                  else self.get('ebwt'))
+        # Determine if bowtie-build should run, and set Bowtie index prefix accordingly
+        bt_index_prefix = self.paths.get('ebwt')
+        if self.get('run_bowtie_build') and bt_index_prefix == '':
+            if not self.get('reference_genome_files'):
+                config_file = os.path.basename(self.inf)
+                paths_file = os.path.basename(self.paths.inf)
+                raise ValueError(f"If {config_file} contains 'run_bowtie_build: true', you "
+                                 f"need to provide your reference genome files in {paths_file}")
+
+            # Outputs are saved in run_directory, prefix is simply the first genome file's basename
+            ref_genome_base = os.path.basename(self.get('reference_genome_files')[0]['path'])
+            bt_index_prefix = self.joinpath(self.get('run_directory'), ref_genome_base)
+            self.set('ebwt', bt_index_prefix)
+
+            # Finally, update user's paths file with the new prefix
+            self.paths.set('ebwt', bt_index_prefix)
+            self.paths.write_processed_config()
+        else:
+            self.set('run_bowtie_build', False)
 
         # Bowtie index files
-        self.set('bt_index_files', [self.cwl_file(bt_idx + postfix)
+        self.set('bt_index_files', [self.cwl_file(bt_index_prefix + postfix)
                         for postfix in ['.1.ebwt', '.2.ebwt', '.3.ebwt', '.4.ebwt', '.rev.1.ebwt', '.rev.2.ebwt']])
 
         # When CWL copies bt_index_filex for the bowtie.cwl InitialWorkDirRequirement, it does not
