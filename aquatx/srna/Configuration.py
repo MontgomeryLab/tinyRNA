@@ -22,7 +22,7 @@ class ConfigBase:
     """
 
     def __init__(self, config_file: str):
-        self.dir = os.path.dirname(config_file)
+        self.dir = os.path.dirname(os.path.abspath(config_file))
         self.inf = config_file
         self.extras = ''
         self.dt = ''
@@ -169,7 +169,7 @@ class Configuration(ConfigBase):
         self.set('reference_genome_files', [to_cwl_file_class(genome) for genome in self.paths['reference_genome_files']])
 
     def process_sample_sheet(self):
-        sample_sheet = self.joinpath(self.dir, self.get('samples_csv')['path'])
+        sample_sheet = self.joinpath(self.paths.dir, self.get('samples_csv')['path'])
         from_here = os.path.dirname(sample_sheet)
 
         with open(sample_sheet, 'r', encoding='utf-8-sig') as sf:
@@ -196,7 +196,7 @@ class Configuration(ConfigBase):
                 self.append_to('uniq_seq_prefix', sample_basename)
 
     def process_feature_sheet(self):
-        feature_sheet = self.joinpath(self.dir, self.get('features_csv')['path'])
+        feature_sheet = self.joinpath(self.paths.dir, self.get('features_csv')['path'])
         from_here = os.path.dirname(feature_sheet)
 
         with open(feature_sheet, 'r', encoding='utf-8-sig') as ff:
