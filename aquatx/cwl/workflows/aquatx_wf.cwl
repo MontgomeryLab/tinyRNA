@@ -17,6 +17,10 @@ inputs:
   # bowtie build
   run_bowtie_build: boolean?
   reference_genome_files: File[]
+  offrate: int?
+  ntoa: boolean?
+  noref: boolean?
+  ftabchars: int?
 
   # fastp inputs
   in_fq: File[]
@@ -86,6 +90,10 @@ steps:
       run_bowtie_build: run_bowtie_build
       ref_in: reference_genome_files
       ebwt_base: ebwt
+      offrate: offrate
+      ntoa: ntoa
+      noref: noref
+      ftabchars: ftabchars
     out: [index_files]
 
   counts-prep:

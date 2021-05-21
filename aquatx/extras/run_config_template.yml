@@ -21,9 +21,7 @@ run_prefix: ~
 run_date: ~
 run_time: ~
 
-paths_config:
-  path: '../../START_HERE/paths.yml'
-  class: File
+paths_config: '../../START_HERE/paths.yml'
 
 ##-- (EXPERIMENTAL) If True: process each sample library in parallel --##
 ##-- If run_native is False, the Toil CWL runner will be used --##
@@ -36,12 +34,36 @@ run_native: False
 ##-- If none given, run_prefix is used (default: date_time_aquatx) --##
 output_prefix: ~
 
-##-- Set to True and provide a reference genome .fa file to index the genome --##
-run_idx: False
-reference_genome: ~
+##-- If True: run bowtie-build before analyzing libraries. --##
+##-- NOTE: this option will be ignored if you do not provide ref genome file(s) in your paths config --##
+run_bowtie_build: False
 
 ##-- Number of threads for multi-threaded programs --##
 threads: 2
+
+######------------------------- BOWTIE INDEX BUILD OPTIONS --------------------------######
+#
+# If you do not already have bowtie indexes, they can be built for you by setting
+# run_bowtie_build (above) to true and adding your reference genome file(s) to your
+# paths_config file.
+#
+# We have specified default parameters for small RNA data based on our own "best practices".
+# You may change the parameters here.
+#
+######-------------------------------------------------------------------------------######
+
+
+##-- SA is sampled every 2^offRate BWT chars (default: 5)
+offrate: ~
+
+##-- Convert Ns in reference to As --##
+ntoa: false
+
+##-- Don't build .3/.4.ebwt (packed reference) portion --##
+noref: false
+
+##-- Number of chars consumed in initial lookup (default: 10) --##
+ftabchars: ~
 
 
 ######---------------------TRIMMING AND QUALITY FILTER OPTIONS ----------------------######
@@ -116,9 +138,9 @@ threshold: 0
 compress: False
 
 
-######------------------------- BOWTIE2 ALIGNMENT OPTIONS ---------------------------######
+######-------------------------- BOWTIE ALIGNMENT OPTIONS ---------------------------######
 #
-# We use bowtie2 for read alignment to a genome. 
+# We use bowtie for read alignment to a genome.
 #
 # We have specified default parameters for small RNA data based on our own "best practices".
 # You may change the parameters here.
@@ -215,12 +237,12 @@ use_deseq: True
 #
 ######-------------------------------------------------------------------------------######
 
-
-samples_csv: {}
-
-features_csv: {}
-
-ebwt: ''
+run_directory: ~
+features_csv: { }
+samples_csv: { }
+reference_genome_files: [ ]
+bt_build_fa: False
+ebwt: ~
 
 
 ######-------------------------- DERIVED FROM SAMPLE SHEET --------------------------######
