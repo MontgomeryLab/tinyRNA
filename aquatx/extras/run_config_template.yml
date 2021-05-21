@@ -241,7 +241,6 @@ run_directory: ~
 features_csv: { }
 samples_csv: { }
 reference_genome_files: [ ]
-bt_build_fa: False
 ebwt: ~
 
 
