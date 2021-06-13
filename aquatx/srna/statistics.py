@@ -19,6 +19,8 @@ class LibraryStats:
             self.assignments = set()
             self.feat_count = 0
 
+    complement = bytes.maketrans(b'ACGTacgt', b'TGCAtgca')
+
     summary_categories = ['Total Assigned Reads', 'Total Assigned Sequences',
                           'Assigned Single-Mapping Reads', 'Assigned Multi-Mapping Reads',
                           'Reads Assigned to Single Feature', 'Sequences Assigned to Single Feature',
@@ -70,12 +72,8 @@ class LibraryStats:
             for feat in assignments:
                 self.feat_counts[feat] += feature_corrected_count
 
-        # Todo: this will record antisense sequences as reverse complement
-        #  Do we need intermediate files? Is it worth converting?
         if self.save_intermediate_file:
-            # sequence, cor_counts, strand, start, end, feat1;feat2;feat3
-            self.alignments.append((aln.read, bundle.corr_count, aln.iv.strand, aln.iv.start, aln.iv.end,
-                                    ';'.join(assignments)))
+            self.record_alignment_details(aln, bundle, assignments)
 
     def finalize_bundle(self, bundle: Bundle) -> None:
         assignment_count = len(bundle.assignments)
@@ -90,7 +88,26 @@ class LibraryStats:
             self.library_stats['Assigned Single-Mapping Reads'] += bundle.read_count * (bundle.loci_count == 1)
             self.library_stats['Assigned Multi-Mapping Reads'] += bundle.read_count * (bundle.loci_count > 1)
 
+    def record_alignment_details(self, aln, bundle, assignments):
+        """Record detailed alignment info if user elects to save intermediate files
+
+        This is called once per locus per read (every alignment). The recorded information is later
+        written to {library['Name']}_aln_table.txt after the entire SAM file has been processed."""
+
+        # Perform reverse complement for anti-sense reads
+        read = aln.read.seq \
+            if aln.iv.strand == '+' \
+            else aln.read.seq[::-1].translate(self.complement)
+
+        # sequence, cor_counts, strand, start, end, feat1;feat2;feat3
+        self.alignments.append((read, bundle.corr_count, aln.iv.strand, aln.iv.start, aln.iv.end,
+                                ';'.join(assignments)))
+
     def write_intermediate_file(self) -> None:
+        """Write the recorded alignment info to the corresponding logfile for this library
+
+        This is called once per library after the entire SAM file has been processed."""
+
         with open(f"{self.out_prefix}_{self.library['Name']}_aln_table.txt", 'w') as imf:
             imf.writelines(
                 # sequence, cor_counts, strand, start, end, feat1a/feat1b;feat2;...
