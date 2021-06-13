@@ -24,14 +24,17 @@ will be renamed.
 import cwltool.executors
 import cwltool.factory
 import cwltool.secrets
+import cwltool.resolver
 import subprocess
 import shutil
 import os
 
+from cwltool.context import LoadingContext
 from pkg_resources import resource_filename
 from argparse import ArgumentParser
 
 from aquatx.srna.Configuration import Configuration
+from cwltool.main import setup_loadingContext
 
 
 def get_args():
@@ -116,21 +119,20 @@ def run_native(config_object, cwl_path, run_directory, debug=False, parallel=Fal
         else:
             furnish_if_file_record(config_param)
 
-    runtime_config = {
+    runtime_context = cwltool.factory.RuntimeContext({
         'secret_store': cwltool.secrets.SecretStore(),
         'outdir': os.path.join('.', run_directory),
         'default_stdout': subprocess.PIPE,
         'default_stderr': subprocess.PIPE,
         'on_error': "continue",
         'debug': debug
-    }
+    })
 
-    runtime_context = cwltool.factory.RuntimeContext()
-    for opt, val in runtime_config.items():
-        setattr(runtime_context, opt, val)
+    loading_context = setup_loadingContext(LoadingContext(), runtime_context, {})
 
     cwl = cwltool.factory.Factory(
         runtime_context=runtime_context,
+        loading_context=loading_context,
         executor=cwltool.executors.MultithreadedJobExecutor()   # Run jobs in parallel
         if parallel else cwltool.executors.SingleJobExecutor()  # Run one library at a time
     )
