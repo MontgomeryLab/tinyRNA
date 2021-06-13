@@ -2,6 +2,7 @@ import numpy as np
 import HTSeq
 import time
 import sys
+import os
 import re
 
 from typing import Tuple, Set, List, Dict
@@ -44,27 +45,100 @@ class Alignment:
         return f"<Alignment Object: Read '{self.read.name}' aligned to {self.iv}"
 
 
-def read_SAM(file):
-    with open(file, 'rb') as f:
-        line = f.readline()
+class SAM_reader:
+    def __init__(self, sam_file):
+        self.sam_file = open(sam_file, 'rb')
+        self.file_name = sam_file
+        self._collapsed_sam = []  # Lists have O(1) amortized appends
+        self._headers = []
 
-        # Skip headers
-        while line[0] == ord('@'):
-            line = f.readline()
+        setattr(self, "read", self.read_collapsed_sam
+        if self.is_collapsed()
+        else self.read_inflated_sam)
 
-        while line:
-            cols = line.split(b'\t')
+    def read(self) -> Alignment:
+        # Assigned at construction time based on SAM file contents
+        pass
 
-            strand = "+" if (int(cols[1]) & 16) >> 4 == 0 else "-"
-            chrom = cols[2].decode('utf-8')
-            name = cols[0].decode('utf-8')
-            start = int(cols[3]) - 1
-            seq = cols[9]
+    def is_collapsed(self) -> bool:
+        # Grab the first SAM alignment record's QName
+        first_record = self.read().read.name
+        # Rewind our file reader to replay the first record during read()
+        self.sam_file.seek(0)
 
+        # We don't want to only match >0_count=... because early records
+        # may have been filtered during pipeline preprocessing steps
+        return bool(re.match(r">[0-9]*_count=[0-9]*", first_record))
+
+    def read_inflated_sam(self):
+        # Inflated SAM files must be sorted on sequence as primary axis, position as secondary axis
+        # This can be accomplished easily with something like:
+        #   SAM=test.sam; (head -n +3 $SAM && tail -n +4 $SAM | sort -k10,10 -k4,4) > $SAM"_sorted.sam"
+
+        strand, chrom, name, start, seq, line = 0, 1, 2, 3, 4, 5
+        seq_idx, seq_count = 0, 1
+
+        record_iter = iter(self.get_record())
+        record = next(record_iter)
+        last = record
+        ma = [last]
+
+        for rec in record_iter:
+            if rec[seq] == last[seq]:
+                seq_count += 1
+                if rec[start] != last[start]:
+                    # Same sequence, different locus
+                    ma.append(rec)
+                    last = rec
+            else:
+                # New sequence encountered, yield previous
+                seq_name = f">{seq_idx}_count={seq_count}"
+                for aln in ma:
+                    collapsed_rec = aln[line].decode("utf-8").replace(aln[name], seq_name)
+                    self._collapsed_sam.append(collapsed_rec)
+
+                    iv = HTSeq.GenomicInterval(aln[chrom], aln[start], aln[start] + len(aln[seq]), aln[strand])
+                    yield Alignment(iv, seq_name, aln[seq])
+
+                last = rec
+                ma = [last]
+                seq_idx += 1
+                seq_count = 1
+
+        # self.write_collapsed_sam()
+
+    def write_collapsed_sam(self):
+        out_file = os.path.splitext(os.path.basename(self.file_name))[0]
+        with open(out_file, 'w') as f:
+            f.writelines(self._headers)
+            f.writelines(self._collapsed_sam)
+
+    def read_collapsed_sam(self) -> Alignment:
+        record_iterator = iter(self.get_record())
+        for strand, chrom, name, start, seq, _ in record_iterator:
             iv = HTSeq.GenomicInterval(chrom, start, start + len(seq), strand)
             yield Alignment(iv, name, seq)
 
+    def get_record(self):
+        with self.sam_file as f:
             line = f.readline()
+
+            # Skip headers
+            while line[0] == ord('@'):
+                self._headers.append(line)
+                line = f.readline()
+
+            while line:
+                cols = line.split(b'\t')
+
+                strand = "+" if (int(cols[1]) & 16) >> 4 == 0 else "-"
+                chrom = cols[2].decode('utf-8')
+                name = cols[0].decode('utf-8')
+                start = int(cols[3]) - 1
+                seq = cols[9]
+
+                yield strand, chrom, name, start, seq, line
+                line = f.readline()
 
 
 def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):

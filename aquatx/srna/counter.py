@@ -6,7 +6,7 @@ import time
 import csv
 import os
 
-import aquatx.srna.hts_parsing as parser
+from aquatx.srna.hts_parsing import SAM_reader, Alignment, build_reference_tables
 from aquatx.srna.FeatureSelector import FeatureSelector
 from aquatx.srna.statistics import LibraryStats, SummaryStats
 from aquatx.srna.hts_parsing import SelectionRules, FeatureSources
@@ -132,7 +132,7 @@ def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
     return rules, gff_files
 
 
-def assign_features(alignment: 'parser.Alignment') -> Tuple[AssignedFeatures, N_Candidates]:
+def assign_features(alignment: 'Alignment') -> Tuple[AssignedFeatures, N_Candidates]:
 
     feat_matches, assignment = list(), set()
     iv = alignment.iv
@@ -156,16 +156,15 @@ def count_reads(library: dict, return_queue: mp.Queue, intermediate_file: bool =
     # For complete SAM records (slower):
     # 1. Change the following line to HTSeq.BAM_Reader(sam_file)
     # 2. Change FeatureSelector.choose() to assign nt5end from chr(alignment.read.seq[0])
-    read_seq = parser.read_SAM(library["File"])
+    sam = SAM_reader(library["File"])
     stats = LibraryStats(library, out_prefix, intermediate_file)
 
     # For each sequence in the sam file...
     # Note: HTSeq only performs bundling. The alignments are our own Alignment objects
-    for bundle in HTSeq.bundle_multiple_alignments(read_seq):
+    for bundle in HTSeq.bundle_multiple_alignments(sam.read()):
         bundle_stats = stats.count_bundle(bundle)
 
         # For each alignment of the given sequence...
-        alignment: parser.Alignment
         for alignment in bundle:
             hits, n_candidates = assign_features(alignment)
             stats.count_bundle_alignments(bundle_stats, alignment, hits)
@@ -217,7 +216,7 @@ def main():
 
     # Build features table and selector, global for multiprocessing
     global features, selector
-    features, attributes, alias = parser.build_reference_tables(gff_file_set, selection_rules)
+    features, attributes, alias = build_reference_tables(gff_file_set, selection_rules)
     selector = FeatureSelector(selection_rules, attributes)
 
     # Prepare for multiprocessing pool
