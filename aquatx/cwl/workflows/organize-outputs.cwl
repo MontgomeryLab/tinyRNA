@@ -1,9 +1,11 @@
 #!/usr/bin/env cwl-runner
 
 ######-------------------------------------------------------------------------------######
+#
 # This Workflow gathers outputs from the preceding counts-prep SubWorkflow into
-# corresponding subdirectories. These subdirectories are then the sole output of the
-# the aquatx_wf.cwl's counts-prep step.
+# corresponding subdirectories. At the WorkflowOutput level within aquatx_wf.cwl,
+# these subdirectories are the final output for all non-counts steps.
+#
 ######-------------------------------------------------------------------------------######
 
 cwlVersion: v1.2

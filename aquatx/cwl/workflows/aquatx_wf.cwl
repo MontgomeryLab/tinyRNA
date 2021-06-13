@@ -156,10 +156,7 @@ steps:
   subdirs:
     run: organize-outputs.cwl
     in:
-      bt_build_indexes:
-        # Necessary since this is an optional output
-        source: [bt_build_optional/index_files]
-        pickValue: all_non_null
+      bt_build_indexes: bt_build_optional/index_files
       run_bowtie_build: run_bowtie_build
       fastp_cleaned_fastq: counts-prep/fastq_clean
       fastp_html_report: counts-prep/html_report_file
