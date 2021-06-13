@@ -1,0 +1,3 @@
+dir:  # type "Directory"
+    class: Directory
+    path: ../../run_directory

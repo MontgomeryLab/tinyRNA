@@ -119,7 +119,9 @@ steps:
       shared_memory: shared_memory
       seed: seed
     out: [sam_out, unal_seqs]
+
 outputs:
+
   fastq_clean:
     type: File # unscatter
     outputSource: fastp/fastq1
@@ -140,11 +142,11 @@ outputs:
     type: File # unscatter
     outputSource: bowtie/sam_out
 
+  # Optional outputs
   unal_seqs:
     type: File?
     outputSource: bowtie/unal_seqs
 
-  # Optional outputs
   uniq_seqs_low:
     type: File? # unscatter
     outputSource: collapse/low_counts_fa
