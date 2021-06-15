@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch, mock_open
 
 from aquatx.srna.hts_parsing import *
 from tests.unit_tests_counter import resources
@@ -6,6 +7,8 @@ import tests.unit_test_helpers as helpers
 
 
 class MyTestCase(unittest.TestCase):
+    tmp_sam = f"{resources}/tmp.sam"
+
     @classmethod
     def setUpClass(self):
         self.gff_file = f"{resources}/identity_choice_test.gff3"
@@ -13,8 +16,13 @@ class MyTestCase(unittest.TestCase):
         self.short_gff = helpers.read(self.short_gff_file)
 
         self.sam_file = f"{resources}/identity_choice_test.sam"
-        self.short_sam_file = f"{resources}/single.sam"
+        self.short_sam_file = f"{resources}/single_inflated.sam"
         self.short_sam = helpers.read(self.short_sam_file)
+
+    @classmethod
+    def tearDown(self) -> None:
+        if os.path.isfile(self.tmp_sam):
+            os.remove(self.tmp_sam)
 
     # === HELPERS ===
 
@@ -25,17 +33,46 @@ class MyTestCase(unittest.TestCase):
         attr_str = self.get_gff_attr_string(gff_file_content)
         return parse_GFF_attribute_string(attr_str)
 
+    def make_single_sam(self, name="read_id", flag="16", chrom="I", pos="15064570", seq="CAAGACAGAGCTTCACCGTTC"):
+        length = str(len(seq))
+        header = '\t'.join(["@SQ", "SN:%s", "LN:%s"]) % (chrom, length)
+        record = '\t'.join([
+            name, flag, chrom, pos, "255", length + "M", "*", "0", "0", seq,
+            "IIIIIIIIIIIIIIIIIIIII", "XA:i:0",	"MD:Z:" + length, "NM:i:0", "XM:i:2"])
+
+        content = header + '\n' + record
+        self.write_tmp_sam(content)
+        return MyTestCase.tmp_sam
+
+    def write_tmp_sam(self, content):
+        # Unfortunately, unittest does not implement seek() and tell() for mock_open
+        # These functions are critical to SAM_open. Instead, we write generated SAM to disk.
+        with open(f"{resources}/tmp.sam", 'w') as f:
+            f.write(content)
+
     # === TESTS ===
 
-    """Did SAM_reader correctly skip header values and parse all pertinent info from a single record SAM file?"""
+    """Did SAM_reader correctly skip header values and parse all pertinent info from 
+    an uncollapsed single record SAM file?"""
 
     def test_sam_reader(self):
-        sam_record = next(read_SAM(self.short_sam_file))
+        file = self.make_single_sam(name="uncollapsed")
+        reader = SAM_reader(file)
+        sam_record = next(iter(reader.read()))
 
+        self.assertEqual(sam_record.read.name, "0_count=1")  # Name is converted to collapsed style
         self.assertEqual(sam_record.iv, HTSeq.GenomicInterval("I", 15064569, 15064590, '-'))
-        self.assertEqual(sam_record.read.name, "read_id")
         self.assertEqual(sam_record.read.seq, b"CAAGACAGAGCTTCACCGTTC")
         self.assertEqual(sam_record.read.len, 21)
+
+    """Did SAM_reader correctly read a multi-line uncollapsed SAM file?"""
+
+    def test_sam_reader_multi(self):
+        file = f"{resources}/hts_parsing/test_aligned.sam"
+        reader = SAM_reader(file)
+
+        for record in reader.read():
+            print(str(record) + " " + str(record.read))
 
     """Does the alignment object construct and retain expected attributes and structure?"""
 
@@ -64,7 +101,7 @@ class MyTestCase(unittest.TestCase):
     # Todo: move all referenced .sam files to a more appropriate (and available) testdata folder
     def test_sam_parser_comparison(self):
         file = "./run_directory/Lib304_test_aligned_seqs.sam"
-        ours = read_SAM(file)
+        ours = SAM_reader(file).read()
         theirs = HTSeq.BAM_Reader(file)
 
         for our, their in zip(ours, theirs):

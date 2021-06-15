@@ -8,7 +8,7 @@ from unittest.mock import patch, mock_open, call, MagicMock
 
 import tests.unit_test_helpers as helpers
 import aquatx.srna.counter as counter
-from aquatx.srna.hts_parsing import Alignment, read_SAM
+from aquatx.srna.hts_parsing import Alignment, SAM_reader
 
 resources = "./testdata/counter"
 
@@ -22,7 +22,7 @@ class CounterTests(unittest.TestCase):
         self.short_gff = helpers.read(self.short_gff_file)
 
         self.sam_file = f"{resources}/identity_choice_test.sam"
-        self.short_sam_file = f"{resources}/single.sam"
+        self.short_sam_file = f"{resources}/single_inflated.sam"
         self.short_sam = helpers.read(self.short_sam_file)
 
         self.strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
