@@ -20,6 +20,13 @@ Alias = dict
 
 
 class Alignment:
+    """The data structure in which parsed SAM alignments are stored.
+
+    Strand-non-specific 5' end nucleotide is stored for efficient lookup. This
+    allows us to skip performing full reverse complement of sequences aligned
+    to the antisense strand.
+    """
+
     complement = {ord('A'): 'T', ord('T'): 'A', ord('G'): 'C', ord('C'): 'G'}
 
     class Sequence:
@@ -45,6 +52,8 @@ class Alignment:
 
 
 def read_SAM(file):
+    """A minimal SAM parser which only handles data relevant to the workflow, for performance."""
+
     with open(file, 'rb') as f:
         line = f.readline()
 
@@ -151,6 +160,7 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
             except KeyError as ke:
                 raise ValueError(f"Feature {row.name} does not contain a {ke} attribute in {file}")
 
+            # Todo: ensure the second part of this condition is sound (since list, shouldn't check "in" instead of ==?)...
             if feature_id in attrs and row_attrs != attrs[feature_id]:
                 # If an attribute record already exists for this feature, and this row provides new attributes,
                 #  append the new attribute values to the existing values

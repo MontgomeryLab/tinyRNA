@@ -3,7 +3,6 @@ import argparse
 import csv
 import os
 
-from ruamel.yaml.comments import CommentedMap
 from pkg_resources import resource_filename
 from datetime import datetime
 from typing import Union, Any
@@ -60,7 +59,7 @@ class ConfigBase:
             self.set_if_not(key, val)
 
     def append_to(self, key: str, val: Any) -> list:
-        """Append a list-type setting (per-file settings)"""
+        """Append a list-type setting (per-library settings)"""
         target = self[key]
         if type(target) is list:
             target.append(val)
@@ -81,26 +80,25 @@ class ConfigBase:
         """Returns everything from path except the file extension"""
         return os.path.splitext(path)[0]
 
-    # todo: calling os.abspath on a relative path uses the cwd of the script
     @staticmethod
     def joinpath(path1: str, path2: str) -> str:
         """Combines two relative paths intelligently"""
         if os.path.isabs(path2): return path2
-        # path2 = os.path.abspath(path2)
         return os.path.normpath(os.path.join(path1, path2))
 
     @staticmethod
     def cwl_file(file: str) -> dict:
-        """Returns a file input/output specification for the CWL config"""
+        """Returns a minimal File object as defined by CWL"""
         # Todo: validate that file exists at this step
         return {'class': 'File', 'path': file}
 
     @staticmethod
     def cwl_dir(dir: str) -> dict:
-        """Returns a directory specificaion for the CWL config"""
+        """Returns a minimal Directory object as defined by CWL"""
         return {'class': 'Directory', 'path': dir}
 
     def from_here(self, destination: str, origin: str = None):
+        """Calculates paths relative to the input config file"""
         origin = self.dir if origin is None else origin
         return self.joinpath(origin, destination)
 
@@ -121,6 +119,12 @@ class ConfigBase:
         if filename is None: filename = self.get_outfile_path(self.inf)
 
         with open(filename, 'w') as outconf:
+            if not os.path.isabs(self['paths_config']):
+                # Processed config will be written to the Run Directory
+                # Ensure paths_config is an absolute path so it remains valid
+                self['paths_config'] = self.from_here(self['paths_config'])
+
+            print("Writing processed run configuration file to:\n" + filename)
             self.yaml.dump(self.config, outconf)
 
         return filename
@@ -129,10 +133,12 @@ class ConfigBase:
 class Configuration(ConfigBase):
     """A class for processing and updating a YAML config file for CWL
 
-    Ultimately, this class populates pipeline settings and per-file settings for pipeline steps.
-    Per-file settings are determined by samples.csv, features.csv, and the input config file.
-    Paths provided in these three files are evaluated relative to the given file.
-    Absolute paths may also be supplied.
+    Ultimately, this class populates workflow settings and per-library settings. This
+    is a convenience to the user as it is tedious to define inputs and outputs pertaining
+    to each workflow step. Settings are determined by the Paths, Samples, and Features Sheets.
+    Users may provide both relative and absolute paths
+
+    IMPORTANT: Paths provided in any config file are evaluated relative to the containing config file.
 
     Attributes:
         paths: the configuration object from processing the paths_config file.
@@ -141,7 +147,7 @@ class Configuration(ConfigBase):
     """
 
     def __init__(self, config_file: str):
-        # Parse YAML run configuration file
+        # Parse YAML configuration file
         super().__init__(config_file)
 
         self.paths = self.load_paths_config()
@@ -154,10 +160,13 @@ class Configuration(ConfigBase):
         self.process_feature_sheet()
         
     def load_paths_config(self):
+        """Constructs a sub-configuration object containing workflow file preferences"""
         path_sheet = self.from_here(self['paths_config'])
         return ConfigBase(path_sheet)
 
     def process_paths_sheet(self):
+        """Loads the paths of all related config files and workflow inputs"""
+
         def to_cwl_file_class(input_file_path):
             path_to_input = self.paths.from_here(input_file_path)
             return self.cwl_file(path_to_input)
@@ -165,7 +174,7 @@ class Configuration(ConfigBase):
         self['ebwt'] = self.paths['ebwt']
         self['run_directory'] = self.paths.from_here(self.paths['run_directory'])
 
-        # Configurations that need to be converted from string to a CWL File class object
+        # Configurations that need to be converted from string to a CWL File object
         self['samples_csv'] = to_cwl_file_class(self.paths.from_here(self.paths['samples_csv']))
         self['features_csv'] = to_cwl_file_class(self.paths.from_here(self.paths['features_csv']))
         self['reference_genome_files'] = [
@@ -214,7 +223,7 @@ class Configuration(ConfigBase):
                 self.append_if_absent('gff_files', self.cwl_file(gff_file))
             
     def setup_per_file(self):
-        """Per-file settings lists to be populated by entries from samples_csv"""
+        """Per-library settings lists to be populated by entries from samples_csv"""
 
         self.set_default_dict({per_file_setting_key: [] for per_file_setting_key in
             ['un', 'in_fq', 'out_fq', 'uniq_seq_prefix', 'gff_files', 'outfile', 'report_title', 'json', 'html']
@@ -224,18 +233,18 @@ class Configuration(ConfigBase):
         """Overall settings for the whole pipeline"""
 
         self.dt = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        default_prefix = '_'.join(x for x in [self.dt, self['user'], "aquatx"] if x)
         self.set_default_dict({
-            'run_prefix': default_prefix,
-            'output_prefix': self['run_prefix'],  # set_default_dict({}) is item-by-item, insertion order
             'run_date': self.dt.split('_')[0],
             'run_time': self.dt.split('_')[1]
         })
 
+        default_run_name = '_'.join(x for x in [self['user'], "aquatx"] if x)
+        self['run_name'] = self.get('run_name', default=default_run_name) + "_" + self.dt
+
         # Create prefixed Run Directory name
-        run_dir_abs = os.path.abspath(self.paths.from_here(self.get('run_directory', default='run_directory')))
-        run_dir_parent = os.path.dirname(run_dir_abs)
-        run_dir_withdt = default_prefix + '_' + os.path.basename(run_dir_abs)
+        run_dir_resolved = self.paths.from_here(self.get('run_directory', default='run_directory'))
+        run_dir_parent = os.path.dirname(run_dir_resolved)
+        run_dir_withdt = self['run_name'] + '_' + os.path.basename(run_dir_resolved)
         self['run_directory'] = self.joinpath(run_dir_parent, run_dir_withdt)
 
         self.extras = resource_filename('aquatx', 'extras/')
@@ -251,7 +260,7 @@ class Configuration(ConfigBase):
                 raise ValueError(f"If {self.basename} contains 'run_bowtie_build: True', you "
                                  f"need to provide your reference genome files in {self.paths.basename}")
 
-            # Outputs are saved in Run Directory, prefix is simply the first genome file's basename without extension
+            # Outputs are saved in {run_directory}/bowtie-build, within which prefix is first genome file's basename
             first_genome_file = self.paths.from_here(self['reference_genome_files'][0]['path'])
             bt_index_prefix = self.prefix(os.path.join(
                 self['run_directory'], "bowtie-build", os.path.basename(first_genome_file))

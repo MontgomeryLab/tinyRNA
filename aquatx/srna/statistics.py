@@ -38,6 +38,8 @@ class LibraryStats:
         self.alignments = []
 
     def count_bundle(self, aln_bundle: iter) -> Bundle:
+        """Called for each multiple-alignment bundle before it is processed"""
+
         bundle_read = aln_bundle[0].read
         loci_counts = len(aln_bundle)
 
@@ -52,6 +54,8 @@ class LibraryStats:
         return self.Bundle(loci_counts, read_counts, corr_counts)
 
     def count_bundle_alignments(self, bundle: Bundle, aln: Alignment, assignments: set) -> None:
+        """Called for each alignment for each read"""
+
         assigned_count = len(assignments)
 
         if assigned_count == 0:
@@ -76,6 +80,8 @@ class LibraryStats:
             self.record_alignment_details(aln, bundle, assignments)
 
     def finalize_bundle(self, bundle: Bundle) -> None:
+        """Called at the conclusion of processing each multiple-alignment bundle"""
+
         assignment_count = len(bundle.assignments)
 
         if assignment_count == 0:
@@ -91,8 +97,9 @@ class LibraryStats:
     def record_alignment_details(self, aln, bundle, assignments):
         """Record detailed alignment info if user elects to save intermediate files
 
-        This is called once per locus per read (every alignment). The recorded information is later
-        written to {library['Name']}_aln_table.txt after the entire SAM file has been processed."""
+        This is called once per locus per read (every alignment) when the user elects to save
+        intermediate files. The recorded information is later written to {library['Name']}_aln_table.txt
+        after the entire SAM file has been processed."""
 
         # Perform reverse complement for anti-sense reads
         read = aln.read.seq \
@@ -104,7 +111,7 @@ class LibraryStats:
                                 ';'.join(assignments)))
 
     def write_intermediate_file(self) -> None:
-        """Write the recorded alignment info to the corresponding logfile for this library
+        """Write all recorded alignment info for this library to its corresponding alignment table
 
         This is called once per library after the entire SAM file has been processed."""
 
@@ -153,17 +160,19 @@ class SummaryStats:
     def write_feat_counts(self, alias: dict, prefix: str) -> None:
         """Writes selected features and their associated counts to {prefix}_out_feature_counts.csv
 
-        The resulting table will have the following columns:
-            - Feature ID: the "ID" attribute of the
-
         If a features.csv rule defined an ID Attribute other than "ID", then the associated features will
         be aliased to their corresponding ID Attribute value and displayed in the Feature Name column, and
         the feature's true "ID" will be indicated in the Feature ID column. If multiple aliases exist for
-        a feature then they will be joined by ", " in the Feature Name column.
+        a feature then they will be joined by ", " in the Feature Name column. A Feature Class column also
+        follows.
 
-        For example, if the rule contained an ID Attribute which aliases gene1 to abc123,def456,123.456,
-        then the feature column of the output file for this feature will read:
-            abc123, def456, 123.456 	gene1
+        For example, if the rule contained an ID Attribute which aliases gene1 to abc123,def456,123.456
+        and is both ALG and CSR class, then the Feature ID, Feature Name, and Feature Class column of the
+        output file for this feature will read:
+            gene1, "abc123,def456,123.456", "ALG,CSR"
+
+        Subsequent columns represent the counts from each library processed by Counter. Column titles are
+        formatted for each library as {group}_rep_{replicate}
         """
 
         # Sort columns by title and round all counts to 2 decimal places
@@ -179,6 +188,8 @@ class SummaryStats:
         summary.to_csv(prefix + '_feature_counts.csv', index=False)
 
     def write_nt_len_mat(self, prefix: str) -> None:
+        """Writes each library's 5' end nucleotide / length matrix to its own file."""
+
         for lib_name, matrix in self.nt_len_mat.items():
             sanitized_lib_name = lib_name.replace('/', '_')
             pd.DataFrame(matrix).fillna(0).to_csv(f'{prefix}_{sanitized_lib_name}_nt_len_dist.csv')
@@ -190,6 +201,7 @@ class SummaryStats:
         self.lib_stats_df[other.library["Name"]] = self.lib_stats_df.index.map(other.library_stats)
         self.nt_len_mat[other.library["Name"]] = other.nt_len_mat
 
+        # Process pipeline step outputs for this library, if they exist, to provide Summary Statistics
         if self.report_summary_statistics and self.library_has_pipeline_outputs(other):
             mapped_seqs = other.library_stats["Total Assigned Sequences"] + other.library_stats["Total Unassigned Sequences"]
             aligned_reads = other.library_stats["Total Assigned Reads"]
@@ -225,6 +237,8 @@ class SummaryStats:
 
     @staticmethod
     def get_fastp_stats(other: LibraryStats) -> Tuple[Union[int,str], Union[int,str]]:
+        """Determine the total number of reads for this library, and the total number retained by fastp"""
+
         try:
             with open(other.library['fastp_log'], 'r') as f:
                 fastp_summary = json.load(f)['summary']
@@ -240,6 +254,8 @@ class SummaryStats:
 
     @staticmethod
     def get_collapser_stats(other: LibraryStats) -> Union[int, str]:
+        """Determine the total number of unique sequences (after quality filtering) in this library"""
+
         with open(other.library['collapsed'], 'r') as f:
             # Get file size and seek to 75 bytes from end
             size = f.seek(0, 2)
@@ -261,5 +277,6 @@ class SummaryStats:
 
     @staticmethod
     def sort_cols_and_round(df: pd.DataFrame) -> pd.DataFrame:
+        """Convenience function to sort columns by title and round all values to 2 decimal places"""
         sorted_columns = sorted(df.columns)
         return df.round(decimals=2).reindex(sorted_columns, axis="columns")

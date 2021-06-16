@@ -92,7 +92,7 @@ def seq_counter(fastq_file: str, file_reader: callable = builtins.open) -> 'Orde
     return seqs
 
 
-def seq2fasta(seqs: dict, out_prefix: str, thresh: int = 0, gz: bool = False, **kwargs) -> None:
+def seq2fasta(seqs: dict, out_prefix: str, thresh: int = 0, gz: bool = False) -> None:
     """Converts a sequence count dictionary to a fasta file, with count filtering
 
     If a threshold is specified, sequences with count > thresh will be written to
@@ -112,7 +112,6 @@ def seq2fasta(seqs: dict, out_prefix: str, thresh: int = 0, gz: bool = False, **
     Args:
         seqs: A dictionary containing sequences and associated counts
         out_prefix: A prefix name for the output fasta files
-    Keyword Args:
         thresh: Sequences with count LE thresh will placed in a separate file
         gz: If true, fasta outputs will be gzip compressed
 
