@@ -22,7 +22,6 @@
 user: FirstTimer
 run_date: '2021-06-13'
 run_time: 11-15-28
-
 paths_config: ./paths.yml
 
 ##-- The label for final outputs --##
@@ -231,7 +230,8 @@ use_deseq: True
 #########################  AUTOMATICALLY GENERATED CONFIGURATIONS #########################
 #
 # Do not make any changes to the following sections. These options are automatically
-# generated using features.csv, samples.csv, paths.yml, and the above settings in this file.
+# generated using your Paths file, your Samples and Features sheets, and the above
+# settings in this file.
 #
 ###########################################################################################
 
@@ -276,6 +276,8 @@ uniq_seq_prefix: [ ]
 bt_index_files: [ ]
 # output alignment file names
 outfile: [ ]
+# logfile names
+logfile: [ ]
 # unaligned read file names
 un: [ ]
 

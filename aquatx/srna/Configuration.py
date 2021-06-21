@@ -124,7 +124,6 @@ class ConfigBase:
                 # Ensure paths_config is an absolute path so it remains valid
                 self['paths_config'] = self.from_here(self['paths_config'])
 
-            print("Writing processed run configuration file to:\n" + filename)
             self.yaml.dump(self.config, outconf)
 
         return filename
@@ -204,6 +203,7 @@ class Configuration(ConfigBase):
 
                 self.append_to('out_fq', sample_basename + '_cleaned.fastq')
                 self.append_to('outfile', sample_basename + '_aligned_seqs.sam')
+                self.append_to('logfile', sample_basename + '_alignment_log.log')
                 self.append_to('un', sample_basename + '_unaligned_seqs.fa')
                 self.append_to('json', sample_basename + '_qc.json')
                 self.append_to('html', sample_basename + '_qc.html')
@@ -226,7 +226,7 @@ class Configuration(ConfigBase):
         """Per-library settings lists to be populated by entries from samples_csv"""
 
         self.set_default_dict({per_file_setting_key: [] for per_file_setting_key in
-            ['un', 'in_fq', 'out_fq', 'uniq_seq_prefix', 'gff_files', 'outfile', 'report_title', 'json', 'html']
+            ['un', 'in_fq', 'out_fq', 'uniq_seq_prefix', 'gff_files', 'outfile', 'logfile', 'report_title', 'json', 'html']
         })
             
     def setup_pipeline(self):
@@ -291,8 +291,9 @@ class Configuration(ConfigBase):
 
         # Get input config file
         parser = argparse.ArgumentParser()
-        parser.add_argument('-i', '--input-file', metavar='CONFIG', required=True,
-                            help="Input file")
+        required_group = parser.add_argument_group("required arguments")
+        required_group.add_argument('-i', '--input-file', metavar='CONFIG', required=True,
+                            help="The Run Config file to be processed")
 
         args = parser.parse_args()
         Configuration(args.input_file).write_processed_config()
