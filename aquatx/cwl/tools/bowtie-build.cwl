@@ -71,6 +71,12 @@ inputs:
       prefix: --seed
     doc: "seed for random number generator"
 
+  threads:
+    type: int?
+    inputBinding:
+      position: 18
+      prefix: --threads
+
 outputs:
   index_files:
     type: File[]

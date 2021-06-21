@@ -12,6 +12,7 @@ inputs:
 
   # multi input
   threads: int?
+  run_name: string
 
   # bowtie build
   run_bowtie_build: boolean
@@ -53,6 +54,7 @@ inputs:
   bt_index_files: File[]
   ebwt: string
   outfile: string[]
+  logfile: string[]
   fastq: boolean?
   fasta: boolean?
   trim5: int?
@@ -72,7 +74,6 @@ inputs:
   shared_memory: boolean?
 
   # counter inputs
-  output_prefix: string
   samples_csv: File
   features_csv: File
   intermed_file: boolean?
@@ -93,11 +94,12 @@ steps:
       ntoa: ntoa
       noref: noref
       ftabchars: ftabchars
+      threads: threads
     out: [index_files]
 
   counts-prep:
     run: per-library.cwl
-    scatter: [in_fq, out_fq, json, html, report_title, uniq_seq_prefix, outfile, un]
+    scatter: [in_fq, out_fq, json, html, report_title, uniq_seq_prefix, outfile, logfile, un]
     scatterMethod: dotproduct
     in:
       # fastp
@@ -134,6 +136,7 @@ steps:
         pickValue: first_non_null
       ebwt: ebwt
       outfile: outfile
+      logfile: logfile
       fastq: fastq
       fasta: fasta
       trim5: trim5
@@ -151,7 +154,7 @@ steps:
       threads: threads
       shared_memory: shared_memory
       seed: seed
-    out: [fastq_clean, html_report_file, json_report_file, uniq_seqs, uniq_seqs_low, aln_seqs, unal_seqs]
+    out: [fastq_clean, html_report_file, json_report_file, uniq_seqs, uniq_seqs_low, aln_seqs, unal_seqs, bowtie_log]
 
   subdirs:
     run: organize-outputs.cwl
@@ -167,6 +170,8 @@ steps:
         source: counts-prep/uniq_seqs_low
         pickValue: all_non_null
       bowtie_sam: counts-prep/aln_seqs
+      bowtie_log: counts-prep/bowtie_log
+
       bowtie_unal:
         # Necessary since this is an optional output
         source: counts-prep/unal_seqs
@@ -180,7 +185,7 @@ steps:
       gff_files: gff_files
       samples_csv: samples_csv
       config_csv: features_csv
-      out_prefix: output_prefix
+      out_prefix: run_name
       intermed_file: intermed_file
       fastp_logs: counts-prep/json_report_file
       collapsed_fa: counts-prep/uniq_seqs

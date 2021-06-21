@@ -27,6 +27,7 @@ inputs:
   collapser_low: File[]?
 
   bowtie_sam: File[]
+  bowtie_log: File[]
   bowtie_unal: File[]?
 
 steps:
@@ -62,7 +63,7 @@ steps:
     run: ../tools/make-subdir.cwl
     in:
       dir_files:
-        source: [ bowtie_sam, bowtie_unal ]
+        source: [ bowtie_sam, bowtie_unal, bowtie_log ]
         linkMerge: merge_flattened
       dir_name: { default: "bowtie" }
     out: [ subdir ]
