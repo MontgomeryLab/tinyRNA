@@ -1,4 +1,4 @@
-Input FastQ/A Files,Sample/Group Name,Replicate number
+Input FASTQ Files,Sample/Group Name,Replicate number
 ../../../../START_HERE/sample_data/Lib303_test.fastq,N2,1
 ../../../../START_HERE/sample_data/Lib304_test.fastq,N2,2
 ../../../../START_HERE/sample_data/Lib305_test.fastq,N2,3

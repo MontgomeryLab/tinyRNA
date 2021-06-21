@@ -42,7 +42,7 @@ class CounterTests(unittest.TestCase):
         if type == "features.csv":
             header = "\uFEFFID Attribute,Attribute Key,Attribute Value,Hierarchy,Strand (sense/antisense/both),5' End Nucleotide,Length,Match,Feature Source"
         elif type == "samples.csv":
-            header = "\uFEFFInput FastQ/A Files,Sample/Group Name,Replicate number"
+            header = "\uFEFFInput FASTQ Files,Sample/Group Name,Replicate number"
 
         return '\n'.join([header, *map(','.join, rows)])
     
