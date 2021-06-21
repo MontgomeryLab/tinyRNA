@@ -73,6 +73,8 @@ conda env create -f environment.yml
 ```
 
 ## Usage
+If you'd like to jump right in and start using AQuATx, see our [tutorial](./START_HERE/TUTORIAL.md).
+
 You may execute the workflow in its entirety for a full end-to-end analysis pipeline, or you may choose to execute individual steps on their own. In most cases you will use the `aquatx` command for pipeline level operations, including running the pipeline.
 
 ### Configuration Files
@@ -92,7 +94,7 @@ The pipeline revolves around a configuration file to make it easy to set up and 
 
 #### Paths File
 
-The locations of pipeline file inputs are defined in the Paths file. This `YAML` file includes your Samples and Features Sheets, in addition to your bowtie index prefix (optional) and the final run directory name. The final run directory will contain all pipeline outputs, and is therefore recreated and prepended with the current date and time of each run to keep outputs separate.
+The locations of pipeline file inputs are defined in the Paths file. This `YAML` file includes your Samples and Features Sheets, in addition to your bowtie index prefix (optional) and the final run directory name. The final run directory will contain all pipeline outputs, and is therefore recreated and prepended with the `run_name` and current date and time of each run to keep outputs separate.
 
 #### Samples Sheet
 
@@ -120,6 +122,7 @@ The pipeline accepts the following formats:
   1. Reference annotations must be in GFF3
      - Each feature must have an attributes column which defines its `ID` and `Class` (case-sensitive)
      - Each feature's `ID` attribute must be unique
+     - All features must be stranded
      - Attribute values which contain commas will be parsed as lists
   2. Library files must be FASTQ(.gz) <sup>*</sup>
   3. Reference genome files must be FASTA
@@ -263,8 +266,8 @@ See the [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. To see what is active
 
 ## Authors
 
-* **Kristen Brown** - Colorado State University - 2018-2019 - [biokcb](https://github.com/biokcb)
-* **Alex Tate** - Colorado State University - 01/2021-present - [AlexTate](https://github.com/AlexTate)
+* **Kristen Brown** - 2018-2019 - Colorado State University - [biokcb](https://github.com/biokcb)
+* **Alex Tate** - 01/2021-present - Colorado State University - [AlexTate](https://github.com/AlexTate)
 
 See also the list of [contributors](https://github.com/MontgomeryLab/aquatx-srna/contributors) who participated in this project.
 
