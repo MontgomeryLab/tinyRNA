@@ -37,6 +37,9 @@ class ConfigBase:
     def __setitem__(self, key: str, val: Union[str, list, dict, bool]) -> Union[str, list, dict, bool]:
         return self.set(key, val)
 
+    def __contains__(self, key: str) -> bool:
+        return key in self.config
+
     def get(self, key: str, default=None) -> Any:
         return self.config.get(key, default)
 
@@ -119,7 +122,7 @@ class ConfigBase:
         if filename is None: filename = self.get_outfile_path(self.inf)
 
         with open(filename, 'w') as outconf:
-            if not os.path.isabs(self['paths_config']):
+            if 'paths_config' in self and not os.path.isabs(self['paths_config']):
                 # Processed config will be written to the Run Directory
                 # Ensure paths_config is an absolute path so it remains valid
                 self['paths_config'] = self.from_here(self['paths_config'])
@@ -269,7 +272,7 @@ class Configuration(ConfigBase):
             self['ebwt'] = self.paths['ebwt'] = bt_index_prefix
 
             # Finally, update user's paths file with the new prefix
-            # self.paths.write_processed_config(self.paths.inf)
+            self.paths.write_processed_config(self.paths.inf)
         else:
             # bowtie-build should only run if 'run_bowtie_build' is True AND ebwt (index prefix) is undefined
             self['run_bowtie_build'] = False
