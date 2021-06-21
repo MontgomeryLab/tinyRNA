@@ -92,7 +92,7 @@ The pipeline revolves around a configuration file to make it easy to set up and 
 
 #### Paths File
 
-The locations of pipeline file inputs are defined in the Paths file. This `YAML` file includes your Samples and Features Sheets, in addition to your bowtie index prefix (optional) and the final run directory name. The final run directory will contain all pipeline outputs, and is therefore recreated and prepended with the current date and time of each run to keep outputs separate.
+The locations of pipeline file inputs are defined in the Paths file. This `YAML` file includes your Samples and Features Sheets, in addition to your bowtie index prefix (optional) and the final run directory name. The final run directory will contain all pipeline outputs, and is therefore recreated and prepended with the `run_name` and current date and time of each run to keep outputs separate.
 
 #### Samples Sheet
 
