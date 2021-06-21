@@ -59,6 +59,7 @@ Rules can be broken down into two parts: selection parameters for feature attrib
 ### Feature Attribute Parameters
 | Attribute Key | Attribute Value | Hierarchy |
 | --- | --- | --- |
+
 The first round of selection is performed using this portion of the rule. Each rule must be assigned a hierarchy value, which is applies only to this round of selection. A lower hierarchy value indicates higher selection preference and rules may share hierarchy values.
 
 Each feature associated with a read-locus pair will be examined to see if its attributes contain the key-value pairs defined in your rules list. If multiple features match, then elimination will be performed using the hierarchy values of the rules they matched. The feature-rule pair(s) with the lowest hierarchy value will be selected for a second round of elimination. Internally, these matches are represented as `(hierarchy, rule, feature)` tuples which we call _hits_.
@@ -70,6 +71,7 @@ A feature may match multiple rules. When this happens, a _hit_ is produced for e
 ### Read Attribute Parameters
 | Strand | 5' End Nucleotide | Length | Match |
 | --- | --- | --- | --- |
+
 The second round of selection switches to attributes of the read to which features are being assigned. Recall that the first round of selection yields a list of _hits_. Now, only the rules contained in this list of _hits_ are used for selection. Contrast this with the first round in which the key-value pairs of all rules were considered.
 
 #### Strand
@@ -82,6 +84,7 @@ Valid values are `Partial` and `Full`
 | --- | :---: | :---: | :---: | :---: |
 | 5' end nt | X | X |  | X |
 | Length | X | X | X | X |
+
 Examples:
 - **Single**: `G` or `22`
 - **List**: `C,G,U` or `25, 26` (spaces do not matter)
