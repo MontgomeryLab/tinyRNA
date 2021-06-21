@@ -20,7 +20,7 @@ run_directory: run_directory
 ######-------------------------------- BOWTIE-BUILD ---------------------------------######
 #
 # To build bowtie indexes:
-#   1. Your run configuration file (run_config.yml) must contain run_bowtie_build: true
+#   1. Your Run Config file must contain run_bowtie_build: true
 #   2. Your reference genome file(s) must be listed under reference_genome_files (below)
 #   3. ebwt (below) must be an empty string, or ''
 #
@@ -39,4 +39,3 @@ ebwt: ''
 ##-- One file per line, with "- " at the beginning (think: bulleted list) --##
 reference_genome_files:
 - ./reference_data/chr1.fa
-
