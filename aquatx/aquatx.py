@@ -184,8 +184,9 @@ def setup_cwl(aquatx_cwl_path: str, config_file: str) -> None:
     if config_file not in ('None', 'none'):
         # Set up the config file
         print("Processing configuration file...")
-        processed_config_location = Configuration(config_file).write_processed_config()
-        print("The processed configuration file is located at: " + processed_config_location)
+        outfile_name = "processed_" + os.path.basename(config_file)
+        Configuration(config_file).write_processed_config(filename=outfile_name)
+        print("The processed configuration file is located at: " + outfile_name)
 
     # Copy the entire cwl directory to the current working directory
     shutil.copytree(aquatx_cwl_path, os.getcwd() + "/cwl/")
