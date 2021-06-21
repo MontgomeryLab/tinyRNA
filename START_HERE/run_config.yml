@@ -69,12 +69,12 @@ ftabchars: ~
 
 ######---------------------TRIMMING AND QUALITY FILTER OPTIONS ----------------------######
 #
-# We use the program fastp to perform: adapter trimming (req), quality filtering (on), 
+# We use the program fastp to perform: adapter trimming (req), quality filtering (on),
 # and QC analysis for an output QC report. See https://github.com/OpenGene/fastp for more
 # information on the fastp tool. We have limited the options available to those appropriate
 # for small RNA sequencing data. If you require an addition option, create an issue on the
 # pipeline github: https://github.com/MontgomeryLab/aquatx-srna
-# 
+#
 # We have specified default parameters for small RNA data based on our own "best practices".
 # You may change the parameters here.
 #
@@ -83,7 +83,7 @@ ftabchars: ~
 
 ##-- Adapter sequence to trim --##
 adapter_sequence: 'auto'
- 
+
 ##-- Minumum & maximum accepted lengths after trimming --##
 length_required: 15
 length_limit: 30
@@ -212,8 +212,8 @@ intermed_file: False
 ######----------------------- ! NOT CURRENTLY IMPLEMENTED ! ------------------------######
 #
 # NORMALIZATION AND STATISTICS OPTIONS
-# We use a custom Python script for read normalization and statistical analysis 
-# (differential gene expression) based on statistical methods developed in [ref]. If you 
+# We use a custom Python script for read normalization and statistical analysis
+# (differential gene expression) based on statistical methods developed in [ref]. If you
 # do not want to use this method and would prefer to use a method such as DESeq2 in R,
 # set use_smrna_stats to False and your output will end at the counts step.
 #

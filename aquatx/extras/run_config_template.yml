@@ -1,45 +1,46 @@
 ######----------------------------- AQuATx Configuration -----------------------------######
 #
-# For reproducibility purposes, if you do not rename this file, we will make a copy
-# with current run time and date information. 
-# 
-# Please rename this file with identifying information for provenance.
-# If you would like to add run time information, you may add it here.
+# In this file you may specify your configuration preferences for the workflow and
+# each workflow step.
 #
+# If you want to use DEFAULT settings for the workflow, all you need to do is provide the path
+# to your Samples Sheet and Features Sheet in your Paths file, then make sure that the
+# 'paths_config' setting below points to your Paths file.
 #
+# We suggest that you also:
+#   1. Add a username to identify the person performing runs, if desired for record keeping
+#   2. Add a run directory name in your Paths file. If not provided, "run_directory" is used
+#   3. Add a run name to label your run directory and run-specific summary reports.
+#      If not provided, user_aquatx will be used.
 #
-# 1. Add a username here to identify the person creating the runs, if desired for record keeping
-# 2. Please add a final run directory to store files - otherwise it will be generated based on
-#    initial run time and date (with added option username). 
-# 3. Please add a final run output prefix to label run-specific summary reports - otherwise
-#    it will be generated based on initial run time and date (with added optional username).
+# This file will be further processed at run time to generate the appropriate pipeline
+# settings for each workflow step. A copy of this processed configuration will be stored
+# in your run directory (as specified by your Paths configuration file).
 #
 ######-------------------------------------------------------------------------------######
 
 user: ~
-run_prefix: ~
 run_date: ~
 run_time: ~
+paths_config: ../../START_HERE/paths.yml
 
-paths_config: '../../START_HERE/paths.yml'
+##-- The label for final outputs --##
+##-- If none provided, the default of user_aquatx will be used --##
+run_name: my_first_run
+
+##-- If True: run bowtie-build before analyzing libraries --##
+##-- NOTE: this option may be ignored depending on your Paths file. See Paths file. --##
+run_bowtie_build: True
+
+##-- Number of threads to use when a step supports multi-threading --##
+##-- For best performance, this should be equal to your computer's processor core count --##
+threads: 2
 
 ##-- (EXPERIMENTAL) If True: process each sample library in parallel --##
-##-- If run_native is False, the Toil CWL runner will be used --##
 run_parallel: False
 
-##-- (EXPERIMENTAL) If True: execute the pipeline using native cwltool python rather than command line --##
+##-- (EXPERIMENTAL) If True: execute the pipeline using native cwltool Python --##
 run_native: False
-
-##-- Final output file prefixes for overall run --##
-##-- If none given, run_prefix is used (default: date_time_aquatx) --##
-output_prefix: ~
-
-##-- If True: run bowtie-build before analyzing libraries. --##
-##-- NOTE: this option will be ignored if you do not provide ref genome file(s) in your paths config --##
-run_bowtie_build: False
-
-##-- Number of threads for multi-threaded programs --##
-threads: 2
 
 ######------------------------- BOWTIE INDEX BUILD OPTIONS --------------------------######
 #
@@ -72,7 +73,7 @@ ftabchars: ~
 # and QC analysis for an output QC report. See https://github.com/OpenGene/fastp for more
 # information on the fastp tool. We have limited the options available to those appropriate
 # for small RNA sequencing data. If you require an addition option, create an issue on the
-# pipeline github: https://github.com/biokcb/smallRNA/issues
+# pipeline github: https://github.com/MontgomeryLab/aquatx-srna
 # 
 # We have specified default parameters for small RNA data based on our own "best practices".
 # You may change the parameters here.
@@ -99,31 +100,32 @@ n_base_limit: 1
 ##-- Compression level for gzip output --##
 compression: 4
 
-###-- Unused option inputs: Remove '#' in front to use --###
+###-- Unused optional inputs: Remove '#' in front to use --###
 ##-- Trim poly x tails of a given length --##
-#trim_poly_x: false
-#poly_x_min_len: 0
+# trim_poly_x: false
+# poly_x_min_len: 0
 
 ##-- Is the data phred 64? --##
-#fp_phred64: False
+# fp_phred64: False
 
 ##-- Turn on overrepresentation sampling analysis --##
-#overrepresentation_sampling: 0 
-#overrepresentation_analysis: false
+# overrepresentation_sampling: 0
+# overrepresentation_analysis: false
 
 ##-- If true: don't overwrite the files --##
-#dont_overwrite: false
+# dont_overwrite: false
 
 ##-- If true: disable these options --##
-#disable_quality_filtering: false
-#disable_length_filtering: false
-#disable_adapter_trimming: false
+# disable_quality_filtering: false
+# disable_length_filtering: false
+# disable_adapter_trimming: false
 
 
 ######--------------------------- READ COLLAPSER OPTIONS ----------------------------######
 #
-# We use a custom Python script for collapsing duplicate reads for now. There are only a 
-# couple options and we recommend using the default (keep all reads: threshold = 0).
+# We use a custom Python script for collapsing duplicate reads.
+# We recommend using the default (keep all reads, or threshold: 0).
+# Sequences <= threshold will not be included in downstream steps.
 #
 # We have specified default parameters for small RNA data based on our own "best practices".
 # You may change the parameters here.
@@ -167,38 +169,39 @@ fasta: True
 sam: True
 
 ##-- If True: use shared mem for index; many bowtie's can share --##
-##-- Note: this requires further configuration of your OS; see ipcs and ipcrm --#
+##-- Note: this requires further configuration of your OS --##
+##-- http://bowtie-bio.sourceforge.net/manual.shtml#bowtie-options-shmem --##
 shared_memory: False
 
 ###-- Unused option inputs: Remove '#' in front to use --###
 ##-- If true: do not align to reverse-compliment reference --##
-#norc: False
+# norc: False
 
 ##-- If True: do not align to forward reference --##
-#nofw: False
+# nofw: False
 
 ##-- If True: input quality scores are Phred64 --##
-#bt_phred64: False
+# bt_phred64: False
 
 ##-- If True: input files are fastq --##
-#fastq: False
+# fastq: False
 
 ##-- Number of alignments to report --##
-#k_aln
+# k_aln
 
 ##-- Number of bases to trim from 5' or 3' end of reads --##
-#trim5: 0
-#trim3: 0
+# trim5: 0
+# trim3: 0
 
 ##-- If True: input files are solexa or solexa 1.3 quality --##
-#solexa: false
-#solexa13: false
+# solexa: false
+# solexa13: false
 
 
 ######--------------------------- FEATURE COUNTER OPTIONS ---------------------------######
 #
-# We use a custom Python script that utilizes the HTSeq API to count small RNA reads. 
-#
+# We use a custom Python script that utilizes the HTSeq API to count small RNA reads.
+# Selection rules for feature counting are defined in your Features Sheet.
 #
 ######-------------------------------------------------------------------------------######
 
@@ -206,9 +209,10 @@ shared_memory: False
 intermed_file: False
 
 
-######---------------------- NORMALIZATION AND STATISTICS OPTIONS -------------------######
+######----------------------- ! NOT CURRENTLY IMPLEMENTED ! ------------------------######
 #
-# We use a custom Python script for read normalization and statistical analysis 
+# NORMALIZATION AND STATISTICS OPTIONS
+# We use a custom Python script for read normalization and statistical analysis
 # (differential gene expression) based on statistical methods developed in [ref]. If you 
 # do not want to use this method and would prefer to use a method such as DESeq2 in R,
 # set use_smrna_stats to False and your output will end at the counts step.
@@ -225,8 +229,9 @@ use_deseq: True
 
 #########################  AUTOMATICALLY GENERATED CONFIGURATIONS #########################
 #
-# These options are automatically generated using features.csv, samples.csv, paths.yml,
-# and the above settings in this file.
+# Do not make any changes to the following sections. These options are automatically
+# generated using your Paths file, your Samples and Features sheets, and the above
+# settings in this file.
 #
 ###########################################################################################
 
@@ -271,7 +276,9 @@ uniq_seq_prefix: [ ]
 bt_index_files: [ ]
 # output alignment file names
 outfile: [ ]
-#unaligned read file names
+# logfile names
+logfile: [ ]
+# unaligned read file names
 un: [ ]
 
 ######------------------------- DERIVED FROM FEATURES SHEET -------------------------######
