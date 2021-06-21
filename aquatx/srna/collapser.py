@@ -33,7 +33,7 @@ def get_args() -> 'argparse.NameSpace':
     # Required arguments
     required_group.add_argument(
         '-i', '--input-file', metavar='FASTQFILE', required=True, help=
-        'The input fastq file to collapse'
+        'The input fastq(.gz) file to collapse'
     )
 
     required_group.add_argument(
