@@ -26,12 +26,17 @@ def get_args():
     """Get input arguments from the user/command line."""
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input-csv', metavar='SAMPLES', required=True,
+    required_group = parser.add_argument_group("required arguments")
+
+    # Required arguments
+    required_group.add_argument('-i', '--input-csv', metavar='SAMPLES', required=True,
                         help='the csv samples file/library list')
-    parser.add_argument('-c', '--config', metavar='CONFIGFILE', required=True,
+    required_group.add_argument('-c', '--config', metavar='CONFIGFILE', required=True,
                         help='the csv features configuration file')
-    parser.add_argument('-o', '--out-prefix', metavar='OUTPUTPREFIX', required=True,
+    required_group.add_argument('-o', '--out-prefix', metavar='OUTPUTPREFIX', required=True,
                         help='output prefix to use for file names')
+
+    # Optional arguments
     parser.add_argument('-t', '--intermed-file', action='store_true',
                         help='Save the intermediate file containing all alignments and '
                              'associated features.')
