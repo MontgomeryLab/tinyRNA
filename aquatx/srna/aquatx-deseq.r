@@ -21,7 +21,7 @@ if (length(args) > 4){
        
        --input-file <count_file>
               A text file containing a table of features x samples of the run to 
-              process by DESeq2. The count output of aquatx-merge is expected here. 
+              process by DESeq2. The [...]feature_counts.csv output of aquatx-count is expected here.
       
        --outfile-prefix <outfile>
               Name of the output files to write. These will be created:
@@ -50,13 +50,16 @@ while (arg_pos <= length(args)){
 
 #### ---- Set up the parameters ---- ####
 counts <- read.csv(count_file,row.names = 1)
+# The first column (Feature ID) is absorbed as the index
+# The remaining two columns (Feature Name and Feature Class) need to be dropped
+counts <- counts[3:length(counts)]
 counts <- data.frame(sapply(counts, as.integer), row.names = rownames(counts))
 # Create a data frame matching the file, name, condition
 samples <- colnames(counts)
 condition <- rep('none', length(samples))
 for (i in 1:length(samples)){
   sample <- as.character(samples[i])
-  condition[i] <- strsplit(sample, '_replicate_')[[1]][1]
+  condition[i] <- strsplit(sample, '_rep_')[[1]][1]
 }
 
 # Create the deseqdataset

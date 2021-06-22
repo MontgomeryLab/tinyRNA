@@ -43,7 +43,7 @@ setuptools.setup(
             'aquatx-merge = aquatx.srna.merge_samples:main'
         ]
     },
-    scripts=['aquatx/srna/aquatx-deseq'],
+    scripts=['aquatx/srna/aquatx-deseq.r'],
     python_requires=REQUIRES_PYTHON,
     install_requires=REQUIRED,
     classifiers=[
