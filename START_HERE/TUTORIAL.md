@@ -56,30 +56,33 @@ sRNA research is often confounded by the fact that features of interest often ov
 
 Rules can be broken down into two parts: selection parameters for feature attributes, and selection parameters for read attributes.
 
-### Feature Attribute Parameters
+>**Important**: candidate features do not receive counts if they do not pass selection process described below
+
+## Feature Attribute Parameters
 | Attribute Key | Attribute Value | Hierarchy |
 | --- | --- | --- |
 
 The first round of selection is performed using this portion of the rule. Each rule must be assigned a hierarchy value, which is applies only to this round of selection. A lower hierarchy value indicates higher selection preference and rules may share hierarchy values.
 
-Each feature associated with a read-locus pair will be examined to see if its attributes contain the key-value pairs defined in your rules list. If multiple features match, then elimination will be performed using the hierarchy values of the rules they matched. The feature-rule pair(s) with the lowest hierarchy value will be selected for a second round of elimination. Internally, these matches are represented as `(hierarchy, rule, feature)` tuples which we call _hits_.
+Each feature associated with a read-locus (alignment) pair will be examined to see if its attributes contain the key-value pairs defined in your rules list. If multiple features match, then elimination will be performed using the hierarchy values of the rules they matched. The feature-rule pair(s) with the lowest hierarchy value will be selected for a second round of elimination. Internally, these matches are represented as `(hierarchy, rule, feature)` tuples which we call _hits_.
 
 A feature may match multiple rules. When this happens, a _hit_ is produced for each matched rule and normal hierarchical elimination is performed. This means that the product of the first round of elimination is not just a list of features, but rather feature-rule pairs in the form of _hits_.
 
 >**Tip**: These parameters are case sensitive. The capitalization in your rule must match the capitalization in your GFF files
 
-### Read Attribute Parameters
+## Read Attribute Parameters
 | Strand | 5' End Nucleotide | Length | Match |
 | --- | --- | --- | --- |
 
 The second round of selection switches to attributes of the read to which features are being assigned. Recall that the first round of selection yields a list of _hits_. Now, only the rules contained in this list of _hits_ are used for selection. Contrast this with the first round in which the key-value pairs of all rules were considered.
 
-#### Strand
+### Strand
 Valid values are `sense`, `antisense`, and `both`.
-#### Match
-Valid values are `Partial` and `Full`
-#### 5' End Nucleotide and Length
 
+### Match
+Valid values are `Partial` and `Full`. This parameter is referring to the required amount of overlap between a read alignment and a feature in order for that feature to be a candidate for selection. If a rule specifies a `Partial` Match value, then features which overlap a read alignment by at least one base will be considered for selection. If a rule specifies a `Full` Match value, then only features whose enpoints are fully contained by or equal to the read alignment will be considered for selection.
+
+### 5' End Nucleotide and Length
 | Parameter | Single | List | Range | Wildcard |
 | --- | :---: | :---: | :---: | :---: |
 | 5' end nt | X | X |  | X |
@@ -97,12 +100,15 @@ Examples:
 >**Tip:** you may specify U and T bases in your rules. Uracil bases will be converted to thymine when your Features Sheet is loaded.
 
 ### Misc
-You may specify an **ID Attribute** which will be used for the `Feature Name` column of the Feature Counts output table. The intention of this column is to provide a human-friendly name for each feature. For example, if your **ID Attribute** is `sequence_name` and gene1's `sequence_name` attribute is "abc123", then gene1's `Feature Name` column in the Feature Counts table will read "abc123"
+| ID Attribute | Feature Source |
+| --- | --- |
+
+You may specify an **ID Attribute** which will be used for the `Feature Name` column of the Feature Counts output table. The intention of this column is to provide a human-friendly name for each feature. For example, if one of your rules specifies an **ID Attribute** of `sequence_name` and gene1's `sequence_name` attribute is "abc123", then gene1's `Feature Name` column in the Feature Counts table will read "abc123"
 
 The **Feature Source** field of a rule is tied only to the **ID Attribute**; rules are _not_ partitioned on a GFF file basis, and features parsed from these GFF files are similarly not partitioned as they all go into the same lookup table without indication of source. However, the **ID Attribute** is used to build the alias table for `Feature Name` when parsing its corresponding **Feature Source**. Additionally, each GFF file is parsed only once regardless of the number of times it occurs in the Features Sheet.
 
 ### The Nitty Gritty Details
-You may encounter the following edge cases when you have more than one unique GFF file listed in your **Feature Source**s:
+You may encounter the following cases when you have more than one unique GFF file listed in your **Feature Source**s:
 - Attribute value lists are supported. Values which contain commas are treated as lists of values when parsing GFF files
 - If a feature is defined in one GFF file, then again in another but with differing attributes, then those attribute values will be appended
 - A feature may have multiple **ID Attribute**s associated with it
