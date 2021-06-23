@@ -1,10 +1,10 @@
 import numpy as np
 import HTSeq
-import time
 import sys
 import re
 
-from typing import Tuple, Set, List, Dict
+from typing import Tuple, List, Dict
+from aquatx.srna.util import report_execution_time
 
 # For parse_GFF_attribute_string()
 # Todo: I believe _re_attr_main may fail if user GFFs have escape characters, which are valid per GFF3 specification
@@ -14,7 +14,7 @@ _re_attr_empty = re.compile(r"^\s*$")
 # Type aliases for human readability
 Features = HTSeq.GenomicArrayOfSets  # interval -> set of associated features
 Attributes = Dict[str, list]  # feature -> feature attributes
-FeatureSources = Set[Tuple[str, str]]
+FeatureSources = Dict[str, list]
 SelectionRules = List[dict]
 Alias = dict
 
@@ -109,6 +109,7 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
         return attribute_dict
 
 
+@report_execution_time("GFF parsing")
 def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> Tuple[Features, Attributes, Alias]:
     """A simplified and slightly modified version of HTSeq.create_genomicarrayofsets
 
@@ -121,8 +122,6 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
     different ID attributes, the feature will
     """
 
-    start_time = time.time()
-
     # Patch the GFF attribute parser to support comma separated attribute value lists
     setattr(HTSeq.features, 'parse_GFF_attribute_string', parse_GFF_attribute_string)
 
@@ -130,24 +129,32 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
     attrs_of_interest = list(np.unique(["Class"] + [attr['Identity'][0] for attr in rules]))
 
     feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
-    attrs, alias = {}, {}
+    attrs, alias, intervals = {}, {}, {}
 
-    for file, preferred_id in gff_files:
+    for file, preferred_ids in gff_files.items():
         gff = HTSeq.GFF_Reader(file)
         for row in gff:
             if row.iv.strand == ".":
                 raise ValueError(f"Feature {row.name} in {file} has no strand information.")
 
             try:
-                # Add feature_id -> feature_interval record
                 feature_id = row.attr["ID"][0]
+
+                # If this feature_id has already been seen, make sure their intervals match
+                if feature_id in intervals and row.iv != intervals[feature_id]:
+                    raise ValueError(f"{feature_id} is being redefined under a different interval in {file}.")
+
+                # Add feature_id <-> feature_interval records
                 feats[row.iv] += feature_id
+                intervals[feature_id] = row.iv
                 row_attrs = [(interest, row.attr[interest]) for interest in attrs_of_interest]
 
-                if preferred_id != "ID":
-                    # Add feature_id -> feature_alias_tuple record
-                    # If an alias already exists for this feature, append to feature's aliases
-                    alias[feature_id] = alias.get(feature_id, ()) + row.attr[preferred_id]
+                curr_alias = alias.get(feature_id, ())
+                for pref_id in preferred_ids:
+                    if pref_id != "ID" and row.attr[pref_id] not in curr_alias:
+                        # Add feature_id -> feature_alias_tuple record
+                        # Append to feature's aliases if it does not already contain
+                        alias[feature_id] = curr_alias + row.attr[pref_id]
             except KeyError as ke:
                 raise ValueError(f"Feature {row.name} does not contain a {ke} attribute in {file}")
 
@@ -160,5 +167,4 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
             # Add feature_id -> feature_attributes record
             attrs[feature_id] = row_attrs
 
-    print("GFF parsing took %.2f seconds" % (time.time() - start_time))
     return feats, attrs, alias
