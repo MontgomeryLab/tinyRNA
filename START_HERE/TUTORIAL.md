@@ -1,8 +1,35 @@
 # Getting Started
 
-This folder (`START_HERE`) contains a working configuration and a sample input dataset derived from C. elegans chromosome 1 of Wormbase WS279. We've assembled this configuration to make it easy to start using AQuATx, and to provide a basis from which you may model your project's configuration. Make sure that you've followed the installation instructions in [README.md](../README.md#prerequisites--installation) before continuing.
+This folder (`START_HERE`) contains a working configuration and a sample input dataset derived from C. elegans chromosome 1 of Wormbase WS279. We've assembled this configuration to make it easy to start using AQuATx, and to provide a basis from which you may model your project's configuration.
 
-Here's what you'll find in this folder.
+## Installation
+
+Installation is pretty easy. You'll install AQuATx in an isolated environment so that it (and its dependencies) don't interfere with your daily. We've provided an environment file to make things simple. First, you'll need to install `conda` for managing the environment.
+
+#### 1. Install conda
+To install `conda` with the least time and disk space commitment, you can download and follow instructions for [Miniconda3](https://docs.conda.io/en/latest/miniconda.html), which contains only conda and its dependencies.
+
+#### 2. Install R & DESeq2
+Rather than installing R via conda, we recommend you install it yourself first from [CRAN](https://www.r-project.org/), then install DESeq2 following [instructions](https://bioconductor.org/packages/release/bioc/html/DESeq2.html) in Bioconductor. 
+
+#### 3a. XQuartz (mac only)
+DESeq2 is quiet about it, but if you're on a mac you'll also need to download and install [XQuartz](https://www.xquartz.org/).
+
+#### 3b. Install AQuATx
+
+To install AQuATx and its remaining dependencies:
+```
+# Clone the repository into a local directory
+git clone https://github.com/MontgomeryLab/aquatx-srna.git
+cd aquatx-srna
+
+# Install the aquatx-srna environment and dependencies
+conda env create -f environment.yml
+```
+
+## This folder
+
+Here's what you'll find:
 - **bowtie_indexes**: contains indexes for chromosome 1
 - **reference_data**: contains reference annotation and genome files for chromosome 1
 - **sample_data**: contains library fastq files (only 10k lines each for fast runs)
@@ -12,7 +39,7 @@ Here's what you'll find in this folder.
 - **samples.csv**: spreadsheet for defining library files and their associated group and replicate numbers
 
 ## First run
-All of the above files are mapped out in `run_config.yml` and the tree of configuration files that it references. Since we already have a working configuration let's run an end-to-end analysis on our sample data using the command
+All of the above files are mapped out in `run_config.yml` and the tree of configuration files that it references. Since we already have a working configuration let's run an end-to-end analysis on our sample data using the command:
 ```
 aquatx run --config run_config.yml
 ```
@@ -20,6 +47,8 @@ Did you receive "command not found"? Make sure that you activate the aquatx envi
 ```
 conda activate aquatx-srna
 ```
+And when you're done, you can close your terminal or use `conda deactivate` to return to a normal shell.
+
 ### Terminal output
 The output you see on your terminal is first from `cwltool`, which coordinates the execution of the workflow CWL, as well as the individual steps being executed.
 
@@ -46,7 +75,7 @@ When setting up for running the pipeline with your own data, you'll want to star
 > You may use relative or absolute paths in these configuration files. If you use relative paths, they will be evaluated relative to the file that contains them. This allows you to store these files in separate locations and more flexibly organize your project.
 
 ### Paths
-Next, open the Paths file. Verify that `samples_csv` and `features_csv` point to their corresponding files. This is where you will provide inputs for `bowtie-build` if you do not already have bowtie indexes for your project.
+Next, open the Paths file. This is where you will provide inputs for `bowtie-build` if you do not already have bowtie indexes for your project. Also verify that `samples_csv` and `features_csv` point to their corresponding files.
 
 ### Features and Samples Sheets
 Finally, the Samples Sheet and Features Sheet will need to be filled out with information about your library files and the selection rules for the features you wish to count. These files should be edited with a spreadsheet editor such as Microsoft Excel or LibreOffice Calc.
@@ -100,16 +129,16 @@ Examples:
 >**Tip:** you may specify U and T bases in your rules. Uracil bases will be converted to thymine when your Features Sheet is loaded.
 
 ### Misc
-| ID Attribute | Feature Source |
+| Name Attribute | Feature Source |
 | --- | --- |
 
-You may specify an **ID Attribute** which will be used for the `Feature Name` column of the Feature Counts output table. The intention of this column is to provide a human-friendly name for each feature. For example, if one of your rules specifies an **ID Attribute** of `sequence_name` and gene1's `sequence_name` attribute is "abc123", then gene1's `Feature Name` column in the Feature Counts table will read "abc123"
+You may specify a **Name Attribute** which will be used for the `Feature Name` column of the Feature Counts output table. The intention of this column is to provide a human-friendly name for each feature. For example, if one of your rules specifies a **Name Attribute** of `sequence_name` and gene1's `sequence_name` attribute is "abc123", then gene1's `Feature Name` column in the Feature Counts table will read "abc123".
 
-The **Feature Source** field of a rule is tied only to the **ID Attribute**; rules are _not_ partitioned on a GFF file basis, and features parsed from these GFF files are similarly not partitioned as they all go into the same lookup table without indication of source. However, the **ID Attribute** is used to build the alias table for `Feature Name` when parsing its corresponding **Feature Source**. Additionally, each GFF file is parsed only once regardless of the number of times it occurs in the Features Sheet.
+The **Feature Source** field of a rule is tied only to the **Name Attribute**; rules are _not_ partitioned on a GFF file basis, and features parsed from these GFF files are similarly not partitioned as they all go into the same lookup table regardless of source. However, the **Name Attribute** is used to build the alias table for `Feature Name` when parsing its corresponding **Feature Source**. Additionally, each GFF file is parsed only once regardless of the number of times it occurs in the Features Sheet.
 
 ### The Nitty Gritty Details
 You may encounter the following cases when you have more than one unique GFF file listed in your **Feature Source**s:
 - Attribute value lists are supported. Values which contain commas are treated as lists of values when parsing GFF files
 - If a feature is defined in one GFF file, then again in another but with differing attributes, then those attribute values will be appended
-- A feature may have multiple **ID Attribute**s associated with it
-- If a feature is defined in one GFF file, then again but under a different **ID Attribute**, then both aliases are retained and treated as a list. All aliases will be present in the `Feature Name` column of the Feature Counts output table. They will be comma separated.
+- A feature may have multiple **Name Attribute**s associated with it
+- If a feature is defined in one GFF file, then again but under a different **Name Attribute**, then both aliases are retained and treated as a list. All aliases will be present in the `Feature Name` column of the Feature Counts output table. They will be comma separated.
