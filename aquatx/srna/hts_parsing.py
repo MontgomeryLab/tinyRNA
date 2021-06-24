@@ -2,6 +2,7 @@ import numpy as np
 import HTSeq
 import sys
 import re
+import os
 
 from typing import Tuple, List, Dict
 from aquatx.srna.util import report_execution_time
@@ -131,6 +132,42 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
     feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
     attrs, alias, intervals = {}, {}, {}
 
+    def check_namespace(feature_id, row_iv, file):
+        # Rename feature_id if it has already been defined for another interval
+        if feature_id in intervals and row_iv != intervals[feature_id]:
+            feature_id = f"{feature_id} ({os.path.basename(file)})"
+        return feature_id
+
+    def add_feature(feature_id, row_iv):
+        feats[row_iv] += feature_id
+        intervals[feature_id] = row_iv
+        # Copy only the attributes of interest
+        return [(interest, row.attr[interest]) for interest in attrs_of_interest]
+
+    def add_alias(feature_id, row_attr):
+        curr_alias = alias.get(feature_id, ())
+        for pref_id in preferred_ids:
+            if pref_id != "ID" and row_attr[pref_id] not in curr_alias:
+                # Add feature_id -> feature_alias_tuple record
+                # Append to feature's aliases if it does not already contain
+                alias[feature_id] = curr_alias + row_attr[pref_id]
+
+    def incorporate_attributes(feature_id, row_attrs):
+        if feature_id in attrs and row_attrs != attrs[feature_id]:
+            # If an attribute record already exists for this feature, and this row provides new attributes,
+            #  append the new attribute values to the existing values
+            cur_attrs = attrs[feature_id]
+            new_attrs = []
+            for cur, new in zip(cur_attrs, row_attrs):
+                attr_key = cur[0]
+                updated_vals = set(cur[1]) | set(new[1])
+                new_attrs.append((attr_key, tuple(updated_vals)))
+
+            attrs[feature_id] = new_attrs
+        else:
+            attrs[feature_id] = row_attrs
+
+    # BEGIN main routine
     for file, preferred_ids in gff_files.items():
         gff = HTSeq.GFF_Reader(file)
         for row in gff:
@@ -139,32 +176,16 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
 
             try:
                 feature_id = row.attr["ID"][0]
-
-                # If this feature_id has already been seen, make sure their intervals match
-                if feature_id in intervals and row.iv != intervals[feature_id]:
-                    raise ValueError(f"{feature_id} is being redefined under a different interval in {file}.")
-
+                # Ensure one interval per feat ID, else rename feat ID
+                feature_id = check_namespace(feature_id, row.iv, file)
                 # Add feature_id <-> feature_interval records
-                feats[row.iv] += feature_id
-                intervals[feature_id] = row.iv
-                row_attrs = [(interest, row.attr[interest]) for interest in attrs_of_interest]
-
-                curr_alias = alias.get(feature_id, ())
-                for pref_id in preferred_ids:
-                    if pref_id != "ID" and row.attr[pref_id] not in curr_alias:
-                        # Add feature_id -> feature_alias_tuple record
-                        # Append to feature's aliases if it does not already contain
-                        alias[feature_id] = curr_alias + row.attr[pref_id]
+                row_attrs = add_feature(feature_id, row.iv)
+                # Append alias to feat if unique
+                add_alias(feature_id, row.attr)
             except KeyError as ke:
                 raise ValueError(f"Feature {row.name} does not contain a {ke} attribute in {file}")
 
-            if feature_id in attrs and row_attrs != attrs[feature_id]:
-                # If an attribute record already exists for this feature, and this row provides new attributes,
-                #  append the new attribute values to the existing values
-                cur_attrs = attrs[feature_id]
-                row_attrs = [(cur[0], cur[1] + new[1]) for cur, new in zip(cur_attrs, row_attrs)]
-
             # Add feature_id -> feature_attributes record
-            attrs[feature_id] = row_attrs
+            incorporate_attributes(feature_id, row_attrs)
 
     return feats, attrs, alias
