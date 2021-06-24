@@ -35,7 +35,7 @@ run_bowtie_build: True
 
 ##-- Number of threads to use when a step supports multi-threading --##
 ##-- For best performance, this should be equal to your computer's processor core count --##
-threads: 2
+threads: 4
 
 ##-- (EXPERIMENTAL) If True: process each sample library in parallel --##
 run_parallel: False
