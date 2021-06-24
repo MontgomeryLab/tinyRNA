@@ -80,16 +80,17 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
     """Parses a GFF attribute string and returns it as a dictionary.
 
     This is a slight modification of the same method found in HTSeq.features.
-    It has been adapted to allow features to have multiple classes, which are
-    split and stored as a tuple rather than a comma separated string. For
-    downstream compatibility with membership operations
-    (e.g. (attr_key, attr_val) in feature_candidate), non-list attribute values
-    are recorded as tuples.
+    It has been adapted to allow features to have comma separated attribute
+    value lists. For downstream compatibility with membership operations
+    (e.g. (Attribute Key, Attribute Value) rules when matching feature
+    candidates) non-list attribute values are also recorded as tuples.
 
-    If 'extra_return_first_value' is set, a pair is returned: the dictionary
-    and the value of the first attribute. This might be useful if this is the
-    ID.
+    Per the original HTSeq docstring:
+        "If 'extra_return_first_value' is set, a pair is returned: the dictionary
+        and the value of the first attribute. This might be useful if this is the
+        ID."
     """
+
     attribute_dict = {}
     first_val = "_unnamed_"
     for i, attr in enumerate(HTSeq._HTSeq.quotesafe_split(attrStr.rstrip().encode())):
@@ -119,15 +120,15 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
 
 
 def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> Tuple[Features, Attributes, Alias]:
-    """A simplified and slightly modified version of HTSeq.create_genomicarrayofsets
+    """A GFF parser which builds feature, attribute, and alias tables, with intelligent appends
 
-    This modification changes the information stored in an interval's step vector
-    within the features table. This stores (feature ID, feature type) tuples rather
-    than the feature ID alone. It also allows for cataloguing features by any attribute,
-    not just by ID, on a per GFF file basis.
-
-    Note: at this time if the same feature is defined in multiple GFF files using
-    different ID attributes, the feature will
+    Features may be defined by multiple GFF files. If multiple files offer different attributes for
+    the same feature, the unique among those attributes are appended to the record. If multiple aliases
+    (or Name Attributes, per the Features Sheet) are defined for a feature, the unique among those
+    names are appended. Each GFF file defined in the Features Sheet is parsed only once regardless of
+    the number of Name Attributes associated with it. Each feature ID may be defined for only one
+    interval; if multiple interval definitions are supplied, then these feature IDs are renamed on
+    the basis of their source GFF file.
     """
 
     start_time = time.time()
