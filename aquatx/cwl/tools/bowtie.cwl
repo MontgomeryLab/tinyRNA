@@ -8,6 +8,8 @@ requirements:
    listing: $(inputs.bt_index_files)
 
 baseCommand: bowtie
+stdout: $(inputs.logfile)
+stderr: $(inputs.logfile)
 
 # Only inputs relevant to the srna pipeline are listed
 inputs:
@@ -35,6 +37,10 @@ inputs:
     inputBinding:
       position: 19
     doc: "File to write hits to"
+
+  logfile:
+    type: string
+    doc: "File to write Bowtie's stdout and stderr streams to"
 
   fastq:
     type: boolean?
@@ -190,3 +196,6 @@ outputs:
     type: File?
     outputBinding:
       glob: $(inputs.un)
+
+  bowtie_log:
+    type: stdout

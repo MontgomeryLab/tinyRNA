@@ -38,6 +38,7 @@ inputs:
   # bowtie inputs
   bt_index_files: File[]
   ebwt: string
+  logfile: string # unscatter
   outfile: string # unscatter
   fastq: boolean?
   fasta: boolean?
@@ -101,6 +102,7 @@ steps:
       ebwt: ebwt
       reads: collapse/collapsed_fa
       outfile: outfile
+      logfile: logfile
       fastq: fastq
       fasta: fasta
       trim5: trim5
@@ -118,8 +120,10 @@ steps:
       threads: threads
       shared_memory: shared_memory
       seed: seed
-    out: [sam_out, unal_seqs]
+    out: [sam_out, unal_seqs, bowtie_log]
+
 outputs:
+
   fastq_clean:
     type: File # unscatter
     outputSource: fastp/fastq1
@@ -140,11 +144,15 @@ outputs:
     type: File # unscatter
     outputSource: bowtie/sam_out
 
+  bowtie_log:
+    type: File # unscatter
+    outputSource: bowtie/bowtie_log
+
+  # Optional outputs
   unal_seqs:
     type: File?
     outputSource: bowtie/unal_seqs
 
-  # Optional outputs
   uniq_seqs_low:
     type: File? # unscatter
     outputSource: collapse/low_counts_fa

@@ -12,7 +12,7 @@ from aquatx.srna.statistics import LibraryStats, SummaryStats
 from aquatx.srna.hts_parsing import SelectionRules, FeatureSources
 from typing import Tuple
 
-# Global variables for copy-on-write multiprocessing
+# Global variables for multiprocessing
 features: 'HTSeq.GenomicArrayOfSets' = HTSeq.GenomicArrayOfSets("auto", stranded=True)
 selector: 'FeatureSelector' = None
 is_pipeline = False
@@ -23,19 +23,20 @@ N_Candidates = int
 
 
 def get_args():
-    """
-    Get input arguments from the user/command line.
+    """Get input arguments from the user/command line."""
 
-    Requires the user provide a SAM file, a GFF file, and an output
-    prefix to save output tables and plots using.
-    """
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input-csv', metavar='SAMPLES', required=True,
+    required_group = parser.add_argument_group("required arguments")
+
+    # Required arguments
+    required_group.add_argument('-i', '--input-csv', metavar='SAMPLES', required=True,
                         help='the csv samples file/library list')
-    parser.add_argument('-c', '--config', metavar='CONFIGFILE', required=True,
+    required_group.add_argument('-c', '--config', metavar='CONFIGFILE', required=True,
                         help='the csv features configuration file')
-    parser.add_argument('-o', '--out-prefix', metavar='OUTPUTPREFIX', required=True,
+    required_group.add_argument('-o', '--out-prefix', metavar='OUTPUTPREFIX', required=True,
                         help='output prefix to use for file names')
+
+    # Optional arguments
     parser.add_argument('-t', '--intermed-file', action='store_true',
                         help='Save the intermediate file containing all alignments and '
                              'associated features.')
@@ -51,13 +52,13 @@ def get_args():
     return parser.parse_args()
 
 
-def load_samples(samples_csv: str):
-    def get_library_filename(csv_row_file, samples_csv):
+def load_samples(samples_csv: str) -> list:
+    def get_library_filename(csv_row_file: str, samples_csv: str) -> str:
         """The input samples.csv may contain either fastq or sam files"""
 
         file_ext = os.path.splitext(csv_row_file)[1].lower()
 
-        # If the sample file has a .fastq extension, infer the name of its pipeline-produced .sam file
+        # If the sample file has a fastq(.gz) extension, infer the name of its pipeline-produced .sam file
         if file_ext == ".fastq" or file_ext == ".fastq.gz":
             # Fix relative paths to be relative to sample_csv's path, rather than relative to cwd
             csv_row_file = os.path.basename(csv_row_file) if is_pipeline else get_path_from_configfile(samples_csv, csv_row_file)
@@ -88,6 +89,7 @@ def load_samples(samples_csv: str):
 
 
 def get_path_from_configfile(config_file, input_file):
+    """Calculates paths relative to the config file which contains them"""
     if not os.path.isabs(input_file):
         from_here = os.path.dirname(config_file)
         input_file = os.path.normpath(os.path.join(from_here, input_file))
@@ -133,6 +135,7 @@ def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
 
 
 def assign_features(alignment: 'parser.Alignment') -> Tuple[AssignedFeatures, N_Candidates]:
+    """Determines features associated with the interval then performs rule-based feature selection"""
 
     feat_matches, assignment = list(), set()
     iv = alignment.iv
@@ -152,6 +155,7 @@ def assign_features(alignment: 'parser.Alignment') -> Tuple[AssignedFeatures, N_
 
 
 def count_reads(library: dict, return_queue: mp.Queue, intermediate_file: bool = False, out_prefix: str = None):
+    """Collects statistics on features assigned to each alignment associated with each read"""
 
     # For complete SAM records (slower):
     # 1. Change the following line to HTSeq.BAM_Reader(sam_file)
@@ -175,11 +179,14 @@ def count_reads(library: dict, return_queue: mp.Queue, intermediate_file: bool =
     # Place results in the multiprocessing queue to be merged by parent process
     return_queue.put(stats)
 
+    # While stats are being merged, write intermediate file
     if intermediate_file:
         stats.write_intermediate_file()
 
 
 def map_and_reduce(libraries, work_args, ret_queue):
+    """Assigns one worker process per library and merges the statistics they report"""
+
     mapred_start = time.time()
 
     # Use a multiprocessing pool if multiple sam files were provided
