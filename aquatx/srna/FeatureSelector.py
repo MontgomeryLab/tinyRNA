@@ -26,6 +26,8 @@ class FeatureSelector:
     is performed against sequence attributes: strand, 5' end nucleotide, and length. Rules for
     5' end nucleotides support lists (e.g. C,G,U) and wildcards (e.g. "all"). Rules for length
     support lists, wildcards, and ranges (i.e. 20-27) which may be intermixed in the same rule.
+    Lengths may be specified as "strict", meaning that the feature must be completely contained
+    by the alignment interval.
     """
 
     rank, rule, feat = 0, 1, 2
@@ -171,4 +173,5 @@ class FeatureSelector:
 
     @classmethod
     def get_hit_indexes(cls):
+        """Hits are stored as tuples for performance. This returns a human friendly index map for the tuple."""
         return cls.rank, cls.rule, cls.feat

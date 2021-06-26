@@ -31,16 +31,14 @@ setuptools.setup(
     package_data={'aquatx': ['cwl/tools/*.cwl', 
                              'cwl/workflows/*.cwl', 
                              'extras/*.csv', 
-                             'extras/*.yml', 
-                             'extras/*.gff']},
+                             'extras/*.yml']},
     zip_safe=False,
     entry_points={
         'console_scripts': [
             'aquatx = aquatx.aquatx:main',
-            'aquatx-config = aquatx.srna.configuration_setup:main',
+            'aquatx-config = aquatx.srna.Configuration:Configuration.main',
             'aquatx-collapse = aquatx.srna.collapser:main',
-            'aquatx-count = aquatx.srna.counter:main',
-            'aquatx-merge = aquatx.srna.merge_samples:main'
+            'aquatx-count = aquatx.srna.counter:main'
         ]
     },
     scripts=['aquatx/srna/aquatx-deseq'],

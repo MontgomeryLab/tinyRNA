@@ -1,28 +1,41 @@
-##############################  MAIN INPUT FILES FOR ANALYSIS ##############################
+############################## MAIN INPUT FILES FOR ANALYSIS ##############################
 #
-# Edit this section to contain the sample sheets with file information to use in the
-# workflow. If you want to use DEFAULT settings for the workflow, this is all you need to
-# edit before running the workflow.
+# Edit this section to provide the path to your Samples and Features sheets. Relative and
+# absolute paths are both allowed. All relative paths are relative to THIS config file.
 #
 # Directions:
-# 1. Fill out the sample sheet with files to process + naming scheme. [samples.csv]
-# 2. Fill out the reference sheet with reference files and parameters of interest [features.csv]
-# 3. Add an output identifier for summary files and databases
+#   1. Fill out the Samples Sheet with files to process + naming scheme. [samples.csv]
+#   2. Fill out the Features Sheet with reference files and selection rules [features.csv]
+#   3. Set samples_csv and features_csv to point to these files
 #
 ######-------------------------------------------------------------------------------######
 
-##-- Relative path to sample & reference sheets (relative to this config file) --##
-samples_csv: './samples.csv'
-features_csv: './features.csv'
+##-- Path to Sample & Features Sheets (relative paths are relative to this config file) --##
+samples_csv: ./samples.csv
+features_csv: ./features.csv
+
+##-- The final output directory for files produced by the pipeline --#
+run_directory: run_directory
+
+######-------------------------------- BOWTIE-BUILD ---------------------------------######
+#
+# To build bowtie indexes:
+#   1. Your Run Config file must contain run_bowtie_build: true
+#   2. Your reference genome file(s) must be listed under reference_genome_files (below)
+#   3. ebwt (below) must be an empty string, or ''
+#
+# Once your indexes have been built, this config file will be modified such
+# that ebwt points to their location (prefix) within your Run Directory. This
+# means that indexes will not be unnecessarily rebuilt on subsequent runs. If
+# you need them rebuilt, simply set ebwt: ''
+#
+######-------------------------------------------------------------------------------######
 
 ##-- The prefix for your bowtie index, include relative path (relative to this config file) --##
 ##-- If you do not have a bowtie index, change this to ebwt: ''
-ebwt: './bowtie_indexes/chr1'
+ebwt: ./bowtie_indexes/chr1
 
 ##-- If you do not have a bowtie index, provide your reference genome file(s) here --##
 ##-- One file per line, with "- " at the beginning (think: bulleted list) --##
 reference_genome_files:
-- './reference_data/chr1.fa'
-
-##-- The final output directory for files produced by the pipeline --#
-run_directory: './run_directory'
+- ./reference_data/chr1.fa
