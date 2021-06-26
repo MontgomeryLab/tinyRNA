@@ -26,14 +26,15 @@ inputs:
 
   fasta:
     type: boolean?
-    inputBinding: 
+    default: true
+    inputBinding:
       position: 1
       prefix: -f
-    default: true
     doc: "reference files are fasta format"
 
   noref:
     type: boolean?
+    default: false
     inputBinding:
       position: 12
       prefix: --noref
@@ -41,6 +42,7 @@ inputs:
 
   offrate:
     type: int?
+    default: 5
     inputBinding:
       position: 14
       prefix: --offrate
@@ -48,6 +50,7 @@ inputs:
 
   ftabchars:
     type: int?
+    default: 10
     inputBinding:
       position: 15
       prefix: --ftabchars
@@ -55,6 +58,7 @@ inputs:
 
   ntoa:
     type: boolean?
+    default: false
     inputBinding:
       position: 16
       prefix: --ntoa
@@ -66,6 +70,12 @@ inputs:
       position: 17
       prefix: --seed
     doc: "seed for random number generator"
+
+  threads:
+    type: int?
+    inputBinding:
+      position: 18
+      prefix: --threads
 
 outputs:
   index_files:

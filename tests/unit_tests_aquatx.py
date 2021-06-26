@@ -42,13 +42,12 @@ class test_aquatx(unittest.TestCase):
                 'tools': {
                     'files': {
                         'aquatx-deseq.cwl', 'bowtie.cwl', 'aquatx-collapse.cwl',
-                        'bowtie-build.cwl', 'aquatx-count.cwl', 'aquatx-merge.cwl',
-                        'fastp.cwl'
+                        'bowtie-build.cwl', 'aquatx-count.cwl', 'fastp.cwl', 'make-subdir.cwl'
                     }
                 },
                 'workflows': {
                     'files': {
-                        'aquatx_wf.cwl', 'per-library.cwl'
+                        'aquatx_wf.cwl', 'per-library.cwl', 'organize-outputs.cwl'
                     }
                 }
             }
@@ -143,14 +142,16 @@ class test_aquatx(unittest.TestCase):
                     test()
                     stdout_result = test.get_stdout()
                     # Get the name of the processed config file
-                    config_file_location = stdout_result.splitlines()[1].split(": ")[1]
+                    config_file_message = stdout_result.splitlines()[1]
 
                 # Check that the function mentioned the config file with a complete name
-                self.assertRegex(stdout_result,
-                                 r'The processed configuration file is located at: \d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_run_config\.yml',
+                config_file_basename = os.path.basename(self.config_file)
+                self.assertEqual(config_file_message,
+                                 r'The processed configuration file is located at: processed_' + config_file_basename,
                                  f"Setup failed to mention the location of the processed config file. Function: {test_context}")
 
                 # Check that the processed configuration file exists
+                config_file_location = config_file_message.split(": ")[1]
                 self.assertTrue(os.path.isfile(config_file_location),
                                 f"The processed config file does not exist: {config_file_location}. Function: {test_context}")
                 os.remove(config_file_location)
@@ -191,7 +192,6 @@ class test_aquatx(unittest.TestCase):
                 for i in range(10):
                     time.sleep(1)
                     sub_names = {sub.name() for sub in get_children()}
-                    print(sub_names)
                     if 'node' in sub_names:
                         break
 

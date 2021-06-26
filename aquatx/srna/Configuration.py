@@ -5,7 +5,6 @@ import os
 
 from pkg_resources import resource_filename
 from datetime import datetime
-from shutil import copyfile
 from typing import Union, Any
 
 
@@ -24,6 +23,7 @@ class ConfigBase:
     def __init__(self, config_file: str):
         self.dir = os.path.dirname(os.path.abspath(config_file))
         self.inf = config_file
+        self.basename = os.path.basename(config_file)
         self.extras = ''
         self.dt = ''
 
@@ -34,8 +34,14 @@ class ConfigBase:
     def __getitem__(self, key: str) -> Any:
         return self.get(key)
 
-    def get(self, key: str) -> Any:
-        return self.config.get(key, None)
+    def __setitem__(self, key: str, val: Union[str, list, dict, bool]) -> Union[str, list, dict, bool]:
+        return self.set(key, val)
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.config
+
+    def get(self, key: str, default=None) -> Any:
+        return self.config.get(key, default)
 
     def set(self, key: str, val: Union[str, list, dict, bool]) -> Union[str, list, dict, bool]:
         self.config[key] = val
@@ -43,10 +49,11 @@ class ConfigBase:
 
     def set_if_not(self, key: str, val: Union[str, list, dict, bool]) -> Any:
         """Apply the setting if it has not been previously set"""
-        if not self.get(key):
-            return self.set(key, val)
+        if not self[key]:
+            self[key] = val
+            return val
         else:
-            return self.get(key)
+            return self[key]
 
     def set_default_dict(self, setting_dict: dict) -> None:
         """Apply each setting in setting_dict if it has not been previously set"""
@@ -55,8 +62,8 @@ class ConfigBase:
             self.set_if_not(key, val)
 
     def append_to(self, key: str, val: Any) -> list:
-        """Append a list-type setting (per-file settings)"""
-        target = self.get(key)
+        """Append a list-type setting (per-library settings)"""
+        target = self[key]
         if type(target) is list:
             target.append(val)
             return target
@@ -65,7 +72,7 @@ class ConfigBase:
 
     def append_if_absent(self, key: str, val: Any) -> list:
         """Append to list-type setting if the value is not already present"""
-        target = self.get(key)
+        target = self[key]
         if val not in target:
             return self.append_to(key, val)
 
@@ -84,38 +91,42 @@ class ConfigBase:
 
     @staticmethod
     def cwl_file(file: str) -> dict:
-        """Returns a file input/output specification for the CWL config"""
+        """Returns a minimal File object as defined by CWL"""
         # Todo: validate that file exists at this step
         return {'class': 'File', 'path': file}
 
     @staticmethod
     def cwl_dir(dir: str) -> dict:
-        """Returns a directory specificaion for the CWL config"""
+        """Returns a minimal Directory object as defined by CWL"""
         return {'class': 'Directory', 'path': dir}
+
+    def from_here(self, destination: str, origin: str = None):
+        """Calculates paths relative to the input config file"""
+        origin = self.dir if origin is None else origin
+        return self.joinpath(origin, destination)
 
     def create_run_directory(self) -> str:
         """Create the destination directory for pipeline outputs"""
-        run_dir = self.get("run_directory")
+        run_dir = self["run_directory"]
         if not os.path.isdir(run_dir):
             os.mkdir(run_dir)
 
         return run_dir
 
-    def get_outfile_name(self, infile: str) -> str:
-        """If the user's config file was named run_config_template.yml, copy and rename.
-        This will likely be changed in the near future"""
-        if os.path.basename(infile) == 'run_config_template.yml':
-            output_name = self.dt + '_run_config.yml'
-            copyfile(infile, output_name)
-            return output_name
-        else:
-            return infile
+    def get_outfile_path(self, infile: str) -> str:
+        """Prepend date+time to the Config File name. Change its path to reside in the Run Directory."""
+        return self.joinpath(self['run_directory'], os.path.basename(infile))
 
     def write_processed_config(self, filename: str = None) -> str:
         """Writes the current configuration """
-        if filename is None: filename = self.get_outfile_name(self.inf)
+        if filename is None: filename = self.get_outfile_path(self.inf)
 
         with open(filename, 'w') as outconf:
+            if 'paths_config' in self and not os.path.isabs(self['paths_config']):
+                # Processed config will be written to the Run Directory
+                # Ensure paths_config is an absolute path so it remains valid
+                self['paths_config'] = self.from_here(self['paths_config'])
+
             self.yaml.dump(self.config, outconf)
 
         return filename
@@ -124,10 +135,12 @@ class ConfigBase:
 class Configuration(ConfigBase):
     """A class for processing and updating a YAML config file for CWL
 
-    Ultimately, this class populates pipeline settings and per-file settings for pipeline steps.
-    Per-file settings are determined by samples.csv, features.csv, and the input config file.
-    Paths provided in these three files are evaluated relative to the given file.
-    Absolute paths may also be supplied.
+    Ultimately, this class populates workflow settings and per-library settings. This
+    is a convenience to the user as it is tedious to define inputs and outputs pertaining
+    to each workflow step. Settings are determined by the Paths, Samples, and Features Sheets.
+    Users may provide both relative and absolute paths
+
+    IMPORTANT: Paths provided in any config file are evaluated relative to the containing config file.
 
     Attributes:
         paths: the configuration object from processing the paths_config file.
@@ -136,7 +149,7 @@ class Configuration(ConfigBase):
     """
 
     def __init__(self, config_file: str):
-        # Parse YAML run configuration file
+        # Parse YAML configuration file
         super().__init__(config_file)
 
         self.paths = self.load_paths_config()
@@ -149,28 +162,31 @@ class Configuration(ConfigBase):
         self.process_feature_sheet()
         
     def load_paths_config(self):
-        path_sheet = self.joinpath(self.dir, self.get('paths_config'))
+        """Constructs a sub-configuration object containing workflow file preferences"""
+        path_sheet = self.from_here(self['paths_config'])
         return ConfigBase(path_sheet)
 
     def process_paths_sheet(self):
-        from_here = self.paths.dir
+        """Loads the paths of all related config files and workflow inputs"""
 
         def to_cwl_file_class(input_file_path):
-            return self.cwl_file(
-                self.joinpath(from_here, input_file_path))
+            path_to_input = self.paths.from_here(input_file_path)
+            return self.cwl_file(path_to_input)
 
-        # No conversion required, simply copy
-        self.set('ebwt', self.paths['ebwt'])
-        self.set('run_directory', self.paths['run_directory'])
+        self['ebwt'] = self.paths['ebwt']
+        self['run_directory'] = self.paths.from_here(self.paths['run_directory'])
 
-        # Configurations that need to be converted from string to a CWL File class object
-        self.set('samples_csv', to_cwl_file_class(self.paths['samples_csv']))
-        self.set('features_csv', to_cwl_file_class(self.paths['features_csv']))
-        self.set('reference_genome_files', [to_cwl_file_class(genome) for genome in self.paths['reference_genome_files']])
+        # Configurations that need to be converted from string to a CWL File object
+        self['samples_csv'] = to_cwl_file_class(self.paths.from_here(self.paths['samples_csv']))
+        self['features_csv'] = to_cwl_file_class(self.paths.from_here(self.paths['features_csv']))
+        self['reference_genome_files'] = [
+            to_cwl_file_class(self.paths.from_here(genome))
+            for genome in self.paths['reference_genome_files']
+        ]
 
     def process_sample_sheet(self):
-        sample_sheet = self.joinpath(self.paths.dir, self.get('samples_csv')['path'])
-        from_here = os.path.dirname(sample_sheet)
+        sample_sheet = self.paths.from_here(self['samples_csv']['path'])
+        sample_sheet_dir = os.path.dirname(sample_sheet)
 
         with open(sample_sheet, 'r', encoding='utf-8-sig') as sf:
             fieldnames = ("File", "Group", "Replicate")
@@ -180,8 +196,8 @@ class Configuration(ConfigBase):
             for row in csv_reader:
                 if not os.path.splitext(row['File'])[1] in [".fastq", ".gz"]:
                     raise ValueError("Files in samples.csv must have a .fastq(.gz) extension:\n%s" % (row['File'],))
-                sample_basename = self.prefix(os.path.basename(row['File']))
-                fastq_file = self.joinpath(from_here, row['File'])
+                fastq_file = self.from_here(row['File'], origin=sample_sheet_dir)
+                sample_basename = self.prefix(os.path.basename(fastq_file))
                 group_name = row['Group']
                 rep_number = row['Replicate']
 
@@ -190,14 +206,15 @@ class Configuration(ConfigBase):
 
                 self.append_to('out_fq', sample_basename + '_cleaned.fastq')
                 self.append_to('outfile', sample_basename + '_aligned_seqs.sam')
+                self.append_to('logfile', sample_basename + '_alignment_log.log')
                 self.append_to('un', sample_basename + '_unaligned_seqs.fa')
                 self.append_to('json', sample_basename + '_qc.json')
                 self.append_to('html', sample_basename + '_qc.html')
                 self.append_to('uniq_seq_prefix', sample_basename)
 
     def process_feature_sheet(self):
-        feature_sheet = self.joinpath(self.paths.dir, self.get('features_csv')['path'])
-        from_here = os.path.dirname(feature_sheet)
+        feature_sheet = self.paths.from_here(self['features_csv']['path'])
+        feature_sheet_dir = os.path.dirname(feature_sheet)
 
         with open(feature_sheet, 'r', encoding='utf-8-sig') as ff:
             fieldnames = ("ID", "Key", "Value", "Hierarchy", "Strand", "nt5", "Length", "Strict", "Source")
@@ -205,62 +222,69 @@ class Configuration(ConfigBase):
 
             next(csv_reader) # Skip header line
             for row in csv_reader:
-                gff_file = self.joinpath(from_here, row['Source'])
+                gff_file = self.from_here(row['Source'], origin=feature_sheet_dir)
                 self.append_if_absent('gff_files', self.cwl_file(gff_file))
             
     def setup_per_file(self):
-        """Per-file settings lists to be populated by entries from samples_csv"""
+        """Per-library settings lists to be populated by entries from samples_csv"""
 
         self.set_default_dict({per_file_setting_key: [] for per_file_setting_key in
-            ['un', 'in_fq', 'out_fq', 'uniq_seq_prefix', 'gff_files', 'outfile', 'report_title', 'json', 'html']
+            ['un', 'in_fq', 'out_fq', 'uniq_seq_prefix', 'gff_files', 'outfile', 'logfile', 'report_title', 'json', 'html']
         })
             
     def setup_pipeline(self):
         """Overall settings for the whole pipeline"""
 
         self.dt = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        default_prefix = '_'.join(x for x in [self.dt, self.get('user'), "aquatx"] if x)
         self.set_default_dict({
-            'run_directory': default_prefix,
-            'run_prefix': default_prefix,
-            'output_prefix': default_prefix,
             'run_date': self.dt.split('_')[0],
             'run_time': self.dt.split('_')[1]
         })
 
+        default_run_name = '_'.join(x for x in [self['user'], "aquatx"] if x)
+        self['run_name'] = self.get('run_name', default=default_run_name) + "_" + self.dt
+
+        # Create prefixed Run Directory name
+        run_dir_resolved = self.paths.from_here(self.get('run_directory', default='run_directory'))
+        run_dir_parent = os.path.dirname(run_dir_resolved)
+        run_dir_withdt = self['run_name'] + '_' + os.path.basename(run_dir_resolved)
+        self['run_directory'] = self.joinpath(run_dir_parent, run_dir_withdt)
+
         self.extras = resource_filename('aquatx', 'extras/')
 
+    # Todo: better heuristics for determining if the prefix outputs actually exist
     def setup_ebwt_idx(self):
         """Bowtie index files and prefix"""
 
         # Determine if bowtie-build should run, and set Bowtie index prefix accordingly
-        bt_index_prefix = self.paths.get('ebwt')
-        if self.get('run_bowtie_build') and bt_index_prefix == '':
-            if not self.get('reference_genome_files'):
-                config_file = os.path.basename(self.inf)
-                paths_file = os.path.basename(self.paths.inf)
-                raise ValueError(f"If {config_file} contains 'run_bowtie_build: true', you "
-                                 f"need to provide your reference genome files in {paths_file}")
+        bt_index_prefix = self.paths['ebwt']
+        if self['run_bowtie_build'] and not bt_index_prefix:
+            if not self['reference_genome_files']:
+                raise ValueError(f"If {self.basename} contains 'run_bowtie_build: True', you "
+                                 f"need to provide your reference genome files in {self.paths.basename}")
 
-            # Outputs are saved in run_directory, prefix is simply the first genome file's basename
-            ref_genome_base = os.path.basename(self.get('reference_genome_files')[0]['path'])
-            bt_index_prefix = self.joinpath(self.get('run_directory'), ref_genome_base)
-            self.set('ebwt', bt_index_prefix)
+            # Outputs are saved in {run_directory}/bowtie-build, within which prefix is first genome file's basename
+            first_genome_file = self.paths.from_here(self['reference_genome_files'][0]['path'])
+            bt_index_prefix = self.prefix(os.path.join(
+                self['run_directory'], "bowtie-build", os.path.basename(first_genome_file))
+            )
+
+            self['ebwt'] = self.paths['ebwt'] = bt_index_prefix
 
             # Finally, update user's paths file with the new prefix
-            self.paths.set('ebwt', bt_index_prefix)
-            self.paths.write_processed_config()
+            self.paths.write_processed_config(self.paths.inf)
         else:
-            # bowtie-build should only run if 'run_bowtie_build' is True AND ebwt is ''
-            self.set('run_bowtie_build', False)
+            # bowtie-build should only run if 'run_bowtie_build' is True AND ebwt (index prefix) is undefined
+            self['run_bowtie_build'] = False
+            bt_index_prefix = self.paths.from_here(bt_index_prefix)
 
         # Bowtie index files
-        self.set('bt_index_files', [self.cwl_file(bt_index_prefix + postfix)
-                        for postfix in ['.1.ebwt', '.2.ebwt', '.3.ebwt', '.4.ebwt', '.rev.1.ebwt', '.rev.2.ebwt']])
+        self['bt_index_files'] = [self.cwl_file(bt_index_prefix + postfix)
+                        for postfix in ['.1.ebwt', '.2.ebwt', '.3.ebwt', '.4.ebwt', '.rev.1.ebwt', '.rev.2.ebwt']]
 
         # When CWL copies bt_index_filex for the bowtie.cwl InitialWorkDirRequirement, it does not
         # preserve the prefix path. What the workflow "sees" is the ebwt files at working dir root
-        self.set("ebwt", os.path.basename(self.get("ebwt")))
+        self["ebwt"] = os.path.basename(self["ebwt"])
 
     """========== COMMAND LINE =========="""
 
@@ -270,13 +294,12 @@ class Configuration(ConfigBase):
 
         # Get input config file
         parser = argparse.ArgumentParser()
-        parser.add_argument('-i', '--input-file', metavar='CONFIG', required=True,
-                            help="Input file")
+        required_group = parser.add_argument_group("required arguments")
+        required_group.add_argument('-i', '--input-file', metavar='CONFIG', required=True,
+                            help="The Run Config file to be processed")
 
         args = parser.parse_args()
         Configuration(args.input_file).write_processed_config()
-
-        # TODO: need to specify the non-model organism run when no reference genome is given
 
     if __name__ == '__main__':
         main()
