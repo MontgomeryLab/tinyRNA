@@ -170,7 +170,7 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
             new_attrs = []
             for cur, new in zip(cur_attrs, row_attrs):
                 attr_key = cur[0]
-                updated_vals = set(cur[1]) | set(new[1])
+                updated_vals = set(cur[1] + new[1])
                 new_attrs.append((attr_key, tuple(updated_vals)))
 
             attrs[feature_id] = new_attrs
