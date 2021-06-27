@@ -156,28 +156,6 @@ steps:
       seed: seed
     out: [fastq_clean, html_report_file, json_report_file, uniq_seqs, uniq_seqs_low, aln_seqs, unal_seqs, bowtie_log]
 
-  subdirs:
-    run: organize-outputs.cwl
-    in:
-      bt_build_indexes: bt_build_optional/index_files
-      run_bowtie_build: run_bowtie_build
-      fastp_cleaned_fastq: counts-prep/fastq_clean
-      fastp_html_report: counts-prep/html_report_file
-      fastp_json_report: counts-prep/json_report_file
-      collapser_uniq: counts-prep/uniq_seqs
-      collapser_low:
-        # Necessary since this is an optional output
-        source: counts-prep/uniq_seqs_low
-        pickValue: all_non_null
-      bowtie_sam: counts-prep/aln_seqs
-      bowtie_log: counts-prep/bowtie_log
-
-      bowtie_unal:
-        # Necessary since this is an optional output
-        source: counts-prep/unal_seqs
-        pickValue: all_non_null
-    out: [bt_build_dir, fastp_dir, collapser_dir, bowtie_dir]
-
   counts:
     run: ../tools/aquatx-count.cwl
     in:
@@ -190,20 +168,53 @@ steps:
       fastp_logs: counts-prep/json_report_file
       collapsed_fa: counts-prep/uniq_seqs
       is_pipeline: {default: true}
-
-      # Dummy values to force execution of subdir step before counts step
-      dummy_fastp: subdirs/fastp_dir
-      dummy_collapser: subdirs/collapser_dir
-      dummy_bt_dir: subdirs/bowtie_dir
     out: [feature_counts, other_counts, alignment_stats, summary_stats, intermed_out_files]
 
+  subdirs:
+    run: organize-outputs.cwl
+    in:
+      bt_build_indexes: bt_build_optional/index_files
+      run_bowtie_build: run_bowtie_build
+
+      fastp_cleaned_fastq: counts-prep/fastq_clean
+      fastp_html_report: counts-prep/html_report_file
+      fastp_json_report: counts-prep/json_report_file
+
+      collapser_uniq: counts-prep/uniq_seqs
+      collapser_low:
+        # If no output in scatter, this value will actually be an
+        #  array of nulls rather than just null. Can't use default.
+        source: counts-prep/uniq_seqs_low
+        pickValue: all_non_null
+
+      bowtie_sam: counts-prep/aln_seqs
+      bowtie_log: counts-prep/bowtie_log
+      bowtie_unal:
+        source: counts-prep/unal_seqs
+        default: []
+
+      counter_features: counts/feature_counts
+      counter_other: counts/other_counts
+      counter_alignment_stats: counts/alignment_stats
+      counter_summary_stats: counts/summary_stats
+      counter_intermed:
+        source: counts/intermed_out_files
+        default: []
+    out: [ bt_build_dir, fastp_dir, collapser_dir, bowtie_dir, counter_dir ]
+
+  differential-expression:
+    run: ../tools/aquatx-deseq.cwl
+    in:
+      input_file: counts/feature_counts
+      outfile_prefix: run_name
+    out: [ norm_counts, comparisons ]
 
 outputs:
 
   # Subdirectory outputs
   bt_build_out_dir:
     type: Directory?
-    outputSource: subdirs/bt_build_dir # bt_build_dir/subdir
+    outputSource: subdirs/bt_build_dir
 
   fastp_out_dir:
     type: Directory
@@ -217,23 +228,15 @@ outputs:
     type: Directory
     outputSource: subdirs/bowtie_dir
 
-  # Counts outputs
-  other_count_files:
+  counter_out_dir:
+    type: Directory
+    outputSource: subdirs/counter_dir
+
+  # Differential expression outputs
+  diffex_norm_counts:
+    type: File
+    outputSource: differential-expression/norm_counts
+
+  diffex_comparisons:
     type: File[]
-    outputSource: counts/other_counts
-
-  feat_count_file:
-    type: File
-    outputSource: counts/feature_counts
-
-  alignment_stats:
-    type: File
-    outputSource: counts/alignment_stats
-
-  summary_stats:
-    type: File
-    outputSource: counts/summary_stats
-
-  aln_tables:
-    type: File[]?
-    outputSource: counts/intermed_out_files
+    outputSource: differential-expression/comparisons
