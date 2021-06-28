@@ -119,7 +119,7 @@ def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
             gff = os.path.basename(row['Source']) if is_pipeline else from_here(features_csv, row['Source'])
 
             # Duplicate Name Attributes and rule entries are not allowed
-            if row['Name'] not in gff_files[gff]: gff_files[gff].append(row['Name'])
+            if row['Name'] not in ["ID", *gff_files[gff]]: gff_files[gff].append(row['Name'])
             if rule not in rules: rules.append(rule)
 
     return rules, gff_files
