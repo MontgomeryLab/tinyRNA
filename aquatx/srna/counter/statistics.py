@@ -160,13 +160,13 @@ class SummaryStats:
     def write_feat_counts(self, alias: dict, prefix: str) -> None:
         """Writes selected features and their associated counts to {prefix}_out_feature_counts.csv
 
-        If a features.csv rule defined an ID Attribute other than "ID", then the associated features will
-        be aliased to their corresponding ID Attribute value and displayed in the Feature Name column, and
+        If a features.csv rule defined a Name Attribute other than "ID", then the associated features will
+        be aliased to their corresponding Name Attribute value and displayed in the Feature Name column, and
         the feature's true "ID" will be indicated in the Feature ID column. If multiple aliases exist for
         a feature then they will be joined by ", " in the Feature Name column. A Feature Class column also
         follows.
 
-        For example, if the rule contained an ID Attribute which aliases gene1 to abc123,def456,123.456
+        For example, if the rule contained a Name Attribute which aliases gene1 to abc123,def456,123.456
         and is both ALG and CSR class, then the Feature ID, Feature Name, and Feature Class column of the
         output file for this feature will read:
             gene1, "abc123,def456,123.456", "ALG,CSR"
@@ -178,7 +178,7 @@ class SummaryStats:
         # Sort columns by title and round all counts to 2 decimal places
         summary = self.sort_cols_and_round(self.feat_counts_df)
         # Add Feature Name column, which is the feature alias (default is Feature ID if no alias exists)
-        summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(alias.get(feat, feat))))
+        summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(alias.get(feat, [feat]))))
         # Add Classes column for classes associated with the given feature
         feat_class_map = lambda feat: ', '.join(FeatureSelector.attributes[feat][0][1])
         summary.insert(1, "Feature Class", summary.index.map(feat_class_map))

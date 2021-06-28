@@ -9,10 +9,10 @@ from typing import Tuple
 from collections import defaultdict
 
 import aquatx.srna.counter.hts_parsing as parser
-from .FeatureSelector import FeatureSelector
-from .statistics import LibraryStats, SummaryStats
-from .hts_parsing import SelectionRules, FeatureSources
-from ..util import report_execution_time, from_here
+from aquatx.srna.counter.FeatureSelector import FeatureSelector
+from aquatx.srna.counter.statistics import LibraryStats, SummaryStats
+from aquatx.srna.counter.hts_parsing import SelectionRules, FeatureSources
+from aquatx.srna.util import report_execution_time, from_here
 
 # Global variables for multiprocessing
 features: 'HTSeq.GenomicArrayOfSets' = HTSeq.GenomicArrayOfSets("auto", stranded=True)
@@ -97,14 +97,14 @@ def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
 
     Returns:
         rules: a list of dictionaries, each representing a parsed row from input
-        gff_files: a set of unique GFF files and associated ID attribute preferences
+        gff_files: a dict of GFF files and associated Name Attribute preferences
     """
 
     rules, gff_files = list(), defaultdict(list)
     convert_strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
 
     with open(features_csv, 'r', encoding='utf-8-sig') as f:
-        fieldnames = ("ID", "Key", "Value", "Hierarchy", "Strand", "nt5", "Length", "Strict", "Source")
+        fieldnames = ("Name", "Key", "Value", "Hierarchy", "Strand", "nt5", "Length", "Strict", "Source")
         csv_reader = csv.DictReader(f, fieldnames=fieldnames, delimiter=',')
 
         next(csv_reader)  # Skip header line
@@ -118,8 +118,8 @@ def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
 
             gff = os.path.basename(row['Source']) if is_pipeline else from_here(features_csv, row['Source'])
 
-            # Duplicate ID Attributes and rule entries are not allowed
-            if row['ID'] not in gff_files[gff]: gff_files[gff].append(row['ID'])
+            # Duplicate Name Attributes and rule entries are not allowed
+            if row['Name'] not in gff_files[gff]: gff_files[gff].append(row['Name'])
             if rule not in rules: rules.append(rule)
 
     return rules, gff_files
