@@ -6,8 +6,8 @@ import os
 from typing import Tuple, Union
 from collections import Counter
 
-from aquatx.srna.FeatureSelector import FeatureSelector
-from aquatx.srna.hts_parsing import Alignment
+from .FeatureSelector import FeatureSelector
+from .hts_parsing import Alignment
 
 
 class LibraryStats:
@@ -236,7 +236,7 @@ class SummaryStats:
             return True
 
     @staticmethod
-    def get_fastp_stats(other: LibraryStats) -> Tuple[Union[int,str], Union[int,str]]:
+    def get_fastp_stats(other: LibraryStats) -> Tuple[Union[int, str], Union[int, str]]:
         """Determine the total number of reads for this library, and the total number retained by fastp"""
 
         try:

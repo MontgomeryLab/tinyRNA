@@ -5,7 +5,7 @@ import re
 import os
 
 from typing import Tuple, List, Dict
-from aquatx.srna.util import report_execution_time
+from ..util import report_execution_time
 
 # For parse_GFF_attribute_string()
 # Todo: I believe _re_attr_main may fail if user GFFs have escape characters, which are valid per GFF3 specification

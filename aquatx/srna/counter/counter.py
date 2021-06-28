@@ -8,11 +8,11 @@ import os
 from typing import Tuple
 from collections import defaultdict
 
-import aquatx.srna.hts_parsing as parser
-from aquatx.srna.FeatureSelector import FeatureSelector
-from aquatx.srna.statistics import LibraryStats, SummaryStats
-from aquatx.srna.hts_parsing import SelectionRules, FeatureSources
-from aquatx.srna.util import report_execution_time
+import aquatx.srna.counter.hts_parsing as parser
+from .FeatureSelector import FeatureSelector
+from .statistics import LibraryStats, SummaryStats
+from .hts_parsing import SelectionRules, FeatureSources
+from ..util import report_execution_time, from_here
 
 # Global variables for multiprocessing
 features: 'HTSeq.GenomicArrayOfSets' = HTSeq.GenomicArrayOfSets("auto", stranded=True)
@@ -27,8 +27,8 @@ N_Candidates = int
 def get_args():
     """Get input arguments from the user/command line."""
 
-    parser = argparse.ArgumentParser()
-    required_group = parser.add_argument_group("required arguments")
+    arg_parser = argparse.ArgumentParser()
+    required_group = arg_parser.add_argument_group("required arguments")
 
     # Required arguments
     required_group.add_argument('-i', '--input-csv', metavar='SAMPLES', required=True,
@@ -39,19 +39,18 @@ def get_args():
                         help='output prefix to use for file names')
 
     # Optional arguments
-    parser.add_argument('-t', '--intermed-file', action='store_true',
+    arg_parser.add_argument('-t', '--intermed-file', action='store_true',
                         help='Save the intermediate file containing all alignments and '
                              'associated features.')
-    parser.add_argument('-p', '--is-pipeline', action='store_true',
+    arg_parser.add_argument('-p', '--is-pipeline', action='store_true',
                         help='Indicates that counter was invoked from the aquatx pipeline '
                              'and that input files should be sources as such.')
 
-    parsed_args = parser.parse_args()
+    parsed_args = arg_parser.parse_args()
 
     global is_pipeline
     is_pipeline = parsed_args.is_pipeline
-
-    return parser.parse_args()
+    return arg_parser.parse_args()
 
 
 def load_samples(samples_csv: str) -> list:
@@ -63,7 +62,7 @@ def load_samples(samples_csv: str) -> list:
         # If the sample file has a fastq(.gz) extension, infer the name of its pipeline-produced .sam file
         if file_ext in [".fastq", ".fastq.gz"]:
             # Fix relative paths to be relative to sample_csv's path, rather than relative to cwd
-            csv_row_file = os.path.basename(csv_row_file) if is_pipeline else get_path_from_configfile(samples_csv, csv_row_file)
+            csv_row_file = os.path.basename(csv_row_file) if is_pipeline else from_here(samples_csv, csv_row_file)
             csv_row_file = os.path.splitext(csv_row_file)[0] + "_aligned_seqs.sam"
         elif file_ext == ".sam":
             if not os.path.isabs(csv_row_file):
@@ -88,15 +87,6 @@ def load_samples(samples_csv: str) -> list:
             if record not in inputs: inputs.append(record)
 
     return inputs
-
-
-def get_path_from_configfile(config_file, input_file):
-    """Calculates paths relative to the config file which contains them"""
-    if not os.path.isabs(input_file):
-        from_here = os.path.dirname(config_file)
-        input_file = os.path.normpath(os.path.join(from_here, input_file))
-
-    return input_file
 
 
 def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
@@ -126,10 +116,11 @@ def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
             rule['Hierarchy'] = int(rule['Hierarchy'])                    # Convert hierarchy to number
             rule['Strict'] = rule['Strict'] == 'Full'                     # Convert strict intersection to boolean
 
-            # Duplicate rule entries are not allowed
+            gff = os.path.basename(row['Source']) if is_pipeline else from_here(features_csv, row['Source'])
+
+            # Duplicate ID Attributes and rule entries are not allowed
+            if row['ID'] not in gff_files[gff]: gff_files[gff].append(row['ID'])
             if rule not in rules: rules.append(rule)
-            gff = os.path.basename(row['Source']) if is_pipeline else get_path_from_configfile(features_csv, row['Source'])
-            gff_files[gff].append(row['ID'])
 
     return rules, gff_files
 

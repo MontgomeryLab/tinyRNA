@@ -1,5 +1,6 @@
 import functools
 import time
+import os
 
 
 def report_execution_time(step_name: str):
@@ -13,3 +14,13 @@ def report_execution_time(step_name: str):
             return return_val
         return wrapper
     return timer
+
+
+def from_here(config_file, input_file):
+    """Calculates paths relative to the config file which contains them"""
+
+    if not os.path.isabs(input_file):
+        from_here = os.path.dirname(config_file)
+        input_file = os.path.normpath(os.path.join(from_here, input_file))
+
+    return input_file
