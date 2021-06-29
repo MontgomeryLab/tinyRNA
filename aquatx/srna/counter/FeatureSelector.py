@@ -158,8 +158,8 @@ class FeatureSelector:
             rule, lengths = row["Length"].split(','), []
             for piece in rule:
                 if '-' in piece:
-                    lo, hi = re.findall(r"(\d+)-(\d+)", piece)[0]
-                    lengths.extend([*range(int(lo), int(hi) + 1)])
+                    for lo, hi in re.findall(r"(\d+)-(\d+)", piece):
+                        lengths.extend([*range(int(lo), int(hi) + 1)])
                 else:
                     lengths.append(int(piece))
 
