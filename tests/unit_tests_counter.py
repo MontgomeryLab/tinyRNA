@@ -155,7 +155,7 @@ class CounterTests(unittest.TestCase):
         self.assertEqual(gff_files, expected_gff_ret)
         self.assertEqual(ruleset, expected_ruleset)
 
-    """Does load_config correctly handle duplicate rules? Only one rule should be returned (no duplicates)."""
+    """Does load_config correctly handle duplicate rules? Want: no duplicate rules and no duplicate Name Attributes."""
 
     def test_load_config_duplicate_rules(self):
         # Features CSV with two duplicate rules/rows
@@ -186,6 +186,22 @@ class CounterTests(unittest.TestCase):
             ruleset, _ = counter.load_config(dummy_file)
 
         self.assertEqual(ruleset[0]['nt5'], 'T')
+
+    """Does load_config properly screen for "ID" Name Attributes?"""
+
+    def test_load_config_id_name_attr(self):
+        row = self.csv_feat_row_dict.copy()
+        row['Name'] = 'ID'
+        csv = self.csv("features.csv", [row.values()])
+
+        with patch('aquatx.srna.counter.counter.open', mock_open(read_data=csv)):
+            dummy_file = '/dev/null'
+            _, gff_files = counter.load_config(dummy_file)
+
+        # Expect {file: [empty Name Attribute list]}
+        from_dummy = from_here(dummy_file, row['Source'])
+        expected = defaultdict(list, zip([from_dummy], [[]]))
+        self.assertEqual(gff_files, expected)
 
     """Do GenomicArraysOfSets slice to step intervals that overlap, even if by just one base?"""
 

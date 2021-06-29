@@ -157,10 +157,11 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
     def add_alias(feature_id, row_attr):
         curr_alias = alias.get(feature_id, ())
         for pref_id in preferred_ids:
+            # Append to feature's aliases if it does not already contain
             if row_attr[pref_id] not in curr_alias:
                 # Add feature_id -> feature_alias_tuple record
-                # Append to feature's aliases if it does not already contain
-                alias[feature_id] = curr_alias + row_attr[pref_id]
+                curr_alias += row_attr[pref_id]
+        alias[feature_id] = curr_alias
 
     def incorporate_attributes(feature_id, row_attrs):
         if feature_id in attrs and row_attrs != attrs[feature_id]:
