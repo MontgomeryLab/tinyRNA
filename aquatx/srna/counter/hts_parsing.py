@@ -1,10 +1,11 @@
 import numpy as np
 import HTSeq
-import time
 import sys
 import re
+import os
 
-from typing import Tuple, Set, List, Dict
+from typing import Tuple, List, Dict
+from ..util import report_execution_time
 
 # For parse_GFF_attribute_string()
 # Todo: I believe _re_attr_main may fail if user GFFs have escape characters, which are valid per GFF3 specification
@@ -14,7 +15,7 @@ _re_attr_empty = re.compile(r"^\s*$")
 # Type aliases for human readability
 Features = HTSeq.GenomicArrayOfSets  # interval -> set of associated features
 Attributes = Dict[str, list]  # feature -> feature attributes
-FeatureSources = Set[Tuple[str, str]]
+FeatureSources = Dict[str, list]
 SelectionRules = List[dict]
 Alias = dict
 
@@ -119,6 +120,7 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
         return attribute_dict
 
 
+@report_execution_time("GFF parsing")
 def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> Tuple[Features, Attributes, Alias]:
     """A GFF parser which builds feature, attribute, and alias tables, with intelligent appends
 
@@ -131,8 +133,6 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
     the basis of their source GFF file.
     """
 
-    start_time = time.time()
-
     # Patch the GFF attribute parser to support comma separated attribute value lists
     setattr(HTSeq.features, 'parse_GFF_attribute_string', parse_GFF_attribute_string)
 
@@ -140,36 +140,63 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
     attrs_of_interest = list(np.unique(["Class"] + [attr['Identity'][0] for attr in rules]))
 
     feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
-    attrs, alias = {}, {}
+    attrs, alias, intervals = {}, {}, {}
 
-    for file, preferred_id in gff_files:
+    def check_namespace(feature_id, row_iv, file):
+        # Rename feature_id if it has already been defined for another interval
+        if feature_id in intervals and row_iv != intervals[feature_id]:
+            feature_id = f"{feature_id} ({os.path.basename(file)})"
+        return feature_id
+
+    def add_feature(feature_id, row_iv):
+        feats[row_iv] += feature_id
+        intervals[feature_id] = row_iv
+        # Copy only the attributes of interest
+        return [(interest, row.attr[interest]) for interest in attrs_of_interest]
+
+    def add_alias(feature_id, row_attr):
+        curr_alias = alias.get(feature_id, ())
+        for pref_id in preferred_ids:
+            # Append to feature's aliases if it does not already contain
+            if row_attr[pref_id] not in curr_alias:
+                # Add feature_id -> feature_alias_tuple record
+                curr_alias += row_attr[pref_id]
+        alias[feature_id] = curr_alias
+
+    def incorporate_attributes(feature_id, row_attrs):
+        if feature_id in attrs and row_attrs != attrs[feature_id]:
+            # If an attribute record already exists for this feature, and this row provides new attributes,
+            #  append the new attribute values to the existing values
+            cur_attrs = attrs[feature_id]
+            new_attrs = []
+            for cur, new in zip(cur_attrs, row_attrs):
+                attr_key = cur[0]
+                updated_vals = set(cur[1] + new[1])
+                new_attrs.append((attr_key, tuple(updated_vals)))
+
+            attrs[feature_id] = new_attrs
+        else:
+            attrs[feature_id] = row_attrs
+
+    # BEGIN main routine
+    for file, preferred_ids in gff_files.items():
         gff = HTSeq.GFF_Reader(file)
         for row in gff:
             if row.iv.strand == ".":
                 raise ValueError(f"Feature {row.name} in {file} has no strand information.")
 
             try:
-                # Add feature_id -> feature_interval record
                 feature_id = row.attr["ID"][0]
-                feats[row.iv] += feature_id
-                row_attrs = [(interest, row.attr[interest]) for interest in attrs_of_interest]
-
-                if preferred_id != "ID":
-                    # Add feature_id -> feature_alias_tuple record
-                    # If an alias already exists for this feature, append to feature's aliases
-                    alias[feature_id] = alias.get(feature_id, ()) + row.attr[preferred_id]
+                # Ensure one interval per feat ID, else rename feat ID
+                feature_id = check_namespace(feature_id, row.iv, file)
+                # Add feature_id <-> feature_interval records
+                row_attrs = add_feature(feature_id, row.iv)
+                # Append alias to feat if unique
+                add_alias(feature_id, row.attr)
             except KeyError as ke:
                 raise ValueError(f"Feature {row.name} does not contain a {ke} attribute in {file}")
 
-            # Todo: ensure the second part of this condition is sound (since list, shouldn't check "in" instead of ==?)...
-            if feature_id in attrs and row_attrs != attrs[feature_id]:
-                # If an attribute record already exists for this feature, and this row provides new attributes,
-                #  append the new attribute values to the existing values
-                cur_attrs = attrs[feature_id]
-                row_attrs = [(cur[0], cur[1] + new[1]) for cur, new in zip(cur_attrs, row_attrs)]
-
             # Add feature_id -> feature_attributes record
-            attrs[feature_id] = row_attrs
+            incorporate_attributes(feature_id, row_attrs)
 
-    print("GFF parsing took %.2f seconds" % (time.time() - start_time))
     return feats, attrs, alias

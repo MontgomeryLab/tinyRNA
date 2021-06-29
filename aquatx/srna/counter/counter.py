@@ -2,15 +2,17 @@ import multiprocessing as mp
 import argparse
 import HTSeq
 import queue
-import time
 import csv
 import os
 
-import aquatx.srna.hts_parsing as parser
-from aquatx.srna.FeatureSelector import FeatureSelector
-from aquatx.srna.statistics import LibraryStats, SummaryStats
-from aquatx.srna.hts_parsing import SelectionRules, FeatureSources
 from typing import Tuple
+from collections import defaultdict
+
+import aquatx.srna.counter.hts_parsing as parser
+from aquatx.srna.counter.FeatureSelector import FeatureSelector
+from aquatx.srna.counter.statistics import LibraryStats, SummaryStats
+from aquatx.srna.counter.hts_parsing import SelectionRules, FeatureSources
+from aquatx.srna.util import report_execution_time, from_here
 
 # Global variables for multiprocessing
 features: 'HTSeq.GenomicArrayOfSets' = HTSeq.GenomicArrayOfSets("auto", stranded=True)
@@ -25,8 +27,8 @@ N_Candidates = int
 def get_args():
     """Get input arguments from the user/command line."""
 
-    parser = argparse.ArgumentParser()
-    required_group = parser.add_argument_group("required arguments")
+    arg_parser = argparse.ArgumentParser()
+    required_group = arg_parser.add_argument_group("required arguments")
 
     # Required arguments
     required_group.add_argument('-i', '--input-csv', metavar='SAMPLES', required=True,
@@ -37,19 +39,18 @@ def get_args():
                         help='output prefix to use for file names')
 
     # Optional arguments
-    parser.add_argument('-t', '--intermed-file', action='store_true',
+    arg_parser.add_argument('-t', '--intermed-file', action='store_true',
                         help='Save the intermediate file containing all alignments and '
                              'associated features.')
-    parser.add_argument('-p', '--is-pipeline', action='store_true',
+    arg_parser.add_argument('-p', '--is-pipeline', action='store_true',
                         help='Indicates that counter was invoked from the aquatx pipeline '
                              'and that input files should be sources as such.')
 
-    parsed_args = parser.parse_args()
+    parsed_args = arg_parser.parse_args()
 
     global is_pipeline
     is_pipeline = parsed_args.is_pipeline
-
-    return parser.parse_args()
+    return arg_parser.parse_args()
 
 
 def load_samples(samples_csv: str) -> list:
@@ -59,9 +60,9 @@ def load_samples(samples_csv: str) -> list:
         file_ext = os.path.splitext(csv_row_file)[1].lower()
 
         # If the sample file has a fastq(.gz) extension, infer the name of its pipeline-produced .sam file
-        if file_ext == ".fastq" or file_ext == ".fastq.gz":
+        if file_ext in [".fastq", ".fastq.gz"]:
             # Fix relative paths to be relative to sample_csv's path, rather than relative to cwd
-            csv_row_file = os.path.basename(csv_row_file) if is_pipeline else get_path_from_configfile(samples_csv, csv_row_file)
+            csv_row_file = os.path.basename(csv_row_file) if is_pipeline else from_here(samples_csv, csv_row_file)
             csv_row_file = os.path.splitext(csv_row_file)[0] + "_aligned_seqs.sam"
         elif file_ext == ".sam":
             if not os.path.isabs(csv_row_file):
@@ -88,17 +89,6 @@ def load_samples(samples_csv: str) -> list:
     return inputs
 
 
-def get_path_from_configfile(config_file, input_file):
-    """Calculates paths relative to the config file which contains them"""
-    if not os.path.isabs(input_file):
-        from_here = os.path.dirname(config_file)
-        input_file = os.path.normpath(os.path.join(from_here, input_file))
-
-    return input_file
-
-
-# Todo: convert FeatureSources to Tuple[str, list] to allow for just one tuple per GFF file
-#  Currently, a GFF is read once per ID attribute which doesn't make much sense (multiple read/parse of the same file)
 def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
     """Parses features.csv to provide inputs to FeatureSelector and build_reference_tables
 
@@ -107,14 +97,14 @@ def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
 
     Returns:
         rules: a list of dictionaries, each representing a parsed row from input
-        gff_files: a set of unique GFF files and associated ID attribute preferences
+        gff_files: a dict of GFF files and associated Name Attribute preferences
     """
 
-    gff_files, rules = set(), list()
+    rules, gff_files = list(), defaultdict(list)
     convert_strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
 
     with open(features_csv, 'r', encoding='utf-8-sig') as f:
-        fieldnames = ("ID", "Key", "Value", "Hierarchy", "Strand", "nt5", "Length", "Strict", "Source")
+        fieldnames = ("Name", "Key", "Value", "Hierarchy", "Strand", "nt5", "Length", "Strict", "Source")
         csv_reader = csv.DictReader(f, fieldnames=fieldnames, delimiter=',')
 
         next(csv_reader)  # Skip header line
@@ -126,10 +116,11 @@ def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
             rule['Hierarchy'] = int(rule['Hierarchy'])                    # Convert hierarchy to number
             rule['Strict'] = rule['Strict'] == 'Full'                     # Convert strict intersection to boolean
 
-            # Duplicate rule entries are not allowed
+            gff = os.path.basename(row['Source']) if is_pipeline else from_here(features_csv, row['Source'])
+
+            # Duplicate Name Attributes and rule entries are not allowed
+            if row['Name'] not in ["ID", *gff_files[gff]]: gff_files[gff].append(row['Name'])
             if rule not in rules: rules.append(rule)
-            gff = os.path.basename(row['Source']) if is_pipeline else get_path_from_configfile(features_csv, row['Source'])
-            gff_files.add((gff, row['ID']))
 
     return rules, gff_files
 
@@ -184,10 +175,9 @@ def count_reads(library: dict, return_queue: mp.Queue, intermediate_file: bool =
         stats.write_intermediate_file()
 
 
+@report_execution_time("Counting and merging")
 def map_and_reduce(libraries, work_args, ret_queue):
     """Assigns one worker process per library and merges the statistics they report"""
-
-    mapred_start = time.time()
 
     # Use a multiprocessing pool if multiple sam files were provided
     # Otherwise perform counts in this process
@@ -197,9 +187,6 @@ def map_and_reduce(libraries, work_args, ret_queue):
     else:
         count_reads(*work_args[0])
 
-    print("Counting took %.2f seconds" % (time.time() - mapred_start))
-    merge_start = time.time()
-
     # Collect counts from all pool workers and merge
     out_prefix = work_args[0][-1]
     summary = SummaryStats(out_prefix)
@@ -207,12 +194,11 @@ def map_and_reduce(libraries, work_args, ret_queue):
         lib_stats = ret_queue.get()
         summary.add_library(lib_stats)
 
-    print("Merging took %.2f seconds" % (time.time() - merge_start))
     return summary
 
 
+@report_execution_time("Overall runtime")
 def main():
-    start = time.time()
     # Get command line arguments.
     args = get_args()
 
@@ -236,7 +222,6 @@ def main():
 
     # Write final outputs
     merged_counts.write_report_files(alias, args.out_prefix)
-    print("Overall runtime took %.2f seconds" % (time.time() - start))
 
 
 if __name__ == '__main__':

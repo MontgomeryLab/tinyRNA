@@ -24,14 +24,15 @@ import cwltool.factory
 import cwltool.secrets
 import subprocess
 import shutil
+import sys
 import os
 
 from cwltool.context import LoadingContext
+from cwltool.utils import DEFAULT_TMP_PREFIX
 from pkg_resources import resource_filename
 from argparse import ArgumentParser
 
 from aquatx.srna.Configuration import Configuration, ResumeConfig, ConfigBase
-from cwltool.main import setup_loadingContext
 
 
 def get_args():
@@ -158,15 +159,21 @@ def run_native(config_object: 'ConfigBase', cwl_path:str, run_directory:str=None
         'default_stdout': subprocess.PIPE,
         'default_stderr': subprocess.PIPE,
         'outdir': run_directory,
+        'move_outputs': "copy",
         'on_error': "continue",
         'debug': debug
     })
 
-    loading_context = setup_loadingContext(LoadingContext(), runtime_context, {'relax_path_checks': True})
+    if sys.platform == "darwin":
+        default_mac_path = "/private/tmp/docker_tmp"
+        if runtime_context.tmp_outdir_prefix == DEFAULT_TMP_PREFIX:
+            runtime_context.tmp_outdir_prefix = default_mac_path
+        if runtime_context.tmpdir_prefix == DEFAULT_TMP_PREFIX:
+            runtime_context.tmpdir_prefix = default_mac_path
 
     cwl = cwltool.factory.Factory(
         runtime_context=runtime_context,
-        loading_context=loading_context,
+        loading_context=LoadingContext({'relax_path_checks': True}),
         executor=cwltool.executors.MultithreadedJobExecutor()   # Run jobs in parallel
         if parallel else cwltool.executors.SingleJobExecutor()  # Run one library at a time
     )
