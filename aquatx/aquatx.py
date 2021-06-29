@@ -30,7 +30,7 @@ from cwltool.context import LoadingContext
 from pkg_resources import resource_filename
 from argparse import ArgumentParser
 
-from aquatx.srna.Configuration import Configuration
+from aquatx.srna.Configuration import Configuration, ResumeConfig, ConfigBase
 from cwltool.main import setup_loadingContext
 
 
@@ -43,6 +43,7 @@ def get_args():
     subparsers = parser.add_subparsers(required=True, dest='command')
     subcommands_with_configfile = {
         "run": "Processes the provided config file and executes the workflow it specifies.",
+        "resume": "Resume pipeline at the Counter step using the PROCESSED run config provided",
         "setup-cwl": 'Processes the provided config file and copies workflow files to the current directory',
         "setup-nextflow": "This subcommand is not yet implemented"
     }
@@ -97,18 +98,35 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
 
         subprocess.run(cwl_runner, shell=True)
 
-        # This would be the invocation for Toil, but it only supports a CWL version that breaks
-        #   when output names contain special characters. Keeping this here for future releases
-        #
-        # cwl_runner = f"toil-cwl-runner --outdir {run_directory} --stats " \
-        #              f"{f'--debug-Worker --writeLogs {run_directory}' if debug else ''}" \
-        #              f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl {cwl_conf_file}"
 
-def resume(cwl_path:str , config_file:str):
+def resume(cwl_path:str, config_file:str):
+    """Resumes pipeline execution at the Counter step
+
+    The user must invoke this from the RUN DIRECTORY for which they wish to
+    resume, and the config file they provide must be the PROCESSED run config
+    within that directory. The previous pipeline outputs and processed config
+    will be used to resume a truncated workflow which begins at the counts step.
+    """
+
+    print("Resuming pipeline at Counter...")
+
+    config = ResumeConfig(config_file, f"{cwl_path}/workflows/aquatx_wf.cwl")
+    config.write_workflow()
+
+    if config['run_native']:
+        run_native(config, "aquatx-resume.cwl")
+    else:
+        resume_conf_file = "resume_" + os.path.basename(config_file)
+        config.write_processed_config(resume_conf_file)
+
+        # This is a bit silly. Will likely refactor to share this routine with run()
+        cwl_runner = f"cwltool --copy-outputs --timestamps --relax-path-checks " \
+                     f"aquatx-resume.cwl {resume_conf_file}"
+
+        subprocess.run(cwl_runner, shell=True)
 
 
-
-def run_native(config_object: 'Configuration', cwl_path:str, run_directory:str, debug=False, parallel=False) -> None:
+def run_native(config_object: 'ConfigBase', cwl_path:str, run_directory:str=None, debug=False, parallel=False) -> None:
     """Executes the workflow using native Python rather than subprocess "command line"
 
     Args:
@@ -227,6 +245,7 @@ def main():
     # Execute appropriate command based on command line input
     command_map = {
         "run": lambda: run(aquatx_cwl_path, args.config),
+        "resume": lambda: resume(aquatx_cwl_path, args.config),
         "setup-cwl": lambda: setup_cwl(aquatx_cwl_path, args.config),
         "get-template": lambda: get_template(aquatx_extras_path),
         "setup-nextflow": lambda: setup_nextflow(args.config)

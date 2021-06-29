@@ -205,27 +205,23 @@ shared_memory: False
 #
 ######-------------------------------------------------------------------------------######
 
+
 ##-- If True: save intermediate table for each library with all alignment information --##
 intermed_file: False
 
 
-######----------------------- ! NOT CURRENTLY IMPLEMENTED ! ------------------------######
+######----------------------------- OUTPUT DIRECTORIES ------------------------------######
 #
-# NORMALIZATION AND STATISTICS OPTIONS
-# We use a custom Python script for read normalization and statistical analysis
-# (differential gene expression) based on statistical methods developed in [ref]. If you
-# do not want to use this method and would prefer to use a method such as DESeq2 in R,
-# set use_smrna_stats to False and your output will end at the counts step.
-#
-# We have specified default parameters for small RNA data based on our own "best practices".
-# You may change the parameters here.
+# Outputs for each step are organized into their own subdirectories in your run
+# directory. You may set these folder names here.
 #
 ######-------------------------------------------------------------------------------######
 
-##-- If True: use zero-inflated model for normalization and DEG calling --##
-use_smrna_stats: False
-use_deseq: True
-
+bowtie_build_dir_name: bowtie-build
+fastp_dir_name: fastp
+collapser_dir_name: collapser
+bowtie_dir_name: bowtie
+counter_dir_name: counter
 
 #########################  AUTOMATICALLY GENERATED CONFIGURATIONS #########################
 #

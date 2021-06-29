@@ -1,3 +1,5 @@
+import shutil
+
 import ruamel.yaml
 import argparse
 import csv
@@ -303,3 +305,87 @@ class Configuration(ConfigBase):
 
     if __name__ == '__main__':
         main()
+
+
+class ResumeConfig(ConfigBase):
+    def __init__(self, processed_config, workflow):
+        # Parse the pre-processed YAML configuration file
+        super().__init__(processed_config)
+
+        # Load the CWL workflow YAML for modification
+        with open(workflow, 'r') as f:
+            self.workflow = self.yaml.load(f)
+
+        self.dt = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        self.new_counter_inputs = {
+            'aligned_seqs': "resume_sams",
+            'fastp_logs': "resume_fastp_logs",
+            'collapsed_fa': "resume_collapsed_fas"
+        }
+
+        self.create_truncated_workflow()
+        self.rebuild_counter_inputs()
+        self.add_timestamps()
+
+    def rebuild_counter_inputs(self):
+        """Set the new path inputs for the counts step
+
+        Normally, the counts step receives inputs from the current run's previous step outputs.
+        When resuming, these outputs should already exist on disk. We need to populate the new
+        File[] arrays with their corresponding pipeline outputs on disk.
+        """
+
+        def cwl_file_resume(subdir, file):
+            return self.cwl_file('/'.join(['.', subdir, file]))
+
+        self['resume_sams'] = [cwl_file_resume(self['dir_name_bowtie'], sam) for sam in self['outfile']]
+        self['resume_fastp_logs'] = [cwl_file_resume(self['dir_name_fastp'], log) for log in self['json']]
+        self['resume_collapsed_fas'] = [cwl_file_resume(self['dir_name_collapser'], prefix + "_test_collapsed.fa")
+                                        for prefix in self['uniq_seq_prefix']]
+
+    def create_truncated_workflow(self):
+        """Modifies the workflow to begin running at the counts step
+
+        New input variables must be created, which point to the files produced by the
+        prior pipeline run. The counts step is modified to receive these inputs directly
+        rather than expecting CWL to run the previous workflow steps. Subdir outputs
+        for previous steps will refer to steps that no longer exist, so they must be
+        removed too.
+        """
+
+        # Remove all pre-counts steps
+        for step in ['bt_build_optional', 'counts-prep']:
+            del self.workflow['steps'][step]
+
+        # Setup new inputs
+        for inp, new_input in self.new_counter_inputs.items():
+            # Create WorkflowInputParameters for new "resume_" File arrays
+            self.workflow['inputs'][new_input] = "File[]"
+            # Update WorkflowStepInputs for these new variables in counts
+            self.workflow['steps']['counts']['in'][inp] = new_input
+
+        # Remove subdir WorkflowOutputParameters for previous steps
+        for outdir in ['bt_build', 'fastp', 'collapser', 'bowtie']:
+            del self.workflow['outputs'][outdir + "_out_dir"]
+
+    def add_timestamps(self):
+        """Adds timestamps to subdirectory outputs, as well as a copy of Features Sheet
+
+        This is done for record keeping and to keep outputs organized between runs.
+        The user will likely use this feature many times when tweaking rules in their Features Sheet.
+        Therefore, it is important to provide a copy of the particular Feature Sheet used, timestamped,
+        and that the timestamps match between all outputs for this run.
+        """
+
+        for subdir in ["counter"]:
+            dir_name = "dir_name_" + subdir
+            self[dir_name] = self[dir_name] + "_" + self.dt
+
+        features_sheet = os.path.splitext(os.path.basename(self['features_csv']))[0]
+        features_sheet += "_" + self.dt + ".csv"
+        shutil.copyfile(self['features_csv'], features_sheet)
+
+    def write_workflow(self):
+        # Will likely be changed to write to temp directory instead
+        with open("aquatx-resume.cwl", "w") as wf:
+            self.yaml.dump(self.workflow, wf)

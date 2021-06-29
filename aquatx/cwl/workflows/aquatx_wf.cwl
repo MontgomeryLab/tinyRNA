@@ -81,6 +81,13 @@ inputs:
   aligned_seqs: File[]?
   is_pipeline: boolean?
 
+  # output directory names
+  dir_name_bt_build: string
+  dir_name_fastp: string
+  dir_name_collapser: string
+  dir_name_bowtie: string
+  dir_name_counter: string
+
 steps:
 
   bt_build_optional:
@@ -173,26 +180,30 @@ steps:
   subdirs:
     run: organize-outputs.cwl
     in:
+      bt_build_name: dir_name_bt_build
       bt_build_indexes: bt_build_optional/index_files
       run_bowtie_build: run_bowtie_build
-
+      
+      fastp_name: dir_name_fastp
       fastp_cleaned_fastq: counts-prep/fastq_clean
       fastp_html_report: counts-prep/html_report_file
       fastp_json_report: counts-prep/json_report_file
-
+  
+      collapser_name: dir_name_collapser
       collapser_uniq: counts-prep/uniq_seqs
       collapser_low:
-        # If no output in scatter, this value will actually be an
-        #  array of nulls rather than just null. Can't use default.
+        # This optional output is actually an array of nulls when not produced (can't use default)
         source: counts-prep/uniq_seqs_low
         pickValue: all_non_null
-
+      
+      bowtie_name: dir_name_bowtie
       bowtie_sam: counts-prep/aln_seqs
       bowtie_log: counts-prep/bowtie_log
       bowtie_unal:
         source: counts-prep/unal_seqs
         default: []
-
+    
+      counter_name: dir_name_counter
       counter_features: counts/feature_counts
       counter_other: counts/other_counts
       counter_alignment_stats: counts/alignment_stats
