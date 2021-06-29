@@ -90,7 +90,7 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
             print("WARNING: parallel execution with cwltool is an experimental feature")
 
         # Use the cwltool CWL runner via command line
-        cwl_runner = f"cwltool --outdir {run_directory} --copy-outputs --timestamps " \
+        cwl_runner = f"cwltool --outdir {run_directory} --copy-outputs --timestamps --relax-path-checks " \
                      f"{'--leave-tmpdir --debug --js-console ' if debug else ''}" \
                      f"{'--parallel ' if config_object['run_parallel'] else ''}" \
                      f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl {cwl_conf_file}"
@@ -141,7 +141,7 @@ def run_native(config_object, cwl_path, run_directory, debug=False, parallel=Fal
         'debug': debug
     })
 
-    loading_context = setup_loadingContext(LoadingContext(), runtime_context, {})
+    loading_context = setup_loadingContext(LoadingContext(), runtime_context, {'relax_path_checks': True})
 
     cwl = cwltool.factory.Factory(
         runtime_context=runtime_context,

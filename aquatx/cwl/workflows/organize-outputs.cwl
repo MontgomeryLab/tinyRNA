@@ -2,9 +2,8 @@
 
 ######-------------------------------------------------------------------------------######
 #
-# This Workflow gathers outputs from the preceding counts-prep SubWorkflow into
-# corresponding subdirectories. At the WorkflowOutput level within aquatx_wf.cwl,
-# these subdirectories are the final output for all non-counts steps.
+# This Workflow gathers outputs from all steps prior to differential-expression
+# and organizes them into subdirectories.
 #
 ######-------------------------------------------------------------------------------######
 
@@ -29,6 +28,12 @@ inputs:
   bowtie_sam: File[]
   bowtie_log: File[]
   bowtie_unal: File[]?
+
+  counter_features: File
+  counter_other: File[]
+  counter_alignment_stats: File
+  counter_summary_stats: File
+  counter_intermed: File[]?
 
 steps:
 
@@ -68,6 +73,15 @@ steps:
       dir_name: { default: "bowtie" }
     out: [ subdir ]
 
+  organize_counter:
+    run: ../tools/make-subdir.cwl
+    in:
+      dir_files:
+        source: [ counter_features, counter_other, counter_alignment_stats, counter_summary_stats, counter_intermed ]
+        linkMerge: merge_flattened
+      dir_name: { default: "counter" }
+    out: [ subdir ]
+
 outputs:
 
   bt_build_dir:
@@ -85,3 +99,7 @@ outputs:
   bowtie_dir:
     type: Directory
     outputSource: organize_bowtie/subdir
+
+  counter_dir:
+    type: Directory
+    outputSource: organize_counter/subdir
