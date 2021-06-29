@@ -104,8 +104,11 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
         #              f"{f'--debug-Worker --writeLogs {run_directory}' if debug else ''}" \
         #              f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl {cwl_conf_file}"
 
+def resume(cwl_path:str , config_file:str):
 
-def run_native(config_object, cwl_path, run_directory, debug=False, parallel=False):
+
+
+def run_native(config_object: 'Configuration', cwl_path:str, run_directory:str, debug=False, parallel=False) -> None:
     """Executes the workflow using native Python rather than subprocess "command line"
 
     Args:
