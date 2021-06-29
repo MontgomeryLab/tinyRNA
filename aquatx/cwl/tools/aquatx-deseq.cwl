@@ -3,15 +3,14 @@
 cwlVersion: v1.0
 class: CommandLineTool
 
-baseCommand: aquatx-deseq
+baseCommand: aquatx-deseq.r
 
 inputs:
   input_file:
     type: File
     inputBinding:
       prefix: --input-file
-      itemSeparator: ","
-    doc: The merged count table output of aquatx-merge
+    doc: The merged count table output of aquatx-count
 
   outfile_prefix:
     type: string

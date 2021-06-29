@@ -37,11 +37,11 @@ setuptools.setup(
         'console_scripts': [
             'aquatx = aquatx.aquatx:main',
             'aquatx-config = aquatx.srna.Configuration:Configuration.main',
-            'aquatx-collapse = aquatx.srna.collapser:main',
+            'aquatx-collapse = aquatx.srna.collapser.collapser:main',
             'aquatx-count = aquatx.srna.counter:main'
         ]
     },
-    scripts=['aquatx/srna/aquatx-deseq'],
+    scripts=['aquatx/srna/aquatx-deseq.r'],
     python_requires=REQUIRES_PYTHON,
     install_requires=REQUIRED,
     classifiers=[

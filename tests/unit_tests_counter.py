@@ -1,14 +1,13 @@
-import multiprocessing as mp
-import os
 import unittest
 import HTSeq
-import queue
 
-from unittest.mock import patch, mock_open, call, MagicMock
+from unittest.mock import patch, mock_open, call
+from collections import defaultdict
 
 import tests.unit_test_helpers as helpers
-import aquatx.srna.counter as counter
-from aquatx.srna.hts_parsing import Alignment, read_SAM
+import aquatx.srna.counter.counter as counter
+from aquatx.srna.counter.hts_parsing import Alignment, read_SAM
+from aquatx.srna.util import from_here
 
 resources = "./testdata/counter"
 
@@ -27,10 +26,22 @@ class CounterTests(unittest.TestCase):
 
         self.strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
 
-        # ID, Key, Value, Hierarchy, Strand, 5pnt, Length, Match, Source
-        self.csv_feat_row_dict = {'id_attr': "Alias", 'at_key': "Class", 'at_val': "CSR", 'rank': "1",
-                                  'strand': "antisense", 'nt5': '"C,G,U"', 'length': "all", 'match': "Partial",
-                                  'gff': "./testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3"}
+        # ID, Key, Value, Hierarchy, Strand, nt5, Length, Match, Source
+        self.csv_feat_row_dict = {'Name': "Alias", 'Key': "Class", 'Value': "CSR", 'Hierarchy': "1",
+                                  'Strand': "antisense", 'nt5': '"C,G,U"', 'Length': "all", 'Match': "Partial",
+                                  'Source': "./testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3"}
+                                   # nt5 needs to be double quoted since it contains commas
+
+        # Identity, Hierarchy, Strand, nt5, Length, Strict
+        row = self.csv_feat_row_dict
+        self.feat_rule = [{
+            'Identity': (row['Key'], row['Value']),
+            'Hierarchy': int(row['Hierarchy']),
+            'Strand': self.strand[row['Strand']],
+            'nt5': row['nt5'].upper().translate({ord('U'): 'T'}).replace('"', ''),  # Undo csv comma quoting
+            'Length': row['Length'],
+            'Strict': row['Match'] == 'Full'
+        }]
 
         self.csv_samp_row_dict = {'file': "test_file.fastq", 'group': "test_group", 'rep': "0"}
 
@@ -40,7 +51,7 @@ class CounterTests(unittest.TestCase):
     def csv(type, rows):
         header = "\uFEFF"
         if type == "features.csv":
-            header = "\uFEFFID Attribute,Attribute Key,Attribute Value,Hierarchy,Strand (sense/antisense/both),5' End Nucleotide,Length,Match,Feature Source"
+            header = "\uFEFFName Attribute,Attribute Key,Attribute Value,Hierarchy,Strand (sense/antisense/both),5' End Nucleotide,Length,Match,Feature Source"
         elif type == "samples.csv":
             header = "\uFEFFInput FASTQ Files,Sample/Group Name,Replicate number"
 
@@ -48,9 +59,6 @@ class CounterTests(unittest.TestCase):
     
     def feat_csv_test_row(self):
         return ','.join(self.csv_feat_row_dict.values())
-
-    def from_here(self, dummy_file, join_path):
-        return os.path.normpath(os.path.join(os.path.dirname(dummy_file), join_path))
         
     # === TESTS ===
 
@@ -59,17 +67,17 @@ class CounterTests(unittest.TestCase):
     def test_load_samples_single(self):
         dummy_file = '/dev/null'
         inp_file = "test.fastq"
-        exp_file = self.from_here(dummy_file, "test_aligned_seqs.sam")
+        exp_file = from_here(dummy_file, "test_aligned_seqs.sam")
 
         row = {'File': inp_file, 'Group': "test_group", 'Rep': "0"}
         csv = self.csv("samples.csv", [row.values()])
 
-        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+        with patch('aquatx.srna.counter.counter.open', mock_open(read_data=csv)):
             inputs = counter.load_samples(dummy_file)
 
         expected_lib_name = f"{row['Group']}_rep_{row['Rep']}"
         expected_result = [{'File': exp_file, 'Name': expected_lib_name}]
-        self.assertEqual(expected_result, inputs)
+        self.assertEqual(inputs, expected_result)
 
         """Does load_samples correctly handle duplicate samples? There should be no duplicates."""
 
@@ -77,11 +85,11 @@ class CounterTests(unittest.TestCase):
         row = {'File': "test.fastq", 'Group': "N/A", 'Rep': "N/A"}
         csv = self.csv("samples.csv", [row.values(), row.values()])
 
-        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+        with patch('aquatx.srna.counter.counter.open', mock_open(read_data=csv)):
             dummy_file = '/dev/null'
             inputs = counter.load_samples(dummy_file)
 
-        self.assertEqual(1, len(inputs))
+        self.assertEqual(len(inputs), 1)
 
     """Does load_samples correctly handle SAM filenames?"""
 
@@ -90,14 +98,14 @@ class CounterTests(unittest.TestCase):
         row = {'File': sam_filename, 'Group': "test_group", 'Rep': "0"}
         csv = self.csv("samples.csv", [row.values()])
 
-        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+        with patch('aquatx.srna.counter.counter.open', mock_open(read_data=csv)):
             dummy_file = '/dev/null'
             inputs = counter.load_samples(dummy_file)
 
         expected_lib_name = f"{row['Group']}_rep_{row['Rep']}"
         expected_result = [{'File': sam_filename, 'Name': expected_lib_name}]
 
-        self.assertEqual(expected_result, inputs)
+        self.assertEqual(inputs, expected_result)
 
     """Does load_samples throw ValueError if a non-absolute path to a SAM file is provided?"""
 
@@ -108,7 +116,7 @@ class CounterTests(unittest.TestCase):
 
         expected_error = "The following file must be expressed as an absolute path:\n" + bad
 
-        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+        with patch('aquatx.srna.counter.counter.open', mock_open(read_data=csv)):
             with self.assertRaisesRegex(ValueError, expected_error):
                 dummy_file = '/dev/null'
                 counter.load_samples(dummy_file)
@@ -123,7 +131,7 @@ class CounterTests(unittest.TestCase):
         expected_error = "The filenames defined in your samples CSV file must have a .fastq or .sam extension.\n" \
                          "The following filename contained neither:\n" + bad
 
-        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+        with patch('aquatx.srna.counter.counter.open', mock_open(read_data=csv)):
             with self.assertRaisesRegex(ValueError, expected_error):
                 dummy_file = '/dev/null'
                 counter.load_samples(dummy_file)
@@ -135,39 +143,36 @@ class CounterTests(unittest.TestCase):
         row = self.csv_feat_row_dict.values()
         csv = self.csv("features.csv", [row])
 
-        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+        with patch('aquatx.srna.counter.counter.open', mock_open(read_data=csv)):
             dummy_file = '/dev/null'
             ruleset, gff_files = counter.load_config(dummy_file)
 
         r = self.csv_feat_row_dict
-        expected_gff_file = self.from_here(dummy_file, r['gff'])
-        expected_gff_ret = {(expected_gff_file, r['id_attr'])}
-        expected_ruleset = [{'Strand': self.strand[r['strand']], 'Hierarchy': int(r['rank']), 'nt5': 'C,G,T',
-                             'Length': r['length'], 'Identity': (r['at_key'], r['at_val']), 'Strict': r['match'] == 'Full'}]
+        expected_gff_file = from_here(dummy_file, r['Source'])
+        expected_gff_ret = defaultdict(list, zip([expected_gff_file], [[r['Name']]]))
+        expected_ruleset = self.feat_rule
 
-        self.assertEqual(expected_gff_ret, gff_files)
-        self.assertEqual(expected_ruleset, ruleset)
+        self.assertEqual(gff_files, expected_gff_ret)
+        self.assertEqual(ruleset, expected_ruleset)
 
-    """Does load_config correctly handle duplicate rules? Only one rule should be returned (no duplicates)."""
+    """Does load_config correctly handle duplicate rules? Want: no duplicate rules and no duplicate Name Attributes."""
 
     def test_load_config_duplicate_rules(self):
         # Features CSV with two duplicate rules/rows
         row = self.csv_feat_row_dict.values()
         csv = self.csv("features.csv", [row, row])  # Duplicate rows
         
-        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+        with patch('aquatx.srna.counter.counter.open', mock_open(read_data=csv)):
             dummy_filename = '/dev/null'
             ruleset, gff_files = counter.load_config(dummy_filename)
 
         r = self.csv_feat_row_dict
-        expected_gff_file = self.from_here(dummy_filename, r['gff'])
-        expected_gff_ret = {(expected_gff_file, r['id_attr'])}
-        expected_ruleset = [
-            {'Strand': self.strand[r['strand']], 'Hierarchy': int(r['rank']), 'nt5': 'C,G,T',
-             'Length': r['length'], 'Identity': (r['at_key'], r['at_val']), 'Strict': r['match'] == 'Full'}]
+        expected_gff_file = from_here(dummy_filename, r['Source'])
+        expected_gff_ret = defaultdict(list, zip([expected_gff_file], [[r['Name']]]))
+        expected_ruleset = self.feat_rule
 
-        self.assertEqual(expected_gff_ret, gff_files)
-        self.assertEqual(expected_ruleset, ruleset)
+        self.assertEqual(gff_files, expected_gff_ret)
+        self.assertEqual(ruleset, expected_ruleset)
 
     """Does load_config convert uracil to thymine for proper matching with cDNA sequences?"""
 
@@ -176,11 +181,27 @@ class CounterTests(unittest.TestCase):
         row['nt5'] = 'U'
         csv = self.csv("features.csv", [row.values()])
 
-        with patch('aquatx.srna.counter.open', mock_open(read_data=csv)):
+        with patch('aquatx.srna.counter.counter.open', mock_open(read_data=csv)):
             dummy_file = '/dev/null'
             ruleset, _ = counter.load_config(dummy_file)
 
         self.assertEqual(ruleset[0]['nt5'], 'T')
+
+    """Does load_config properly screen for "ID" Name Attributes?"""
+
+    def test_load_config_id_name_attr(self):
+        row = self.csv_feat_row_dict.copy()
+        row['Name'] = 'ID'
+        csv = self.csv("features.csv", [row.values()])
+
+        with patch('aquatx.srna.counter.counter.open', mock_open(read_data=csv)):
+            dummy_file = '/dev/null'
+            _, gff_files = counter.load_config(dummy_file)
+
+        # Expect {file: [empty Name Attribute list]}
+        from_dummy = from_here(dummy_file, row['Source'])
+        expected = defaultdict(list, zip([from_dummy], [[]]))
+        self.assertEqual(gff_files, expected)
 
     """Do GenomicArraysOfSets slice to step intervals that overlap, even if by just one base?"""
 
@@ -247,33 +268,32 @@ class CounterTests(unittest.TestCase):
 
         selector.choose.assert_not_called()
 
-    """Does count_reads properly handle a single record library?"""
+    """Does count_reads call the right functions when handling a single record library?"""
 
-    @patch.object(counter, "LibraryStats", autospec=True)
+    @patch.object(counter, "LibraryStats")
     @patch.object(counter, "assign_features", return_value=({'mock_feat'}, 1))
-    def test_count_reads_generic(self, assign_features, LibraryStats):
+    @patch.object(counter.queue, "Queue", autospec=True)
+    @patch.object(counter.parser, "Alignment")
+    def test_count_reads_generic(self, aln_obj, queue_obj, assign_features, stats_obj):
         library = {'File': self.short_sam_file, 'Name': 'short'}
-        alignment = next(read_SAM(library['File']))
-        ret_q = queue.Queue()
+        alignment = next(read_SAM(library['File']))     # Grab first alignment object from the SAM reader
+        aln_obj.configure_mock(return_value=alignment)  # Patch parser.Alignment to always return same object
+        bundle = stats_obj().count_bundle.return_value
 
-        expected_LibStat_count_bundle_call = call().count_bundle([alignment])
-        bundle = LibraryStats.count_bundle.return_value
-        # LibraryStats.count_bundle = MagicMock()
-        # LibraryStats.count_bundle_alignments = MagicMock()
-        # LibraryStats.finalize_bundle = MagicMock
-
-        expected_LibStats_calls = [
-
-            call(library, None, False),
-            expected_LibStat_count_bundle_call,
+        expected_calls_to_stats = [
+            call(),  # Produced above when grabbing the return value of count_bundle
+            call(library, None, False),  # Call to constructor
+            call().count_bundle([alignment]),
             call().count_bundle_alignments(bundle, alignment, {'mock_feat'}),
             call().finalize_bundle(bundle)
         ]
 
-        counter.count_reads(library, ret_q)
+        # CALL FUNCTION
+        counter.count_reads(library, queue_obj)
 
         assign_features.assert_called_once()
-        LibraryStats.assert_has_calls(expected_LibStats_calls)
+        stats_obj.assert_has_calls(expected_calls_to_stats)
+        queue_obj.put.assert_called_with(stats_obj())
 
     # Todo: write factory functions for in-memory GFF and SAM file testing rather than tons of resource files
 
