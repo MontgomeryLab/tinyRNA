@@ -217,11 +217,11 @@ intermed_file: False
 #
 ######-------------------------------------------------------------------------------######
 
-bowtie_build_dir_name: bowtie-build
-fastp_dir_name: fastp
-collapser_dir_name: collapser
-bowtie_dir_name: bowtie
-counter_dir_name: counter
+dir_name_bt_build: bowtie-build
+dir_name_fastp: fastp
+dir_name_collapser: collapser
+dir_name_bowtie: bowtie
+dir_name_counter: counter
 
 #########################  AUTOMATICALLY GENERATED CONFIGURATIONS #########################
 #

@@ -381,9 +381,9 @@ class ResumeConfig(ConfigBase):
             dir_name = "dir_name_" + subdir
             self[dir_name] = self[dir_name] + "_" + self.dt
 
-        features_sheet = os.path.splitext(os.path.basename(self['features_csv']))[0]
+        features_sheet = os.path.splitext(os.path.basename(self['features_csv']['path']))[0]
         features_sheet += "_" + self.dt + ".csv"
-        shutil.copyfile(self['features_csv'], features_sheet)
+        shutil.copyfile(self['features_csv']['path'], features_sheet)
 
     def write_workflow(self):
         # Will likely be changed to write to temp directory instead
