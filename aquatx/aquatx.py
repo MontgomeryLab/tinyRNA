@@ -85,7 +85,7 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
     debug = False
     if config_object['run_native']:  # experimental
         # Execute the CWL runner via native Python
-        run_native(config_object, aquatx_cwl_path, run_directory,
+        run_native(config_object, f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl", run_directory,
                    debug=debug, parallel=config_object['run_parallel'])
     else:
         if config_object['run_parallel']:
@@ -112,22 +112,26 @@ def resume(cwl_path:str, config_file:str):
     print("Resuming pipeline at Counter...")
 
     config = ResumeConfig(config_file, f"{cwl_path}/workflows/aquatx_wf.cwl")
-    config.write_workflow()
+    # resume_wf = config.write_workflow()
+    resume_wf = f"{cwl_path}/workflows/aquatx-resume.cwl"
 
+    debug = True
     if config['run_native']:
-        run_native(config, "aquatx-resume.cwl")
+        # Don't need to write processed config, pass in directly
+        run_native(config, resume_wf, debug=debug)
     else:
         resume_conf_file = "resume_" + os.path.basename(config_file)
         config.write_processed_config(resume_conf_file)
 
         # This is a bit silly. Will likely refactor to share this routine with run()
         cwl_runner = f"cwltool --copy-outputs --timestamps --relax-path-checks " \
-                     f"aquatx-resume.cwl {resume_conf_file}"
+                     f"{'--leave-tmpdir --debug --js-console ' if debug else ''}" \
+                     f"{resume_wf} {resume_conf_file}"
 
         subprocess.run(cwl_runner, shell=True)
 
 
-def run_native(config_object: 'ConfigBase', cwl_path:str, run_directory:str=None, debug=False, parallel=False) -> None:
+def run_native(config_object: 'ConfigBase', workflow:str, run_directory:str=None, debug=False, parallel=False) -> None:
     """Executes the workflow using native Python rather than subprocess "command line"
 
     Args:
@@ -178,7 +182,7 @@ def run_native(config_object: 'ConfigBase', cwl_path:str, run_directory:str=None
         if parallel else cwltool.executors.SingleJobExecutor()  # Run one library at a time
     )
 
-    pipeline = cwl.make(f"{cwl_path}/workflows/aquatx_wf.cwl")
+    pipeline = cwl.make(workflow)
     pipeline(**config_object.config)
 
 
