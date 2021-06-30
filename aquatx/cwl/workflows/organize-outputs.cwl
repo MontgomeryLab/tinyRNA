@@ -40,6 +40,10 @@ inputs:
   counter_summary_stats: File
   counter_intermed: File[]?
 
+  dge_name: string
+  dge_norm: File
+  dge_comparisons: File[]
+
 steps:
 
   organize_bt_indexes:
@@ -87,6 +91,15 @@ steps:
       dir_name: counter_name
     out: [ subdir ]
 
+  organize_dge:
+    run: ../tools/make-subdir.cwl
+    in:
+      dir_files:
+        source: [ dge_norm, dge_comparisons ]
+        linkMerge: merge_flattened
+      dir_name: dge_name
+    out: [ subdir ]
+
 outputs:
 
   bt_build_dir:
@@ -108,3 +121,7 @@ outputs:
   counter_dir:
     type: Directory
     outputSource: organize_counter/subdir
+
+  dge_dir:
+    type: Directory
+    outputSource: organize_dge/subdir

@@ -87,6 +87,7 @@ inputs:
   dir_name_collapser: string
   dir_name_bowtie: string
   dir_name_counter: string
+  dir_name_dge: string
 
 steps:
 
@@ -177,6 +178,13 @@ steps:
       is_pipeline: {default: true}
     out: [feature_counts, other_counts, alignment_stats, summary_stats, intermed_out_files]
 
+  dge:
+    run: ../tools/aquatx-deseq.cwl
+    in:
+      input_file: counts/feature_counts
+      outfile_prefix: run_name
+    out: [ norm_counts, comparisons ]
+
   subdirs:
     run: organize-outputs.cwl
     in:
@@ -211,14 +219,11 @@ steps:
       counter_intermed:
         source: counts/intermed_out_files
         default: []
-    out: [ bt_build_dir, fastp_dir, collapser_dir, bowtie_dir, counter_dir ]
 
-  differential-expression:
-    run: ../tools/aquatx-deseq.cwl
-    in:
-      input_file: counts/feature_counts
-      outfile_prefix: run_name
-    out: [ norm_counts, comparisons ]
+      dge_name: dir_name_dge
+      dge_norm: dge/norm_counts
+      dge_comparisons: dge/comparisons
+    out: [ bt_build_dir, fastp_dir, collapser_dir, bowtie_dir, counter_dir, dge_dir ]
 
 outputs:
 
@@ -243,11 +248,6 @@ outputs:
     type: Directory
     outputSource: subdirs/counter_dir
 
-  # Differential expression outputs
-  diffex_norm_counts:
-    type: File
-    outputSource: differential-expression/norm_counts
-
-  diffex_comparisons:
-    type: File[]
-    outputSource: differential-expression/comparisons
+  dge_out_dir:
+    type: Directory
+    outputSource: subdirs/dge_dir
