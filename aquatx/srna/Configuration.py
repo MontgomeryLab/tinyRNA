@@ -1,3 +1,5 @@
+import re
+
 import ruamel.yaml
 import argparse
 import shutil
@@ -8,7 +10,8 @@ from pkg_resources import resource_filename
 from datetime import datetime
 from typing import Union, Any
 
-
+from ruamel.yaml.comments import CommentedOrderedMap
+from ruamel.yaml.compat import ordereddict
 
 
 class ConfigBase:
@@ -315,9 +318,11 @@ class ResumeConfig(ConfigBase):
 
         # Load the CWL workflow YAML for modification
         with open(workflow, 'r') as f:
+            self.workflow: CommentedOrderedMap
             self.workflow = self.yaml.load(f)
 
         self.dt = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        self.steps = ["counter", "dge"]
         self.new_counter_inputs = {
             'aligned_seqs': "resume_sams",
             'fastp_logs': "resume_fastp_logs",
@@ -337,7 +342,7 @@ class ResumeConfig(ConfigBase):
         """
 
         def cwl_file_resume(subdir, file):
-            return self.cwl_file('/'.join(['.', subdir, file]))
+            return self.cwl_file('/'.join([subdir, file]))
 
         self['resume_sams'] = [cwl_file_resume(self['dir_name_bowtie'], sam) for sam in self['outfile']]
         self['resume_fastp_logs'] = [cwl_file_resume(self['dir_name_fastp'], log) for log in self['json']]
@@ -349,13 +354,14 @@ class ResumeConfig(ConfigBase):
 
         New input variables must be created, which point to the files produced by the
         prior pipeline run. The counts step is modified to receive these inputs directly
-        rather than expecting CWL to run the previous workflow steps. Subdir outputs
-        for previous steps will refer to steps that no longer exist, so they must be
-        removed too.
+        rather than expecting CWL to run the previous workflow steps. Parameters for Counter outputs and
+        DEG inputs do not require modification. The subdirs step is removed and replaced with modified
+        copies of its own calls to make-subdir.cwl, for the creation of Counter and DEG outputs.
+        The Features Sheet is also included in the new Counter folder.
         """
 
-        # Remove all pre-counts steps
-        for step in ['bt_build_optional', 'counts-prep']:
+        # Remove incompatible steps
+        for step in ['bt_build_optional', 'counts-prep', 'subdirs']:
             del self.workflow['steps'][step]
 
         # Setup new inputs
@@ -365,52 +371,49 @@ class ResumeConfig(ConfigBase):
             # Update WorkflowStepInputs for these new variables in counts
             self.workflow['steps']['counts']['in'][inp] = new_input
 
-        # Remove subdir WorkflowOutputParameters for previous steps
-        for outdir in ['bt_build', 'fastp', 'collapser', 'bowtie']:
-            del self.workflow['outputs'][outdir + "_out_dir"]
+        # Remove subdir WorkflowOutputParameters
+        for outdir in ['bt_build', 'fastp', 'collapser', 'bowtie', 'counter', 'dge']:
+            del self.workflow['outputs'][f'{outdir}_out_dir']
 
-        # Replace the subdirs subworkflow step with a single call to its underlying CommandLineTool.
+        # Replace the subdirs subworkflow step with calls to its underlying CommandLineTool.
         with open(resource_filename('aquatx', 'cwl/workflows/organize-outputs.cwl')) as f:
-            # Copy the parameters for make-subdir.cwl from organize-outputs.cwl's organize_counter step
             organizer_sub_wf = self.yaml.load(f)
-            for param, val in organizer_sub_wf['steps']['organize_counter'].items():
-                self.workflow['steps']['subdirs'][param] = val
 
-            # Update WorkflowStepInputs for make-subdirs' dir_files parameter
-            self.workflow['steps']['subdirs']['in']['dir_files']['source'] = \
-                ["counts/feature_counts", "counts/other_counts", "counts/alignment_stats",
-                 "counts/summary_stats", "counts/intermed_out_files"]
-            self.workflow['steps']['subdirs']['in']['dir_files']['pickValue'] = 'all_non_null'
+            sources = {"counter":
+                           ["counts/feature_counts", "counts/other_counts", "counts/alignment_stats",
+                            "counts/summary_stats", "counts/intermed_out_files", "features_csv"],
+                       "dge":
+                            ['dge/norm_counts', 'dge/comparisons']}
 
-            # Update WorkflowStepInputs and WorkflowStepOutputs for the "new" subdirs step
-            self.workflow['steps']['subdirs']['in']['dir_name'] = 'dir_name_counter'
-            self.workflow['steps']['subdirs']['out'] = ['subdir']
-
-            # Update the WokflowOutputParameter for the counter subdirectory
-            self.workflow['outputs']['counter_out_dir']['outputSource'] = 'subdirs/subdir'
-
+            for step in self.steps:
+                step_name = f'organize_{step}'
+                # Copy relevant steps from organize-outputs.cwl
+                context = self.workflow['steps'][step_name] = organizer_sub_wf['steps'][step_name]
+                # Update WorkflowStepInputs
+                context['in']['dir_name'] = f'dir_name_{step}'
+                context['in']['dir_files'] = {'source': sources[step], 'pickValue': 'all_non_null',
+                                              'linkMerge': 'merge_flattened'}
+                # Update WorkflowOutputParameter
+                self.workflow['outputs'][f'{step}_out_dir'] = {
+                    'type': "Directory",
+                    'outputSource': f'{step_name}/subdir'
+                }
 
     def add_timestamps(self):
         """Adds timestamps to subdirectory outputs, as well as a copy of Features Sheet
 
         This is done for record keeping and to keep outputs organized between runs.
-        The user will likely use this feature many times when tweaking rules in their Features Sheet.
-        Therefore, it is important to provide a copy of the particular Feature Sheet used, timestamped,
-        and that the timestamps match between all outputs for this run.
         """
 
-        for subdir in ["counter"]:
-            dir_name = "dir_name_" + subdir
-            self[dir_name] = self[dir_name] + "_" + self.dt
+        # Rename output directories with timestamp
+        for subdir in self.steps:
+            step_dir = "dir_name_" + subdir
+            self[step_dir] = self[step_dir] + "_" + self.dt
 
-        features_sheet = os.path.splitext(os.path.basename(self['features_csv']['path']))[0]
-        features_sheet += "_" + self.dt + ".csv"
-        shutil.copyfile(self['features_csv']['path'], features_sheet)
+        # Update run_name output prefix variable for the current date and time
+        self['run_name'] = re.sub(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}", self.dt, self['run_name'])
 
-    def write_workflow(self) -> str:
-        # Will likely be changed to write to temp directory instead
-        workflow_outfile = resource_filename('aquatx', 'cwl/workflows/aquatx-resume.cwl')
+
+    def write_workflow(self, workflow_outfile: str) -> None:
         with open(workflow_outfile, "w") as wf:
             self.yaml.dump(self.workflow, wf)
-
-        return workflow_outfile

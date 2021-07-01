@@ -2,8 +2,7 @@
 
 ######-------------------------------------------------------------------------------######
 #
-# This Workflow gathers outputs from all steps prior to differential-expression
-# and organizes them into subdirectories.
+# This Workflow gathers outputs from all steps and organizes them into subdirectories.
 #
 ######-------------------------------------------------------------------------------######
 
