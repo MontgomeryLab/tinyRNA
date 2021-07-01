@@ -82,22 +82,19 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
     run_directory = config_object.create_run_directory()
     cwl_conf_file = config_object.write_processed_config()
 
+    workflow = f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl"
+    parallel = config_object['run_parallel']
     debug = False
+
     if config_object['run_native']:  # experimental
         # Execute the CWL runner via native Python
-        run_native(config_object, f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl", run_directory,
-                   debug=debug, parallel=config_object['run_parallel'])
+        run_native(config_object, workflow, run_directory, debug=debug, parallel=parallel)
     else:
         if config_object['run_parallel']:
             print("WARNING: parallel execution with cwltool is an experimental feature")
 
         # Use the cwltool CWL runner via command line
-        cwl_runner = f"cwltool --outdir {run_directory} --copy-outputs --timestamps --relax-path-checks " \
-                     f"{'--leave-tmpdir --debug --js-console ' if debug else ''}" \
-                     f"{'--parallel ' if config_object['run_parallel'] else ''}" \
-                     f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl {cwl_conf_file}"
-
-        subprocess.run(cwl_runner, shell=True)
+        run_cwltool_subprocess(cwl_conf_file, workflow, run_directory=run_directory, parallel=parallel, debug=debug)
 
 
 def resume(cwl_path:str, config_file:str):
@@ -112,8 +109,8 @@ def resume(cwl_path:str, config_file:str):
     print("Resuming pipeline at Counter...")
 
     config = ResumeConfig(config_file, f"{cwl_path}/workflows/aquatx_wf.cwl")
-    # resume_wf = config.write_workflow()
     resume_wf = f"{cwl_path}/workflows/aquatx-resume.cwl"
+    config.write_workflow(resume_wf)
 
     debug = True
     if config['run_native']:
@@ -122,16 +119,20 @@ def resume(cwl_path:str, config_file:str):
     else:
         resume_conf_file = "resume_" + os.path.basename(config_file)
         config.write_processed_config(resume_conf_file)
-
-        # This is a bit silly. Will likely refactor to share this routine with run()
-        cwl_runner = f"cwltool --copy-outputs --timestamps --relax-path-checks " \
-                     f"{'--leave-tmpdir --debug --js-console ' if debug else ''}" \
-                     f"{resume_wf} {resume_conf_file}"
-
-        subprocess.run(cwl_runner, shell=True)
+        run_cwltool_subprocess(resume_conf_file, resume_wf, debug=debug)
 
 
-def run_native(config_object: 'ConfigBase', workflow:str, run_directory:str=None, debug=False, parallel=False) -> None:
+def run_cwltool_subprocess(config_file: str, workflow: str, run_directory=None, parallel=False, debug=False):
+    cwl_runner = "cwltool --copy-outputs --timestamps --relax-path-checks " \
+                 f"{'--leave-tmpdir --debug --js-console ' if debug else ''}" \
+                 f"{'--outdir ' + run_directory + ' ' if run_directory else ''}" \
+                 f"{'--parallel ' if parallel else ''}" \
+                 f"{workflow} {config_file}"
+
+    subprocess.run(cwl_runner, shell=True)
+
+
+def run_native(config_object: 'ConfigBase', workflow:str, run_directory:str=None, parallel=False, debug=False) -> None:
     """Executes the workflow using native Python rather than subprocess "command line"
 
     Args:
