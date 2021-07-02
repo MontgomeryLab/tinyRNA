@@ -81,6 +81,11 @@ inputs:
   aligned_seqs: File[]?
   is_pipeline: boolean?
 
+  # plotter options
+  plot_input_files: string[]
+  plot_data_types: string[]
+  plots: string[]
+
 steps:
 
   bt_build_optional:
@@ -209,6 +214,16 @@ steps:
       outfile_prefix: run_name
     out: [ norm_counts, comparisons ]
 
+  plotter:
+    run: ../tools/aquatx-plot.cwl
+    in:
+      input_files: plot_input_files
+      data_types: plot_data_types
+      out_prefix: output_prefix
+      reference: ref_annotations
+      plots: plots
+    out: [plots]
+
 outputs:
 
   # Subdirectory outputs
@@ -240,3 +255,8 @@ outputs:
   diffex_comparisons:
     type: File[]
     outputSource: differential-expression/comparisons
+
+  # Plotter outputs
+  plots:
+    type: File[]
+    outputSource: plotter/plots

@@ -226,6 +226,33 @@ intermed_file: False
 use_smrna_stats: False
 use_deseq: True
 
+######-------------------------------- PLOTTING OPTIONS -----------------------------######
+#
+# We use a custom Python script for creating all plots. The default base style is called
+# 'smrna-light'. If you wish to use another matplotlib stylesheet you may specify that here
+# (i.e. ggplot or seaborn-white). You may also specify color palettes built into matplotlib
+# if you do not wish to use 'smrna-light' defaults.
+#
+# We have specified default parameters for small RNA data based on our own "best practices".
+# You may change the parameters here.
+#
+######-------------------------------------------------------------------------------######
+
+# Define the plots desired by uncommenting (removing the '#') for each plot
+# or adding a '#' to remove that plot
+plots:
+  - 'len_dist'
+  - 'class_charts'
+  - 'replicate_scatter'
+#  - 'sample_avg_scatter'
+#  - 'sample_avg_scatter_by_class'
+#  - 'sample_avg_scatter_by_deg'
+  - 'sample_avg_scatter_by_both'
+
+##-- These options are generated based on sample input --##
+plot_input_files: ''
+plot_data_types: ''
+
 
 #########################  AUTOMATICALLY GENERATED CONFIGURATIONS #########################
 #
