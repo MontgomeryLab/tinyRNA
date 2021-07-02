@@ -292,6 +292,13 @@ class Configuration(ConfigBase):
         # preserve the prefix path. What the workflow "sees" is the ebwt files at working dir root
         self["ebwt"] = os.path.basename(self["ebwt"])
 
+    def save_run_profile(self, config_file_name=None) -> str:
+        """Saves Samples Sheet and processed run config to the Run Directory for record keeping"""
+
+        samples_sheet_name = os.path.basename(self['features_csv']['path'])
+        shutil.copyfile(self['features_csv']['path'], f"{self['run_directory']}/{samples_sheet_name}")
+        return self.write_processed_config(config_file_name)
+
     """========== COMMAND LINE =========="""
 
     @staticmethod

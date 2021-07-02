@@ -80,7 +80,7 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
     # First get the configuration file set up for this run
     config_object = Configuration(config_file)
     run_directory = config_object.create_run_directory()
-    cwl_conf_file = config_object.write_processed_config()
+    cwl_conf_file = config_object.save_run_profile()
 
     workflow = f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl"
     parallel = config_object['run_parallel']
