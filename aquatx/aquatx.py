@@ -115,7 +115,7 @@ def resume(cwl_path:str, config_file:str):
     debug = True
     if config['run_native']:
         # Don't need to write processed config, pass in directly
-        run_native(config, resume_wf, run_directory=".", debug=debug)
+        run_native(config, resume_wf, debug=debug)
     else:
         resume_conf_file = "resume_" + os.path.basename(config_file)
         config.write_processed_config(resume_conf_file)
@@ -125,7 +125,7 @@ def resume(cwl_path:str, config_file:str):
 def run_cwltool_subprocess(config_file: str, workflow: str, run_directory=None, parallel=False, debug=False):
     cwl_runner = "cwltool --copy-outputs --timestamps --relax-path-checks " \
                  f"{'--leave-tmpdir --debug --js-console ' if debug else ''}" \
-                 f"{'--outdir ' + run_directory if run_directory else ''}" \
+                 f"{'--outdir ' + run_directory + ' ' if run_directory else ''}" \
                  f"{'--parallel ' if parallel else ''}" \
                  f"{workflow} {config_file}"
 
