@@ -222,7 +222,7 @@ dir_name_fastp: fastp
 dir_name_collapser: collapser
 dir_name_bowtie: bowtie
 dir_name_counter: counter
-dir_name_dge: differential-expression
+dir_name_dge: DGE
 
 #########################  AUTOMATICALLY GENERATED CONFIGURATIONS #########################
 #

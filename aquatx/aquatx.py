@@ -8,15 +8,20 @@ returning template files and workflows that can be used separately.
 Subcommands:
     - get-template
     - setup-cwl
+    - resume
     - run
 
-When installed, run and setup-cwl should be invoked with:
+When installed, run, resume and setup-cwl should be invoked with:
     aquatx <subcommand> --config <config-file>
 
-A configuration file should be supplied for the run subcommand (required)
+The Run Config file should be supplied for the run subcommand (required)
 and for the setup-cwl subcommand (optional; alternatively you may use the
 word "None" or "none" to obtain only the workflow files). The config file
 will be processed to generate pipeline settings from your input files.
+
+The resume command must be invoked from within the Run Directory of the
+run you wish to resume. The config file you supply must be the processed
+Run Configuration file within the Run Directory.
 """
 
 import cwltool.executors
@@ -40,7 +45,7 @@ def get_args():
 
     parser = ArgumentParser(description=__doc__)
 
-    # Parser for subcommands: (run, setup-cwl, get-template, etc.)
+    # Parser for subcommands: (run, resume, setup-cwl, get-template, etc.)
     subparsers = parser.add_subparsers(required=True, dest='command')
     subcommands_with_configfile = {
         "run": "Processes the provided config file and executes the workflow it specifies.",
@@ -73,6 +78,8 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
         aquatx_cwl_path: The path to the project's CWL workflow file directory
         config_file: The configuration file for this run
 
+    Returns: None
+
     """
 
     print("Running the end-to-end analysis...")
@@ -97,19 +104,30 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
         run_cwltool_subprocess(cwl_conf_file, workflow, run_directory=run_directory, parallel=parallel, debug=debug)
 
 
-def resume(cwl_path:str, config_file:str):
+def resume(aquatx_cwl_path:str, config_file:str) -> None:
     """Resumes pipeline execution at the Counter step
 
     The user must invoke this from the RUN DIRECTORY for which they wish to
     resume, and the config file they provide must be the PROCESSED run config
     within that directory. The previous pipeline outputs and processed config
     will be used to resume a truncated workflow which begins at the counts step.
+
+    Output directories will be timestamped to keep results separate between
+    resume runs. A copy of each run's Features Sheet will be provided in the
+    (timestamped) counts output directory.
+
+    Args:
+        aquatx_cwl_path: The path to the project's CWL workflow file directory
+        config_file: The configuration file for this run
+
+    Returns: None
+
     """
 
     print("Resuming pipeline at Counter...")
 
-    config = ResumeConfig(config_file, f"{cwl_path}/workflows/aquatx_wf.cwl")
-    resume_wf = f"{cwl_path}/workflows/aquatx-resume.cwl"
+    config = ResumeConfig(config_file, f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl")
+    resume_wf = f"{aquatx_cwl_path}/workflows/aquatx-resume.cwl"
     config.write_workflow(resume_wf)
 
     debug = True
@@ -121,26 +139,43 @@ def resume(cwl_path:str, config_file:str):
         config.write_processed_config(resume_conf_file)
         run_cwltool_subprocess(resume_conf_file, resume_wf, debug=debug)
 
+    if os.path.isfile(resume_wf):
+        # We don't want the generated workflow to be returned by a call to setup-cwl
+        os.remove(resume_wf)
 
-def run_cwltool_subprocess(config_file: str, workflow: str, run_directory=None, parallel=False, debug=False):
+
+def run_cwltool_subprocess(config_file: str, workflow: str, run_directory=None, parallel=False, debug=False) -> None:
+    """Executes the workflow using a command line invocation of cwltool
+
+    Args:
+        config_file: the processed configuration file produced by Configuration.py
+        workflow: the path to the workflow to be executed
+        run_directory: the destination folder for workflow output subdirectories (default: CWD)
+        parallel: process libraries in parallel where possible
+        debug: instruct the CWL runner to provide additional debug info
+
+    Returns: None
+
+    """
+
     cwl_runner = "cwltool --copy-outputs --timestamps --relax-path-checks " \
                  f"{'--leave-tmpdir --debug --js-console ' if debug else ''}" \
-                 f"{'--outdir ' + run_directory if run_directory else ''}" \
+                 f"{'--outdir ' + run_directory + ' ' if run_directory else ''}" \
                  f"{'--parallel ' if parallel else ''}" \
                  f"{workflow} {config_file}"
 
     subprocess.run(cwl_runner, shell=True)
 
 
-def run_native(config_object: 'ConfigBase', workflow:str, run_directory:str=None, parallel=False, debug=False) -> None:
+def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = None, parallel=False, debug=False) -> None:
     """Executes the workflow using native Python rather than subprocess "command line"
 
     Args:
-        config_object: the processed configuration produced by Configuration.py
-        cwl_path: the path to the project's CWL workflow file directory
-        run_directory: the destination folder for workflow outputs
-        debug: instruct the CWL runner to provide additional debug info
+        config_object: a constructed ConfigBase-derived object
+        workflow: the path to the workflow to be executed
+        run_directory: the destination folder for workflow output subdirectories (default: CWD)
         parallel: process libraries in parallel where possible
+        debug: instruct the CWL runner to provide additional debug info
 
     Returns: None
 
@@ -195,6 +230,8 @@ def get_template(aquatx_extras_path: str) -> None:
             contains templates for the run configuration, sample inputs, feature selection
             rules, and paths for all the above.
 
+    Returns: None
+
     """
 
     print("Copying template input files to current directory...")
@@ -210,6 +247,8 @@ def setup_cwl(aquatx_cwl_path: str, config_file: str) -> None:
     Args:
         aquatx_cwl_path: The path to the project's CWL workflow file directory
         config_file: The configuration file to be processed (or None/none to skip processing)
+
+    Returns: None
 
     """
 

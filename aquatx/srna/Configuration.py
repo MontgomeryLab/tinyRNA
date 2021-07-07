@@ -1,17 +1,13 @@
-import re
-
 import ruamel.yaml
 import argparse
-import shutil
 import csv
 import os
+import re
 
+from ruamel.yaml.comments import CommentedOrderedMap
 from pkg_resources import resource_filename
 from datetime import datetime
 from typing import Union, Any
-
-from ruamel.yaml.comments import CommentedOrderedMap
-from ruamel.yaml.compat import ordereddict
 
 
 class ConfigBase:
@@ -312,6 +308,16 @@ class Configuration(ConfigBase):
 
 
 class ResumeConfig(ConfigBase):
+    """A class for modifying the workflow and config to resume a run at Counter
+
+    The modified workflow document is written to the package resource directory.
+    Directory output names have a timestamp appended to them to keep outputs
+    separate between runs. Timestamped run prefixes are also updated to the
+    date and time of the resume run. A copy of the Features Sheet is included
+    in the counts output directory to maintain a record of the selection rules
+    that were used for the resume run.
+    """
+
     def __init__(self, processed_config, workflow):
         # Parse the pre-processed YAML configuration file
         super().__init__(processed_config)
