@@ -3,6 +3,7 @@
 ## The module for running DESeq2 for small RNA sequencing data
 
 library(DESeq2)
+library(lattice)
 
 #### ---- Get the command line arguments ---- ####
 
@@ -28,6 +29,10 @@ if (length(args) > 4){
                   1. Normalized count table of all samples
                   2. Differential gene expression table per comparison
 
+       --pca
+             Use this option to produce principle component analysis plots
+             using the DESeq2 library
+
        ")
 } else if (length(args) < 4){
   stop(sprintf("Not enough arguments given. Only parsed %d arguments.", length(args)))
@@ -35,13 +40,16 @@ if (length(args) > 4){
 
 # Grab all the arg information
 arg_pos <- 1
+plot_pca = FALSE
 while (arg_pos <= length(args)){
   
   if (args[arg_pos] == '--input-file'){
     count_file <- args[arg_pos + 1]
   } else if (args[arg_pos] == '--outfile-prefix'){
     out_pref <- args[arg_pos + 1]
-  } else if (!(args[arg_pos - 1] %in% c('--input-file', '--outfile-prefix'))){
+  } else if (args[arg_pos] == '--pca') {
+    plot_pca <- TRUE
+  } else if (!(args[arg_pos - 1] %in% c('--input-file', '--outfile-prefix', '--pca'))){
     stop(sprintf("This argument %s%s is not accepted. Did you accidentally include a space in your file or
          sample names?", args[arg_pos - 1], args[arg_pos]))
   }
@@ -81,6 +89,11 @@ for (i in 1:nrow(all_comparisons)){
   comparison <- all_comparisons[i,] 
   deseq_res <- results(deseq_run, c("condition", comparison[1], comparison[2]))
   deseq_res <- deseq_res[order(deseq_res$padj),]
+
+  plt <- plotPCA(rlog(deseq_ds))
+  trellis.device(device="pdf", file=paste(out_pref, "cond1", comparison[1], "cond2", comparison[2], "pca_plot.pdf", sep="_"))
+  print(plt)
+  dev.off()
   write.csv(deseq_res, paste(out_pref, "cond1", comparison[1], "cond2", comparison[2], "deseq_table.csv", sep="_"))
 }
 
