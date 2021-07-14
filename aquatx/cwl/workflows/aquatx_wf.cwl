@@ -81,6 +81,9 @@ inputs:
   aligned_seqs: File[]?
   is_pipeline: boolean?
 
+  # deseq inputs
+  dge_pca_plots: boolean?
+
   # output directory names
   dir_name_bt_build: string
   dir_name_fastp: string
@@ -183,7 +186,8 @@ steps:
     in:
       input_file: counts/feature_counts
       outfile_prefix: run_name
-    out: [ norm_counts, comparisons ]
+      pca_plots: dge_pca_plots
+    out: [ norm_counts, comparisons, pca_plots ]
 
   subdirs:
     run: organize-outputs.cwl
@@ -223,6 +227,9 @@ steps:
       dge_name: dir_name_dge
       dge_norm: dge/norm_counts
       dge_comparisons: dge/comparisons
+      dge_pca:
+        source: dge/pca_plots
+        default: []
     out: [ bt_build_dir, fastp_dir, collapser_dir, bowtie_dir, counter_dir, dge_dir ]
 
 outputs:

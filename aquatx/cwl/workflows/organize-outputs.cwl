@@ -41,6 +41,7 @@ inputs:
 
   dge_name: string
   dge_norm: File
+  dge_pca: File[]?
   dge_comparisons: File[]
 
 steps:
@@ -94,7 +95,7 @@ steps:
     run: ../tools/make-subdir.cwl
     in:
       dir_files:
-        source: [ dge_norm, dge_comparisons ]
+        source: [ dge_norm, dge_comparisons, dge_pca ]
         linkMerge: merge_flattened
       dir_name: dge_name
     out: [ subdir ]

@@ -1,62 +1,54 @@
 #!/usr/bin/env Rscript --vanilla
 
-## The module for running DESeq2 for small RNA sequencing data
-
-library(DESeq2)
-library(lattice)
-
 #### ---- Get the command line arguments ---- ####
 
 args <- commandArgs(trailingOnly = TRUE)
+usage <- "The following arguments are accepted:
 
-# Throw an error if there are more args than expected
-if (length(args) > 4){
-  stop(sprintf("Too many arguments given. Only --input-files and --sample-names are accepted.
-        Files and names must be comma-separated without spaces. The bad arguments given were 
-
-        %s
-
-        Did you add a space in a list?", args[5:length(args)]))
-} else if (length(args) == 0){
-  stop("No arguments given. The following arguments are accepted:
-       
        --input-file <count_file>
-              A text file containing a table of features x samples of the run to 
+              A text file containing a table of features x samples of the run to
               process by DESeq2. The [...]feature_counts.csv output of aquatx-count is expected here.
-      
+
        --outfile-prefix <outfile>
               Name of the output files to write. These will be created:
                   1. Normalized count table of all samples
                   2. Differential gene expression table per comparison
+                  3. A PCA plot per comparison, if --pca is also provided.
 
        --pca
-             Use this option to produce principle component analysis plots
-             using the DESeq2 library
+              Optional. This will produce principle component analysis plots
+              using the DESeq2 library. Output files are PDF format.
 
-       ")
+       "
+
+## Throw an error if an unexpected number of arguments is provided
+if (length(args) > 5){
+  stop(gettextf("Too many arguments given. %d arguments were parsed.
+  Was there an unquoted space in your arguments?\n\n%s", length(args), usage))
+} else if (length(args) == 0){
+  stop(gettextf("No arguments given.\n\n%s", usage))
 } else if (length(args) < 4){
-  stop(sprintf("Not enough arguments given. Only parsed %d arguments.", length(args)))
+  stop("Not enough arguments given. Only parsed %d arguments.\n\n%s", length(args), usage)
 }
 
-# Grab all the arg information
-arg_pos <- 1
-plot_pca = FALSE
-while (arg_pos <= length(args)){
-  
-  if (args[arg_pos] == '--input-file'){
-    count_file <- args[arg_pos + 1]
-  } else if (args[arg_pos] == '--outfile-prefix'){
-    out_pref <- args[arg_pos + 1]
-  } else if (args[arg_pos] == '--pca') {
-    plot_pca <- TRUE
-  } else if (!(args[arg_pos - 1] %in% c('--input-file', '--outfile-prefix', '--pca'))){
-    stop(sprintf("This argument %s%s is not accepted. Did you accidentally include a space in your file or
-         sample names?", args[arg_pos - 1], args[arg_pos]))
-  }
-  arg_pos <- arg_pos + 1
+## Assign arg variables
+count_file <- args[match('--input-file', args) + 1]
+out_pref <- args[match('--outfile-prefix', args) + 1]
+plot_pca <- '--pca' %in% args
+
+## Make sure that argument parameters weren't skipped
+if (out_pref %in% c('--input-file', '--pca')){
+  stop(gettextf("Please be sure to include your outfile prefix.\n\n%s", usage))
+} else if (count_file %in% c('--outfile-prefix', '--pca')){
+  stop(gettextf("Please be sure to include your count file.\n\n%s", usage))
 }
+
+## Now that command line args have been validated, load libraries for performing DEG and writing PCA plots
+library(DESeq2)
+library(lattice)
 
 #### ---- Set up the parameters ---- ####
+
 counts <- read.csv(count_file,row.names = 1)
 # The first column (Feature ID) is absorbed as the index
 # The remaining two columns (Feature Name and Feature Class) need to be dropped
@@ -90,10 +82,13 @@ for (i in 1:nrow(all_comparisons)){
   deseq_res <- results(deseq_run, c("condition", comparison[1], comparison[2]))
   deseq_res <- deseq_res[order(deseq_res$padj),]
 
-  plt <- plotPCA(rlog(deseq_ds))
-  trellis.device(device="pdf", file=paste(out_pref, "cond1", comparison[1], "cond2", comparison[2], "pca_plot.pdf", sep="_"))
-  print(plt)
-  dev.off()
+  if (plot_pca){
+    plt <- plotPCA(rlog(deseq_ds))
+    trellis.device(device="pdf", file=paste(out_pref, "cond1", comparison[1], "cond2", comparison[2], "pca_plot.pdf", sep="_"))
+    print(plt)
+    dev.off()
+  }
+
   write.csv(deseq_res, paste(out_pref, "cond1", comparison[1], "cond2", comparison[2], "deseq_table.csv", sep="_"))
 }
 

@@ -389,7 +389,7 @@ class ResumeConfig(ConfigBase):
                            ["counts/feature_counts", "counts/other_counts", "counts/alignment_stats",
                             "counts/summary_stats", "counts/intermed_out_files", "features_csv"],
                        "dge":
-                            ['dge/norm_counts', 'dge/comparisons']}
+                            ['dge/norm_counts', 'dge/comparisons', 'dge/pca_plots']}
 
             for step in self.steps:
                 step_name = f'organize_{step}'
