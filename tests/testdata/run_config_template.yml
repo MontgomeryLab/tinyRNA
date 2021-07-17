@@ -20,7 +20,6 @@
 ######-------------------------------------------------------------------------------######
 
 user: Tester
-run_prefix: test_run
 run_date: ~
 run_time: ~
 paths_config: ./paths.yml
@@ -206,27 +205,35 @@ shared_memory: False
 #
 ######-------------------------------------------------------------------------------######
 
+
 ##-- If True: save intermediate table for each library with all alignment information --##
 intermed_file: False
 
 
-######----------------------- ! NOT CURRENTLY IMPLEMENTED ! ------------------------######
+######--------------------------- DIFFERENTIAL EXPRESSION ---------------------------######
 #
-# NORMALIZATION AND STATISTICS OPTIONS
-# We use a custom Python script for read normalization and statistical analysis
-# (differential gene expression) based on statistical methods developed in [ref]. If you
-# do not want to use this method and would prefer to use a method such as DESeq2 in R,
-# set use_smrna_stats to False and your output will end at the counts step.
-#
-# We have specified default parameters for small RNA data based on our own "best practices".
-# You may change the parameters here.
+# Differential expression analysis is performed using the DESeq2 R library.
 #
 ######-------------------------------------------------------------------------------######
 
-##-- If True: use zero-inflated model for normalization and DEG calling --##
-use_smrna_stats: False
-use_deseq: True
 
+##-- If True: produce principal component analysis plots for each library comparison
+dge_pca_plots: true
+
+
+######----------------------------- OUTPUT DIRECTORIES ------------------------------######
+#
+# Outputs for each step are organized into their own subdirectories in your run
+# directory. You may set these folder names here.
+#
+######-------------------------------------------------------------------------------######
+
+dir_name_bt_build: bowtie-build
+dir_name_fastp: fastp
+dir_name_collapser: collapser
+dir_name_bowtie: bowtie
+dir_name_counter: counter
+dir_name_dge: DGE
 
 #########################  AUTOMATICALLY GENERATED CONFIGURATIONS #########################
 #

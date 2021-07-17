@@ -38,7 +38,7 @@ setuptools.setup(
             'aquatx = aquatx.aquatx:main',
             'aquatx-config = aquatx.srna.Configuration:Configuration.main',
             'aquatx-collapse = aquatx.srna.collapser:main',
-            'aquatx-count = aquatx.srna.counter:main'
+            'aquatx-count = aquatx.srna.counter.counter:main'
         ]
     },
     scripts=['aquatx/srna/aquatx-deseq.r'],
