@@ -210,6 +210,17 @@ shared_memory: False
 intermed_file: False
 
 
+######--------------------------- DIFFERENTIAL EXPRESSION ---------------------------######
+#
+# Differential expression analysis is performed using the DESeq2 R library.
+#
+######-------------------------------------------------------------------------------######
+
+
+##-- If True: produce principal component analysis plots for each library comparison
+dge_pca_plots: true
+
+
 ######----------------------------- OUTPUT DIRECTORIES ------------------------------######
 #
 # Outputs for each step are organized into their own subdirectories in your run

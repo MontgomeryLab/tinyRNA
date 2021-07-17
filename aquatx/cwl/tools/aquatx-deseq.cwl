@@ -18,6 +18,12 @@ inputs:
       prefix: --outfile-prefix
     doc: The prefix for naming output files
 
+  pca_plots:
+    type: boolean?
+    inputBinding:
+      prefix: --pca
+    doc: Produce PCA plots for each library comparison
+
 outputs:
   norm_counts:
     type: File
@@ -28,3 +34,8 @@ outputs:
     type: File[]
     outputBinding:
       glob: $(inputs.outfile_prefix)_*_*_deseq_table.csv
+
+  pca_plots:
+    type: File[]?
+    outputBinding:
+      glob: $(inputs.outfile_prefix)_*_*_pca_plot.pdf
