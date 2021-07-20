@@ -9,44 +9,51 @@ the workflow. It creates a specific set of plots through the mode argument.
 import argparse
 import os.path
 import itertools
+from collections import defaultdict
+from typing import Optional
+
 import numpy as np
 import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import aquatx.srna.plotterlib as aqplt
-from HTSeq import GFF_Reader
 
 def get_args():
     """Get input arguments from the user/command line."""
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input-files', metavar='DATAFILE', required=True, nargs='+',
-                        help='input files with data from final merged tables')
+    counter_files = parser.add_argument_group("Input files produced by Counter")
+    diffexp_files = parser.add_argument_group("Input files produced by DEG")
+
+    # Single file inputs
+    counter_files.add_argument('-rc', '--raw-counts', metavar='RAW_COUNTS',
+                               help='The ...feature_counts.csv file.')
+    diffexp_files.add_argument('-nc', '--norm-counts', metavar='NORM_COUNTS',
+                               help='The ...norm_counts.csv file.')
+
+    # Multi-file inputs
+    diffexp_files.add_argument('-deg', '--deg-tables', metavar='DEG_COMPARISONS,...', nargs='+',
+                               help='The ...cond1...cond2...deseq.csv files')
+    counter_files.add_argument('-len', '--len-dist', metavar='5P_LEN_DISTS,...', nargs='+',
+                               help='The ...nt_len_dist.csv files')
+
+    # Outputs options
     parser.add_argument('-o', '--out-prefix', metavar='OUTFILE', default='',
                         help='Optional prefix to use for output PDF files.')
-    parser.add_argument('-d', '--data-types', metavar='DATATYPE', required=True, nargs='+',
-                        help='List of data types corresponding to input files. Options: '\
-                        '\nraw_counts: the raw counts per feature data,'\
-                        '\nnorm_counts: the normalized counts per feature data,'\
-                        '\ndegs: the table of differential gene expression analysis including p-values,'\
-                        '\nlen_dist: the size and 5p nucleotide count matrix,'\
-                        '\nclass_counts: the table of raw counts per class')
-    parser.add_argument('-r', '--references', metavar='GFF3_FILES', nargs='+',
-                        help='The reference annotation files containing class information to'\
-                        'highlight on plots.')
+
     parser.add_argument('-p', '--plots', metavar='PLOTS', required=True, nargs='+',
-                        help='List of plots to create. Options: '\
-                        '\nlen_dist: A stacked barplot showing size & 5p-nt distribution,'\
-                        '\nclass_charts: A pie and barchart showing proportions of counts per class,'\
-                        '\nreplicate_scatter: A scatter plot comparing replicates for all count files given,'\
-                        '\nsample_avg_scatter: A scatter plot comparing all sample groups,'\
-                        'averaged by replicate. Uses the normalized counts for averaging.'\
-                        '\nsample_avg_scatter_by_class: A scatter plot comparing all sample groups,'\
-                        'with different classes highlighted.'\
-                        '\nsample_avg_scatter_by_deg: A scatter plot comparing all sample groups,'\
-                        'with significantly different (padj<0.05) genes highlighted.'\
-                        '\nsample_avg_scatter_by_both: A scatter plot comparing all sample groups,'\
-                        'with classes and significantly different genes highlighted')
+                        help='List of plots to create. Options: \n'
+                             'len_dist: A stacked barplot showing size & 5p-nt distribution,\n'
+                             'class_charts: A pie and barchart showing proportions of counts per class,\n'
+                             'replicate_scatter: A scatter plot comparing replicates for all count files given,\n'
+                             'sample_avg_scatter: A scatter plot comparing all sample groups,'
+                                'averaged by replicate. Uses the normalized counts for averaging.\n'
+                             'sample_avg_scatter_by_class: A scatter plot comparing all sample groups,'
+                                'with different classes highlighted.\n'
+                             'sample_avg_scatter_by_deg: A scatter plot comparing all sample groups,'
+                                'with significantly different (padj<0.05) genes highlighted.\n'
+                             'sample_avg_scatter_by_both: A scatter plot comparing all sample groups,'
+                                'with classes and significantly different genes highlighted')
     args = parser.parse_args()
 
     return args
@@ -69,7 +76,7 @@ def size_dist_plot(size_file, pdf_name, **kwargs):
 
     Args:
         size_file: Path to file containing size + 5p-nt counts
-        pdf name: String to use as prefix for saving the output
+        pdf_name: Filename for output PDF plot
         kwargs: Keyword arguments to pass to matplotlib rc or plot 
     """
     # Read the size_dist file
@@ -77,10 +84,10 @@ def size_dist_plot(size_file, pdf_name, **kwargs):
     
     # Create the plot
     nt_colors = ['#F78E2D', '#CBDC3F', '#4D8AC8', '#E06EAA'] # Orange, Yellow-green, Blue, Pink
-    ax = aqplt.size_dist_bar(size_dist_rpm, color=nt_colors, **kwargs)
+    ax = aqplt.size_dist_bar(size_dist, color=nt_colors, **kwargs)
     
     # Save the plot
-    ax.savefig(out_name, bbox_inches='tight')
+    plt.savefig(pdf_name, bbox_inches='tight')
 
 def class_plots(class_file, pdf_name, **kwargs):
     """Create a PDF of the proportion of counts assigned to
@@ -97,36 +104,36 @@ def class_plots(class_file, pdf_name, **kwargs):
     # Save the plot
     fig.savefig(pdf_name, bbox_inches='tight')
 
-def get_replicates(df):
-    """Determine which replicates to compare in a dataframe based on sample_replicate_N format.
+def get_sample_rep_dict(df):
+    """Determine which replicates to compare in a dataframe based on sample_rep_N format.
     
     Args:
-        df: The dataframe with columns using sample_replicate_N format and features for rows
+        df: The dataframe with columns using sample_rep_N format and features for rows
 
     Returns:
         sample_dict: A dictionary containing all column names corresponding to unique samples.
     """
     
-    sample_dict = dict()
+    sample_dict = defaultdict(list)
 
     for col in df.columns:
-        sample = col.split("_replicate_")[0]
-        sample_dict.setdefault(sample, []).append(col)
+        if col == "Feature.Class": continue
+        sample = col.split("_rep_")[0]
+        sample_dict[sample].append(col)
 
     return sample_dict
 
-def get_sample_averages(df):
+def get_sample_averages(df, samples):
     """Average the counts per sample across replicates.
     
     Args:
-        df: The dataframe with columns using sample_replicate_N format and features for rows
+        df: The dataframe with columns using sample_rep_N format and features for rows
             to be averaged.
-    
+        samples: A dictionary containing sample names and their associated "sample_rep_N" replicates
+
     Returns:
         new_df: The new dataframe with averaged counts per unique sample.
     """
-
-    samples = get_replicates(df)
     
     new_df = pd.DataFrame(index=df.index, columns=samples.keys())
 
@@ -135,37 +142,16 @@ def get_sample_averages(df):
     
     return new_df
 
-def get_annotations(count_df, *args):
-    """Get feature + class information from reference annotation files
 
-    Args:
-        args: A list of all files to process
-
-    Returns:
-        classes: A dataframe containing features in index + class information.
-    """
-    classes = pd.DataFrame(index=count_df.index, columns=['class'])
-
-    for afile in args:
-        feat_gff = GFF_Reader(afile)
-        for feat in feat_gff:
-            if pd.isnull(classes.loc[feat.attr["ID"]]).any():
-                classes.loc[feat.attr["ID"]] = feat.type
-            else:
-                classes.loc[feat.attr["ID"]] = 'ambiguous'
-
-    return classes
-
-def scatter_replicates(count_df, output_prefix, norm=False):
+def scatter_replicates(count_df, output_prefix, samples, norm=False):
     """Creates PDFs of all pairwise comparison scatter plots from a count table.
     
     Args:
         count_df: A dataframe of counts per features
         output_prefix: A string to use as a prefix for saving files
+        samples: A dictionary containing sample names and their associated "sample_rep_N" replicates
         norm: Boolean indicating if data was normalized
     """
-
-    samples = get_replicates(count_df)
 
     for samp, reps in samples.items():
         for pair in get_pairs(reps):
@@ -173,18 +159,18 @@ def scatter_replicates(count_df, output_prefix, norm=False):
                                         color='#888888', marker='s', alpha=0.5, s=50, 
                                         edgecolors='none', log_norm=True)
             rscat.set_title(samp)
-            rscat.set_xlabel('Replicate ' + pair[0].split('_replicate_')[1])
-            rscat.set_ylabel('Replicate ' + pair[1].split('_replicate_')[1])
-            pdf_name = '_'.join([output_prefix, samp, 'replicates', pair[0].split('_replicate_')[1],
-                                pair[1].split('_replicate_')[1], 'scatter.pdf'])
+            rscat.set_xlabel('Replicate ' + pair[0].split('_rep_')[1])
+            rscat.set_ylabel('Replicate ' + pair[1].split('_rep_')[1])
+            pdf_name = '_'.join([output_prefix, samp, 'replicates', pair[0].split('_rep_')[1],
+                                pair[1].split('_rep_')[1], 'scatter.pdf'])
             rscat.figure.savefig(pdf_name, bbox_inches='tight')
 
-def get_degs(*args):
+def get_degs(comparisons):
     """Create a new dataframe containing all features and pvalues for each comparison
     from a set of DEG tables. 
 
     Args:
-        args: Files (DEG tables) to process
+        comparisons: Files (DEG tables) to process
 
     Returns:
         de_table: A single table of p-values per feature/comparison
@@ -192,21 +178,23 @@ def get_degs(*args):
     count = 0
     samples = {}
     
-    for degfile in args:
+    for degfile in comparisons:
         degs = pd.read_csv(degfile, index_col=0)
-        samples[degfile] = os.path.basename(degfile).split('.')[:-1][0].split('_cond1_')[1].split('_deseq_')[0].replace('_cond2_','_vs_')
+        name_split = os.path.basename(degfile).split('_')
+        # Negative indexes are used since prefixes are allowed to contain underscores
+        samples[degfile] = name_split[-5] + "vs" + name_split[-3]
 
         if count == 0:
-            de_table = pd.DataFrame(index=degs.index, columns=args)
-        
-        de_table.loc[:, degfile] = degs.loc[:, 'padj']
+            de_table = pd.DataFrame(index=degs.index, columns=comparisons)
+
+        de_table.loc[:, degfile] = degs.loc[:, 'padj'] # Are you sure? My hunch is this is supposed to be p-value
         count += 1
         
     de_table.rename(samples, axis=1, inplace=True)
     
     return de_table
 
-def scatter_samples(count_df, output_prefix, classes=None, degs=None, ambig=False, pval=0.05):
+def scatter_samples(count_df, output_prefix, classes=None, degs=None, unknown=False, pval=0.05):
     """Creates PDFs of all pairwise comparison scatter plots from a count table.
     Can highlight classes and/or differentially expressed genes as different colors.
 
@@ -215,15 +203,15 @@ def scatter_samples(count_df, output_prefix, classes=None, degs=None, ambig=Fals
         output_prefix: A string to use as a prefix for saving files
         classes: A dataframe containing class per feature
         degs: A dataframe of differential gene table output to highlight
-        ambig: Boolean indicating if ambiguous classes should be highlighted
+        unknown: Boolean indicating if ambiguous classes should be highlighted
     """
     samples = get_pairs(list(count_df.columns))
 
     if (classes is not None) and (degs is not None):
         uniq_classes = list(pd.unique(classes.loc[:,'class'].dropna()))
         
-        if not ambig:
-            uniq_classes.remove('ambiguous')
+        if not unknown:
+            uniq_classes.remove('unknown')
         
         for pair in samples:
             grp_args = []
@@ -255,14 +243,14 @@ def scatter_samples(count_df, output_prefix, classes=None, degs=None, ambig=Fals
             sscat.figure.savefig(pdf_name, bbox_inches='tight')
 
     elif classes is not None:
-        uniq_classes = list(pd.unique(classes.loc[:, 'class'].dropna()))
+        uniq_classes = list(pd.unique(classes.loc[:, 'Feature.Class'].dropna()))
         
-        if not ambig:
-            uniq_classes.remove('ambiguous')
+        if not unknown:
+            uniq_classes.remove('unknown')
         
         grp_args = []
         for cls in uniq_classes:
-            grp_args.append(list(classes.loc[classes['class'] == cls].index))
+            grp_args.append(list(classes.loc[classes['Feature.Class'] == cls].index))
     
         for pair in samples:
             sscat = aqplt.scatter_grouped(count_df.loc[:,pair[0]], count_df.loc[:,pair[1]],
@@ -309,99 +297,100 @@ def scatter_samples(count_df, output_prefix, classes=None, degs=None, ambig=Fals
             pdf_name = '_'.join([output_prefix, pair[0], 'vs', pair[1], 'scatter.pdf'])
             sscat.figure.savefig(pdf_name, bbox_inches='tight')
 
+
+def load_raw_counts(args) -> (pd.DataFrame, Optional[dict]):
+    if args.raw_counts is not None:
+        raw_count_df = pd.read_csv(args.raw_counts, index_col=0)
+        sample_rep_dict = get_sample_rep_dict(raw_count_df)
+    else:
+        raw_count_df, sample_rep_dict = None, None
+
+    return raw_count_df, sample_rep_dict
+
+
+def load_norm_counts(args) -> (pd.DataFrame, pd.DataFrame, Optional[dict]):
+    if args.norm_counts is not None:
+        norm_count_df = pd.read_csv(args.norm_counts, index_col=0)
+        sample_rep_dict = get_sample_rep_dict(norm_count_df)  # Refactor
+        norm_count_avg_df = get_sample_averages(norm_count_df, sample_rep_dict)
+
+        classes = pd.DataFrame(norm_count_df["Feature.Class"])
+    else:
+        norm_count_df, norm_count_avg_df, sample_rep_dict, classes = None, None, None, None
+        scatters = ['sample_avg_scatter', 'sample_avg_scatter_by_class',
+                    'sample_avg_scatter_by_deg', 'sample_avg_scatter_by_both']
+        if any([dependency in args.plots for dependency in scatters]):
+            raise Exception('The normalized count file is required for scatter plots, but it was not provided.')
+
+    return norm_count_df, norm_count_avg_df, sample_rep_dict, classes
+
+def load_deg_tables(args) -> pd.DataFrame:
+    if args.deg_tables is not None:
+        de_table = get_degs(args.deg_tables)
+    else:
+        de_table = None
+        de_dependencies = ['sample_avg_scatter_by_deg', 'sample_avg_scatter_by_both']
+        if any([dependency in args.plots for dependency in de_dependencies]):
+            raise Exception('Differential expression tables are required for deg scatter plots, but none were provided.')
+
+    return de_table
+
 def main():
-    """ 
+    """
     Main routine
     """
     args = get_args()
 
-    # Sort files & types
-    data_dict=dict()
-    for infile, dtype in zip(args.input_files, args.data_types):
-        data_dict.setdefault(dtype, []).append(infile)
-    
-    # Create count dataframes if given
-    try: 
-        raw_count_df = pd.read_csv(data_dict['raw_counts'][0], index_col=0)
-    except KeyError:
-        raw_count_df = None
-            
-    try:
-        norm_count_df = pd.read_csv(data_dict['norm_counts'][0], index_col=0)
-        norm_count_avg_df = get_sample_averages(norm_count_df)
-    
-        # get class information if given
-        try:
-            classes = get_annotations(norm_count_df, args.references)
-        except NameError:
-            classes = None
-            if bool(set('sample_avg_scatter_by_class', 'sample_avg_scatter_by_both') & set(args.plots)):
-                raise Exception('No reference annotation file given, but class highlighting on scatter'\
-                                'plots requested. Please check -r/--references was given.')
+    # Create dataframes for raw/norm counts and deg tables if given
+    raw_count_df, sample_rep_dict = load_raw_counts(args)
+    norm_count_df, norm_count_avg_df, sample_rep_dict, classes = load_norm_counts(args)
+    de_table = load_deg_tables(args)
 
-    except KeyError:
-        norm_count_df = None
-        scatters = ['sample_avg_scatter', 'sample_avg_scatter_by_class', 
-                     'sample_avg_scatter_by_deg', 'sample_avg_scatter_by_both']
-        if bool(set(scatters) & set(args.plots)):
-            raise Exception('No normalized count files specified in -d/--dtypes, but sample scatter'\
-                            'plots were requested. Please check your arguments for norm_counts.')
-    
-    if ('replicate_scatter' in args.plots) and (raw_count_df is None) and (norm_count_df is None):
-        raise Exception('No count files specified in -d/--dtypes, but replicate scatter plots requested.'\
-                        'Please check your arguments.')
+    if all([counts is None for counts in [raw_count_df, norm_count_df]]) and 'replicate_scatter' in args.plots:
+        raise Exception('Count files (norm or raw) are required for replicate scatter plots, '
+                        'but neither were provided.')
 
-    # create merged de table for highlighting
-    try:
-        de_table = get_degs(data_dict['degs'])
-
-    except KeyError:
-        de_table = None
-        if bool(set(['sample_avg_scatter_by_deg', 'sample_avg_scatter_by_both']) & set(args.plots)):
-            raise Exception('No differential expression tables specified in -d/--dtypes, but deg scatter'\
-                            'plots were requested. Please check your arguments for degs.')
-    
     # generate plots requested
     for plot in args.plots:
-        if plot is 'len_dist':
-            try:
-                for infile in data_dict['len_dist']:
-                    outprefix = args.out_prefix + ''.join(os.path.basename(infile[0]).split('.')[:-1])
-                    size_dist_plot(infile, outprefix)
-            except KeyError as ke:
-                print('No len_dist files found in args, but length distribution plots requested.')
-                print('Please check that -d/--dtypes has len_dist.')
-                raise ke
+        if plot == 'len_dist':
+            if args.len_dist is not None:
+                for infile in args.len_dist:
+                    outfile = args.out_prefix + os.path.splitext(os.path.basename(infile))[0] + "_len_dist.pdf"
+                    size_dist_plot(infile, outfile)
+            else:
+                print("5' nucleotide/length tables are required for length distribution plots, but none were provided.")
 
-        elif plot is 'class_charts':
-            try:
-                for infile in data_dict['class_counts']:
-                    outprefix = args.out_prefix + ''.join(os.path.basename(infile[0]).split('.')[:-1])
-                    class_plots(infile, outprefix)
-            except KeyError as ke:
-                print('No class_counts files found in args, but class charts requested.')
-                print('Please check that -d/--dtypes has class_counts.')
-                raise ke
+        elif plot == 'class_charts':
+            pass
+            # try:
+            #     for infile in data_dict['class_counts']:
+            #         outprefix = args.out_prefix + os.path.splitext(os.path.basename(infile[0]))[0]
+            #         class_plots(infile, outprefix)
+            # except KeyError as ke:
+            #     print('No class_counts files found in args, but class charts requested.')
+            #     print('Please check that -d/--dtypes has class_counts.')
+            #     raise ke
 
-        elif plot is 'replicate_scatter':
+        elif plot == 'replicate_scatter':
+            # Refactor. I believe this will lead to overwritten outputs if both raw and norm counts are provided
             if raw_count_df is not None:
-                scatter_replicates(raw_count_df, args.out_prefix)
+                scatter_replicates(raw_count_df, args.out_prefix, sample_rep_dict)
             
             if norm_count_df is not None:
-                scatter_replicates(norm_count_df, args.out_prefix)
+                scatter_replicates(norm_count_df, args.out_prefix, sample_rep_dict)
         
-        elif plot is 'sample_avg_scatter':
+        elif plot == 'sample_avg_scatter':
             if norm_count_df is not None:
-                scatter_samples(norm_count_avg_df, args.out_prefix)
-        elif plot is 'sample_avg_scatter_by_class':
-            if (norm_count_df is not None) and (classes is not None):
-                scatter_samples(norm_count_avg_df, args.out_prefix, classes=classes)
-        elif plot is 'sample_avg_scatter_by_deg':
+                scatter_samples(norm_count_avg_df, args.out_prefix + "_avg")
+        elif plot == 'sample_avg_scatter_by_class':
+            if (norm_count_df is not None):
+                scatter_samples(norm_count_avg_df, args.out_prefix + "_avg_by_class", classes=classes)
+        elif plot == 'sample_avg_scatter_by_deg':
             if (norm_count_df is not None) and (de_table is not None):
-                scatter_samples(norm_count_avg_df, args.out_prefix, degs=de_table)
-        elif plot is 'sample_avg_scatter_by_both':
-            if (norm_count_df is not None) and (de_table is not None) and  (classes is not None):
-                scatter_samples(norm_count_avg_df, args.out_prefix, classes=classes, degs=de_table)
+                scatter_samples(norm_count_avg_df, args.out_prefix + "_avg_by_deg", degs=de_table)
+        elif plot == 'sample_avg_scatter_by_both':
+            if (norm_count_df is not None) and (de_table is not None):
+                scatter_samples(norm_count_avg_df, args.out_prefix + "_avg_by_both", classes=classes, degs=de_table)
         else:
             print('Plot type %s not recognized, please check the -p/--plot arguments' % plot)
 
