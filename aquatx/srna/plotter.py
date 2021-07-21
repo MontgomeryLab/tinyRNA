@@ -9,6 +9,7 @@ the workflow. It creates a specific set of plots through the mode argument.
 import argparse
 import os.path
 import itertools
+import re
 from collections import defaultdict
 from typing import Optional
 
@@ -182,7 +183,7 @@ def get_degs(comparisons):
         degs = pd.read_csv(degfile, index_col=0)
         name_split = os.path.basename(degfile).split('_')
         # Negative indexes are used since prefixes are allowed to contain underscores
-        samples[degfile] = name_split[-5] + "vs" + name_split[-3]
+        samples[degfile] = name_split[-5] + "_vs_" + name_split[-3]
 
         if count == 0:
             de_table = pd.DataFrame(index=degs.index, columns=comparisons)
@@ -243,14 +244,22 @@ def scatter_samples(count_df, output_prefix, classes=None, degs=None, unknown=Fa
             sscat.figure.savefig(pdf_name, bbox_inches='tight')
 
     elif classes is not None:
-        uniq_classes = list(pd.unique(classes.loc[:, 'Feature.Class'].dropna()))
+        # Features with multiple associated classes must have these classes flattened
+        flat_classes = pd.DataFrame(
+            [(feat, classes.strip()) if ',' in feat_class else (feat, feat_class)
+             for (feat, feat_class) in classes['Feature.Class'].items()
+             for classes in feat_class.split(',')],
+            columns=['index', 'Feature.Class']
+        ).set_index('index')
+
+        uniq_classes = list(pd.unique(flat_classes['Feature.Class']))
         
         if not unknown:
             uniq_classes.remove('unknown')
         
         grp_args = []
         for cls in uniq_classes:
-            grp_args.append(list(classes.loc[classes['Feature.Class'] == cls].index))
+            grp_args.append(list(flat_classes.index[flat_classes['Feature.Class'] == cls]))
     
         for pair in samples:
             sscat = aqplt.scatter_grouped(count_df.loc[:,pair[0]], count_df.loc[:,pair[1]],
@@ -298,9 +307,15 @@ def scatter_samples(count_df, output_prefix, classes=None, degs=None, unknown=Fa
             sscat.figure.savefig(pdf_name, bbox_inches='tight')
 
 
+def get_r_safename(name):
+    leading_char = lambda x: re.sub(r"^(?=[^a-zA-Z.]+|\.\d)", "X", x)
+    special_char = lambda x: re.sub(r"[^a-zA-Z0-9_.]", ".", x)
+    return special_char(leading_char(name))
+
+
 def load_raw_counts(args) -> (pd.DataFrame, Optional[dict]):
     if args.raw_counts is not None:
-        raw_count_df = pd.read_csv(args.raw_counts, index_col=0)
+        raw_count_df = pd.read_csv(args.raw_counts, index_col=0).rename(get_r_safename, axis="columns")
         sample_rep_dict = get_sample_rep_dict(raw_count_df)
     else:
         raw_count_df, sample_rep_dict = None, None
@@ -314,6 +329,7 @@ def load_norm_counts(args) -> (pd.DataFrame, pd.DataFrame, Optional[dict]):
         sample_rep_dict = get_sample_rep_dict(norm_count_df)  # Refactor
         norm_count_avg_df = get_sample_averages(norm_count_df, sample_rep_dict)
 
+        # Todo: flatten classes here?
         classes = pd.DataFrame(norm_count_df["Feature.Class"])
     else:
         norm_count_df, norm_count_avg_df, sample_rep_dict, classes = None, None, None, None
@@ -323,6 +339,7 @@ def load_norm_counts(args) -> (pd.DataFrame, pd.DataFrame, Optional[dict]):
             raise Exception('The normalized count file is required for scatter plots, but it was not provided.')
 
     return norm_count_df, norm_count_avg_df, sample_rep_dict, classes
+
 
 def load_deg_tables(args) -> pd.DataFrame:
     if args.deg_tables is not None:
@@ -334,6 +351,7 @@ def load_deg_tables(args) -> pd.DataFrame:
             raise Exception('Differential expression tables are required for deg scatter plots, but none were provided.')
 
     return de_table
+
 
 def main():
     """
@@ -384,7 +402,7 @@ def main():
                 scatter_samples(norm_count_avg_df, args.out_prefix + "_avg")
         elif plot == 'sample_avg_scatter_by_class':
             if (norm_count_df is not None):
-                scatter_samples(norm_count_avg_df, args.out_prefix + "_avg_by_class", classes=classes)
+                scatter_samples(norm_count_avg_df, args.out_prefix, classes=classes)
         elif plot == 'sample_avg_scatter_by_deg':
             if (norm_count_df is not None) and (de_table is not None):
                 scatter_samples(norm_count_avg_df, args.out_prefix + "_avg_by_deg", degs=de_table)
