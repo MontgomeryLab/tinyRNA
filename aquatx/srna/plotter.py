@@ -17,7 +17,10 @@ import numpy as np
 import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import aquatx.srna.plotterlib as aqplt
+from aquatx.srna.plotterlib import plotterlib as lib
+from aquatx.srna.util import report_execution_time
+
+mpl.use("PDF")
 
 def get_args():
     """Get input arguments from the user/command line."""
@@ -149,13 +152,14 @@ def get_sample_averages(df, samples):
     
     return new_df
 
-
-def scatter_replicates(count_df, output_prefix, samples, norm=False):
+@report_execution_time("Scatter replicates")
+def scatter_replicates(count_df, output_prefix, output_postfix, samples, norm=False):
     """Creates PDFs of all pairwise comparison scatter plots from a count table.
     
     Args:
         count_df: A dataframe of counts per features
         output_prefix: A string to use as a prefix for saving files
+        output_postfix: A string to use as postfix for differentiating between raw and norm counts
         samples: A dictionary containing sample names and their associated "sample_rep_N" replicates
         norm: Boolean indicating if data was normalized
     """
@@ -165,14 +169,16 @@ def scatter_replicates(count_df, output_prefix, samples, norm=False):
             rscat = aqplt.scatter_simple(count_df.loc[:,pair[0]], count_df.loc[:,pair[1]], 
                                         color='#888888', marker='s', alpha=0.5, s=50, 
                                         edgecolors='none', log_norm=True)
-            rscat.set_title(samp)
-            rscat.set_xlabel('Replicate ' + pair[0].split('_rep_')[1])
-            rscat.set_ylabel('Replicate ' + pair[1].split('_rep_')[1])
-            pdf_name = '_'.join([output_prefix, samp, 'replicates', pair[0].split('_rep_')[1],
-                                pair[1].split('_rep_')[1], 'scatter.pdf'])
+            rscat.set_title(samp if not norm else samp + " (normalized)")
+            rep1, rep2 = pair[0].split('_rep_')[1], pair[1].split('_rep_')[1]
+            rscat.set_xlabel('Replicate ' + rep1)
+            rscat.set_ylabel('Replicate ' + rep2)
+            pdf_name = '_'.join([output_prefix, samp, 'replicates', rep1, rep2,
+                                 output_postfix, 'scatter.pdf'])
             rscat.figure.savefig(pdf_name, bbox_inches='tight')
 
-def get_degs(comparisons):
+
+def load_deg_tables(comparisons):
     """Create a new dataframe containing all features and pvalues for each comparison
     from a set of DEG tables. 
 
@@ -312,39 +318,18 @@ def get_r_safename(name):
     return special_char(leading_char(name))
 
 
-def load_raw_counts(args) -> (pd.DataFrame, Optional[dict]):
-    if args.raw_counts is not None:
-        raw_count_df = pd.read_csv(args.raw_counts, index_col=0)
-        raw_count_df.rename(get_r_safename, axis="columns")
-        sample_rep_dict = get_sample_rep_dict(raw_count_df)
-    else:
-        raw_count_df, sample_rep_dict = None, None
+def load_raw_counts(raw_counts_file) -> pd.DataFrame:
+    raw_count_df = pd.read_csv(raw_counts_file, index_col=0)
+    raw_count_df.rename(get_r_safename, axis="columns")
 
-    return raw_count_df, sample_rep_dict
+    return raw_count_df
 
 
-def load_norm_counts(args) -> (pd.DataFrame, pd.DataFrame, Optional[dict]):
-    if args.norm_counts is not None:
-        norm_count_df = pd.read_csv(args.norm_counts, index_col=0)
-        sample_rep_dict = get_sample_rep_dict(norm_count_df)  # Refactor
-        norm_count_avg_df = get_sample_averages(norm_count_df, sample_rep_dict)
-        feat_classes = get_flat_classes(norm_count_df)
-    else:
-        norm_count_df, norm_count_avg_df, sample_rep_dict, feat_classes = None, None, None, None
-
-    return norm_count_df, norm_count_avg_df, sample_rep_dict, feat_classes
+def load_norm_counts(norm_counts_file) -> pd.DataFrame:
+    return pd.read_csv(norm_counts_file, index_col=0)
 
 
-def load_deg_tables(args) -> pd.DataFrame:
-    if args.deg_tables is not None:
-        de_table = get_degs(args.deg_tables)
-    else:
-        de_table = None
-
-    return de_table
-
-
-def get_flat_classes(count_df):
+def get_flat_classes(count_df) -> pd.Series:
     # Features with multiple associated classes must have these classes flattened
     count_df["Feature.Class"] \
         .apply(lambda x: [cls.strip() for cls in x.split(',')]) \
@@ -365,7 +350,7 @@ def get_class_counts(counts_df) -> pd.DataFrame:
 
     return class_counts
 
-
+@report_execution_time("Input validation")
 def validate_inputs(args):
     dependencies_satisfied_for = {
         'len_dist': all([args.len_dist]),
@@ -400,10 +385,11 @@ def validate_inputs(args):
     for bad_request in unsatisfied:
         args.plots.remove(bad_request)
 
+@report_execution_time("Setup")
 def setup(args):
     required_inputs = {
         'len_dist': [None],
-        'class_charts': ["class_counts"],
+        'class_charts': ["norm_count_df", "class_counts"],
         'replicate_scatter': ["raw_count_df", "norm_count_df", "sample_rep_dict"],
         'sample_avg_scatter': ["norm_count_df", "norm_count_avg_df"],
         'sample_avg_scatter_by_class': ["norm_count_df", "norm_count_avg_df", "feat_classes"],
@@ -413,18 +399,16 @@ def setup(args):
 
     relevant_vars = {}
     input_getters = {
-        'raw_count_df': lambda: load_raw_counts(args),
-        'norm_count_df': lambda: load_norm_counts(args),
-        'de_table': lambda: load_deg_tables(args),
+        'raw_count_df': lambda: load_raw_counts(args.raw_counts),
+        'norm_count_df': lambda: load_norm_counts(args.norm_counts),
+        'de_table': lambda: load_deg_tables(args.deg_tables),
         'sample_rep_dict': lambda: get_sample_rep_dict(relevant_vars["norm_count_df"]),
         'norm_count_avg_df': lambda: get_sample_averages(relevant_vars["norm_count_df"], relevant_vars["sample_rep_dict"]),
         'feat_classes': lambda: get_flat_classes(relevant_vars["norm_count_df"]),
         'class_counts': lambda: get_class_counts(relevant_vars["norm_count_df"])
     }
 
-    for prereq in ["norm_count_df", "raw_count_df"]:
-        if any([prereq in required_inputs[plot] for plot in args.plots]):
-            relevant_vars["norm_count_df"] = input_getters["norm_count_df"]()
+    # Todo: handle the "either-or" case in replicate_scatter
 
     for plot in args.plots:
         for req in required_inputs[plot]:
@@ -433,7 +417,7 @@ def setup(args):
 
     return relevant_vars
 
-
+@report_execution_time("Main routine")
 def main():
     """
     Main routine
@@ -442,34 +426,29 @@ def main():
     validate_inputs(args)
     inputs = setup(args)
 
-    # Create dataframes for raw/norm counts and deg tables if given
-    raw_count_df, sample_rep_dict = load_raw_counts(args)
-    norm_count_df, norm_count_avg_df, sample_rep_dict, feat_classes = load_norm_counts(args)
-    de_table = load_deg_tables(args)
-    class_counts = get_class_counts(norm_count_df)
+    global aqplt
+    aqplt = lib()
 
     # generate plots requested
     for plot in args.plots:
         if plot == 'len_dist':
             len_dist_plots(args.len_dist, args.out_prefix)
         elif plot == 'class_charts':
-            class_plots(class_counts, args.out_prefix)
+            class_plots(inputs["class_counts"], args.out_prefix)
         elif plot == 'replicate_scatter':
-            # Refactor. Add postfix argument to scatter_replicates()
-            if raw_count_df is not None:
-                scatter_replicates(raw_count_df, args.out_prefix + "raw_count", sample_rep_dict)
+            if inputs["raw_count_df"] is not None:
+                scatter_replicates(inputs["raw_count_df"], args.out_prefix, "raw_count", inputs["sample_rep_dict"])
             
-            if norm_count_df is not None:
-                scatter_replicates(norm_count_df, args.out_prefix + "norm_count", sample_rep_dict)
-        
+            if inputs["norm_count_df"] is not None:
+                scatter_replicates(inputs["norm_count_df"], args.out_prefix, "norm_count", inputs["sample_rep_dict"], norm=True)
         elif plot == 'sample_avg_scatter':
-            scatter_samples(norm_count_avg_df, args.out_prefix)
+            scatter_samples(inputs["norm_count_avg_df"], args.out_prefix)
         elif plot == 'sample_avg_scatter_by_class':
-            scatter_samples(norm_count_avg_df, args.out_prefix, classes=feat_classes)
+            scatter_samples(inputs["norm_count_avg_df"], args.out_prefix, classes=inputs["feat_classes"])
         elif plot == 'sample_avg_scatter_by_deg':
-            scatter_samples(norm_count_avg_df, args.out_prefix, degs=de_table)
+            scatter_samples(inputs["norm_count_avg_df"], args.out_prefix, degs=inputs["de_table"])
         elif plot == 'sample_avg_scatter_by_both':
-            scatter_samples(norm_count_avg_df, args.out_prefix, classes=feat_classes, degs=de_table)
+            scatter_samples(inputs["norm_count_avg_df"], args.out_prefix, classes=inputs["feat_classes"], degs=inputs["de_table"])
         else:
             print('Plot type %s not recognized, please check the -p/--plot arguments' % plot)
 
