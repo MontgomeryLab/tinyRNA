@@ -217,23 +217,9 @@ intermed_file: False
 ######-------------------------------------------------------------------------------######
 
 
-##-- If True: produce principal component analysis plots for each library comparison
+##-- If True: produce principal component analysis plots for each sample comparison
 dge_pca_plots: true
 
-
-######----------------------------- OUTPUT DIRECTORIES ------------------------------######
-#
-# Outputs for each step are organized into their own subdirectories in your run
-# directory. You may set these folder names here.
-#
-######-------------------------------------------------------------------------------######
-
-dir_name_bt_build: bowtie-build
-dir_name_fastp: fastp
-dir_name_collapser: collapser
-dir_name_bowtie: bowtie
-dir_name_counter: counter
-dir_name_dge: DGE
 
 ######-------------------------------- PLOTTING OPTIONS -----------------------------######
 #
@@ -247,9 +233,10 @@ dir_name_dge: DGE
 #
 ######-------------------------------------------------------------------------------######
 
-# Define the plots desired by uncommenting (removing the '#') for each plot
-# or adding a '#' to remove that plot
-plots:
+
+# Enable plots by uncommenting (removing the '#') for the desired plot type
+# Disable plots by commenting (adding a '#') for the undesired plot type
+plot_requests:
   - 'len_dist'
   - 'class_charts'
   - 'replicate_scatter'
@@ -258,9 +245,21 @@ plots:
 #  - 'sample_avg_scatter_by_deg'
   - 'sample_avg_scatter_by_both'
 
-##-- These options are generated based on sample input --##
-plot_input_files: ''
-plot_data_types: ''
+
+######----------------------------- OUTPUT DIRECTORIES ------------------------------######
+#
+# Outputs for each step are organized into their own subdirectories in your run
+# directory. You may set these folder names here.
+#
+######-------------------------------------------------------------------------------######
+
+
+dir_name_bt_build: bowtie-build
+dir_name_fastp: fastp
+dir_name_collapser: collapser
+dir_name_bowtie: bowtie
+dir_name_counter: counter
+dir_name_dge: DGE
 
 
 #########################  AUTOMATICALLY GENERATED CONFIGURATIONS #########################

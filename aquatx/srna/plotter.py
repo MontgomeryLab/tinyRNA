@@ -11,7 +11,7 @@ import os.path
 import itertools
 import re
 from collections import defaultdict
-from typing import Optional
+from typing import Optional, Dict, Union
 
 import numpy as np
 import pandas as pd
@@ -21,6 +21,7 @@ from aquatx.srna.plotterlib import plotterlib as lib
 from aquatx.srna.util import report_execution_time
 
 mpl.use("PDF")
+
 
 def get_args():
     """Get input arguments from the user/command line."""
@@ -62,6 +63,7 @@ def get_args():
 
     return args
 
+
 def get_pairs(samples):
     """Get pairs of comparisons from a list of samples to compare.
     
@@ -93,7 +95,7 @@ def len_dist_plots(files_list, out_prefix, **kwargs):
         ax = aqplt.size_dist_bar(size_dist, color=nt_colors, **kwargs)
 
         # Save the plot
-        pdf_name = out_prefix + os.path.splitext(os.path.basename(size_file))[0] + "_len_dist.pdf"
+        pdf_name = '_'.join([out_prefix, os.path.splitext(os.path.basename(size_file))[0], "len_dist.pdf"])
         plt.savefig(pdf_name, bbox_inches='tight')
 
 
@@ -133,6 +135,7 @@ def get_sample_rep_dict(df):
 
     return sample_dict
 
+
 def get_sample_averages(df, samples):
     """Average the counts per sample across replicates.
     
@@ -151,6 +154,7 @@ def get_sample_averages(df, samples):
         new_df.loc[:, key] = df[val].mean(axis=1)
     
     return new_df
+
 
 @report_execution_time("Scatter replicates")
 def scatter_replicates(count_df, output_prefix, output_postfix, samples, norm=False):
@@ -318,14 +322,16 @@ def get_r_safename(name):
     return special_char(leading_char(name))
 
 
-def load_raw_counts(raw_counts_file) -> pd.DataFrame:
+def load_raw_counts(raw_counts_file) -> Optional[pd.DataFrame]:
+    if raw_counts_file is None: return None
     raw_count_df = pd.read_csv(raw_counts_file, index_col=0)
     raw_count_df.rename(get_r_safename, axis="columns")
 
     return raw_count_df
 
 
-def load_norm_counts(norm_counts_file) -> pd.DataFrame:
+def load_norm_counts(norm_counts_file) -> Optional[pd.DataFrame]:
+    if norm_counts_file is None: return None
     return pd.read_csv(norm_counts_file, index_col=0)
 
 
@@ -349,6 +355,7 @@ def get_class_counts(counts_df) -> pd.DataFrame:
     class_counts = pd.DataFrame(grouped_flat_index, columns=counts_df.columns).groupby("Feature.Class").sum()
 
     return class_counts
+
 
 @report_execution_time("Input validation")
 def validate_inputs(args):
@@ -385,10 +392,11 @@ def validate_inputs(args):
     for bad_request in unsatisfied:
         args.plots.remove(bad_request)
 
+
 @report_execution_time("Setup")
 def setup(args):
     required_inputs = {
-        'len_dist': [None],
+        'len_dist': [],
         'class_charts': ["norm_count_df", "class_counts"],
         'replicate_scatter': ["raw_count_df", "norm_count_df", "sample_rep_dict"],
         'sample_avg_scatter': ["norm_count_df", "norm_count_avg_df"],
@@ -397,7 +405,7 @@ def setup(args):
         'sample_avg_scatter_by_both': ["norm_count_df", "norm_count_avg_df", "feat_classes", "de_table"],
     }
 
-    relevant_vars = {}
+    relevant_vars: Dict[str, Union[pd.DataFrame, pd.Series, dict, None]] = {}
     input_getters = {
         'raw_count_df': lambda: load_raw_counts(args.raw_counts),
         'norm_count_df': lambda: load_norm_counts(args.norm_counts),
@@ -408,14 +416,13 @@ def setup(args):
         'class_counts': lambda: get_class_counts(relevant_vars["norm_count_df"])
     }
 
-    # Todo: handle the "either-or" case in replicate_scatter
-
     for plot in args.plots:
         for req in required_inputs[plot]:
             if req is not None and req not in relevant_vars:
                 relevant_vars[req] = input_getters[req]()
 
     return relevant_vars
+
 
 @report_execution_time("Main routine")
 def main():

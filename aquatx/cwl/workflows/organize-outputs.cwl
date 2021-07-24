@@ -86,7 +86,7 @@ steps:
     run: ../tools/make-subdir.cwl
     in:
       dir_files:
-        source: [ counter_features, counter_other, counter_alignment_stats, counter_summary_stats, counter_intermed ]
+        source: [ counter_features, counter_other, counter_alignment_stats, counter_summary_stats, counter_intermed, features_csv ]
         linkMerge: merge_flattened
       dir_name: counter_name
     out: [ subdir ]

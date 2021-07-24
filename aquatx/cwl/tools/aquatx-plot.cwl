@@ -6,34 +6,39 @@ class: CommandLineTool
 baseCommand: aquatx-plot
 
 inputs:
-  input_files:
+  raw_counts:
+    type: File
+    inputBinding:
+      prefix: -rc
+    doc: "Raw, non-normalized feature counts from Counter"
+
+  norm_counts:
+    type: File
+    inputBinding:
+      prefix: -nc
+    doc: "Normalized feature counts from DESeq"
+
+  deg_tables:
     type: File[]
     inputBinding:
-      position: 2
-      prefix: -i
+      prefix: -deg
+    doc: "Sample comparison tables from DESeq"
+
+  len_dist:
+    type: File[]
+    inputBinding:
+      prefix: -len
+    doc: "5' end nucleotide vs. length matrices from Counter"
 
   out_prefix:
     type: string?
     inputBinding:
-      position: 2
       prefix: -o
+    doc: "The prefix to use when naming output files (optional)"
 
-  data_types:
+  plot_requests:
     type: string[]
     inputBinding:
-      position: 2
-      prefix: -d
-
-  references:
-    type: File[]?
-    inputBinding:
-      position: 2
-      prefix: -r
-
-  plots:
-    type: string[]?
-    inputBinding:
-      position: 2
       prefix: -p
 
 outputs:

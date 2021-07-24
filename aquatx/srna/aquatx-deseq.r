@@ -2,10 +2,7 @@
 
 #### ---- Get the command line arguments ---- ####
 
-# args <- commandArgs(trailingOnly = TRUE)
-args <- c("--input-file", "/Users/alex/Projects/PycharmProjects/aquatx-srna/START_HERE/my_first_run_2021-07-16_19-23-58_run_directory/counter/my_first_run_2021-07-16_19-23-58_feature_counts.csv",
-          "--outfile-prefix", "tontph")
-
+args <- commandArgs(trailingOnly = TRUE)
 usage <- "The following arguments are accepted:
 
        --input-file <count_file>

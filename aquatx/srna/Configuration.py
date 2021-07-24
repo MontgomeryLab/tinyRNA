@@ -310,12 +310,11 @@ class Configuration(ConfigBase):
 class ResumeConfig(ConfigBase):
     """A class for modifying the workflow and config to resume a run at Counter
 
-    The modified workflow document is written to the package resource directory.
-    Directory output names have a timestamp appended to them to keep outputs
-    separate between runs. Timestamped run prefixes are also updated to the
-    date and time of the resume run. A copy of the Features Sheet is included
-    in the counts output directory to maintain a record of the selection rules
-    that were used for the resume run.
+    The modified workflow document must be written to the package resource directory
+    for CWL workflows in order to preserve the relative paths copied from the original
+    workflows. Directory output names have a timestamp appended to them to keep outputs
+    separate between runs. Timestamped run prefixes are also updated to reflect the
+    date and time of the resume run.
     """
 
     def __init__(self, processed_config, workflow):
@@ -328,7 +327,7 @@ class ResumeConfig(ConfigBase):
             self.workflow = self.yaml.load(f)
 
         self.dt = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        self.steps = ["counter", "dge"]
+        self.steps = ["counter", "dge", "plotter"]
         self.new_counter_inputs = {
             'aligned_seqs': "resume_sams",
             'fastp_logs': "resume_fastp_logs",
@@ -340,9 +339,9 @@ class ResumeConfig(ConfigBase):
         self.add_timestamps()
 
     def rebuild_counter_inputs(self):
-        """Set the new path inputs for the counts step
+        """Set the new path inputs for the Counter step
 
-        Normally, the counts step receives inputs from the current run's previous step outputs.
+        Normally, the Counter step receives inputs from the current run's previous step outputs.
         When resuming, these outputs should already exist on disk. We need to populate the new
         File[] arrays with their corresponding pipeline outputs on disk.
         """
@@ -356,40 +355,36 @@ class ResumeConfig(ConfigBase):
                                         for prefix in self['uniq_seq_prefix']]
 
     def create_truncated_workflow(self):
-        """Modifies the workflow to begin running at the counts step
+        """Modifies the workflow to begin running at the Counter step
 
-        New input variables must be created, which point to the files produced by the
-        prior pipeline run. The counts step is modified to receive these inputs directly
-        rather than expecting CWL to run the previous workflow steps. Parameters for Counter outputs and
-        DEG inputs do not require modification. The subdirs step is removed and replaced with modified
-        copies of its own calls to make-subdir.cwl, for the creation of Counter and DEG outputs.
-        The Features Sheet is also included in the new Counter folder.
+        New input variables must be created which point to the files produced by the
+        prior pipeline run. The Counter step is modified to receive these inputs directly
+        rather than expecting CWL to run the previous workflow steps. Parameters between
+        resumed steps don't require modification. The subdirs step is removed and replaced
+        with modified copies of its own calls to make-subdir.cwl.
         """
 
-        # Remove incompatible steps
-        for step in ['bt_build_optional', 'counts-prep', 'subdirs']:
-            del self.workflow['steps'][step]
+        # Remove all steps except those defined for the resume run
+        for workflow_step in list(self.workflow['steps'].keys()):
+            if workflow_step not in self.steps:
+                del self.workflow['steps'][workflow_step]
 
-        # Setup new inputs
+        # Setup new inputs at the workflow and first-step levels
         for inp, new_input in self.new_counter_inputs.items():
             # Create WorkflowInputParameters for new "resume_" File arrays
             self.workflow['inputs'][new_input] = "File[]"
-            # Update WorkflowStepInputs for these new variables in counts
-            self.workflow['steps']['counts']['in'][inp] = new_input
+            # Update WorkflowStepInputs for these new variables in Counter
+            self.workflow['steps'][self.steps[0]]['in'][inp] = new_input
 
-        # Remove subdir WorkflowOutputParameters
-        for outdir in ['bt_build', 'fastp', 'collapser', 'bowtie', 'counter', 'dge']:
-            del self.workflow['outputs'][f'{outdir}_out_dir']
+        # Remove all WorkflowOutputParameters in preparation for the new
+        self.workflow['outputs'].clear()
 
-        # Replace the subdirs subworkflow step with calls to its underlying CommandLineTool.
+        # Copy relevant steps from the organize-outputs subworkflow and update their inputs/outputs
         with open(resource_filename('aquatx', 'cwl/workflows/organize-outputs.cwl')) as f:
             organizer_sub_wf = self.yaml.load(f)
 
-            sources = {"counter":
-                           ["counts/feature_counts", "counts/other_counts", "counts/alignment_stats",
-                            "counts/summary_stats", "counts/intermed_out_files", "features_csv"],
-                       "dge":
-                            ['dge/norm_counts', 'dge/comparisons', 'dge/pca_plots']}
+            subdir_sources = {step: [f"{step}/{output}" for output in self.workflow['steps'][step]['out']]
+                              for step in self.steps}
 
             for step in self.steps:
                 step_name = f'organize_{step}'
@@ -397,7 +392,7 @@ class ResumeConfig(ConfigBase):
                 context = self.workflow['steps'][step_name] = organizer_sub_wf['steps'][step_name]
                 # Update WorkflowStepInputs
                 context['in']['dir_name'] = f'dir_name_{step}'
-                context['in']['dir_files'] = {'source': sources[step], 'pickValue': 'all_non_null',
+                context['in']['dir_files'] = {'source': subdir_sources[step], 'pickValue': 'all_non_null',
                                               'linkMerge': 'merge_flattened'}
                 # Update WorkflowOutputParameter
                 self.workflow['outputs'][f'{step}_out_dir'] = {
@@ -418,7 +413,6 @@ class ResumeConfig(ConfigBase):
 
         # Update run_name output prefix variable for the current date and time
         self['run_name'] = re.sub(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}", self.dt, self['run_name'])
-
 
     def write_workflow(self, workflow_outfile: str) -> None:
         with open(workflow_outfile, "w") as wf:

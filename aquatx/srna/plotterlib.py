@@ -5,6 +5,7 @@ with the AQuATx pipeline. The plots are built off of matplotlib, but updated to
 use the plot style of this tool. Other color schemes and built-in matplotlib styles
 can be used. 
 """
+
 import itertools
 import numpy as np
 import pandas as pd
@@ -12,7 +13,21 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import warnings; warnings.filterwarnings(action='once')
 
+
 class plotterlib:
+    
+    plot_config = {
+        'class_pie_barh': {'args': {'nrows': 1, 'ncols': 2}, 'style': {'figsize': (8, 4)}},
+        'scatter_simple': {'args': {}, 'style': {'figsize': (8, 8)}}
+    }
+
+    def __init__(self):
+        self.subplots = {}
+        for plot in self.plot_config:
+            conf = self.plot_config[plot]
+            fig, ax = plt.subplots(**conf["args"], **conf["style"])
+            self.subplots[plot] = {'fig': fig, 'ax': ax}
+
     def set_aquatx_style(self, **kwargs):
         """Set parameters for the stylesheet for AQuATx if parameters not set by user."""
 
@@ -110,7 +125,7 @@ class plotterlib:
         kwargs = self.set_aquatx_style(figure={'figsize': (6,4)}, **kwargs)
 
         # Convert reads to proportion
-        size_prop = size_df / size_df.sum().sum()
+        size_prop = size_df / size_df.sum()
 
         # Create the plot
         sizeb = size_prop.plot(kind='bar', stacked=True, **kwargs)
@@ -179,13 +194,16 @@ class plotterlib:
             cplots: A pie chart & horizontal bar chart of sRNA classes
         """
         # Set the plot style
-        kwargs = self.set_aquatx_style(**kwargs, figure={'figsize':(8,4)})
+        kwargs = self.set_aquatx_style(**kwargs, figure={'figsize': (8, 4)})
 
         # Convert reads to proportion
         class_prop = class_df/(class_df.sum())
 
-        # Create the plots
-        fig, ax = plt.subplots(nrows=1, ncols=2)
+        # Retrieve axis and styles for this plot type
+        ax: plt.Axes
+        fig, ax = self.subplots["class_pie_barh"].values()
+        ax[0].clear()
+        ax[1].clear()
 
         # pie
         class_prop.plot(kind='pie', subplots=True, ax=ax[0], labels=None, **kwargs)
@@ -247,41 +265,43 @@ class plotterlib:
             kwargs: Additional arguments to pass to matplotlib rc or plot
 
         Returns:
-            sscat: A simple scatter plot of counts
+            ax: A simple scatter plot of counts
         """
         # Set the plot style
         kwargs = self.set_aquatx_style(figure={'figsize': (8,8)}, **kwargs)
 
-        fig, sscat = plt.subplots()
+        # Retrieve axis and styles for this plot type
+        fig, ax = self.subplots["scatter_simple"].values()
+        ax.clear()
 
         # log2 normalize data if requested
         if log_norm:
             count_x = count_x.apply(np.log2)
             count_y = count_y.apply(np.log2)
             sscat_lims = self.scatter_range(pd.concat([count_x, count_y]))
-            sscat.set_xlim(sscat_lims)
-            sscat.set_ylim(sscat_lims)
-            sscat.scatter(count_x, count_y, **kwargs)
+            ax.set_xlim(sscat_lims)
+            ax.set_ylim(sscat_lims)
+            ax.scatter(count_x, count_y, **kwargs)
 
-            oldticks = sscat.get_xticks()
+            oldticks = ax.get_xticks()
             newticks = np.empty([len(oldticks)-1, 8])
 
             for i in range(1,len(oldticks)-1):
                 newticks[i,:] = np.arange(2**oldticks[i-1], 2**oldticks[i], (2**oldticks[i] - 2**oldticks[i-1])/8)
 
             newticks = np.sort(newticks[2:,:].flatten())
-            sscat.set_xticks(np.log2(newticks), minor=True)
-            sscat.set_xticklabels(np.round(2**oldticks))
-            sscat.set_yticks(np.log2(newticks), minor=True)
-            sscat.set_yticklabels(np.round(2**oldticks))
+            ax.set_xticks(np.log2(newticks), minor=True)
+            ax.set_xticklabels(np.round(2**oldticks))
+            ax.set_yticks(np.log2(newticks), minor=True)
+            ax.set_yticklabels(np.round(2**oldticks))
 
         else:
-            sscat.scatter(count_x, count_y, **kwargs)
+            ax.scatter(count_x, count_y, **kwargs)
             sscat_lims = self.scatter_range(pd.concat([count_x, count_y]))
-            sscat.set_xlim(sscat_lims)
-            sscat.set_ylim(sscat_lims)
+            ax.set_xlim(sscat_lims)
+            ax.set_ylim(sscat_lims)
 
-        return sscat
+        return ax
 
     def scatter_grouped(self, count_x, count_y, *args, log_norm=False, labels=None, **kwargs):
         """Creates a scatter plot with different groups highlighted.

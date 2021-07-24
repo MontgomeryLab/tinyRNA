@@ -84,6 +84,9 @@ inputs:
   # deseq inputs
   dge_pca_plots: boolean?
 
+  # plotter options
+  plot_requests: string[]
+
   # output directory names
   dir_name_bt_build: string
   dir_name_fastp: string
@@ -91,11 +94,6 @@ inputs:
   dir_name_bowtie: string
   dir_name_counter: string
   dir_name_dge: string
-
-  # plotter options
-  plot_input_files: string[]
-  plot_data_types: string[]
-  plots: string[]
 
 steps:
 
@@ -113,7 +111,7 @@ steps:
       threads: threads
     out: [index_files]
 
-  counts-prep:
+  counter-prep:
     run: per-library.cwl
     scatter: [in_fq, out_fq, json, html, report_title, uniq_seq_prefix, outfile, logfile, un]
     scatterMethod: dotproduct
@@ -172,27 +170,38 @@ steps:
       seed: seed
     out: [fastq_clean, html_report_file, json_report_file, uniq_seqs, uniq_seqs_low, aln_seqs, unal_seqs, bowtie_log]
 
-  counts:
+  counter:
     run: ../tools/aquatx-count.cwl
     in:
-      aligned_seqs: counts-prep/aln_seqs
+      aligned_seqs: counter-prep/aln_seqs
       gff_files: gff_files
       samples_csv: samples_csv
       config_csv: features_csv
       out_prefix: run_name
       intermed_file: intermed_file
-      fastp_logs: counts-prep/json_report_file
-      collapsed_fa: counts-prep/uniq_seqs
+      fastp_logs: counter-prep/json_report_file
+      collapsed_fa: counter-prep/uniq_seqs
       is_pipeline: {default: true}
     out: [feature_counts, other_counts, alignment_stats, summary_stats, intermed_out_files]
 
   dge:
     run: ../tools/aquatx-deseq.cwl
     in:
-      input_file: counts/feature_counts
+      input_file: counter/feature_counts
       outfile_prefix: run_name
       pca_plots: dge_pca_plots
     out: [ norm_counts, comparisons, pca_plots ]
+
+  plotter:
+    run: ../tools/aquatx-plot.cwl
+    in:
+      raw_counts: counter/feature_counts
+      norm_counts: dge/norm_counts
+      deg_tables: dge/comparisons
+      len_dist: counter/other_counts
+      out_prefix: run_name
+      plot_requests: plot_requests
+    out: [ plots ]
 
   subdirs:
     run: organize-outputs.cwl
@@ -202,31 +211,31 @@ steps:
       run_bowtie_build: run_bowtie_build
 
       fastp_name: dir_name_fastp
-      fastp_cleaned_fastq: counts-prep/fastq_clean
-      fastp_html_report: counts-prep/html_report_file
-      fastp_json_report: counts-prep/json_report_file
+      fastp_cleaned_fastq: counter-prep/fastq_clean
+      fastp_html_report: counter-prep/html_report_file
+      fastp_json_report: counter-prep/json_report_file
 
       collapser_name: dir_name_collapser
-      collapser_uniq: counts-prep/uniq_seqs
+      collapser_uniq: counter-prep/uniq_seqs
       collapser_low:
         # This optional output is actually an array of nulls when not produced (can't use default)
-        source: counts-prep/uniq_seqs_low
+        source: counter-prep/uniq_seqs_low
         pickValue: all_non_null
 
       bowtie_name: dir_name_bowtie
-      bowtie_sam: counts-prep/aln_seqs
-      bowtie_log: counts-prep/bowtie_log
+      bowtie_sam: counter-prep/aln_seqs
+      bowtie_log: counter-prep/bowtie_log
       bowtie_unal:
-        source: counts-prep/unal_seqs
+        source: counter-prep/unal_seqs
         default: []
 
       counter_name: dir_name_counter
-      counter_features: counts/feature_counts
-      counter_other: counts/other_counts
-      counter_alignment_stats: counts/alignment_stats
-      counter_summary_stats: counts/summary_stats
+      counter_features: counter/feature_counts
+      counter_other: counter/other_counts
+      counter_alignment_stats: counter/alignment_stats
+      counter_summary_stats: counter/summary_stats
       counter_intermed:
-        source: counts/intermed_out_files
+        source: counter/intermed_out_files
         default: []
 
       dge_name: dir_name_dge
@@ -236,16 +245,6 @@ steps:
         source: dge/pca_plots
         default: []
     out: [ bt_build_dir, fastp_dir, collapser_dir, bowtie_dir, counter_dir, dge_dir ]
-
-  plotter:
-    run: ../tools/aquatx-plot.cwl
-    in:
-      input_files: plot_input_files
-      data_types: plot_data_types
-      out_prefix: output_prefix
-      reference: ref_annotations
-      plots: plots
-    out: [plots]
 
 outputs:
 
@@ -275,6 +274,7 @@ outputs:
     outputSource: subdirs/dge_dir
 
   # Plotter outputs
-  plots:
+  plotter_plots:
     type: File[]
     outputSource: plotter/plots
+
