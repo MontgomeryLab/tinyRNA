@@ -44,6 +44,9 @@ inputs:
   dge_pca: File[]?
   dge_comparisons: File[]
 
+  plotter_name: string
+  plotter_plots: File[]?
+
 steps:
 
   organize_bt_indexes:
@@ -100,6 +103,15 @@ steps:
       dir_name: dge_name
     out: [ subdir ]
 
+  organize_plotter:
+    run: ../tools/make-subdir.cwl
+    in:
+      dir_files:
+        source: [ plotter_plots ]
+        linkMerge: merge_flattened
+      dir_name: plotter_name
+    out: [ subdir ]
+
 outputs:
 
   bt_build_dir:
@@ -125,3 +137,7 @@ outputs:
   dge_dir:
     type: Directory
     outputSource: organize_dge/subdir
+
+  plotter_dir:
+    type: Directory
+    outputSource: organize_plotter/subdir

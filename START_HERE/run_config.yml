@@ -240,9 +240,9 @@ plot_requests:
   - 'len_dist'
   - 'class_charts'
   - 'replicate_scatter'
-#  - 'sample_avg_scatter'
-#  - 'sample_avg_scatter_by_class'
-#  - 'sample_avg_scatter_by_deg'
+  - 'sample_avg_scatter'
+  - 'sample_avg_scatter_by_class'
+  - 'sample_avg_scatter_by_deg'
   - 'sample_avg_scatter_by_both'
 
 
@@ -260,6 +260,7 @@ dir_name_collapser: collapser
 dir_name_bowtie: bowtie
 dir_name_counter: counter
 dir_name_dge: DGE
+dir_name_plotter: plots
 
 
 #########################  AUTOMATICALLY GENERATED CONFIGURATIONS #########################

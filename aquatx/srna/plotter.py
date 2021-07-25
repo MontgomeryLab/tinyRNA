@@ -14,6 +14,7 @@ from collections import defaultdict
 from typing import Optional, Dict, Union
 
 import numpy as np
+import multiprocessing as mp
 import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -94,8 +95,19 @@ def len_dist_plots(files_list, out_prefix, **kwargs):
         nt_colors = ['#F78E2D', '#CBDC3F', '#4D8AC8', '#E06EAA'] # Orange, Yellow-green, Blue, Pink
         ax = aqplt.size_dist_bar(size_dist, color=nt_colors, **kwargs)
 
-        # Save the plot
-        pdf_name = '_'.join([out_prefix, os.path.splitext(os.path.basename(size_file))[0], "len_dist.pdf"])
+        # Parse the "sample_rep_N" string from the input filename to avoid duplicate out_prefix's in the basename
+        basename = os.path.splitext(os.path.basename(size_file))[0]
+        pos = re.search(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_", basename).span()
+
+        if pos is not None:
+            # File is a pipeline product
+            begin = pos[1]
+            end = basename.rfind("_nt_len_dist")
+        else:
+            # File does not appear to have been produced by the pipeline
+            begin, end = 0, len(basename)
+
+        pdf_name = '_'.join([out_prefix, basename[begin:end], "len_dist.pdf"])
         plt.savefig(pdf_name, bbox_inches='tight')
 
 
@@ -325,7 +337,7 @@ def get_r_safename(name):
 def load_raw_counts(raw_counts_file) -> Optional[pd.DataFrame]:
     if raw_counts_file is None: return None
     raw_count_df = pd.read_csv(raw_counts_file, index_col=0)
-    raw_count_df.rename(get_r_safename, axis="columns")
+    raw_count_df.rename(get_r_safename, axis="columns", inplace=True)
 
     return raw_count_df
 
@@ -436,29 +448,40 @@ def main():
     global aqplt
     aqplt = lib()
 
+    itinerary = []
+
     # generate plots requested
     for plot in args.plots:
         if plot == 'len_dist':
-            len_dist_plots(args.len_dist, args.out_prefix)
+            itinerary.append((len_dist_plots, (args.len_dist, args.out_prefix), {}))
         elif plot == 'class_charts':
-            class_plots(inputs["class_counts"], args.out_prefix)
+            itinerary.append((class_plots, (inputs["class_counts"], args.out_prefix), {}))
         elif plot == 'replicate_scatter':
             if inputs["raw_count_df"] is not None:
-                scatter_replicates(inputs["raw_count_df"], args.out_prefix, "raw_count", inputs["sample_rep_dict"])
-            
+                itinerary.append((scatter_replicates, (inputs["raw_count_df"], args.out_prefix, "raw_count", inputs["sample_rep_dict"]), {}))
             if inputs["norm_count_df"] is not None:
-                scatter_replicates(inputs["norm_count_df"], args.out_prefix, "norm_count", inputs["sample_rep_dict"], norm=True)
+                itinerary.append((scatter_replicates, (inputs["norm_count_df"], args.out_prefix, "norm_count", inputs["sample_rep_dict"]), {"norm": True}))
         elif plot == 'sample_avg_scatter':
-            scatter_samples(inputs["norm_count_avg_df"], args.out_prefix)
+            itinerary.append((scatter_samples, (inputs["norm_count_avg_df"], args.out_prefix), {}))
         elif plot == 'sample_avg_scatter_by_class':
-            scatter_samples(inputs["norm_count_avg_df"], args.out_prefix, classes=inputs["feat_classes"])
+            itinerary.append((scatter_samples, (inputs["norm_count_avg_df"], args.out_prefix), {"classes": inputs["feat_classes"]}))
         elif plot == 'sample_avg_scatter_by_deg':
-            scatter_samples(inputs["norm_count_avg_df"], args.out_prefix, degs=inputs["de_table"])
+            itinerary.append((scatter_samples, (inputs["norm_count_avg_df"], args.out_prefix), {"degs": inputs["de_table"]}))
         elif plot == 'sample_avg_scatter_by_both':
-            scatter_samples(inputs["norm_count_avg_df"], args.out_prefix, classes=inputs["feat_classes"], degs=inputs["de_table"])
+            itinerary.append((scatter_samples, (inputs["norm_count_avg_df"], args.out_prefix), {"classes": inputs["feat_classes"], "degs": inputs["de_table"]}))
         else:
             print('Plot type %s not recognized, please check the -p/--plot arguments' % plot)
 
+    if len(itinerary) > 1:
+        with mp.Pool(len(itinerary)) as pool:
+            results = []
+            for task, args, kwds in itinerary:
+                results.append(pool.apply_async(task, args, kwds))
+            for result in results:
+                result.wait()
+    else:
+        task = itinerary.pop()
+        task[0](*task[1], **task[2])
 
 if __name__ == '__main__':
     main()

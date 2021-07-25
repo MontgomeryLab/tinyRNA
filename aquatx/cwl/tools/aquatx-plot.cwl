@@ -40,10 +40,11 @@ inputs:
     type: string[]
     inputBinding:
       prefix: -p
+    doc: "A list of desired plot types to produce"
 
 outputs:
   plots:
-    type: File[]
+    type: File[]?
     outputBinding:
       glob: "*.pdf"
 

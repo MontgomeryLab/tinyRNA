@@ -94,6 +94,7 @@ inputs:
   dir_name_bowtie: string
   dir_name_counter: string
   dir_name_dge: string
+  dir_name_plotter: string
 
 steps:
 
@@ -244,7 +245,12 @@ steps:
       dge_pca:
         source: dge/pca_plots
         default: []
-    out: [ bt_build_dir, fastp_dir, collapser_dir, bowtie_dir, counter_dir, dge_dir ]
+
+      plotter_name: dir_name_plotter
+      plotter_plots:
+        source: plotter/plots
+        default: []
+    out: [ bt_build_dir, fastp_dir, collapser_dir, bowtie_dir, counter_dir, dge_dir, plotter_dir ]
 
 outputs:
 
@@ -273,8 +279,7 @@ outputs:
     type: Directory
     outputSource: subdirs/dge_dir
 
-  # Plotter outputs
-  plotter_plots:
-    type: File[]
+  plotter_out_dir:
+    type: Directory
     outputSource: plotter/plots
 

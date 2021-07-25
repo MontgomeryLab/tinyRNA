@@ -19,11 +19,11 @@ usage <- "The following arguments are accepted:
               Optional. This will produce principle component analysis plots
               using the DESeq2 library. Output files are PDF format."
 
-df_with_classes <- function(df){
-  # Returns the provided dataframe with a corresponding classes column, regardless of order
+df_with_classes <- function(data){
+  # Returns the provided data as a dataframe with a corresponding classes column, regardless of order
   return(
     transform(
-      merge(classes, df, by=0),
+      merge(classes, data.frame(data), by=0),
       row.names = Row.names,
       Row.names = NULL
     )
@@ -90,8 +90,8 @@ for (i in 1:nrow(all_comparisons)){
   comparison <- all_comparisons[i,]
 
   deseq_res <- results(deseq_run, c("condition", comparison[1], comparison[2]))
-  deseq_res <- df_with_classes(data.frame(deseq_res[order(deseq_res$padj),]))
-  write.csv(deseq_res, paste(out_pref, "cond1", comparison[1], "cond2", comparison[2], "deseq_table.csv", sep="_"))
+  result_df <- df_with_classes(deseq_res[order(deseq_res$padj),])
+  write.csv(result_df, paste(out_pref, "cond1", comparison[1], "cond2", comparison[2], "deseq_table.csv", sep="_"))
 
   if (plot_pca){
     plt <- plotPCA(rlog(deseq_ds))
