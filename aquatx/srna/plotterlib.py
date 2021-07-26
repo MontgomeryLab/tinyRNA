@@ -7,112 +7,40 @@ can be used.
 """
 
 import itertools
+from typing import Union
+
 import numpy as np
 import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import warnings; warnings.filterwarnings(action='once')
 
+from pkg_resources import resource_filename
+
 
 class plotterlib:
-    
-    plot_config = {
-        'class_pie_barh': {'args': {'nrows': 1, 'ncols': 2}, 'style': {'figsize': (8, 4)}},
-        'scatter_simple': {'args': {}, 'style': {'figsize': (8, 8)}}
-    }
 
-    def __init__(self):
+    def __init__(self, user_style_sheet=resource_filename('aquatx', 'extras/aquatx-srna-light.mplstyle')):
+
+        # Set global plot style once
+        plt.style.use(user_style_sheet)
+
+        # Improves performance (sacrifices interactivity)
+        mpl.use("PDF")
+
+        # Create one subplot per plot type to reuse between calls
+        fig_args = {
+            'class_pie_barh': {'figsize': (8, 4), 'nrows': 1, 'ncols': 2, 'tight_layout': True},
+            'len_dist_bar': {'figsize': (6, 4)},
+            'scatter_simple': {'figsize': (8, 8)}
+        }
+
         self.subplots = {}
-        for plot in self.plot_config:
-            conf = self.plot_config[plot]
-            fig, ax = plt.subplots(**conf["args"], **conf["style"])
+        for plot in fig_args:
+            fig, ax = plt.subplots(**fig_args[plot])
             self.subplots[plot] = {'fig': fig, 'ax': ax}
 
-    def set_aquatx_style(self, **kwargs):
-        """Set parameters for the stylesheet for AQuATx if parameters not set by user."""
-
-        # Define default aquatx settings
-        srna_colors =  ['F1605D', '51B9CF', 'FDC010', 'A5D38E', 'ED2891', '989898']
-        aq_kwargs = {'figure': {'figsize': (6,6),
-                                'dpi': 100,
-                                'facecolor': 'white',
-                                'edgecolor': '0.5'},
-                     'xtick': {'color': '333333',
-                               'direction': 'out',
-                               'major.size': 3.0,
-                               'minor.size': 1.5,
-                               'major.width': 0.8,
-                               'minor.width': 0.6,
-                               'major.pad': 3.5,
-                               'labelsize': 16},
-                     'ytick': {'color': '333333',
-                               'direction': 'out',
-                               'major.size': 3.0,
-                               'minor.size': 1.5,
-                               'major.width': 0.8,
-                               'minor.width': 0.6,
-                               'major.pad': 3.5,
-                               'labelsize': 16},
-                     'axes': {'labelsize': 16,
-                              'titlesize': 22,
-                              'facecolor': 'white',
-                              'edgecolor': '333333',
-                              'linewidth': 1,
-                              'grid': True,
-                              'labelcolor': '333333',
-                              'labelpad': 4.0,
-                              'axisbelow': True,
-                              'autolimit_mode': 'round_numbers',
-                              'prop_cycle': mpl.cycler('color', srna_colors),
-                              'xmargin': 0.5,
-                              'ymargin': 0.5},
-                     'legend': {'fontsize': 16,
-                                'framealpha': 0.8,
-                                'edgecolor': '0.8',
-                                'markerscale': 1.0,
-                                'borderpad': 0.4,
-                                'labelspacing': 0.5,
-                                'handletextpad': 0.8,
-                                'borderaxespad': 0.5,
-                                'columnspacing': 2.0},
-                     'pdf': {'fonttype': 42},
-                     'ps': {'fonttype': 42},
-                     'savefig': {'pad_inches': 0.1},
-                     'font': {'family': 'sans-serif',
-                              'sans-serif': 'Arial',
-                              'size': 10},
-                     'lines': {'linewidth': 3.0,
-                               'markersize': 11.0,
-                               'markeredgewidth': 0},
-                     'grid': {'color': '333333',
-                              'linestyle': '--',
-                              'linewidth': 0.8,
-                              'alpha': 0.2},
-                    }
-
-        # Add default values if user has not set
-        for key, val in aq_kwargs.items():
-            kwargs.setdefault(key, val)
-
-        # Set all values in rcParams, then remove from kwargs
-        kwargskeys = list(kwargs.keys())
-        for key in kwargskeys:
-            try:
-                mpl.rc(key, **kwargs[key])
-                _ = kwargs.pop(key)
-            except (KeyError, TypeError):
-                pass
-
-            try:
-                mpl.rcParams[key] = kwargs[key]
-                _ = kwargs.pop(key)
-            except KeyError:
-                pass
-
-
-        return kwargs
-
-    def size_dist_bar(self, size_df: pd.DataFrame, **kwargs):
+    def len_dist_bar(self, size_df: pd.DataFrame, **kwargs) -> plt.Axes:
         """Creates a size distribution plot.
 
         Args:
@@ -120,115 +48,105 @@ class plotterlib:
 
         Returns:
             sizeb: A stacked barplot of size + 5'nt data
+            kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
         """
-        # Set the plot style
-        kwargs = self.set_aquatx_style(figure={'figsize': (6,4)}, **kwargs)
+
+        # Retrieve axis and styles for this plot type
+        fig, ax = self.reuse_subplot("len_dist_bar")
 
         # Convert reads to proportion
-        size_prop = size_df / size_df.sum()
+        size_prop = size_df / size_df.sum().sum()
 
-        # Create the plot
-        sizeb = size_prop.plot(kind='bar', stacked=True, **kwargs)
-        sizeb.set_title('Distribution of aligned reads')
-        sizeb.set_ylim(0,np.max(np.sum(size_prop, axis=1))+0.025)
-        sizeb.set_ylabel('Proportion of Reads')
-        sizeb.set_xlabel('Length of Sequence')
-        sizeb.set_xticklabels(sizeb.get_xticklabels(), rotation=0)
+        # Override default colors. User may override with kwargs. (Orange, Yellow-green, Blue, Pink)
+        colors = {'axes.prop_cycle': mpl.cycler(color=['#F78E2D', '#CBDC3F', '#4D8AC8', '#E06EAA'])}
+
+        # The style context allows us to use temporary styles
+        with plt.style.context(colors):
+            plt.sca(ax)
+            sizeb = size_prop.plot(kind='bar', stacked=True, reuse_plot=True, **kwargs)
+            sizeb.set_title('Distribution of aligned reads')
+            sizeb.set_ylim(0,np.max(np.sum(size_prop, axis=1))+0.025)
+            sizeb.set_ylabel('Proportion of Reads')
+            sizeb.set_xlabel('Length of Sequence')
+            sizeb.set_xticklabels(sizeb.get_xticklabels(), rotation=0)
 
         return sizeb
 
-    def class_pie(self, class_df, **kwargs):
+    def class_pie(self, class_df: pd.DataFrame, **kwargs) -> plt.Axes:
         """Creates a pie chart of sRNA classes.
 
         Args:
             class_df: A pandas dataframe containing counts per class
+            kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
 
         Returns:
             cpie: A pie chart of sRNA classes
         """
-        # Set the plot style
-        kwargs = self.set_aquatx_style(**kwargs)
 
         # Convert reads to proportion
-        class_prop = class_df/(class_df.sum())
+        class_prop = class_df / class_df.sum()
 
         # Create the plot
         cpie = class_prop.plot(kind='pie', **kwargs)
+        cpie.legend(loc='best', bbox_to_anchor=(1, 0.5), fontsize=10, labels=class_prop.index)
         cpie.set_aspect("equal")
-        cpie.legend(loc='best', bbox_to_anchor= (1,0.5), fontsize=10, labels=class_prop.index)
         cpie.set_ylabel('')
         cpie.set_xlabel('')
 
         return cpie
 
-    def class_barh(self, class_df, **kwargs):
+    def class_barh(self, class_df: pd.DataFrame, **kwargs) -> plt.Axes:
         """Creates a horizontal bar chart of sRNA classes.
 
         Args:
             class_df: A pandas dataframe containing counts per class
+            kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
 
         Returns:
             cbar: A horizontal bar chart of sRNA classes
         """
-        # Set the plot style
-        kwargs = self.set_aquatx_style(**kwargs)
 
         # Convert reads to proportion
-        class_prop = class_df/(class_df.sum())
+        class_prop = class_df / class_df.sum()
+
+        # df.plot(kind=barh) ignores axes.prop_cycle... (ugh)
+        colors = kwargs.get('colors', plt.rcParams['axes.prop_cycle'].by_key()['color'])
 
         # Create the plot
-        colors = kwargs.get('colors', plt.rcParams['axes.prop_cycle'].by_key()['color'])
-        cbar = class_prop.plot(kind='barh', color=colors)
+        cbar = class_prop.plot(kind='barh', color=colors, **kwargs)
         cbar.set_xlabel('Proportion of reads')
+        cbar.legend().set_visible(False)
+        cbar.set_title('')
+        cbar.set_ylabel('')
         cbar.set_xlim(0,1)
 
         return cbar
 
-    def class_pie_barh(self, class_df, **kwargs):
+    def class_pie_barh(self, class_df, **kwargs) -> plt.Figure:
         """Creates both a pie & bar chart in the same figure
 
         Args:
             class_df: A pandas dataframe containing counts per class
+            kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
 
         Returns:
             cplots: A pie chart & horizontal bar chart of sRNA classes
         """
-        # Set the plot style
-        kwargs = self.set_aquatx_style(**kwargs, figure={'figsize': (8, 4)})
-
-        # Convert reads to proportion
-        class_prop = class_df/(class_df.sum())
 
         # Retrieve axis and styles for this plot type
-        ax: plt.Axes
-        fig, ax = self.subplots["class_pie_barh"].values()
-        ax[0].clear()
-        ax[1].clear()
+        fig, ax = self.reuse_subplot("class_pie_barh")
 
-        # pie
-        class_prop.plot(kind='pie', subplots=True, ax=ax[0], labels=None, **kwargs)
-        ax[0].set_aspect("equal")
-        ax[0].legend(loc='best', bbox_to_anchor= (1,0.5), fontsize=10, labels=class_prop.index)
-        ax[0].set_ylabel('')
-        ax[0].set_xlabel('')
-
-        # bar
-        colors = kwargs.get('colors', plt.rcParams['axes.prop_cycle'].by_key()['color'])
-        class_prop.plot(kind='barh', subplots=True, ax=ax[1], color=colors)
-        ax[1].legend().set_visible(False)
-        ax[1].set_title('')
-        ax[1].set_xlabel('Proportion of reads')
-        ax[1].set_ylabel('')
-        ax[1].set_xlim(0,1)
+        # Plot pie and barh on separate axes
+        self.class_pie(class_df, ax=ax[0], labels=None, **kwargs)
+        self.class_barh(class_df, ax=ax[1], legend=None, title=None, ylabel=None, **kwargs)
 
         # finalize & save figure
         fig.suptitle("Proportion of classes of small RNAs", fontsize=22)
-        fig.tight_layout(rect=[0, 0.03, 1, 0.95])
         fig.subplots_adjust(top=0.85)
 
-        return fig, ax
+        return fig
 
-    def scatter_range(self, df):
+    def scatter_range(self, df: pd.DataFrame) -> (int, int):
         """ Find an appropriate range for x,y limits of a scatter plot.
 
         Args:
@@ -255,24 +173,21 @@ class plotterlib:
 
         return lim_min, lim_max
 
-    def scatter_simple(self, count_x, count_y, log_norm=False, **kwargs):
+    def scatter_simple(self, count_x, count_y, log_norm=False, **kwargs) -> plt.Axes:
         """Creates a simple scatter plot of counts.
 
         Args:
             count_x: A pandas dataframe/series of counts per feature (X axis)
             count_y: A pandas dataframe/series of counts per feature (Y axis)
             log_norm: Apply log2 normalization to the data
-            kwargs: Additional arguments to pass to matplotlib rc or plot
+            kwargs: Additional keyword arguments to pass to pyplot.Axes.scatter()
 
         Returns:
             ax: A simple scatter plot of counts
         """
-        # Set the plot style
-        kwargs = self.set_aquatx_style(figure={'figsize': (8,8)}, **kwargs)
 
         # Retrieve axis and styles for this plot type
-        fig, ax = self.subplots["scatter_simple"].values()
-        ax.clear()
+        fig, ax = self.reuse_subplot("scatter_simple")
 
         # log2 normalize data if requested
         if log_norm:
@@ -311,12 +226,11 @@ class plotterlib:
             count_y: A pandas dataframe/series of counts per feature (Y axis)
             args: A list of features to highlight, can pass multiple lists
             log_norm: whether or not the data should be log-normalized
-            kwargs: Additional arguments to pass to matplotlib rc or plot
+            kwargs: Additional arguments to pass to pyplot.Axes.scatter()
 
         Returns:
             gscat: A scatter plot containing groups highlighted different colors
         """
-        kwargs = self.set_aquatx_style(figure={'figsize': (8,8)}, **kwargs)
 
         # Subset the base points to avoid overplotting
         count_x_base = count_x.drop(list(itertools.chain(*args)))
@@ -340,3 +254,96 @@ class plotterlib:
         gscat.legend(labels=labels)
 
         return gscat
+
+    def reuse_subplot(self, plot_type:str) -> (plt.Figure, Union[plt.Axes, np.ndarray]):
+        """Retrieves the reusable subplot for this plot type
+
+        Args:
+            plot_type: The reusable plot name
+
+        Returns:
+            fig: The subplot's pyplot.Figure
+            ax: The subplot's pyplot.Axes, or an array of axes if subplot's nrows or ncols is >1
+        """
+        fig, ax = self.subplots[plot_type].values() # Each plot type has a dedicated figure and axis
+        if type(ax) == np.ndarray:
+            for subax in ax: subax.clear()  # Remove previous plot data
+        else:
+            ax.clear()
+        return fig, ax
+
+    def get_default_style(self):
+        srna_colors = ['F1605D', '51B9CF', 'FDC010', 'A5D38E', 'ED2891', '989898']
+        return {
+            'figure': {
+                'figsize': [6, 6],
+                'dpi': 100,
+                'facecolor': "white",
+                'edgecolor': "0.5"
+            },
+            'xtick': {
+                'color': "333333",
+                'direction': "out",
+                'major.size': 3.0,
+                'minor.size': 1.5,
+                'major.width': 0.8,
+                'minor.width': 0.6,
+                'major.pad': 3.5,
+                'labelsize': 16
+            },
+            'ytick': {
+                'color': "333333",
+                'direction': "out",
+                'major.size': 3.0,
+                'minor.size': 1.5,
+                'major.width': 0.8,
+                'minor.width': 0.6,
+                'major.pad': 3.5,
+                'labelsize': 16
+            },
+            'axes': {
+                'labelsize': 16,
+                'titlesize': 22,
+                'facecolor': "white",
+                'edgecolor': "333333",
+                'linewidth': 1,
+                'grid': True,
+                'labelcolor': "333333",
+                'labelpad': 4.0,
+                'axisbelow': True,
+                'autolimit_mode': "round_numbers",
+                'prop_cycle': mpl.cycler("color", srna_colors),
+                'xmargin': 0.5,
+                'ymargin': 0.5
+            },
+            'legend': {
+                'fontsize': 16,
+                'framealpha': 0.8,
+                'edgecolor': "0.8",
+                'markerscale': 1.0,
+                'borderpad': 0.4,
+                'labelspacing': 0.5,
+                'handletextpad': 0.8,
+                'borderaxespad': 0.5,
+                'columnspacing': 2.0
+            },
+            'pdf': {'fonttype': 42},
+            'ps': {'fonttype': 42},
+            'savefig': {'pad_inches': 0.1},
+            'font': {
+                'family': "sans-serif",
+                'sans-serif': "Arial",
+                'size': 10
+            },
+            'lines': {
+                'linewidth': 3.0,
+                'markersize': 11.0,
+                'markeredgewidth': 0
+            },
+            'grid': {
+                'color': "333333",
+                'linestyle': "--",
+                'linewidth': 0.8,
+                'alpha': 0.2
+            }
+        }

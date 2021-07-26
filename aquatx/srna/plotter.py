@@ -21,8 +21,6 @@ import matplotlib.pyplot as plt
 from aquatx.srna.plotterlib import plotterlib as lib
 from aquatx.srna.util import report_execution_time
 
-mpl.use("PDF")
-
 
 def get_args():
     """Get input arguments from the user/command line."""
@@ -79,56 +77,56 @@ def get_pairs(samples):
         yield pair
 
 
-def len_dist_plots(files_list, out_prefix, **kwargs):
+def len_dist_plots(files_list: list, out_prefix:str, **kwargs):
     """Create a PDF of size and 5'nt distribution plot for a sample.
 
     Args:
         files_list: A list of files containing size + 5p-nt counts per library
         out_prefix: The prefix to use when naming output PDF plots
-        kwargs: Keyword arguments to pass to matplotlib rc or plot 
+        kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
     """
     for size_file in files_list:
         # Read the size_dist file
         size_dist = pd.read_csv(size_file, index_col=0)
 
         # Create the plot
-        nt_colors = ['#F78E2D', '#CBDC3F', '#4D8AC8', '#E06EAA'] # Orange, Yellow-green, Blue, Pink
-        ax = aqplt.size_dist_bar(size_dist, color=nt_colors, **kwargs)
+        plot = aqplt.len_dist_bar(size_dist, **kwargs)
 
         # Parse the "sample_rep_N" string from the input filename to avoid duplicate out_prefix's in the basename
         basename = os.path.splitext(os.path.basename(size_file))[0]
-        pos = re.search(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_", basename).span()
+        date_prefix_pos = re.search(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_", basename).span()
 
-        if pos is not None:
+        if date_prefix_pos is not None:
             # File is a pipeline product
-            begin = pos[1]
+            begin = date_prefix_pos[1]
             end = basename.rfind("_nt_len_dist")
+            condition_and_rep = basename[begin:end]
         else:
             # File does not appear to have been produced by the pipeline
-            begin, end = 0, len(basename)
+            condition_and_rep = basename
 
-        pdf_name = '_'.join([out_prefix, basename[begin:end], "len_dist.pdf"])
-        plt.savefig(pdf_name, bbox_inches='tight')
+        pdf_name = '_'.join([out_prefix, condition_and_rep, "len_dist.pdf"])
+        plot.figure.savefig(pdf_name, bbox_inches='tight')
 
 
-def class_plots(class_counts, out_prefix, **kwargs):
+def class_plots(class_counts: pd.DataFrame, out_prefix:str, **kwargs):
     """Create a PDF of the proportion of counts assigned to
     a feature in a particular class as a pie and bar chart.
 
     Args:
         class_counts: A dataframe containing class counts per library
         out_prefix: The prefix to use when naming output PDF plots
-        kwargs: Keyword arguments to pass to matplotlib rc or plot 
+        kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
     """
     for library in class_counts:
-        fig, ax = aqplt.class_pie_barh(class_counts[library], **kwargs)
+        fig = aqplt.class_pie_barh(class_counts[library], **kwargs)
 
         # Save the plot
         pdf_name = f"{out_prefix}_{library}_class_chart.pdf"
         fig.savefig(pdf_name, bbox_inches='tight')
 
 
-def get_sample_rep_dict(df):
+def get_sample_rep_dict(df: pd.DataFrame) -> dict:
     """Determine which replicates to compare in a dataframe based on sample_rep_N format.
     
     Args:
@@ -148,7 +146,7 @@ def get_sample_rep_dict(df):
     return sample_dict
 
 
-def get_sample_averages(df, samples):
+def get_sample_averages(df: pd.DataFrame, samples:dict) -> pd.DataFrame:
     """Average the counts per sample across replicates.
     
     Args:
@@ -163,13 +161,13 @@ def get_sample_averages(df, samples):
     new_df = pd.DataFrame(index=df.index, columns=samples.keys())
 
     for key, val in samples.items():
-        new_df.loc[:, key] = df[val].mean(axis=1)
+        new_df[key] = df.loc[:, val].mean(axis=1)
     
     return new_df
 
 
 @report_execution_time("Scatter replicates")
-def scatter_replicates(count_df, output_prefix, output_postfix, samples, norm=False):
+def scatter_replicates(count_df: pd.DataFrame, output_prefix: str, output_postfix: str, samples: dict, norm=False):
     """Creates PDFs of all pairwise comparison scatter plots from a count table.
     
     Args:
@@ -194,7 +192,7 @@ def scatter_replicates(count_df, output_prefix, output_postfix, samples, norm=Fa
             rscat.figure.savefig(pdf_name, bbox_inches='tight')
 
 
-def load_deg_tables(comparisons):
+def load_deg_tables(comparisons: list) -> pd.DataFrame:
     """Create a new dataframe containing all features and pvalues for each comparison
     from a set of DEG tables. 
 
@@ -204,22 +202,15 @@ def load_deg_tables(comparisons):
     Returns:
         de_table: A single table of p-values per feature/comparison
     """
-    count = 0
-    samples = {}
-    
+
+    de_table = pd.DataFrame()
+
     for degfile in comparisons:
-        degs = pd.read_csv(degfile, index_col=0)
-        name_split = os.path.basename(degfile).split('_')
         # Negative indexes are used since prefixes are allowed to contain underscores
-        samples[degfile] = name_split[-5] + "_vs_" + name_split[-3]
+        name_split = os.path.basename(degfile).split('_')
+        comparison_name = name_split[-5] + "_vs_" + name_split[-3]
 
-        if count == 0:
-            de_table = pd.DataFrame(index=degs.index, columns=comparisons)
-
-        de_table.loc[:, degfile] = degs.loc[:, 'padj']
-        count += 1
-        
-    de_table.rename(samples, axis=1, inplace=True)
+        de_table[comparison_name] = pd.read_csv(degfile, index_col=0)['padj']
     
     return de_table
 
@@ -243,33 +234,22 @@ def scatter_samples(count_df, output_prefix, classes=None, degs=None, unknown=Fa
         if not unknown:
             uniq_classes.remove('unknown')
         
-        for pair in samples:
-            grp_args = []
-            try:
-                samp_comp = '%s_vs_%s' % (pair[0], pair[1])
-                deg_list = list(degs.index[degs[samp_comp] < pval])
-            except KeyError:
-                try: 
-                    samp_comp = '%s_vs_%s' % (pair[1], pair[0])
-                    deg_list = list(degs.index[degs[samp_comp] < pval])
-                except KeyError as ke:
-                    print('Sample names in count data frame do not match sample comparisons')
-                    print('in DEG table. Make sure formatting is correct in your tables for')
-                    print('AQuATx. Error occurred with %s, %s in count table.' % (pair[0], pair[1]))
-                    raise ke
-            
+        for pair in degs:
+            p1, p2 = pair.split("_vs_")
+            deg_list = list(degs.index[degs[pair] < pval])
             class_degs = classes.loc[deg_list]
 
+            grp_args = []
             for cls in uniq_classes:
                 grp_args.append(list(class_degs.index[class_degs == cls]))
 
             labels = ['p > %6.2f' % pval] + uniq_classes
-            sscat = aqplt.scatter_grouped(count_df.loc[:,pair[0]], count_df.loc[:,pair[1]],
+            sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2],
                                           *grp_args, log_norm=True, labels=labels) 
-            sscat.set_title('%s vs %s' % (pair[0], pair[1]))
-            sscat.set_xlabel(pair[0])
-            sscat.set_ylabel(pair[1])
-            pdf_name = '_'.join([output_prefix, pair[0], 'vs', pair[1], 'scatter_by_deg_class.pdf'])
+            sscat.set_title(pair)
+            sscat.set_xlabel(p1)
+            sscat.set_ylabel(p2)
+            pdf_name = '_'.join([output_prefix, pair, 'scatter_by_deg_class.pdf'])
             sscat.figure.savefig(pdf_name, bbox_inches='tight')
 
     elif classes is not None:
@@ -292,28 +272,17 @@ def scatter_samples(count_df, output_prefix, classes=None, degs=None, unknown=Fa
             sscat.figure.savefig(pdf_name, bbox_inches='tight')
     
     elif degs is not None:
-        
-        for pair in samples:    
-            grp_args = []
-            try:
-                samp_comp = '%s_vs_%s' % (pair[0], pair[1])
-                grp_args.append(list(degs.loc[degs[samp_comp] < pval].index))
-            except KeyError:
-                try: 
-                    samp_comp = '%s_vs_%s' % (pair[1], pair[0])
-                    grp_args.append(list(degs.loc[degs[samp_comp] < pval].index))
-                except KeyError as ke:
-                    print('Sample names in count data frame do not match sample comparisons')
-                    print('in DEG table. Make sure formatting is correct in your tables for')
-                    print('AQuATx. Error occurred with %s, %s in count table.' % (pair[0], pair[1]))
-                    raise ke
+        for pair in degs:
+            grp_args = list(degs.index[degs[pair] < pval])
+            p1, p2 = pair.split("_vs_")
+
             labels = ['p < %d' % pval]
-            sscat = aqplt.scatter_grouped(count_df.loc[:,pair[0]], count_df.loc[:,pair[1]],
+            sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2],
                                           *grp_args, log_norm=True, labels=labels) 
-            sscat.set_title('%s vs %s' % (pair[0], pair[1]))
-            sscat.set_xlabel(pair[0])
-            sscat.set_ylabel(pair[1])
-            pdf_name = '_'.join([output_prefix, pair[0], 'vs', pair[1], 'scatter_by_deg.pdf'])
+            sscat.set_title(pair)
+            sscat.set_xlabel(p1)
+            sscat.set_ylabel(p2)
+            pdf_name = '_'.join([output_prefix, pair, 'scatter_by_deg.pdf'])
             sscat.figure.savefig(pdf_name, bbox_inches='tight')
     
     else:
@@ -349,7 +318,7 @@ def load_norm_counts(norm_counts_file) -> Optional[pd.DataFrame]:
 
 def get_flat_classes(count_df) -> pd.Series:
     # Features with multiple associated classes must have these classes flattened
-    count_df["Feature.Class"] \
+    return count_df["Feature.Class"] \
         .apply(lambda x: [cls.strip() for cls in x.split(',')]) \
         .explode()
 
@@ -387,7 +356,7 @@ def validate_inputs(args):
 
     error_message = {
         'len_dist': "5' nucleotide/length tables (-len/--len-dist) are required for ",
-        'class_charts': f"{nc_file} is required for ",
+        'class_charts': f"A {nc_file} is required for ",
         'replicate_scatter': f"A {nc_file} or a {rc_file} is required for ",
         'sample_avg_scatter': f"A {nc_file} is required for ",
         'sample_avg_scatter_by_class': f"A {nc_file} is required for ",
@@ -395,14 +364,10 @@ def validate_inputs(args):
         'sample_avg_scatter_by_both': f"A {nc_file} and {deg_files} are required for ",
     }
 
-    unsatisfied = []
-    for plot_name in args.plots:
+    for plot_name in args.plots.copy():
         if not dependencies_satisfied_for[plot_name]:
             print(error_message[plot_name] + plot_name)
-            unsatisfied.append(plot_name)
-
-    for bad_request in unsatisfied:
-        args.plots.remove(bad_request)
+            args.plots.remove(plot_name)
 
 
 @report_execution_time("Setup")
@@ -411,10 +376,10 @@ def setup(args):
         'len_dist': [],
         'class_charts': ["norm_count_df", "class_counts"],
         'replicate_scatter': ["raw_count_df", "norm_count_df", "sample_rep_dict"],
-        'sample_avg_scatter': ["norm_count_df", "norm_count_avg_df"],
-        'sample_avg_scatter_by_class': ["norm_count_df", "norm_count_avg_df", "feat_classes"],
-        'sample_avg_scatter_by_deg': ["norm_count_df", "norm_count_avg_df", "de_table"],
-        'sample_avg_scatter_by_both': ["norm_count_df", "norm_count_avg_df", "feat_classes", "de_table"],
+        'sample_avg_scatter': ["norm_count_df", "sample_rep_dict", "norm_count_avg_df"],
+        'sample_avg_scatter_by_class': ["norm_count_df", "sample_rep_dict", "norm_count_avg_df", "feat_classes"],
+        'sample_avg_scatter_by_deg': ["norm_count_df", "sample_rep_dict", "norm_count_avg_df", "de_table"],
+        'sample_avg_scatter_by_both': ["norm_count_df", "sample_rep_dict", "norm_count_avg_df", "feat_classes", "de_table"],
     }
 
     relevant_vars: Dict[str, Union[pd.DataFrame, pd.Series, dict, None]] = {}
@@ -422,7 +387,7 @@ def setup(args):
         'raw_count_df': lambda: load_raw_counts(args.raw_counts),
         'norm_count_df': lambda: load_norm_counts(args.norm_counts),
         'de_table': lambda: load_deg_tables(args.deg_tables),
-        'sample_rep_dict': lambda: get_sample_rep_dict(relevant_vars["norm_count_df"]),
+        'sample_rep_dict': lambda x="norm" if args.norm_counts else "raw": get_sample_rep_dict(relevant_vars[f"{x}_count_df"]),
         'norm_count_avg_df': lambda: get_sample_averages(relevant_vars["norm_count_df"], relevant_vars["sample_rep_dict"]),
         'feat_classes': lambda: get_flat_classes(relevant_vars["norm_count_df"]),
         'class_counts': lambda: get_class_counts(relevant_vars["norm_count_df"])

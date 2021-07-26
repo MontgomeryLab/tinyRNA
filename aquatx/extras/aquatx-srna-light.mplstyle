@@ -1,15 +1,14 @@
 # Matplotlib style sheet for Small RNA plots
 
 #### Figure basics ####
-figure.figsize: 6, 6
 figure.dpi: 100
 figure.facecolor: white
 figure.edgecolor: 0.50
 
 #### Tick style settings ####
-xtick.color: 58595B
+xtick.color: 333333
 xtick.direction: out
-ytick.color: 58595B
+ytick.color: 333333
 ytick.direction: out
 
 xtick.major.size: 3.0
@@ -31,15 +30,15 @@ ytick.labelsize: 16
 axes.labelsize: 16
 axes.titlesize: 22
 axes.facecolor: white
-axes.edgecolor: 58595B
+axes.edgecolor: 333333
 axes.linewidth: 1
 axes.grid: True
-axes.labelcolor: 000000
+axes.labelcolor: 333333
 axes.labelpad: 4.0
-axes.axisbelow: True       
+axes.axisbelow: True
 axes.autolimit_mode: round_numbers
-axes.xmargin: 0.05
-axes.ymargin: 0.05
+axes.xmargin: 0.5
+axes.ymargin: 0.5
 
 #### Legend ####
 legend.fontsize: 16
@@ -59,7 +58,7 @@ savefig.pad_inches: 0.1
 
 #### Font ####
 font.family: sans-serif
-font.sans-serif: ['Arial', 'Helvetica']
+font.sans-serif: Arial
 font.size: 10
 
 #### Line style ####
@@ -78,7 +77,7 @@ axes.prop_cycle: cycler('color', ['F1605D', '51B9CF', 'FDC010', 'A5D38E', 'ED289
                    # 989898: Gray
 
 #### Grid style ####
-grid.color: 58595B
+grid.color: 333333
 grid.linestyle: --
 grid.linewidth: 0.8
 grid.alpha: 0.2
