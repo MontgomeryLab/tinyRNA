@@ -1,9 +1,10 @@
 """ Plotting functions for small RNA data. 
 
 This module contains functions to create relevant plots for small RNA data for use
-with the AQuATx pipeline. The plots are built off of matplotlib, but updated to
-use the plot style of this tool. Other color schemes and built-in matplotlib styles
-can be used. 
+with the AQuATx pipeline. The plots are built using matplotlib and our style sheet.
+You may override these styles by obtaining a copy of the style sheet (aquatx get-template),
+modifying it, and passing it to aquatx-plot via the -s/--style-sheet argument. If
+using this module directly, it may be passed at construction time.
 """
 
 import itertools
@@ -39,14 +40,14 @@ class plotterlib:
             self.subplots[plot] = {'fig': fig, 'ax': ax}
 
     def len_dist_bar(self, size_df: pd.DataFrame, **kwargs) -> plt.Axes:
-        """Creates a size distribution plot.
+        """Creates a stacked barplot of 5' end nucleotides by read length
 
         Args:
-            size_df: A pandas dataframe containing the size x 5'nt raw counts
+            size_df: A dataframe containing the size x 5'nt raw counts
+            kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
 
         Returns:
             sizeb: A stacked barplot of size + 5'nt data
-            kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
         """
 
         # Retrieve axis and styles for this plot type
@@ -70,11 +71,11 @@ class plotterlib:
 
         return sizeb
 
-    def class_pie(self, class_df: pd.DataFrame, **kwargs) -> plt.Axes:
+    def class_pie(self, class_s: pd.Series, **kwargs) -> plt.Axes:
         """Creates a pie chart of sRNA classes.
 
         Args:
-            class_df: A pandas dataframe containing counts per class
+            class_s: A pandas Series containing counts per class
             kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
 
         Returns:
@@ -82,7 +83,7 @@ class plotterlib:
         """
 
         # Convert reads to proportion
-        class_prop = class_df / class_df.sum()
+        class_prop = class_s / class_s.sum()
 
         # Create the plot
         cpie = class_prop.plot(kind='pie', **kwargs)
@@ -93,19 +94,19 @@ class plotterlib:
 
         return cpie
 
-    def class_barh(self, class_df: pd.DataFrame, **kwargs) -> plt.Axes:
+    def class_barh(self, class_s: pd.Series, **kwargs) -> plt.Axes:
         """Creates a horizontal bar chart of sRNA classes.
 
         Args:
-            class_df: A pandas dataframe containing counts per class
-            kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
+            class_s: A pandas Series containing a single library's counts per class
+            kwargs: Additional keyword arguments to pass to pandas.Series.plot()
 
         Returns:
             cbar: A horizontal bar chart of sRNA classes
         """
 
         # Convert reads to proportion
-        class_prop = class_df / class_df.sum()
+        class_prop = class_s / class_s.sum()
 
         # df.plot(kind=barh) ignores axes.prop_cycle... (ugh)
         colors = kwargs.get('colors', plt.rcParams['axes.prop_cycle'].by_key()['color'])
@@ -120,11 +121,11 @@ class plotterlib:
 
         return cbar
 
-    def class_pie_barh(self, class_df, **kwargs) -> plt.Figure:
+    def class_pie_barh(self, class_s: pd.Series, **kwargs) -> plt.Figure:
         """Creates both a pie & bar chart in the same figure
 
         Args:
-            class_df: A pandas dataframe containing counts per class
+            class_s: A pandas Series containing counts per class
             kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
 
         Returns:
@@ -135,8 +136,8 @@ class plotterlib:
         fig, ax = self.reuse_subplot("class_pie_barh")
 
         # Plot pie and barh on separate axes
-        self.class_pie(class_df, ax=ax[0], labels=None, **kwargs)
-        self.class_barh(class_df, ax=ax[1], legend=None, title=None, ylabel=None, **kwargs)
+        self.class_pie(class_s, ax=ax[0], labels=None, **kwargs)
+        self.class_barh(class_s, ax=ax[1], legend=None, title=None, ylabel=None, **kwargs)
 
         # finalize & save figure
         fig.suptitle("Proportion of classes of small RNAs", fontsize=22)
@@ -145,7 +146,7 @@ class plotterlib:
         return fig
 
     def scatter_range(self, df: pd.DataFrame) -> (int, int):
-        """ Find an appropriate range for x,y limits of a scatter plot.
+        """Find an appropriate range for x,y limits of a scatter plot.
 
         Args:
             df: A dataframe being plotted
@@ -171,7 +172,7 @@ class plotterlib:
 
         return lim_min, lim_max
 
-    def scatter_simple(self, count_x, count_y, log_norm=False, **kwargs) -> plt.Axes:
+    def scatter_simple(self, count_x: pd.DataFrame, count_y: pd.DataFrame, log_norm=False, **kwargs) -> plt.Axes:
         """Creates a simple scatter plot of counts.
 
         Args:
@@ -216,7 +217,7 @@ class plotterlib:
 
         return ax
 
-    def scatter_grouped(self, count_x, count_y, *args, log_norm=False, labels=None, **kwargs):
+    def scatter_grouped(self, count_x: pd.DataFrame, count_y: pd.DataFrame, *args, log_norm=False, labels=None, **kwargs):
         """Creates a scatter plot with different groups highlighted.
 
         Args:
@@ -227,7 +228,7 @@ class plotterlib:
             kwargs: Additional arguments to pass to pyplot.Axes.scatter()
 
         Returns:
-            gscat: A scatter plot containing groups highlighted different colors
+            gscat: A scatter plot containing groups highlighted with different colors
         """
 
         # Subset the base points to avoid overplotting
@@ -253,7 +254,7 @@ class plotterlib:
 
         return gscat
 
-    def reuse_subplot(self, plot_type:str) -> (plt.Figure, Union[plt.Axes, np.ndarray]):
+    def reuse_subplot(self, plot_type: str) -> (plt.Figure, Union[plt.Axes, np.ndarray]):
         """Retrieves the reusable subplot for this plot type
 
         Args:
@@ -263,85 +264,10 @@ class plotterlib:
             fig: The subplot's pyplot.Figure
             ax: The subplot's pyplot.Axes, or an array of axes if subplot's nrows or ncols is >1
         """
+
         fig, ax = self.subplots[plot_type].values() # Each plot type has a dedicated figure and axis
         if type(ax) == np.ndarray:
             for subax in ax: subax.clear()  # Remove previous plot data
         else:
             ax.clear()
         return fig, ax
-
-    def get_default_style(self):
-        srna_colors = ['F1605D', '51B9CF', 'FDC010', 'A5D38E', 'ED2891', '989898']
-        return {
-            'figure': {
-                'figsize': [6, 6],
-                'dpi': 100,
-                'facecolor': "white",
-                'edgecolor': "0.5"
-            },
-            'xtick': {
-                'color': "333333",
-                'direction': "out",
-                'major.size': 3.0,
-                'minor.size': 1.5,
-                'major.width': 0.8,
-                'minor.width': 0.6,
-                'major.pad': 3.5,
-                'labelsize': 16
-            },
-            'ytick': {
-                'color': "333333",
-                'direction': "out",
-                'major.size': 3.0,
-                'minor.size': 1.5,
-                'major.width': 0.8,
-                'minor.width': 0.6,
-                'major.pad': 3.5,
-                'labelsize': 16
-            },
-            'axes': {
-                'labelsize': 16,
-                'titlesize': 22,
-                'facecolor': "white",
-                'edgecolor': "333333",
-                'linewidth': 1,
-                'grid': True,
-                'labelcolor': "333333",
-                'labelpad': 4.0,
-                'axisbelow': True,
-                'autolimit_mode': "round_numbers",
-                'prop_cycle': mpl.cycler("color", srna_colors),
-                'xmargin': 0.5,
-                'ymargin': 0.5
-            },
-            'legend': {
-                'fontsize': 16,
-                'framealpha': 0.8,
-                'edgecolor': "0.8",
-                'markerscale': 1.0,
-                'borderpad': 0.4,
-                'labelspacing': 0.5,
-                'handletextpad': 0.8,
-                'borderaxespad': 0.5,
-                'columnspacing': 2.0
-            },
-            'pdf': {'fonttype': 42},
-            'ps': {'fonttype': 42},
-            'savefig': {'pad_inches': 0.1},
-            'font': {
-                'family': "sans-serif",
-                'sans-serif': "Arial",
-                'size': 10
-            },
-            'lines': {
-                'linewidth': 3.0,
-                'markersize': 11.0,
-                'markeredgewidth': 0
-            },
-            'grid': {
-                'color': "333333",
-                'linestyle': "--",
-                'linewidth': 0.8,
-                'alpha': 0.2
-            }
-        }

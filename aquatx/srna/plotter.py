@@ -1,9 +1,8 @@
 """ Plotting script for the sRNA AQuATx workflow.
 
 This script produces basic static plots for publications as part of the AQuATx
-workflow. It uses a default style and produces multiple PDFs. This script is
-intended to be used immediately following the aquatx-count/counter.py step of
-the workflow. It creates a specific set of plots through the mode argument.
+workflow. It uses a default style and produces multiple PDFs, but you may provide
+your own styles sheet.
 """
 
 import multiprocessing as mp
@@ -35,10 +34,10 @@ def get_args():
                                help='The ...norm_counts.csv file.')
 
     # Multi-file inputs
-    diffexp_files.add_argument('-deg', '--deg-tables', metavar='DEG_COMPARISONS,...', nargs='+',
-                               help='The ...cond1...cond2...deseq.csv files.')
-    counter_files.add_argument('-len', '--len-dist', metavar='5P_LEN_DISTS,...', nargs='+',
-                               help='The ...nt_len_dist.csv files.')
+    diffexp_files.add_argument('-deg', '--deg-tables', metavar='DEG_COMPARISONS ...', nargs='+',
+                               help='The ...cond1...cond2...deseq.csv files, separated by a space.')
+    counter_files.add_argument('-len', '--len-dist', metavar='5P_LEN_DISTS ...', nargs='+',
+                               help='The ...nt_len_dist.csv files, separated by a space.')
 
     # Outputs options
     parser.add_argument('-o', '--out-prefix', metavar='OUTFILE', default='',
@@ -86,6 +85,7 @@ def len_dist_plots(files_list: list, out_prefix:str, **kwargs):
         out_prefix: The prefix to use when naming output PDF plots
         kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
     """
+
     for size_file in files_list:
         # Read the size_dist file
         size_dist = pd.read_csv(size_file, index_col=0)
@@ -119,6 +119,7 @@ def class_plots(class_counts: pd.DataFrame, out_prefix:str, **kwargs):
         out_prefix: The prefix to use when naming output PDF plots
         kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
     """
+
     for library in class_counts:
         fig = aqplt.class_pie_barh(class_counts[library], **kwargs)
 
@@ -128,7 +129,7 @@ def class_plots(class_counts: pd.DataFrame, out_prefix:str, **kwargs):
 
 
 def get_sample_rep_dict(df: pd.DataFrame) -> dict:
-    """Determine which replicates to compare in a dataframe based on sample_rep_N format.
+    """Group sample_rep_N format strings by sample
     
     Args:
         df: The dataframe with columns using sample_rep_N format and features for rows
@@ -148,11 +149,10 @@ def get_sample_rep_dict(df: pd.DataFrame) -> dict:
 
 
 def get_sample_averages(df: pd.DataFrame, samples:dict) -> pd.DataFrame:
-    """Average the counts per sample across replicates.
+    """Average counts across replicates on a per-sample basis
     
     Args:
-        df: The dataframe with columns using sample_rep_N format and features for rows
-            to be averaged.
+        df: A dataframe with columns using sample_rep_N format and features for rows
         samples: A dictionary containing sample names and their associated "sample_rep_N" replicates
 
     Returns:
@@ -167,12 +167,11 @@ def get_sample_averages(df: pd.DataFrame, samples:dict) -> pd.DataFrame:
     return new_df
 
 
-@report_execution_time("Scatter replicates")
 def scatter_replicates(count_df: pd.DataFrame, output_prefix: str, output_postfix: str, samples: dict, norm=False):
     """Creates PDFs of all pairwise comparison scatter plots from a count table.
     
     Args:
-        count_df: A dataframe of counts per features
+        count_df: A dataframe of counts per feature
         output_prefix: A string to use as a prefix for saving files
         output_postfix: A string to use as postfix for differentiating between raw and norm counts
         samples: A dictionary containing sample names and their associated "sample_rep_N" replicates
@@ -194,14 +193,14 @@ def scatter_replicates(count_df: pd.DataFrame, output_prefix: str, output_postfi
 
 
 def load_deg_tables(comparisons: list) -> pd.DataFrame:
-    """Create a new dataframe containing all features and pvalues for each comparison
-    from a set of DEG tables. 
+    """Creates a new dataframe containing all features and padj values for each comparison
+    from a list of DEG tables.
 
     Args:
-        comparisons: Files (DEG tables) to process
+        comparisons: DEG tables (files) produced by DESeq2
 
     Returns:
-        de_table: A single table of p-values per feature/comparison
+        de_table: A single table of padj values per feature/comparison
     """
 
     de_table = pd.DataFrame()
@@ -223,9 +222,9 @@ def scatter_samples(count_df, output_prefix, classes=None, degs=None, unknown=Fa
     Args:
         count_df: A dataframe of counts per feature
         output_prefix: A string to use as a prefix for saving files
-        classes: A dataframe containing class per feature
+        classes: A dataframe containing class(es) per feature
         degs: A dataframe of differential gene table output to highlight
-        unknown: Boolean indicating if ambiguous classes should be highlighted
+        unknown: Boolean indicating if "unknown" classes should be highlighted
     """
     samples = get_pairs(list(count_df.columns))
 
@@ -298,13 +297,32 @@ def scatter_samples(count_df, output_prefix, classes=None, degs=None, unknown=Fa
             sscat.figure.savefig(pdf_name, bbox_inches='tight')
 
 
-def get_r_safename(name):
+def get_r_safename(name: str) -> str:
+    """Converts a string to a syntactically valid R name
+
+    This is used on tables which haven't been produced by R (ex: raw_counts),
+    so that column headers match the column headers of those that have (ex: norm_counts).
+    https://stat.ethz.ch/R-manual/R-devel/library/base/html/make.names.html
+
+    Args:
+        name: The string to be sanitized
+    Returns:
+        The sanitized string
+    """
+
     leading_char = lambda x: re.sub(r"^(?=[^a-zA-Z.]+|\.\d)", "X", x)
     special_char = lambda x: re.sub(r"[^a-zA-Z0-9_.]", ".", x)
     return special_char(leading_char(name))
 
 
-def load_raw_counts(raw_counts_file) -> Optional[pd.DataFrame]:
+def load_raw_counts(raw_counts_file: str) -> Optional[pd.DataFrame]:
+    """Loads a raw_counts CSV as a DataFrame and sanitizes its column headers
+    Args:
+        raw_counts_file: The raw counts CSV produced by Counter
+    Returns:
+        The raw counts DataFrame with sanitized column headers
+    """
+
     if raw_counts_file is None: return None
     raw_count_df = pd.read_csv(raw_counts_file, index_col=0)
     raw_count_df.rename(get_r_safename, axis="columns", inplace=True)
@@ -312,19 +330,45 @@ def load_raw_counts(raw_counts_file) -> Optional[pd.DataFrame]:
     return raw_count_df
 
 
-def load_norm_counts(norm_counts_file) -> Optional[pd.DataFrame]:
+def load_norm_counts(norm_counts_file: str) -> Optional[pd.DataFrame]:
+    """Loads a norm_counts CSV as a DataFrame
+    Args:
+        norm_counts_file: The norm counts CSV produced by DESeq2
+    Returns:
+        The norm counts DataFrame
+    """
+
     if norm_counts_file is None: return None
     return pd.read_csv(norm_counts_file, index_col=0)
 
 
-def get_flat_classes(count_df) -> pd.Series:
-    # Features with multiple associated classes must have these classes flattened
-    return count_df["Feature.Class"] \
+def get_flat_classes(counts_df: pd.DataFrame) -> pd.Series:
+    """Features with multiple associated classes must have these classes flattened
+    In these cases, the feature will be listed multiple times in the index with one associated class per row.
+
+    Args:
+        counts_df: A counts DataFrame (raw or norm)
+    Returns:
+        A Series with an index of features, and entries for each associated class
+    """
+
+    return counts_df["Feature.Class"] \
         .apply(lambda x: [cls.strip() for cls in x.split(',')]) \
         .explode()
 
 
-def get_class_counts(counts_df) -> pd.DataFrame:
+def get_class_counts(counts_df: pd.DataFrame) -> pd.DataFrame:
+    """Calculates class counts from a counts DataFrame (raw or norm)
+
+    If there are multiple classes associated with a feature, each class will receive
+    the feature's full count without normalizing by the number of associated classes.
+
+    Args:
+        counts_df: A DataFrame containing features and their associated classes and counts
+    Returns:
+        class_counts: A DataFrame with an index of classes and count entries, per comparison
+    """
+
     # 1. Group and sum by Feature Class. This makes the next step less expensive.
     grouped = counts_df.groupby("Feature.Class").sum()
 
@@ -339,8 +383,15 @@ def get_class_counts(counts_df) -> pd.DataFrame:
     return class_counts
 
 
-@report_execution_time("Input validation")
-def validate_inputs(args):
+def validate_inputs(args: argparse.Namespace) -> None:
+    """Determines if the necessary input files have been provided for the requested plots
+    This is necessary because we allow users to run the tool without specifying all
+    possible input files.
+
+    Args:
+        args: Command line arguments parsed by argparse
+    """
+
     dependencies_satisfied_for = {
         'len_dist': all([args.len_dist]),
         'class_charts': all([args.norm_counts]),
@@ -371,8 +422,16 @@ def validate_inputs(args):
             args.plots.remove(plot_name)
 
 
-@report_execution_time("Setup")
-def setup(args):
+def setup(args: argparse.Namespace) -> dict:
+    """Dynamically loads input files based on the plots requested
+    We don't want to waste time processing files that are unnecessary for the request
+
+    Args:
+        args: Command line arguments parsed by argparse
+    Returns:
+        relevant_vars: A dictionary of input names and their processed data
+    """
+
     required_inputs = {
         'len_dist': [],
         'class_charts': ["norm_count_df", "class_counts"],
@@ -446,6 +505,7 @@ def main():
             for result in results:
                 result.wait()
     else:
+        # Don't use multiprocessing if only one plot type requested
         task = itinerary.pop()
         task[0](*task[1], **task[2])
 
