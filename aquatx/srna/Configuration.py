@@ -4,10 +4,11 @@ import csv
 import os
 import re
 
-from ruamel.yaml.comments import CommentedOrderedMap
 from pkg_resources import resource_filename
 from datetime import datetime
 from typing import Union, Any
+
+timestamp_format = re.compile(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}")
 
 
 class ConfigBase:
@@ -120,7 +121,7 @@ class ConfigBase:
         return self.joinpath(self['run_directory'], os.path.basename(infile))
 
     def write_processed_config(self, filename: str = None) -> str:
-        """Writes the current configuration """
+        """Writes the current configuration to disk"""
         if filename is None: filename = self.get_outfile_path(self.inf)
 
         with open(filename, 'w') as outconf:
@@ -305,115 +306,3 @@ class Configuration(ConfigBase):
 
     if __name__ == '__main__':
         main()
-
-
-class ResumeConfig(ConfigBase):
-    """A class for modifying the workflow and config to resume a run at Counter
-
-    The modified workflow document must be written to the package resource directory
-    for CWL workflows in order to preserve the relative paths copied from the original
-    workflows. Directory output names have a timestamp appended to them to keep outputs
-    separate between runs. Timestamped run prefixes are also updated to reflect the
-    date and time of the resume run.
-    """
-
-    def __init__(self, processed_config, workflow):
-        # Parse the pre-processed YAML configuration file
-        super().__init__(processed_config)
-
-        # Load the CWL workflow YAML for modification
-        with open(workflow, 'r') as f:
-            self.workflow: CommentedOrderedMap
-            self.workflow = self.yaml.load(f)
-
-        self.dt = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        self.steps = ["counter", "dge", "plotter"]
-        self.new_counter_inputs = {
-            'aligned_seqs': "resume_sams",
-            'fastp_logs': "resume_fastp_logs",
-            'collapsed_fa': "resume_collapsed_fas"
-        }
-
-        self.create_truncated_workflow()
-        self.rebuild_counter_inputs()
-        self.add_timestamps()
-
-    def rebuild_counter_inputs(self):
-        """Set the new path inputs for the Counter step
-
-        Normally, the Counter step receives inputs from the current run's previous step outputs.
-        When resuming, these outputs should already exist on disk. We need to populate the new
-        File[] arrays with their corresponding pipeline outputs on disk.
-        """
-
-        def cwl_file_resume(subdir, file):
-            return self.cwl_file('/'.join([subdir, file]))
-
-        self['resume_sams'] = [cwl_file_resume(self['dir_name_bowtie'], sam) for sam in self['outfile']]
-        self['resume_fastp_logs'] = [cwl_file_resume(self['dir_name_fastp'], log) for log in self['json']]
-        self['resume_collapsed_fas'] = [cwl_file_resume(self['dir_name_collapser'], prefix + "_collapsed.fa")
-                                        for prefix in self['uniq_seq_prefix']]
-
-    def create_truncated_workflow(self):
-        """Modifies the workflow to begin running at the Counter step
-
-        New input variables must be created which point to the files produced by the
-        prior pipeline run. The Counter step is modified to receive these inputs directly
-        rather than expecting CWL to run the previous workflow steps. Parameters between
-        resumed steps don't require modification. The subdirs step is removed and replaced
-        with modified copies of its own calls to make-subdir.cwl.
-        """
-
-        # Remove all steps except those defined for the resume run
-        for workflow_step in list(self.workflow['steps'].keys()):
-            if workflow_step not in self.steps:
-                del self.workflow['steps'][workflow_step]
-
-        # Setup new inputs at the workflow and first-step levels
-        for inp, new_input in self.new_counter_inputs.items():
-            # Create WorkflowInputParameters for new "resume_" File arrays
-            self.workflow['inputs'][new_input] = "File[]"
-            # Update WorkflowStepInputs for these new variables in Counter
-            self.workflow['steps'][self.steps[0]]['in'][inp] = new_input
-
-        # Remove all WorkflowOutputParameters in preparation for the new
-        self.workflow['outputs'].clear()
-
-        # Copy relevant steps from the organize-outputs subworkflow and update their inputs/outputs
-        with open(resource_filename('aquatx', 'cwl/workflows/organize-outputs.cwl')) as f:
-            organizer_sub_wf = self.yaml.load(f)
-
-            subdir_sources = {step: [f"{step}/{output}" for output in self.workflow['steps'][step]['out']]
-                              for step in self.steps}
-
-            for step in self.steps:
-                step_name = f'organize_{step}'
-                # Copy relevant steps from organize-outputs.cwl
-                context = self.workflow['steps'][step_name] = organizer_sub_wf['steps'][step_name]
-                # Update WorkflowStepInputs
-                context['in']['dir_name'] = f'dir_name_{step}'
-                context['in']['dir_files'] = {'source': subdir_sources[step], 'pickValue': 'all_non_null',
-                                              'linkMerge': 'merge_flattened'}
-                # Update WorkflowOutputParameter
-                self.workflow['outputs'][f'{step}_out_dir'] = {
-                    'type': "Directory",
-                    'outputSource': f'{step_name}/subdir'
-                }
-
-    def add_timestamps(self):
-        """Adds timestamps to subdirectory outputs, as well as a copy of Features Sheet
-
-        This is done for record keeping and to keep outputs organized between runs.
-        """
-
-        # Rename output directories with timestamp
-        for subdir in self.steps:
-            step_dir = "dir_name_" + subdir
-            self[step_dir] = self[step_dir] + "_" + self.dt
-
-        # Update run_name output prefix variable for the current date and time
-        self['run_name'] = re.sub(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}", self.dt, self['run_name'])
-
-    def write_workflow(self, workflow_outfile: str) -> None:
-        with open(workflow_outfile, "w") as wf:
-            self.yaml.dump(self.workflow, wf)

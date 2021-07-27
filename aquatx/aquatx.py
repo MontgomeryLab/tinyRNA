@@ -8,10 +8,11 @@ returning template files and workflows that can be used separately.
 Subcommands:
     - get-template
     - setup-cwl
-    - resume
+    - recount
+    - replot
     - run
 
-When installed, run, resume and setup-cwl should be invoked with:
+When installed, run, recount and setup-cwl should be invoked with:
     aquatx <subcommand> --config <config-file>
 
 The Run Config file should be supplied for the run subcommand (required)
@@ -19,8 +20,8 @@ and for the setup-cwl subcommand (optional; alternatively you may use the
 word "None" or "none" to obtain only the workflow files). The config file
 will be processed to generate pipeline settings from your input files.
 
-The resume command must be invoked from within the Run Directory of the
-run you wish to resume. The config file you supply must be the processed
+The recount and replot commands must be invoked from within the Run Directory
+of the run you wish to resume. The config file you supply must be the processed
 Run Configuration file within the Run Directory.
 """
 
@@ -37,7 +38,8 @@ from cwltool.utils import DEFAULT_TMP_PREFIX
 from pkg_resources import resource_filename
 from argparse import ArgumentParser
 
-from aquatx.srna.Configuration import Configuration, ResumeConfig, ConfigBase
+from aquatx.srna.Configuration import Configuration, ConfigBase
+from aquatx.srna.resume import ResumeCounterConfig, ResumePlotterConfig
 
 
 def get_args():
@@ -45,11 +47,12 @@ def get_args():
 
     parser = ArgumentParser(description=__doc__)
 
-    # Parser for subcommands: (run, resume, setup-cwl, get-template, etc.)
+    # Parser for subcommands: (run, recount, replot, setup-cwl, get-template, etc.)
     subparsers = parser.add_subparsers(required=True, dest='command')
     subcommands_with_configfile = {
         "run": "Processes the provided config file and executes the workflow it specifies.",
-        "resume": "Resume pipeline at the Counter step using the PROCESSED run config provided",
+        "replot": "Resume pipeline at the Plotter step using the PROCESSED run config provided",
+        "recount": "Resume pipeline at the Counter step using the PROCESSED run config provided",
         "setup-cwl": 'Processes the provided config file and copies workflow files to the current directory',
         "setup-nextflow": "This subcommand is not yet implemented"
     }
@@ -104,33 +107,38 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
         run_cwltool_subprocess(cwl_conf_file, workflow, run_directory=run_directory, parallel=parallel, debug=debug)
 
 
-def resume(aquatx_cwl_path:str, config_file:str) -> None:
-    """Resumes pipeline execution at the Counter step
+def resume(aquatx_cwl_path: str, config_file: str, step: str) -> None:
+    """Resumes pipeline execution at either the Counter or Plotter step
 
     The user must invoke this from the RUN DIRECTORY for which they wish to
     resume, and the config file they provide must be the PROCESSED run config
     within that directory. The previous pipeline outputs and processed config
-    will be used to resume a truncated workflow which begins at the counts step.
+    will be used to resume a truncated workflow which begins at the chosen step.
 
     Output directories will be timestamped to keep results separate between
     resume runs. A copy of each run's Features Sheet will be provided in the
     (timestamped) counts output directory.
 
     Args:
-        aquatx_cwl_path: The path to the project's CWL workflow file directory
-        config_file: The configuration file for this run
+        aquatx_cwl_path: The path to the project's CWL file directory
+        config_file: The PROCESSED config file for the run to resume
+        step: The stepname to serve as the new workflow entrypoint
 
     Returns: None
 
     """
 
-    print("Resuming pipeline at Counter...")
+    entry_config = {
+        "Counter": ResumeCounterConfig,
+        "Plotter": ResumePlotterConfig
+    }
 
-    config = ResumeConfig(config_file, f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl")
+    print(f"Resuming pipeline execution at the {step} step...")
+    config = entry_config[step](config_file, f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl")
     resume_wf = f"{aquatx_cwl_path}/workflows/aquatx-resume.cwl"
     config.write_workflow(resume_wf)
 
-    debug = True
+    debug = False
     if config['run_native']:
         # Don't need to write processed config, pass in directly
         run_native(config, resume_wf, run_directory=".", debug=debug)
@@ -228,7 +236,7 @@ def get_template(aquatx_extras_path: str) -> None:
     Args:
         aquatx_extras_path: The path to the project's extras directory. This directory
             contains templates for the run configuration, sample inputs, feature selection
-            rules, and paths for all the above.
+            rules, the project's matplotlib stylesheet, and paths for all the above.
 
     Returns: None
 
@@ -236,8 +244,11 @@ def get_template(aquatx_extras_path: str) -> None:
 
     print("Copying template input files to current directory...")
 
+    template_files = ['run_config_template.yml', 'samples.csv', 'features.csv',
+                      'paths.yml', 'aquatx-srna-light.mplstyle']
+
     # Copy template files to the current working directory
-    for template in ['run_config_template.yml', 'samples.csv', 'features.csv', 'paths.yml']:
+    for template in template_files:
         shutil.copyfile(f"{aquatx_extras_path}/{template}", f"{os.getcwd()}/{template}")
 
 
@@ -282,6 +293,8 @@ def main():
 
     Options:
         run: Run the end-to-end analysis based on a config file.
+        recount: Resume pipeline execution at the Counter step
+        replot: Resume pipeline execution at the Plotter step
         get-template: Get the input sheets & template config files.
         setup-cwl: Get the CWL workflow for a run
     """
@@ -296,7 +309,8 @@ def main():
     # Execute appropriate command based on command line input
     command_map = {
         "run": lambda: run(aquatx_cwl_path, args.config),
-        "resume": lambda: resume(aquatx_cwl_path, args.config),
+        "replot": lambda: resume(aquatx_cwl_path, args.config, "Plotter"),
+        "recount": lambda: resume(aquatx_cwl_path, args.config, "Counter"),
         "setup-cwl": lambda: setup_cwl(aquatx_cwl_path, args.config),
         "get-template": lambda: get_template(aquatx_extras_path),
         "setup-nextflow": lambda: setup_nextflow(args.config)
