@@ -6,18 +6,17 @@ intended to be used immediately following the aquatx-count/counter.py step of
 the workflow. It creates a specific set of plots through the mode argument.
 """
 
-import argparse
-import os.path
-import itertools
-import re
-from collections import defaultdict
-from typing import Optional, Dict, Union
-
-import numpy as np
 import multiprocessing as mp
 import pandas as pd
-import matplotlib as mpl
-import matplotlib.pyplot as plt
+import itertools
+import argparse
+import os.path
+import re
+
+from collections import defaultdict
+from typing import Optional, Dict, Union
+from pkg_resources import resource_filename
+
 from aquatx.srna.plotterlib import plotterlib as lib
 from aquatx.srna.util import report_execution_time
 
@@ -37,14 +36,16 @@ def get_args():
 
     # Multi-file inputs
     diffexp_files.add_argument('-deg', '--deg-tables', metavar='DEG_COMPARISONS,...', nargs='+',
-                               help='The ...cond1...cond2...deseq.csv files')
+                               help='The ...cond1...cond2...deseq.csv files.')
     counter_files.add_argument('-len', '--len-dist', metavar='5P_LEN_DISTS,...', nargs='+',
-                               help='The ...nt_len_dist.csv files')
+                               help='The ...nt_len_dist.csv files.')
 
     # Outputs options
     parser.add_argument('-o', '--out-prefix', metavar='OUTFILE', default='',
                         help='Optional prefix to use for output PDF files.')
-
+    parser.add_argument('-s', '--style-sheet', metavar='MPLSTYLE',
+                        default=resource_filename('aquatx', 'extras/aquatx-srna-light.mplstyle'),
+                        help='Optional matplotlib style sheet to use for plots.')
     parser.add_argument('-p', '--plots', metavar='PLOTS', required=True, nargs='+',
                         help='List of plots to create. Options: \n'
                              'len_dist: A stacked barplot showing size & 5p-nt distribution,\n'
@@ -411,7 +412,7 @@ def main():
     inputs = setup(args)
 
     global aqplt
-    aqplt = lib()
+    aqplt = lib(args.style_sheet)
 
     itinerary = []
 

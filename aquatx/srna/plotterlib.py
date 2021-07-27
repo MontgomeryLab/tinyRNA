@@ -15,12 +15,10 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import warnings; warnings.filterwarnings(action='once')
 
-from pkg_resources import resource_filename
-
 
 class plotterlib:
 
-    def __init__(self, user_style_sheet=resource_filename('aquatx', 'extras/aquatx-srna-light.mplstyle')):
+    def __init__(self, user_style_sheet):
 
         # Set global plot style once
         plt.style.use(user_style_sheet)
