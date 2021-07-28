@@ -43,7 +43,7 @@ All of the above files are mapped out in `run_config.yml` and the tree of config
 ```
 aquatx run --config run_config.yml
 ```
-Did you receive "command not found"? Make sure that you activate the aquatx environment before using it.
+Did you receive "command not found"? Make sure that you activate the tinyrna environment before using it.
 ```
 conda activate aquatx-srna
 ```

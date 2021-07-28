@@ -70,7 +70,7 @@ def get_args():
     return parser.parse_args()
 
 
-def run(aquatx_cwl_path: str, config_file: str) -> None:
+def run(tinyrna_cwl_path: str, config_file: str) -> None:
     """Processes the provided config file and executes the workflow it defines
 
     The provided configuration file will be processed to reflect the contents of all
@@ -92,7 +92,7 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
     run_directory = config_object.create_run_directory()
     cwl_conf_file = config_object.write_processed_config()
 
-    workflow = f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl"
+    workflow = f"{tinyrna_cwl_path}/workflows/aquatx_wf.cwl"
     parallel = config_object['run_parallel']
     debug = False
 
@@ -107,7 +107,7 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
         run_cwltool_subprocess(cwl_conf_file, workflow, run_directory=run_directory, parallel=parallel, debug=debug)
 
 
-def resume(aquatx_cwl_path: str, config_file: str, step: str) -> None:
+def resume(tinyrna_cwl_path: str, config_file: str, step: str) -> None:
     """Resumes pipeline execution at either the Counter or Plotter step
 
     The user must invoke this from the RUN DIRECTORY for which they wish to
@@ -134,8 +134,8 @@ def resume(aquatx_cwl_path: str, config_file: str, step: str) -> None:
     }
 
     print(f"Resuming pipeline execution at the {step} step...")
-    config = entry_config[step](config_file, f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl")
-    resume_wf = f"{aquatx_cwl_path}/workflows/aquatx-resume.cwl"
+    config = entry_config[step](config_file, f"{tinyrna_cwl_path}/workflows/aquatx_wf.cwl")
+    resume_wf = f"{tinyrna_cwl_path}/workflows/aquatx-resume.cwl"
     config.write_workflow(resume_wf)
 
     debug = False
@@ -230,7 +230,7 @@ def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = 
     pipeline(**config_object.config)
 
 
-def get_template(aquatx_extras_path: str) -> None:
+def get_template(tinyrna_extras_path: str) -> None:
     """Copies all configuration file templates to the current working directory
 
     Args:
@@ -249,10 +249,10 @@ def get_template(aquatx_extras_path: str) -> None:
 
     # Copy template files to the current working directory
     for template in template_files:
-        shutil.copyfile(f"{aquatx_extras_path}/{template}", f"{os.getcwd()}/{template}")
+        shutil.copyfile(f"{tinyrna_extras_path}/{template}", f"{os.getcwd()}/{template}")
 
 
-def setup_cwl(aquatx_cwl_path: str, config_file: str) -> None:
+def setup_cwl(tinyrna_cwl_path: str, config_file: str) -> None:
     """Retrieves the project's workflow files, and if provided, processes the run config file
 
     Args:
@@ -272,7 +272,7 @@ def setup_cwl(aquatx_cwl_path: str, config_file: str) -> None:
         print("The processed configuration file is located at: " + outfile_name)
 
     # Copy the entire cwl directory to the current working directory
-    shutil.copytree(aquatx_cwl_path, os.getcwd() + "/cwl/")
+    shutil.copytree(tinyrna_cwl_path, os.getcwd() + "/cwl/")
     print("The workflow and files are under: cwl/tools/ and cwl/workflows/")
 
 
@@ -303,16 +303,16 @@ def main():
     args = get_args()
 
     # Get the package data
-    aquatx_cwl_path = resource_filename('aquatx', 'cwl/')
-    aquatx_extras_path = resource_filename('aquatx', 'extras/')
+    tinyrna_cwl_path = resource_filename('aquatx', 'cwl/')
+    tinyrna_extras_path = resource_filename('aquatx', 'extras/')
 
     # Execute appropriate command based on command line input
     command_map = {
-        "run": lambda: run(aquatx_cwl_path, args.config),
-        "replot": lambda: resume(aquatx_cwl_path, args.config, "Plotter"),
-        "recount": lambda: resume(aquatx_cwl_path, args.config, "Counter"),
-        "setup-cwl": lambda: setup_cwl(aquatx_cwl_path, args.config),
-        "get-template": lambda: get_template(aquatx_extras_path),
+        "run": lambda: run(tinyrna_cwl_path, args.config),
+        "replot": lambda: resume(tinyrna_cwl_path, args.config, "Plotter"),
+        "recount": lambda: resume(tinyrna_cwl_path, args.config, "Counter"),
+        "setup-cwl": lambda: setup_cwl(tinyrna_cwl_path, args.config),
+        "get-template": lambda: get_template(tinyrna_extras_path),
         "setup-nextflow": lambda: setup_nextflow(args.config)
     }
 

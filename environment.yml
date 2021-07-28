@@ -1,4 +1,4 @@
-name: aquatx-srna
+name: tinyrna-srna
 channels:
   - bioconda
 dependencies:

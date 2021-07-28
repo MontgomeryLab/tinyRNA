@@ -12,7 +12,7 @@ before_install:
 
 install:
   - conda env update -f environment.yml
-  - conda activate aquatx-srna
+  - conda activate tinyrna-srna
 
 script:
   - python -m unittest tests.unit_tests_aquatx

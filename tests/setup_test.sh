@@ -10,10 +10,10 @@ versions=( 3.7 3.8 3.9 )
 for v in "${versions[@]}"; do
   echo "Testing v$v"
   # Create/overwrite environment
-  conda create -n aquatx-srna-"$v" python="$v" --yes > /dev/null || exit
+  conda create -n tinyrna-srna-"$v" python="$v" --yes > /dev/null || exit
 
   # Install aquatx. Read conda output for error strings in real-time
-  conda env update -f ../environment.yml -n aquatx-srna-"$v" 2>&1 | while read line; do
+  conda env update -f ../environment.yml -n tinyrna-srna-"$v" 2>&1 | while read line; do
     if [[ $line == "Found conflicts!"* || $line == "UnsatisfiableError"* ]]; then
       echo "Failed env update."
       # Send SIGINT (CTRL+C) to conda for graceful exit from env update
@@ -24,7 +24,7 @@ for v in "${versions[@]}"; do
   done
 
   # Activate the environment to verify intended Python version
-  conda activate aquatx-srna-"$v"
+  conda activate tinyrna-srna-"$v"
   if [[ $(python -V 2>&1) != "Python $v"* ]]; then echo "Failed version check."; fi
   conda deactivate
 done
