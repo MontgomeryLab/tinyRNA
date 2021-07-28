@@ -17,9 +17,18 @@ usage <- "The following arguments are accepted:
 
        --pca
               Optional. This will produce principle component analysis plots
-              using the DESeq2 library. Output files are PDF format.
+              using the DESeq2 library. Output files are PDF format."
 
-       "
+df_with_classes <- function(data){
+  # Returns the provided data as a dataframe with a corresponding classes column, regardless of order
+  return(
+    transform(
+      merge(classes, data.frame(data), by=0),
+      row.names = Row.names,
+      Row.names = NULL
+    )
+  )
+}
 
 ## Throw an error if an unexpected number of arguments is provided
 if (length(args) > 5){
@@ -46,14 +55,14 @@ if (out_pref %in% c('--input-file', '--pca')){
 ## Now that command line args have been validated, load libraries for performing DEG and writing PCA plots
 library(DESeq2)
 library(lattice)
+library(utils)
 
 #### ---- Set up the parameters ---- ####
 
 counts <- read.csv(count_file,row.names = 1)
-# The first column (Feature ID) is absorbed as the index
-# The remaining two columns (Feature Name and Feature Class) need to be dropped
-counts <- counts[3:length(counts)]
-counts <- data.frame(sapply(counts, as.integer), row.names = rownames(counts))
+classes <- data.frame(counts[2])
+# Feature Name and Feature Class columns need to be dropped before integer sapply
+counts <- data.frame(sapply(counts[3:length(counts)], as.integer), row.names = rownames(counts))
 # Create a data frame matching the file, name, condition
 samples <- colnames(counts)
 condition <- rep('none', length(samples))
@@ -72,15 +81,17 @@ deseq_ds <- DESeqDataSetFromMatrix(countData = counts, colData = sample_table, d
 deseq_run <- DESeq(deseq_ds)
 
 # Get the normalized counts
-deseq_counts <- counts(deseq_run, normalized=TRUE)
+deseq_counts <- df_with_classes(counts(deseq_run, normalized=TRUE))
 write.csv(deseq_counts, paste(out_pref, "norm_counts.csv", sep="_"))
 
 # Create & retrieve all possible comparisons
 all_comparisons <- t(combn(unique(condition), 2))
 for (i in 1:nrow(all_comparisons)){
-  comparison <- all_comparisons[i,] 
+  comparison <- all_comparisons[i,]
+
   deseq_res <- results(deseq_run, c("condition", comparison[1], comparison[2]))
-  deseq_res <- deseq_res[order(deseq_res$padj),]
+  result_df <- df_with_classes(deseq_res[order(deseq_res$padj),])
+  write.csv(result_df, paste(out_pref, "cond1", comparison[1], "cond2", comparison[2], "deseq_table.csv", sep="_"))
 
   if (plot_pca){
     plt <- plotPCA(rlog(deseq_ds))
@@ -88,7 +99,5 @@ for (i in 1:nrow(all_comparisons)){
     print(plt)
     dev.off()
   }
-
-  write.csv(deseq_res, paste(out_pref, "cond1", comparison[1], "cond2", comparison[2], "deseq_table.csv", sep="_"))
 }
 

@@ -44,6 +44,9 @@ inputs:
   dge_pca: File[]?
   dge_comparisons: File[]
 
+  plotter_name: string
+  plotter_plots: File[]?
+
 steps:
 
   organize_bt_indexes:
@@ -86,7 +89,7 @@ steps:
     run: ../tools/make-subdir.cwl
     in:
       dir_files:
-        source: [ counter_features, counter_other, counter_alignment_stats, counter_summary_stats, counter_intermed ]
+        source: [ counter_features, counter_other, counter_alignment_stats, counter_summary_stats, counter_intermed, features_csv ]
         linkMerge: merge_flattened
       dir_name: counter_name
     out: [ subdir ]
@@ -98,6 +101,15 @@ steps:
         source: [ dge_norm, dge_comparisons, dge_pca ]
         linkMerge: merge_flattened
       dir_name: dge_name
+    out: [ subdir ]
+
+  organize_plotter:
+    run: ../tools/make-subdir.cwl
+    in:
+      dir_files:
+        source: [ plotter_plots ]
+        linkMerge: merge_flattened
+      dir_name: plotter_name
     out: [ subdir ]
 
 outputs:
@@ -125,3 +137,7 @@ outputs:
   dge_dir:
     type: Directory
     outputSource: organize_dge/subdir
+
+  plotter_dir:
+    type: Directory
+    outputSource: organize_plotter/subdir

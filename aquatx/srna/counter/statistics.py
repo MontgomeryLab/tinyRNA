@@ -192,7 +192,8 @@ class SummaryStats:
 
         for lib_name, matrix in self.nt_len_mat.items():
             sanitized_lib_name = lib_name.replace('/', '_')
-            pd.DataFrame(matrix).fillna(0).to_csv(f'{prefix}_{sanitized_lib_name}_nt_len_dist.csv')
+            len_dist_df = pd.DataFrame(matrix).sort_index().fillna(0)
+            len_dist_df.to_csv(f'{prefix}_{sanitized_lib_name}_nt_len_dist.csv')
 
     def add_library(self, other: LibraryStats) -> None:
         # Add incoming feature counts as a new column of the data frame

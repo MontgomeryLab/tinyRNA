@@ -217,8 +217,33 @@ intermed_file: False
 ######-------------------------------------------------------------------------------######
 
 
-##-- If True: produce principal component analysis plots for each library comparison
+##-- If True: produce principal component analysis plots for each sample comparison
 dge_pca_plots: true
+
+
+######-------------------------------- PLOTTING OPTIONS -----------------------------######
+#
+# We use a custom Python script for creating all plots. The default base style is called
+# 'smrna-light'. If you wish to use another matplotlib stylesheet you may specify that here
+# (i.e. ggplot or seaborn-white). You may also specify color palettes built into matplotlib
+# if you do not wish to use 'smrna-light' defaults.
+#
+# We have specified default parameters for small RNA data based on our own "best practices".
+# You may change the parameters here.
+#
+######-------------------------------------------------------------------------------######
+
+
+# Enable plots by uncommenting (removing the '#') for the desired plot type
+# Disable plots by commenting (adding a '#') for the undesired plot type
+plot_requests:
+  - 'len_dist'
+  - 'class_charts'
+  - 'replicate_scatter'
+  - 'sample_avg_scatter'
+  - 'sample_avg_scatter_by_class'
+  - 'sample_avg_scatter_by_deg'
+  - 'sample_avg_scatter_by_both'
 
 
 ######----------------------------- OUTPUT DIRECTORIES ------------------------------######
@@ -228,12 +253,15 @@ dge_pca_plots: true
 #
 ######-------------------------------------------------------------------------------######
 
+
 dir_name_bt_build: bowtie-build
 dir_name_fastp: fastp
 dir_name_collapser: collapser
 dir_name_bowtie: bowtie
 dir_name_counter: counter
 dir_name_dge: DGE
+dir_name_plotter: plots
+
 
 #########################  AUTOMATICALLY GENERATED CONFIGURATIONS #########################
 #
