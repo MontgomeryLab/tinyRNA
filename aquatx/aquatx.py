@@ -25,10 +25,14 @@ of the run you wish to resume. The config file you supply must be the processed
 Run Configuration file within the Run Directory.
 """
 
+import cwltool.main as cwlmain
+
 import cwltool.executors
 import cwltool.factory
 import cwltool.secrets
+import coloredlogs
 import subprocess
+import logging
 import shutil
 import sys
 import os
@@ -94,7 +98,7 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
 
     workflow = f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl"
     parallel = config_object['run_parallel']
-    debug = False
+    debug = config_object['debug']
 
     if config_object['run_native']:  # experimental
         # Execute the CWL runner via native Python
@@ -105,6 +109,12 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
 
         # Use the cwltool CWL runner via command line
         run_cwltool_subprocess(cwl_conf_file, workflow, run_directory=run_directory, parallel=parallel, debug=debug)
+
+    # For now, we assume bowtie-build completed successfully if requested
+    # We want to update the Paths Sheet to point to the new index prefix
+    if config_object['run_bowtie_build']:
+        paths_sheet_filename = config_object.paths.inf
+        config_object.paths.write_processed_config(paths_sheet_filename)
 
 
 def resume(aquatx_cwl_path: str, config_file: str, step: str) -> None:
@@ -134,18 +144,18 @@ def resume(aquatx_cwl_path: str, config_file: str, step: str) -> None:
     }
 
     print(f"Resuming pipeline execution at the {step} step...")
+
     config = entry_config[step](config_file, f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl")
     resume_wf = f"{aquatx_cwl_path}/workflows/aquatx-resume.cwl"
     config.write_workflow(resume_wf)
 
-    debug = False
     if config['run_native']:
         # Don't need to write processed config, pass in directly
-        run_native(config, resume_wf, run_directory=".", debug=debug)
+        run_native(config, resume_wf, debug=config['debug'])
     else:
         resume_conf_file = "resume_" + os.path.basename(config_file)
         config.write_processed_config(resume_conf_file)
-        run_cwltool_subprocess(resume_conf_file, resume_wf, debug=debug)
+        run_cwltool_subprocess(resume_conf_file, resume_wf, debug=config['debug'])
 
     if os.path.isfile(resume_wf):
         # We don't want the generated workflow to be returned by a call to setup-cwl
@@ -175,7 +185,7 @@ def run_cwltool_subprocess(config_file: str, workflow: str, run_directory=None, 
     subprocess.run(cwl_runner, shell=True)
 
 
-def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = None, parallel=False, debug=False) -> None:
+def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = '.', parallel=False, debug=False) -> None:
     """Executes the workflow using native Python rather than subprocess "command line"
 
     Args:
@@ -202,6 +212,11 @@ def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = 
         else:
             furnish_if_file_record(config_param)
 
+    logger = logging.getLogger("cwltool")
+    logger.handlers.clear()  # executors.py loads a default handler; outputs are printed twice if we don't clear it
+    coloredlogs.install(logger=logger, stream=sys.stderr, fmt="[%(asctime)s] %(levelname)s %(message)s", isatty=True,
+                        datefmt="%Y-%m-%d %H:%M:%S", level='DEBUG' if debug else 'INFO')
+
     runtime_context = cwltool.factory.RuntimeContext({
         'secret_store': cwltool.secrets.SecretStore(),
         'default_stdout': subprocess.PIPE,
@@ -209,6 +224,7 @@ def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = 
         'outdir': run_directory,
         'move_outputs': "copy",
         'on_error': "continue",
+        'js_console': debug,
         'debug': debug
     })
 
@@ -227,7 +243,18 @@ def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = 
     )
 
     pipeline = cwl.make(workflow)
-    pipeline(**config_object.config)
+    pipeline(**config_object.config, logger=logger)
+
+    # resume_conf_file = "processed_run_conf.yml"
+    # config_object.write_processed_config(resume_conf_file)
+    #
+    # cwlmain.run(**{
+    #     'argsl': [workflow, resume_conf_file],
+    #     'runtimeContext': runtime_context,
+    #     'loadingContext': LoadingContext({'relax_path_checks': True}),
+    #     'executor': cwltool.executors.MultithreadedJobExecutor()  # Run jobs in parallel
+    #     if parallel else cwltool.executors.SingleJobExecutor(),   # Run one library at a time
+    # })
 
 
 def get_template(aquatx_extras_path: str) -> None:
