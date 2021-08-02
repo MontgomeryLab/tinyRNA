@@ -1,6 +1,8 @@
 import ruamel.yaml
 import argparse
 import shutil
+import errno
+import sys
 import csv
 import os
 import re
@@ -94,9 +96,10 @@ class ConfigBase:
         return os.path.normpath(os.path.join(path1, path2))
 
     @staticmethod
-    def cwl_file(file: str) -> dict:
+    def cwl_file(file: str, verify=True) -> dict:
         """Returns a minimal File object as defined by CWL"""
-        # Todo: validate that file exists at this step
+        if verify and not os.path.exists(file):
+            raise(FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file))
         return {'class': 'File', 'path': file}
 
     @staticmethod
@@ -205,9 +208,6 @@ class Configuration(ConfigBase):
                 group_name = row['Group']
                 rep_number = row['Replicate']
 
-                self.append_to('report_title', f"{group_name}_rep_{rep_number}")
-                self.append_to('in_fq', self.cwl_file(fastq_file))
-
                 self.append_to('out_fq', sample_basename + '_cleaned.fastq')
                 self.append_to('outfile', sample_basename + '_aligned_seqs.sam')
                 self.append_to('logfile', sample_basename + '_alignment_log.log')
@@ -215,6 +215,13 @@ class Configuration(ConfigBase):
                 self.append_to('json', sample_basename + '_qc.json')
                 self.append_to('html', sample_basename + '_qc.html')
                 self.append_to('uniq_seq_prefix', sample_basename)
+                self.append_to('report_title', f"{group_name}_rep_{rep_number}")
+
+                try:
+                    self.append_to('in_fq', self.cwl_file(fastq_file))
+                except FileNotFoundError:
+                    line = csv_reader.line_num
+                    sys.exit("The fastq file on line %d of your Samples Sheet was not found:\n%s" % (line, fastq_file))
 
     def process_feature_sheet(self):
         feature_sheet = self.paths.from_here(self['features_csv']['path'])
@@ -223,12 +230,16 @@ class Configuration(ConfigBase):
         with open(feature_sheet, 'r', encoding='utf-8-sig') as ff:
             fieldnames = ("ID", "Key", "Value", "Hierarchy", "Strand", "nt5", "Length", "Strict", "Source")
             csv_reader = csv.DictReader(ff, fieldnames=fieldnames, delimiter=',')
+            next(csv_reader)  # Skip header line
 
-            next(csv_reader) # Skip header line
-            for row in csv_reader:
-                gff_file = self.from_here(row['Source'], origin=feature_sheet_dir)
-                self.append_if_absent('gff_files', self.cwl_file(gff_file))
-            
+            try:
+                for row in csv_reader:
+                    gff_file = self.from_here(row['Source'], origin=feature_sheet_dir)
+                    self.append_if_absent('gff_files', self.cwl_file(gff_file))
+            except FileNotFoundError:
+                line = csv_reader.line_num
+                sys.exit("The GFF file on line %d of your Features Sheet was not found:\n%s" % (line, gff_file))
+
     def setup_per_file(self):
         """Per-library settings lists to be populated by entries from samples_csv"""
 
@@ -256,7 +267,6 @@ class Configuration(ConfigBase):
 
         self.extras = resource_filename('aquatx', 'extras/')
 
-    # Todo: better heuristics for determining if the prefix outputs actually exist
     def setup_ebwt_idx(self):
         """Bowtie index files and prefix"""
 
@@ -274,17 +284,18 @@ class Configuration(ConfigBase):
             )
 
             self['ebwt'] = self.paths['ebwt'] = bt_index_prefix
-
-            # Finally, update user's paths file with the new prefix
-            self.paths.write_processed_config(self.paths.inf)
         else:
             # bowtie-build should only run if 'run_bowtie_build' is True AND ebwt (index prefix) is undefined
             self['run_bowtie_build'] = False
             bt_index_prefix = self.paths.from_here(bt_index_prefix)
 
         # Bowtie index files
-        self['bt_index_files'] = [self.cwl_file(bt_index_prefix + postfix)
-                        for postfix in ['.1.ebwt', '.2.ebwt', '.3.ebwt', '.4.ebwt', '.rev.1.ebwt', '.rev.2.ebwt']]
+        try:
+            self['bt_index_files'] = [self.cwl_file(bt_index_prefix + postfix, verify=(not self['run_bowtie_build']))
+                            for postfix in ['.1.ebwt', '.2.ebwt', '.3.ebwt', '.4.ebwt', '.rev.1.ebwt', '.rev.2.ebwt']]
+        except FileNotFoundError as e:
+            sys.exit("The following file could not be found from the Bowtie index prefix defined in your Paths Sheet:\n"
+                     "%s" % (e.filename,))
 
         # When CWL copies bt_index_filex for the bowtie.cwl InitialWorkDirRequirement, it does not
         # preserve the prefix path. What the workflow "sees" is the ebwt files at working dir root
