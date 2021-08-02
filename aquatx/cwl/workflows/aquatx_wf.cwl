@@ -86,6 +86,7 @@ inputs:
 
   # plotter options
   plot_requests: string[]
+  plot_style_sheet: File?
 
   # output directory names
   dir_name_bt_build: string
@@ -170,6 +171,33 @@ steps:
       shared_memory: shared_memory
       seed: seed
     out: [fastq_clean, html_report_file, json_report_file, uniq_seqs, uniq_seqs_low, aln_seqs, unal_seqs, bowtie_log]
+    
+  counter-prep-subdirs:
+    run: organize-outputs.cwl
+    in:
+      bt_build_name: dir_name_bt_build
+      bt_build_indexes: bt_build_optional/index_files
+      run_bowtie_build: run_bowtie_build
+
+      fastp_name: dir_name_fastp
+      fastp_cleaned_fastq: counter-prep/fastq_clean
+      fastp_html_report: counter-prep/html_report_file
+      fastp_json_report: counter-prep/json_report_file
+
+      collapser_name: dir_name_collapser
+      collapser_uniq: counter-prep/uniq_seqs
+      collapser_low:
+        # Due to scatter, this optional output is actually an array of nulls when not produced (can't use default)
+        source: counter-prep/uniq_seqs_low
+        pickValue: all_non_null
+
+      bowtie_name: dir_name_bowtie
+      bowtie_sam: counter-prep/aln_seqs
+      bowtie_log: counter-prep/bowtie_log
+      bowtie_unal:
+        source: counter-prep/unal_seqs
+        default: [ ]
+    out: [ bt_build_dir, fastp_dir, collapser_dir, bowtie_dir ]
 
   counter:
     run: ../tools/aquatx-count.cwl
@@ -190,7 +218,7 @@ steps:
     in:
       input_file: counter/feature_counts
       outfile_prefix: run_name
-      pca_plots: dge_pca_plots
+      pca: dge_pca_plots
     out: [ norm_counts, comparisons, pca_plots ]
 
   plotter:
@@ -200,36 +228,14 @@ steps:
       norm_counts: dge/norm_counts
       deg_tables: dge/comparisons
       len_dist: counter/other_counts
+      style_sheet: plot_style_sheet
       out_prefix: run_name
       plot_requests: plot_requests
     out: [ plots ]
 
-  subdirs:
+  post-counter-subdirs:
     run: organize-outputs.cwl
     in:
-      bt_build_name: dir_name_bt_build
-      bt_build_indexes: bt_build_optional/index_files
-      run_bowtie_build: run_bowtie_build
-
-      fastp_name: dir_name_fastp
-      fastp_cleaned_fastq: counter-prep/fastq_clean
-      fastp_html_report: counter-prep/html_report_file
-      fastp_json_report: counter-prep/json_report_file
-
-      collapser_name: dir_name_collapser
-      collapser_uniq: counter-prep/uniq_seqs
-      collapser_low:
-        # This optional output is actually an array of nulls when not produced (can't use default)
-        source: counter-prep/uniq_seqs_low
-        pickValue: all_non_null
-
-      bowtie_name: dir_name_bowtie
-      bowtie_sam: counter-prep/aln_seqs
-      bowtie_log: counter-prep/bowtie_log
-      bowtie_unal:
-        source: counter-prep/unal_seqs
-        default: []
-
       counter_name: dir_name_counter
       counter_features: counter/feature_counts
       counter_other: counter/other_counts
@@ -238,6 +244,7 @@ steps:
       counter_intermed:
         source: counter/intermed_out_files
         default: []
+      features_csv: features_csv
 
       dge_name: dir_name_dge
       dge_norm: dge/norm_counts
@@ -250,36 +257,36 @@ steps:
       plotter_plots:
         source: plotter/plots
         default: []
-    out: [ bt_build_dir, fastp_dir, collapser_dir, bowtie_dir, counter_dir, dge_dir, plotter_dir ]
+    out: [ counter_dir, dge_dir, plotter_dir ]
 
 outputs:
 
   # Subdirectory outputs
   bt_build_out_dir:
     type: Directory?
-    outputSource: subdirs/bt_build_dir
+    outputSource: counter-prep-subdirs/bt_build_dir
 
   fastp_out_dir:
-    type: Directory
-    outputSource: subdirs/fastp_dir
+    type: Directory?
+    outputSource: counter-prep-subdirs/fastp_dir
 
   collapser_out_dir:
-    type: Directory
-    outputSource: subdirs/collapser_dir
+    type: Directory?
+    outputSource: counter-prep-subdirs/collapser_dir
 
   bowtie_out_dir:
-    type: Directory
-    outputSource: subdirs/bowtie_dir
+    type: Directory?
+    outputSource: counter-prep-subdirs/bowtie_dir
 
   counter_out_dir:
-    type: Directory
-    outputSource: subdirs/counter_dir
+    type: Directory?
+    outputSource: post-counter-subdirs/counter_dir
 
   dge_out_dir:
-    type: Directory
-    outputSource: subdirs/dge_dir
+    type: Directory?
+    outputSource: post-counter-subdirs/dge_dir
 
-  plotter_out_dir:
-    type: Directory
-    outputSource: plotter/plots
+  plotter_dir:
+    type: Directory?
+    outputSource: post-counter-subdirs/plotter_dir
 

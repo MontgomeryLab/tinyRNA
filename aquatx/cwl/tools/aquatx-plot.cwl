@@ -30,6 +30,12 @@ inputs:
       prefix: -len
     doc: "5' end nucleotide vs. length matrices from Counter"
 
+  style_sheet:
+    type: File?
+    inputBinding:
+      prefix: -s
+    doc: "A .mplstyle sheet to use instead of aquatx default styles"
+
   out_prefix:
     type: string?
     inputBinding:
