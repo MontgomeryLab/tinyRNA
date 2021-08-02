@@ -246,7 +246,7 @@ def scatter_samples(count_df, output_prefix, classes=None, degs=None, unknown=Fa
             labels = ['p > %6.2f' % pval] + uniq_classes
             sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2],
                                           *grp_args, log_norm=True, labels=labels) 
-            sscat.set_title(pair)
+            sscat.set_title('%s vs %s' % (p1, p2))
             sscat.set_xlabel(p1)
             sscat.set_ylabel(p2)
             pdf_name = '_'.join([output_prefix, pair, 'scatter_by_deg_class.pdf'])
@@ -262,13 +262,13 @@ def scatter_samples(count_df, output_prefix, classes=None, degs=None, unknown=Fa
         for cls in uniq_classes:
             grp_args.append(list(classes.index[classes == cls]))
     
-        for pair in samples:
-            sscat = aqplt.scatter_grouped(count_df.loc[:,pair[0]], count_df.loc[:,pair[1]],
-                                          *grp_args, log_norm=True, labels=uniq_classes) 
-            sscat.set_title('%s vs %s' % (pair[0], pair[1]))
-            sscat.set_xlabel(pair[0])
-            sscat.set_ylabel(pair[1])
-            pdf_name = '_'.join([output_prefix, pair[0], 'vs', pair[1], 'scatter_by_class.pdf'])
+        for p1, p2 in samples:
+            sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2],
+                                          *grp_args, log_norm=True, labels=uniq_classes)
+            sscat.set_title('%s vs %s' % (p1, p2))
+            sscat.set_xlabel(p1)
+            sscat.set_ylabel(p2)
+            pdf_name = '_'.join([output_prefix, p1, 'vs', p2, 'scatter_by_class.pdf'])
             sscat.figure.savefig(pdf_name, bbox_inches='tight')
     
     elif degs is not None:
@@ -278,8 +278,8 @@ def scatter_samples(count_df, output_prefix, classes=None, degs=None, unknown=Fa
 
             labels = ['p < %d' % pval]
             sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2],
-                                          *grp_args, log_norm=True, labels=labels) 
-            sscat.set_title(pair)
+                                          grp_args, log_norm=True, labels=labels)
+            sscat.set_title('%s vs %s' % (p1, p2))
             sscat.set_xlabel(p1)
             sscat.set_ylabel(p2)
             pdf_name = '_'.join([output_prefix, pair, 'scatter_by_deg.pdf'])
@@ -369,18 +369,14 @@ def get_class_counts(counts_df: pd.DataFrame) -> pd.DataFrame:
         class_counts: A DataFrame with an index of classes and count entries, per comparison
     """
 
-    # 1. Group and sum by Feature Class. This makes the next step less expensive.
-    grouped = counts_df.groupby("Feature.Class").sum()
+    # 1. Group by Feature Class. Class "lists" are strings. Normalize their counts by the number of commas.
+    grouped = counts_df.groupby("Feature.Class").apply(lambda grp: grp.sum() / (grp.name.count(',') + 1))
 
-    # 2. Groups may also contain list (string) entries which need to be flattened for proper attribution.
-    grouped_flat_index = [row._replace(Index=split.strip()) if ',' in row[0] else row
-                          for row in grouped.itertuples()
-                          for split in row[0].split(',')]
+    # 2. Convert class "list" strings to true lists since we no longer need a hashable index
+    grouped.index = grouped.index.map(lambda x: [cls.strip() for cls in x.split(',')])
 
-    # 3. Finally, group and sum again now that class lists have been flattened.
-    class_counts = pd.DataFrame(grouped_flat_index, columns=counts_df.columns).groupby("Feature.Class").sum()
-
-    return class_counts
+    # 3. Finally, flatten class lists and add the normalized counts to their groups
+    return grouped.reset_index().explode("Feature.Class").groupby("Feature.Class").sum()
 
 
 def validate_inputs(args: argparse.Namespace) -> None:
@@ -417,6 +413,10 @@ def validate_inputs(args: argparse.Namespace) -> None:
     }
 
     for plot_name in args.plots.copy():
+        if plot_name not in dependencies_satisfied_for:
+            print(f"Skipping unrecognized plot type: {plot_name}")
+            args.plots.remove(plot_name)
+            continue
         if not dependencies_satisfied_for[plot_name]:
             print(error_message[plot_name] + plot_name)
             args.plots.remove(plot_name)
@@ -473,6 +473,7 @@ def main():
     global aqplt
     aqplt = lib(args.style_sheet)
 
+    # Assemble work units for multiprocessing pool
     itinerary = []
 
     # generate plots requested
