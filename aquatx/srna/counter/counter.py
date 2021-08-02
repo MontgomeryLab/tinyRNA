@@ -74,7 +74,7 @@ def load_samples(samples_csv: str) -> list:
 
     inputs = list()
 
-    with open(samples_csv, 'r', encoding='utf-8-sig') as f:
+    with open(os.path.expanduser(samples_csv), 'r', encoding='utf-8-sig') as f:
         fieldnames = ("File", "Group", "Replicate")
         csv_reader = csv.DictReader(f, fieldnames=fieldnames, delimiter=',')
 
@@ -103,7 +103,7 @@ def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
     rules, gff_files = list(), defaultdict(list)
     convert_strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
 
-    with open(features_csv, 'r', encoding='utf-8-sig') as f:
+    with open(os.path.expanduser(features_csv), 'r', encoding='utf-8-sig') as f:
         fieldnames = ("Name", "Key", "Value", "Hierarchy", "Strand", "nt5", "Length", "Strict", "Source")
         csv_reader = csv.DictReader(f, fieldnames=fieldnames, delimiter=',')
 

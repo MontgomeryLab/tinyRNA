@@ -27,6 +27,7 @@ class ConfigBase:
     """
 
     def __init__(self, config_file: str):
+        if '~' in config_file: config_file = os.path.expanduser(config_file)
         self.dir = os.path.dirname(os.path.abspath(config_file))
         self.inf = config_file
         self.basename = os.path.basename(config_file)
@@ -92,12 +93,14 @@ class ConfigBase:
     @staticmethod
     def joinpath(path1: str, path2: str) -> str:
         """Combines two relative paths intelligently"""
+        path1, path2 = (os.path.expanduser(p) for p in [path1, path2])
         if os.path.isabs(path2): return path2
         return os.path.normpath(os.path.join(path1, path2))
 
     @staticmethod
     def cwl_file(file: str, verify=True) -> dict:
         """Returns a minimal File object as defined by CWL"""
+        if '~' in file: file = os.path.expanduser(file)
         if verify and not os.path.exists(file):
             raise(FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file))
         return {'class': 'File', 'path': file}

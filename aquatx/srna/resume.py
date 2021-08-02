@@ -27,6 +27,7 @@ class ResumeConfig(ConfigBase, ABC):
         self.check_dir_requirements(processed_config)
 
         # Load the CWL workflow YAML for modification
+        if '~' in workflow: os.path.expanduser(workflow)
         with open(workflow, 'r') as f:
             self.workflow: CommentedOrderedMap
             self.workflow = self.yaml.load(f)
