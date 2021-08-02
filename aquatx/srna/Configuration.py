@@ -92,6 +92,7 @@ class ConfigBase:
     @staticmethod
     def joinpath(path1: str, path2: str) -> str:
         """Combines two relative paths intelligently"""
+        path1, path2 = (os.path.expanduser(p) for p in [path1, path2])
         if os.path.isabs(path2): return path2
         return os.path.normpath(os.path.join(path1, path2))
 
