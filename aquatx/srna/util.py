@@ -18,6 +18,7 @@ def report_execution_time(step_name: str):
 
 def from_here(config_file, input_file):
     """Calculates paths relative to the config file which contains them"""
+    config_file, input_file = (os.path.expanduser(p) for p in [config_file, input_file])
 
     if not os.path.isabs(input_file):
         from_here = os.path.dirname(config_file)

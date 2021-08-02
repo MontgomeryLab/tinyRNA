@@ -60,7 +60,7 @@ def load_samples(samples_csv: str) -> list:
         file_ext = os.path.splitext(csv_row_file)[1].lower()
 
         # If the sample file has a fastq(.gz) extension, infer the name of its pipeline-produced .sam file
-        if file_ext in [".fastq", ".fastq.gz"]:
+        if file_ext in [".fastq", ".gz"]:
             # Fix relative paths to be relative to sample_csv's path, rather than relative to cwd
             csv_row_file = os.path.basename(csv_row_file) if is_pipeline else from_here(samples_csv, csv_row_file)
             csv_row_file = os.path.splitext(csv_row_file)[0] + "_aligned_seqs.sam"
@@ -68,13 +68,13 @@ def load_samples(samples_csv: str) -> list:
             if not os.path.isabs(csv_row_file):
                 raise ValueError("The following file must be expressed as an absolute path:\n%s" % (csv_row_file,))
         else:
-            raise ValueError("The filenames defined in your samples CSV file must have a .fastq or .sam extension.\n"
+            raise ValueError("The filenames defined in your Samples Sheet must have a .fastq(.gz) or .sam extension.\n"
                              "The following filename contained neither:\n%s" % (csv_row_file,))
         return csv_row_file
 
     inputs = list()
 
-    with open(samples_csv, 'r', encoding='utf-8-sig') as f:
+    with open(os.path.expanduser(samples_csv), 'r', encoding='utf-8-sig') as f:
         fieldnames = ("File", "Group", "Replicate")
         csv_reader = csv.DictReader(f, fieldnames=fieldnames, delimiter=',')
 
@@ -103,7 +103,7 @@ def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
     rules, gff_files = list(), defaultdict(list)
     convert_strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
 
-    with open(features_csv, 'r', encoding='utf-8-sig') as f:
+    with open(os.path.expanduser(features_csv), 'r', encoding='utf-8-sig') as f:
         fieldnames = ("Name", "Key", "Value", "Hierarchy", "Strand", "nt5", "Length", "Strict", "Source")
         csv_reader = csv.DictReader(f, fieldnames=fieldnames, delimiter=',')
 

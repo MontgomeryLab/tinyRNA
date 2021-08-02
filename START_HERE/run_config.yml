@@ -36,6 +36,9 @@ run_bowtie_build: True
 ##-- For best performance, this should be equal to your computer's processor core count --##
 threads: 4
 
+##-- If True: cwltool will print detailed workflow operation details --##
+debug: False
+
 ##-- (EXPERIMENTAL) If True: process each sample library in parallel --##
 run_parallel: False
 
@@ -234,8 +237,8 @@ dge_pca_plots: true
 ######-------------------------------------------------------------------------------######
 
 
-# Enable plots by uncommenting (removing the '#') for the desired plot type
-# Disable plots by commenting (adding a '#') for the undesired plot type
+##-- Enable plots by uncommenting (removing the '#') for the desired plot type --##
+##-- Disable plots by commenting (adding a '#') for the undesired plot type --##
 plot_requests:
   - 'len_dist'
   - 'class_charts'
@@ -244,6 +247,9 @@ plot_requests:
   - 'sample_avg_scatter_by_class'
   - 'sample_avg_scatter_by_deg'
   - 'sample_avg_scatter_by_both'
+
+##-- You may supply your own matplotlib style sheet to override defaults here --##
+plot_style_sheet: ~
 
 
 ######----------------------------- OUTPUT DIRECTORIES ------------------------------######

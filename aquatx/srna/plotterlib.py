@@ -13,6 +13,7 @@ from typing import Union
 import numpy as np
 import pandas as pd
 import matplotlib as mpl
+import matplotlib.ticker as tix
 import matplotlib.pyplot as plt
 import warnings; warnings.filterwarnings(action='once')
 
@@ -204,6 +205,11 @@ class plotterlib:
                 newticks[i,:] = np.arange(2**oldticks[i-1], 2**oldticks[i], (2**oldticks[i] - 2**oldticks[i-1])/8)
 
             newticks = np.sort(newticks[2:,:].flatten())
+
+            # These lines have been added to address the FixedLocator warning
+            ax.xaxis.set_major_locator(tix.FixedLocator(oldticks))
+            ax.yaxis.set_major_locator(tix.FixedLocator(oldticks))
+
             ax.set_xticks(np.log2(newticks), minor=True)
             ax.set_xticklabels(np.round(2**oldticks))
             ax.set_yticks(np.log2(newticks), minor=True)

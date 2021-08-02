@@ -36,6 +36,9 @@ run_bowtie_build: True
 ##-- For best performance, this should be equal to your computer's processor core count --##
 threads: 4
 
+##-- If True: cwltool will print detailed workflow operation details --##
+debug: False
+
 ##-- (EXPERIMENTAL) If True: process each sample library in parallel --##
 run_parallel: False
 
@@ -69,12 +72,12 @@ ftabchars: ~
 
 ######---------------------TRIMMING AND QUALITY FILTER OPTIONS ----------------------######
 #
-# We use the program fastp to perform: adapter trimming (req), quality filtering (on), 
+# We use the program fastp to perform: adapter trimming (req), quality filtering (on),
 # and QC analysis for an output QC report. See https://github.com/OpenGene/fastp for more
 # information on the fastp tool. We have limited the options available to those appropriate
 # for small RNA sequencing data. If you require an addition option, create an issue on the
 # pipeline github: https://github.com/MontgomeryLab/aquatx-srna
-# 
+#
 # We have specified default parameters for small RNA data based on our own "best practices".
 # You may change the parameters here.
 #
@@ -83,7 +86,7 @@ ftabchars: ~
 
 ##-- Adapter sequence to trim --##
 adapter_sequence: 'auto'
- 
+
 ##-- Minumum & maximum accepted lengths after trimming --##
 length_required: 15
 length_limit: 30
@@ -217,8 +220,36 @@ intermed_file: False
 ######-------------------------------------------------------------------------------######
 
 
-##-- If True: produce principal component analysis plots for each library comparison
+##-- If True: produce principal component analysis plots for each sample comparison
 dge_pca_plots: true
+
+
+######-------------------------------- PLOTTING OPTIONS -----------------------------######
+#
+# We use a custom Python script for creating all plots. The default base style is called
+# 'smrna-light'. If you wish to use another matplotlib stylesheet you may specify that here
+# (i.e. ggplot or seaborn-white). You may also specify color palettes built into matplotlib
+# if you do not wish to use 'smrna-light' defaults.
+#
+# We have specified default parameters for small RNA data based on our own "best practices".
+# You may change the parameters here.
+#
+######-------------------------------------------------------------------------------######
+
+
+##-- Enable plots by uncommenting (removing the '#') for the desired plot type --##
+##-- Disable plots by commenting (adding a '#') for the undesired plot type --##
+plot_requests:
+  - 'len_dist'
+  - 'class_charts'
+  - 'replicate_scatter'
+  - 'sample_avg_scatter'
+  - 'sample_avg_scatter_by_class'
+  - 'sample_avg_scatter_by_deg'
+  - 'sample_avg_scatter_by_both'
+
+##-- You may supply your own matplotlib style sheet to override defaults here --##
+plot_style_sheet: ~
 
 
 ######----------------------------- OUTPUT DIRECTORIES ------------------------------######
@@ -228,12 +259,15 @@ dge_pca_plots: true
 #
 ######-------------------------------------------------------------------------------######
 
+
 dir_name_bt_build: bowtie-build
 dir_name_fastp: fastp
 dir_name_collapser: collapser
 dir_name_bowtie: bowtie
 dir_name_counter: counter
 dir_name_dge: DGE
+dir_name_plotter: plots
+
 
 #########################  AUTOMATICALLY GENERATED CONFIGURATIONS #########################
 #

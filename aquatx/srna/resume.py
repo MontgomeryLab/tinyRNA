@@ -1,4 +1,6 @@
+import os
 import re
+import sys
 
 from ruamel.yaml.comments import CommentedOrderedMap
 from pkg_resources import resource_filename
@@ -22,8 +24,10 @@ class ResumeConfig(ConfigBase, ABC):
     def __init__(self, processed_config, workflow, steps, entry_inputs):
         # Parse the pre-processed YAML configuration file
         super().__init__(processed_config)
+        self.check_dir_requirements(processed_config)
 
         # Load the CWL workflow YAML for modification
+        if '~' in workflow: os.path.expanduser(workflow)
         with open(workflow, 'r') as f:
             self.workflow: CommentedOrderedMap
             self.workflow = self.yaml.load(f)
@@ -35,6 +39,16 @@ class ResumeConfig(ConfigBase, ABC):
         self._create_truncated_workflow()
         self._rebuild_entry_inputs()
         self._add_timestamps()
+
+    def check_dir_requirements(self, config_file):
+        """Ensure that user has invoked this command from within the target run directory"""
+
+        target_run_dir = os.path.basename(self['run_directory'])
+        config_file_dir = os.path.dirname(config_file)
+        invocation_dir = os.path.basename(os.getcwd())
+
+        if config_file_dir != '' or invocation_dir != target_run_dir:
+            sys.exit("Resume commands must be executed from within the target Run Directory.")
 
     @abstractmethod
     def _rebuild_entry_inputs(self):
@@ -78,6 +92,7 @@ class ResumeConfig(ConfigBase, ABC):
             # Copy relevant steps from organize-outputs.cwl
             step_name = f'organize_{step}'
             context = wf_steps[step_name] = organizer_sub_wf['steps'][step_name]
+            del context['when']
 
             # Update WorkflowStepInputs
             context['in']['dir_name'] = f'dir_name_{step}'
@@ -133,7 +148,10 @@ class ResumeCounterConfig(ResumeConfig):
         """
 
         def cwl_file_resume(subdir, file):
-            return self.cwl_file('/'.join([subdir, file]))
+            try:
+                return self.cwl_file('/'.join([subdir, file]))
+            except FileNotFoundError as e:
+                sys.exit("The following pipeline output could not be found:\n%s" % (e.filename,))
 
         self['resume_sams'] = [cwl_file_resume(self['dir_name_bowtie'], sam) for sam in self['outfile']]
         self['resume_fastp_logs'] = [cwl_file_resume(self['dir_name_fastp'], log) for log in self['json']]
@@ -168,7 +186,10 @@ class ResumePlotterConfig(ResumeConfig):
         counter = self['dir_name_counter']
         dge = self['dir_name_dge']
 
-        self['resume_raw'] = self.cwl_file(glob(counter + "/*_feature_counts.csv")[0])
-        self['resume_norm'] = self.cwl_file(glob(dge + "/*_norm_counts.csv")[0])
-        self['resume_len_dist'] = list(map(self.cwl_file, glob(counter + "/*_nt_len_dist.csv")))
-        self['resume_deg'] = list(map(self.cwl_file, glob(dge + "/*_deseq_table.csv")))
+        try:
+            self['resume_raw'] = self.cwl_file(glob(counter + "/*_feature_counts.csv")[0])
+            self['resume_norm'] = self.cwl_file(glob(dge + "/*_norm_counts.csv")[0])
+            self['resume_len_dist'] = list(map(self.cwl_file, glob(counter + "/*_nt_len_dist.csv")))
+            self['resume_deg'] = list(map(self.cwl_file, glob(dge + "/*_deseq_table.csv")))
+        except (FileNotFoundError, IndexError) as e:
+            sys.exit("The following pipeline output could not be found:\n%s" % (e.filename,))

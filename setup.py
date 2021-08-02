@@ -6,19 +6,16 @@ import setuptools
 NAME = 'aquatx'
 DESCRIPTION = 'Automated Quantitative Analysis of Transcript Expression'
 URL = 'https://github.com/MontgomeryLab/aquatx-srna/'
-EMAIL = 'kristen.brown@colostate.edu'
-AUTHOR = 'Kristen Brown'
+EMAIL = 'ajtate@colostate.edu'
+AUTHOR = 'Kristen Brown, Alex Tate'
 REQUIRES_PYTHON = '>=3.7.0'
 VERSION = '0.1'
 
 # Required packages
-REQUIRED = [
-    'cwltool',
-    'htseq',
-    'numpy',
-    'pandas',
-    'matplotlib',
-]
+REQUIRED = []
+
+# Todo: add routine to check that user is executing this via conda...
+#  Otherwise the app will install without dependencies
 
 setuptools.setup(
     name=NAME,
@@ -28,10 +25,9 @@ setuptools.setup(
     description=DESCRIPTION,
     packages=setuptools.find_packages(exclude=['tests/*']),
     include_package_data=True,
-    package_data={'aquatx': ['cwl/tools/*.cwl', 
+    package_data={'aquatx': ['cwl/tools/*.cwl',
                              'cwl/workflows/*.cwl', 
-                             'extras/*.csv', 
-                             'extras/*.yml']},
+                             'extras/*']},
     zip_safe=False,
     entry_points={
         'console_scripts': [
