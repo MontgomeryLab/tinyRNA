@@ -91,6 +91,7 @@ class ResumeConfig(ConfigBase, ABC):
             # Copy relevant steps from organize-outputs.cwl
             step_name = f'organize_{step}'
             context = wf_steps[step_name] = organizer_sub_wf['steps'][step_name]
+            del context['when']
 
             # Update WorkflowStepInputs
             context['in']['dir_name'] = f'dir_name_{step}'
