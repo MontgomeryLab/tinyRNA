@@ -191,5 +191,5 @@ class ResumePlotterConfig(ResumeConfig):
             self['resume_norm'] = self.cwl_file(glob(dge + "/*_norm_counts.csv")[0])
             self['resume_len_dist'] = list(map(self.cwl_file, glob(counter + "/*_nt_len_dist.csv")))
             self['resume_deg'] = list(map(self.cwl_file, glob(dge + "/*_deseq_table.csv")))
-        except FileNotFoundError as e:
+        except (FileNotFoundError, IndexError) as e:
             sys.exit("The following pipeline output could not be found:\n%s" % (e.filename,))
