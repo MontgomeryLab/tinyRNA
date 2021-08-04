@@ -124,7 +124,8 @@ class LibraryStats:
 
 class SummaryStats:
 
-    summary_categories = ["Total Reads", "Retained Reads", "Unique Sequences", "Mapped Sequences", "Aligned Reads"]
+    summary_categories = ["Total Reads", "Retained Reads", "Unique Sequences",
+                          "Mapped Sequences", "Mapped Reads", "Aligned Reads"]
 
     def __init__(self, out_prefix):
         self.out_prefix = out_prefix
@@ -204,7 +205,13 @@ class SummaryStats:
 
         # Process pipeline step outputs for this library, if they exist, to provide Summary Statistics
         if self.report_summary_statistics and self.library_has_pipeline_outputs(other):
-            mapped_seqs = other.library_stats["Total Assigned Sequences"] + other.library_stats["Total Unassigned Sequences"]
+            mapped_seqs = sum([other.library_stats[stat] for stat in [
+                "Total Assigned Sequences",
+                "Total Unassigned Sequences"]])
+            mapped_reads = sum([other.library_stats[stat] for stat in [
+                'Assigned Multi-Mapping Reads',
+                'Assigned Single-Mapping Reads',
+                'Total Unassigned Reads']])
             aligned_reads = other.library_stats["Total Assigned Reads"]
             total_reads, retained_reads = self.get_fastp_stats(other)
             unique_seqs = self.get_collapser_stats(other)
@@ -214,6 +221,7 @@ class SummaryStats:
                 "Retained Reads": retained_reads,
                 "Unique Sequences": unique_seqs,
                 "Mapped Sequences": mapped_seqs,
+                "Mapped Reads": mapped_reads,
                 "Aligned Reads": aligned_reads
             }
 
