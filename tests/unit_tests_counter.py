@@ -128,8 +128,8 @@ class CounterTests(unittest.TestCase):
         row = [bad, "test_group", "0"]
         csv = self.csv("samples.csv", [row])
 
-        expected_error = "The filenames defined in your samples CSV file must have a .fastq or .sam extension.\n" \
-                         "The following filename contained neither:\n" + bad
+        expected_error = r"The filenames defined in your Samples Sheet must have a \.fastq\(\.gz\) or \.sam extension\.\n" \
+                         r"The following filename contained neither\:\n" + bad
 
         with patch('aquatx.srna.counter.counter.open', mock_open(read_data=csv)):
             with self.assertRaisesRegex(ValueError, expected_error):

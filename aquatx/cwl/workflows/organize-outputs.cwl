@@ -52,7 +52,7 @@ steps:
 
   organize_bt_indexes:
     run: ../tools/make-subdir.cwl
-    when: $(inputs.bt_build_name != null)
+    when: $(inputs.dir_name != null)
     in:
       dir_files: bt_build_indexes
       dir_name: bt_build_name

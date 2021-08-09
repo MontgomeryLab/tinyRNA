@@ -8,7 +8,7 @@ import unittest
 
 import psutil
 
-import aquatx.aquatx as aquatx
+import aquatx.entry as aquatx
 import tests.unit_test_helpers as helpers
 
 """
@@ -32,7 +32,7 @@ class test_aquatx(unittest.TestCase):
         self.aquatx_extras_path = '../aquatx/extras'
 
         # For post-install tests
-        os.system("pip install ../ > /dev/null")
+        os.system("pip install -e ../ > /dev/null")
 
         # For both pre and post install
         self.config_file = './testdata/run_config_template.yml'
@@ -41,7 +41,7 @@ class test_aquatx(unittest.TestCase):
                 'files': set(),
                 'tools': {
                     'files': {
-                        'aquatx-deseq.cwl', 'bowtie.cwl', 'aquatx-collapse.cwl',
+                        'aquatx-deseq.cwl', 'aquatx-plot.cwl', 'bowtie.cwl', 'aquatx-collapse.cwl',
                         'bowtie-build.cwl', 'aquatx-count.cwl', 'fastp.cwl', 'make-subdir.cwl'
                     }
                 },

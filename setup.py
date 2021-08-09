@@ -1,6 +1,9 @@
 #!/usr/bin/env python
+import os
+import sys
+import setuptools
 
-import setuptools 
+from setuptools.command.install import install
 
 # Package metadata
 NAME = 'aquatx'
@@ -14,8 +17,15 @@ VERSION = '0.1'
 # Required packages
 REQUIRED = []
 
-# Todo: add routine to check that user is executing this via conda...
-#  Otherwise the app will install without dependencies
+
+class PreFlight(install):
+    def run(self):
+        if not all([os.getenv(conda_var) for conda_var in ["CONDA_PREFIX", "CONDA_DEFAULT_ENV"]]):
+            sys.exit("CRITICAL ERROR: you appear to be installing %s outside of a conda environment.\n"
+                     "Instead, please run: conda env create -f environment.yml" % (NAME,))
+        else:
+            install.run(self)
+
 
 setuptools.setup(
     name=NAME,
@@ -23,6 +33,7 @@ setuptools.setup(
     author=AUTHOR,
     author_email=EMAIL,
     description=DESCRIPTION,
+    cmdclass={'install': PreFlight},
     packages=setuptools.find_packages(exclude=['tests/*']),
     include_package_data=True,
     package_data={'aquatx': ['cwl/tools/*.cwl',
@@ -31,7 +42,7 @@ setuptools.setup(
     zip_safe=False,
     entry_points={
         'console_scripts': [
-            'aquatx = aquatx.aquatx:main',
+            'aquatx = aquatx.entry:main',
             'aquatx-config = aquatx.srna.Configuration:Configuration.main',
             'aquatx-collapse = aquatx.srna.collapser:main',
             'aquatx-count = aquatx.srna.counter.counter:main',
