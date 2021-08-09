@@ -1,3 +1,5 @@
+from collections import Counter
+
 import numpy as np
 import HTSeq
 import sys
@@ -38,7 +40,7 @@ class Alignment:
             self.nt5 = nt5
 
         def __repr__(self):
-            return f"<Sequence Object: '{self.name}', {self.seq} ({self.len} bases)"
+            return f"<Sequence Object: '{self.name}', {self.seq} ({self.len} bases)>"
 
         def __len__(self):
             return self.len
@@ -49,9 +51,9 @@ class Alignment:
         self.iv = iv
 
     def __repr__(self):
-        return f"<Alignment Object: Read '{self.read.name}' aligned to {self.iv}"
+        return f"<Alignment Object: Read '{self.read.name}' aligned to {self.iv}>"
 
-
+strandedness = 1
 def read_SAM(file):
     """A minimal SAM parser which only handles data relevant to the workflow, for performance."""
 
@@ -65,7 +67,7 @@ def read_SAM(file):
         while line:
             cols = line.split(b'\t')
 
-            strand = "+" if (int(cols[1]) & 16) >> 4 == 0 else "-"
+            strand = "+" if (int(cols[1]) & 16) >> 4 == strandedness else "-"
             chrom = cols[2].decode('utf-8')
             name = cols[0].decode('utf-8')
             start = int(cols[3]) - 1
@@ -75,6 +77,39 @@ def read_SAM(file):
             yield Alignment(iv, name, seq)
 
             line = f.readline()
+
+
+def infer_strandedness(sam_file: str, feats: 'HTSeq.GenomicArrayOfSets', intervals: dict) -> int:
+    """Infers strandedness from a sample SAM file and intervals from a parsed GFF file
+
+    Credit: this technique is an adaptation of those in RSeQC's infer_experiment.py
+    """
+
+    # Hack for now. This will make more sense once I convert SAM reader and ref tables to classes.
+    global strandedness
+    strandedness = 0
+
+    unstranded = HTSeq.GenomicArrayOfSets("auto", stranded=False)
+
+    for orig_iv in intervals.values():
+        iv_convert = orig_iv.copy()
+        iv_convert.strand = '.'
+        unstranded[iv_convert] = orig_iv.strand
+
+    sample_read = read_SAM(sam_file)
+    excelsior = Counter()
+    for i in range(0, 20000):
+        rec = next(sample_read)
+        rec.iv.strand = '.'
+        gff_strand = ':'.join(unstranded[rec.iv])
+        sam_strand = rec.iv.strand
+        excelsior[sam_strand + gff_strand] += 1
+
+    forward = (excelsior['++'] + excelsior['--']) / sum(excelsior.values())
+    reverse = (excelsior['+-'] + excelsior['-+']) / sum(excelsior.values())
+
+    if forward > reverse: return 0
+    else: return 1
 
 
 def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
@@ -121,7 +156,7 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
 
 
 @report_execution_time("GFF parsing")
-def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> Tuple[Features, Attributes, Alias]:
+def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules, determine_strand=False) -> Tuple[Features, Attributes, Alias]:
     """A GFF parser which builds feature, attribute, and alias tables, with intelligent appends
 
     Features may be defined by multiple GFF files. If multiple files offer different attributes for
@@ -199,4 +234,8 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
             # Add feature_id -> feature_attributes record
             incorporate_attributes(feature_id, row_attrs)
 
+    if determine_strand:
+        samfile = determine_strand
+        global strandedness
+        strandedness = infer_strandedness(samfile, feats, intervals)
     return feats, attrs, alias

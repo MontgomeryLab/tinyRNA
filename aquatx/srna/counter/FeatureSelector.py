@@ -38,6 +38,7 @@ class FeatureSelector:
         self.interest = ('Identity', 'Strand', 'nt5', 'Length')
         self.rules_table = sorted(rules, key=lambda x: x['Hierarchy'])
         self.build_filters()
+        self.diag = None
 
         # Inverted ident rules: (Attrib Key, Attrib Val) as key, [associated rules] as val
         inverted_identities = defaultdict(list)
@@ -59,6 +60,9 @@ class FeatureSelector:
             for hit in finalists:
                 if read not in self.rules_table[hit[self.rule]][step]:
                     eliminated.add(hit)
+                    if self.diag is not None:
+                        feat_class = self.attributes[hit[self.feat]][0][1][0]
+                        self.diag[feat_class][f"{step}={read}"] += 1
 
             finalists -= eliminated
             eliminated.clear()
