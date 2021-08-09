@@ -47,6 +47,13 @@ inputs:
       position: 4
       prefix: -p
 
+  diagnostics:
+    type: boolean?
+    default: false
+    inputBinding:
+      position: 5
+      prefix: -d
+
   # The following optional inputs are for staging InitialWorkingDir files for pipeline execution
 
   # Specifies the GFF files defined in features.csv
@@ -90,3 +97,13 @@ outputs:
     type: File[]?
     outputBinding:
       glob: "*_aln_table.txt"
+
+  alignment_diags:
+    type: File?
+    outputBinding:
+      glob: $(inputs.out_prefix)_alignment_diags.csv
+
+  selection_diags:
+    type: File?
+    outputBinding:
+      glob: $(inputs.out_prefix)_selection_diags.txt

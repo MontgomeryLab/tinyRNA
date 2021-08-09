@@ -80,6 +80,7 @@ inputs:
   gff_files: File[]?
   aligned_seqs: File[]?
   is_pipeline: boolean?
+  counter_diags: boolean?
 
   # deseq inputs
   dge_pca_plots: boolean?
@@ -211,7 +212,8 @@ steps:
       fastp_logs: counter-prep/json_report_file
       collapsed_fa: counter-prep/uniq_seqs
       is_pipeline: {default: true}
-    out: [feature_counts, other_counts, alignment_stats, summary_stats, intermed_out_files]
+      diagnostics: counter_diags
+    out: [feature_counts, other_counts, alignment_stats, summary_stats, intermed_out_files, alignment_diags, selection_diags]
 
   dge:
     run: ../tools/aquatx-deseq.cwl
@@ -243,6 +245,12 @@ steps:
       counter_summary_stats: counter/summary_stats
       counter_intermed:
         source: counter/intermed_out_files
+        default: []
+      counter_aln_diag:
+        source: counter/alignment_diags
+        default: []
+      counter_selection_diag:
+        source: counter/selection_diags
         default: []
       features_csv: features_csv
 
