@@ -18,7 +18,7 @@ from aquatx.srna.util import report_execution_time, from_here
 
 # Global variables for multiprocessing
 features: 'HTSeq.GenomicArrayOfSets' = HTSeq.GenomicArrayOfSets("auto", stranded=True)
-selector: 'FeatureSelector'
+selector: 'FeatureSelector' = None
 is_pipeline = False
 run_diags = False
 
@@ -138,10 +138,11 @@ def assign_features(alignment: 'parser.Alignment') -> Tuple[AssignedFeatures, N_
     feat_matches, assignment = list(), set()
     iv = alignment.iv
 
+    # Resolve features from alignment interval on both strands, regardless of alignment strand
     feat_matches = [match for match in
-                    (features.chrom_vectors[iv.chrom][iv.strand]  # GenomicArrayOfSets -> ChromVector
-                             .array[iv.start:iv.end]              # ChromVector -> StepVector
-                             .get_steps(merge_steps=True))        # StepVector -> (iv_start, iv_end, {features})]
+                    (features.chrom_vectors[iv.chrom]['.']  # GenomicArrayOfSets -> ChromVector
+                             .array[iv.start:iv.end]        # ChromVector -> StepVector
+                             .get_steps(merge_steps=True))  # StepVector -> (iv_start, iv_end, {features})]
                     # If an alignment does not map to a feature, an empty set is returned at tuple position 2
                     if len(match[2]) != 0]
 
@@ -160,7 +161,7 @@ def count_reads(library: dict, return_queue: mp.Queue, intermediate_file: bool =
     # 2. Change FeatureSelector.choose() to assign nt5end from chr(alignment.read.seq[0])
     read_seq = parser.read_SAM(library["File"])
     stats = LibraryStats(library, out_prefix, intermediate_file, run_diags)
-    if run_diags: selector.diag = stats.selection_diags
+    if run_diags: selector.enable_diagnostics(stats.selection_diags)
 
     # For each sequence in the sam file...
     # Note: HTSeq only performs bundling. The alignments are our own Alignment objects

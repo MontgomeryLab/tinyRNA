@@ -96,19 +96,19 @@ def infer_strandedness(sam_file: str, intervals: dict) -> str:
 
     # Assumes read_SAM() defaults to non-reverse strandedness
     sample_read = read_SAM(sam_file)
-    excelsior = Counter()
+    gff_sam_map = Counter()
     for count in range(1, 20000):
         try:
             rec = next(sample_read)
             rec.iv.strand = '.'
             gff_strand = ':'.join(unstranded[rec.iv].get_steps())
             sam_strand = rec.iv.strand
-            excelsior[sam_strand + gff_strand] += 1
+            gff_sam_map[sam_strand + gff_strand] += 1
         except StopIteration:
             break
 
-    non_rev = (excelsior['++'] + excelsior['--']) / sum(excelsior.values())
-    reverse = (excelsior['+-'] + excelsior['-+']) / sum(excelsior.values())
+    non_rev = (gff_sam_map['++'] + gff_sam_map['--']) / sum(gff_sam_map.values())
+    reverse = (gff_sam_map['+-'] + gff_sam_map['-+']) / sum(gff_sam_map.values())
     unknown = 1 - reverse - non_rev
 
     if reverse > non_rev: return "reverse"
@@ -177,12 +177,12 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
     # Obtain an ordered list of unique attributes of interest from selection rules
     attrs_of_interest = list(np.unique(["Class"] + [attr['Identity'][0] for attr in rules]))
 
-    feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+    feats = HTSeq.GenomicArrayOfSets("auto", stranded=False)
     attrs, alias, intervals = {}, {}, {}
 
     def check_namespace(feature_id, row_iv, file):
         # Rename feature_id if it has already been defined for another interval
-        if feature_id in intervals and row_iv != intervals[feature_id]:
+        while feature_id in intervals and row_iv != intervals[feature_id]:
             feature_id = f"{feature_id} ({os.path.basename(file)})"
         return feature_id
 
@@ -220,11 +220,10 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
     for file, preferred_ids in gff_files.items():
         gff = HTSeq.GFF_Reader(file)
         for row in gff:
-            if row.iv.strand == ".":
-                raise ValueError(f"Feature {row.name} in {file} has no strand information.")
-
             try:
                 feature_id = row.attr["ID"][0]
+                # Remove strand info
+                row.iv.strand = '.'
                 # Ensure one interval per feat ID, else rename feat ID
                 feature_id = check_namespace(feature_id, row.iv, file)
                 # Add feature_id <-> feature_interval records

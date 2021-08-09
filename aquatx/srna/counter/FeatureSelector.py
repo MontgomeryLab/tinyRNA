@@ -2,8 +2,10 @@ import itertools
 import HTSeq
 import re
 
-from collections import defaultdict
+from collections import defaultdict, Counter
 from typing import List, Tuple, FrozenSet, Dict, Set
+
+from aquatx.srna.counter.hts_parsing import Alignment
 
 # Type aliases for human readability
 IntervalFeatures = Tuple[int, int, Set[str]]  # A set of features associated with an interval
@@ -38,7 +40,6 @@ class FeatureSelector:
         self.interest = ('Identity', 'Strand', 'nt5', 'Length')
         self.rules_table = sorted(rules, key=lambda x: x['Hierarchy'])
         self.build_filters()
-        self.diag = None
 
         # Inverted ident rules: (Attrib Key, Attrib Val) as key, [associated rules] as val
         inverted_identities = defaultdict(list)
@@ -46,9 +47,12 @@ class FeatureSelector:
             inverted_identities[rule['Identity']].append(i)
         self.inv_ident = dict(inverted_identities)
 
-    def choose(self, feat_set, alignment) -> set:
+        self.report_diags = False
+        self.report: defaultdict['Counter']
+
+    def choose(self, feat_list: List[IntervalFeatures], alignment: 'Alignment') -> set:
         # Perform hierarchy-based first round of selection for identities
-        finalists = self.choose_identities(feat_set, alignment.iv)
+        finalists = self.choose_identities(feat_list, alignment.iv)
         if not finalists: return set()
 
         strand = alignment.iv.strand
@@ -60,9 +64,9 @@ class FeatureSelector:
             for hit in finalists:
                 if read not in self.rules_table[hit[self.rule]][step]:
                     eliminated.add(hit)
-                    if self.diag is not None:
+                    if self.report_diags:
                         feat_class = self.attributes[hit[self.feat]][0][1][0]
-                        self.diag[feat_class][f"{step}={read}"] += 1
+                        self.report[feat_class][f"{step}={read}"] += 1
 
             finalists -= eliminated
             eliminated.clear()
@@ -174,6 +178,11 @@ class FeatureSelector:
             for step, filt in filters:
                 if not wildcard(step):
                     row[step] = filt()
+
+    def enable_diagnostics(self, libstats_selection_diags):
+        """Enables diagnostic reporting for eliminations made in selection phase 2"""
+        self.report = libstats_selection_diags
+        self.report_diags = True
 
     @classmethod
     def get_hit_indexes(cls):

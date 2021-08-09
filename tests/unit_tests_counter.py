@@ -267,10 +267,10 @@ class CounterTests(unittest.TestCase):
     """Does assign_features return features that overlap the query interval by a single base?"""
 
     def test_assign_features_single_base_overlap(self):
-        features = HTSeq.GenomicArrayOfSets("auto", stranded=True)
-        iv_feat = HTSeq.GenomicInterval("I", 0, 2, "+")  # The "feature"
-        iv_olap = HTSeq.GenomicInterval("I", 1, 2, "+")  # A single-base overlapping feature
-        iv_none = HTSeq.GenomicInterval("I", 2, 3, "+")  # A non-overlapping interval
+        features = HTSeq.GenomicArrayOfSets("auto", stranded=False)
+        iv_feat = HTSeq.GenomicInterval("I", 0, 2, ".")  # The "feature"
+        iv_olap = HTSeq.GenomicInterval("I", 1, 2, ".")  # A single-base overlapping feature
+        iv_none = HTSeq.GenomicInterval("I", 2, 3, ".")  # A non-overlapping interval
 
         features[iv_feat] += 'The "feature"'
         features[iv_none] += "Non-overlapping feature"
@@ -287,9 +287,9 @@ class CounterTests(unittest.TestCase):
     """Does assign_features correctly handle alignments with zero feature matches?"""
 
     def test_assign_features_no_match(self):
-        features = HTSeq.GenomicArrayOfSets("auto", stranded=True)
-        iv_feat = HTSeq.GenomicInterval("I", 0, 2, "+")
-        iv_none = HTSeq.GenomicInterval("I", 2, 3, "+")
+        features = HTSeq.GenomicArrayOfSets("auto", stranded=False)
+        iv_feat = HTSeq.GenomicInterval("I", 0, 2, ".")
+        iv_none = HTSeq.GenomicInterval("I", 2, 3, ".")
 
         features[iv_feat] += "Should not match"
         none_alignment = Alignment(iv_none, "Non-overlap", b"A")
@@ -314,9 +314,9 @@ class CounterTests(unittest.TestCase):
 
         expected_calls_to_stats = [
             call(),  # Produced above when grabbing the return value of count_bundle
-            call(library, None, False),  # Call to constructor
+            call(library, None, False, False),  # Call to constructor
             call().count_bundle([alignment]),
-            call().count_bundle_alignments(bundle, alignment, {'mock_feat'}),
+            call().count_bundle_alignments(bundle, alignment, {'mock_feat'}, len({'mock_feat'})),
             call().finalize_bundle(bundle)
         ]
 
