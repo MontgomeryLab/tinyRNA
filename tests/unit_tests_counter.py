@@ -231,6 +231,38 @@ class CounterTests(unittest.TestCase):
         self.assertEqual(matches_with_cooridnates[0][0], HTSeq.GenomicInterval("I", 9,10,'+'))
         self.assertEqual(matches_with_cooridnates[1][0], HTSeq.GenomicInterval("I", 10,15,'+'))
         self.assertEqual(matches_with_cooridnates[2][0], HTSeq.GenomicInterval("I", 15,20,'+'))
+        self.assertEqual(matches_with_cooridnates[2][0], HTSeq.GenomicInterval("I", 15,20,'+'))
+
+    """What happens if we invert the previous test's strand? Do intervals behave differently?"""
+
+    def test_HTSeq_antisense_iv_slice(self):
+        gas = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+        iva = HTSeq.GenomicInterval("I", 1, 10, '-')
+        ivb = HTSeq.GenomicInterval("I", 5, 15, '-')
+        ivc = HTSeq.GenomicInterval("I", 9, 20, '-')
+        ivd = HTSeq.GenomicInterval("I", 2, 4, "-")
+        gas[iva] += "TestA"
+        gas[ivb] += "TestB"
+        gas[ivd] += "TestD"
+
+        """
+        iva:  1 |--TestA--| 10
+        ivb:      5 |---TestB--| 15
+        ivc:          9 |-----------| 20
+        ivd:   2 |--| 4
+                         ^ Single base overlap: iva ∩ ivc
+        Expect:       9 |-|{B}-|-{}-| 20
+                     [9, 10)   [15,20)
+                         ^ {A ∩ B}
+        """
+
+        matches = list(gas[ivc].array[ivc.start:ivc.end].get_steps(values_only=True))
+        matches_with_cooridnates = list(gas[ivc].steps())
+        self.assertEqual(matches, [{"TestA", "TestB"}, {"TestB"}, set()])
+        self.assertEqual(matches_with_cooridnates[0][0], HTSeq.GenomicInterval("I", 9,10,'-'))
+        self.assertEqual(matches_with_cooridnates[1][0], HTSeq.GenomicInterval("I", 10,15,'-'))
+        self.assertEqual(matches_with_cooridnates[2][0], HTSeq.GenomicInterval("I", 15,20,'-'))
+        self.assertEqual(matches_with_cooridnates[2][0], HTSeq.GenomicInterval("I", 15,20,'-'))
 
     """Does assign_features return features that overlap the query interval by a single base?"""
 

@@ -1,11 +1,10 @@
-from collections import Counter
-
 import numpy as np
 import HTSeq
 import sys
 import re
 import os
 
+from collections import Counter
 from typing import Tuple, List, Dict
 from ..util import report_execution_time
 
@@ -53,7 +52,7 @@ class Alignment:
     def __repr__(self):
         return f"<Alignment Object: Read '{self.read.name}' aligned to {self.iv}>"
 
-strandedness = 1
+
 def read_SAM(file):
     """A minimal SAM parser which only handles data relevant to the workflow, for performance."""
 
@@ -67,7 +66,8 @@ def read_SAM(file):
         while line:
             cols = line.split(b'\t')
 
-            strand = "+" if (int(cols[1]) & 16) >> 4 == strandedness else "-"
+            # Note: we assume sRNA sequencing data is NOT reversely stranded
+            strand = "+" if (int(cols[1]) & 16) >> 4 == 0 else "-"
             chrom = cols[2].decode('utf-8')
             name = cols[0].decode('utf-8')
             start = int(cols[3]) - 1
@@ -79,15 +79,13 @@ def read_SAM(file):
             line = f.readline()
 
 
-def infer_strandedness(sam_file: str, feats: 'HTSeq.GenomicArrayOfSets', intervals: dict) -> int:
+def infer_strandedness(sam_file: str, intervals: dict) -> str:
     """Infers strandedness from a sample SAM file and intervals from a parsed GFF file
 
-    Credit: this technique is an adaptation of those in RSeQC's infer_experiment.py
+    Credit: this technique is an adaptation of those in RSeQC's infer_experiment.py.
+    It has been modified to accept a GFF reference file rather than a BED file,
+    and to use HTSeq rather than bx-python.
     """
-
-    # Hack for now. This will make more sense once I convert SAM reader and ref tables to classes.
-    global strandedness
-    strandedness = 0
 
     unstranded = HTSeq.GenomicArrayOfSets("auto", stranded=False)
 
@@ -96,20 +94,25 @@ def infer_strandedness(sam_file: str, feats: 'HTSeq.GenomicArrayOfSets', interva
         iv_convert.strand = '.'
         unstranded[iv_convert] = orig_iv.strand
 
+    # Assumes read_SAM() defaults to non-reverse strandedness
     sample_read = read_SAM(sam_file)
     excelsior = Counter()
-    for i in range(0, 20000):
-        rec = next(sample_read)
-        rec.iv.strand = '.'
-        gff_strand = ':'.join(unstranded[rec.iv])
-        sam_strand = rec.iv.strand
-        excelsior[sam_strand + gff_strand] += 1
+    for count in range(1, 20000):
+        try:
+            rec = next(sample_read)
+            rec.iv.strand = '.'
+            gff_strand = ':'.join(unstranded[rec.iv].get_steps())
+            sam_strand = rec.iv.strand
+            excelsior[sam_strand + gff_strand] += 1
+        except StopIteration:
+            break
 
-    forward = (excelsior['++'] + excelsior['--']) / sum(excelsior.values())
+    non_rev = (excelsior['++'] + excelsior['--']) / sum(excelsior.values())
     reverse = (excelsior['+-'] + excelsior['-+']) / sum(excelsior.values())
+    unknown = 1 - reverse - non_rev
 
-    if forward > reverse: return 0
-    else: return 1
+    if reverse > non_rev: return "reverse"
+    else: return "non-reverse"
 
 
 def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
@@ -156,7 +159,7 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
 
 
 @report_execution_time("GFF parsing")
-def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules, determine_strand=False) -> Tuple[Features, Attributes, Alias]:
+def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> Tuple[Features, Attributes, Alias]:
     """A GFF parser which builds feature, attribute, and alias tables, with intelligent appends
 
     Features may be defined by multiple GFF files. If multiple files offer different attributes for
@@ -234,8 +237,4 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules, det
             # Add feature_id -> feature_attributes record
             incorporate_attributes(feature_id, row_attrs)
 
-    if determine_strand:
-        samfile = determine_strand
-        global strandedness
-        strandedness = infer_strandedness(samfile, feats, intervals)
     return feats, attrs, alias

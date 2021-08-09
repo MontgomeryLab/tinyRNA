@@ -24,9 +24,9 @@ class ResumeConfig(ConfigBase, ABC):
     def __init__(self, processed_config, workflow, steps, entry_inputs):
         # Parse the pre-processed YAML configuration file
         super().__init__(processed_config)
-        self.check_dir_requirements(processed_config)
+        self.check_dir_requirements()
 
-        # Load the CWL workflow YAML for modification
+        # Load the workflow YAML for modification
         if '~' in workflow: os.path.expanduser(workflow)
         with open(workflow, 'r') as f:
             self.workflow: CommentedOrderedMap
@@ -40,14 +40,13 @@ class ResumeConfig(ConfigBase, ABC):
         self._rebuild_entry_inputs()
         self._add_timestamps()
 
-    def check_dir_requirements(self, config_file):
+    def check_dir_requirements(self):
         """Ensure that user has invoked this command from within the target run directory"""
 
         target_run_dir = os.path.basename(self['run_directory'])
-        config_file_dir = os.path.dirname(config_file)
         invocation_dir = os.path.basename(os.getcwd())
 
-        if config_file_dir != '' or invocation_dir != target_run_dir:
+        if invocation_dir != target_run_dir:
             sys.exit("Resume commands must be executed from within the target Run Directory.")
 
     @abstractmethod
@@ -136,7 +135,7 @@ class ResumeCounterConfig(ResumeConfig):
             'collapsed_fa': {'var': "resume_collapsed_fas", 'type': "File[]"},
         }
 
-        # Parse the pre-processed YAML configuration file
+        # Build resume config from the previously-processed Run Config
         super().__init__(processed_config, workflow, steps, inputs)
 
     def _rebuild_entry_inputs(self):
@@ -172,7 +171,7 @@ class ResumePlotterConfig(ResumeConfig):
             'len_dist': {'var': "resume_len_dist", 'type': "File[]"}
         }
 
-        # Parse the pre-processed YAML configuration file
+        # Build resume config from the previously-processed Run Config
         super().__init__(processed_config, workflow, steps, inputs)
 
     def _rebuild_entry_inputs(self):

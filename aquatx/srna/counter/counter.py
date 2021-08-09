@@ -1,11 +1,9 @@
-import functools
 import multiprocessing as mp
-import argparse
-import sys
 import traceback
-
+import argparse
 import HTSeq
 import queue
+import sys
 import csv
 import os
 
@@ -50,20 +48,15 @@ def get_args():
     arg_parser.add_argument('-p', '--is-pipeline', action='store_true',
                         help='Indicates that counter was invoked from the aquatx pipeline '
                              'and that input files should be sources as such.')
-    arg_parser.add_argument('-s', '--strandedness', choices=['forward', 'reverse', 'infer'], default='reverse',
-                        help='Indicates the library preparation method used. Most modern '
-                             'library preparation methods use first strand cDNA synthesis, '
-                             'or the "reverse" option. If you aren\'t sure, choose "infer"')
     arg_parser.add_argument('-d', '--diagnostics', action='store_true',
                         help='Produce diagnostic information about uncounted/eliminated '
                              'selection elements.')
 
     parsed_args = arg_parser.parse_args()
 
-    global is_pipeline, run_diags, stranded
+    global is_pipeline, run_diags
     is_pipeline = parsed_args.is_pipeline
     run_diags = parsed_args.diagnostics
-    stranded = parsed_args.strandedness
     return arg_parser.parse_args()
 
 
