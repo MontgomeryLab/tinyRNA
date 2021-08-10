@@ -63,7 +63,8 @@ class test_aquatx(unittest.TestCase):
             helpers.LambdaCapture(lambda: aquatx.get_template(self.aquatx_extras_path)),  # The pre-install invocation
             helpers.ShellCapture("aquatx get-template")                                   # The post-install command
         ]
-        template_files = ['run_config_template.yml', 'samples.csv', 'features.csv', 'paths.yml']
+        template_files = ['run_config_template.yml', 'samples.csv', 'features.csv',
+                          'paths.yml', 'aquatx-srna-light.mplstyle']
 
         def dir_entry_ct():
             return len(os.listdir('.'))
@@ -75,10 +76,10 @@ class test_aquatx(unittest.TestCase):
                 with test_context as test:
                     test()
 
-                # Check that exactly 4 files were produced by the command
+                # Check that exactly 5 files were produced by the command
                 self.assertEqual(
                     dir_entry_ct() - dir_before_count, len(template_files),
-                    f"Abnormal number of template files. Expected 4. Function: {test_context}")
+                    f"Abnormal number of template files. Function: {test_context}")
 
                 # Check that each expected file was produced
                 for file in template_files:

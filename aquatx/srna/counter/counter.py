@@ -1,7 +1,9 @@
 import multiprocessing as mp
+import traceback
 import argparse
 import HTSeq
 import queue
+import sys
 import csv
 import os
 
@@ -18,6 +20,7 @@ from aquatx.srna.util import report_execution_time, from_here
 features: 'HTSeq.GenomicArrayOfSets' = HTSeq.GenomicArrayOfSets("auto", stranded=True)
 selector: 'FeatureSelector' = None
 is_pipeline = False
+run_diags = False
 
 # Type aliases for human readability
 AssignedFeatures = set
@@ -45,11 +48,15 @@ def get_args():
     arg_parser.add_argument('-p', '--is-pipeline', action='store_true',
                         help='Indicates that counter was invoked from the aquatx pipeline '
                              'and that input files should be sources as such.')
+    arg_parser.add_argument('-d', '--diagnostics', action='store_true',
+                        help='Produce diagnostic information about uncounted/eliminated '
+                             'selection elements.')
 
     parsed_args = arg_parser.parse_args()
 
-    global is_pipeline
+    global is_pipeline, run_diags
     is_pipeline = parsed_args.is_pipeline
+    run_diags = parsed_args.diagnostics
     return arg_parser.parse_args()
 
 
@@ -131,10 +138,11 @@ def assign_features(alignment: 'parser.Alignment') -> Tuple[AssignedFeatures, N_
     feat_matches, assignment = list(), set()
     iv = alignment.iv
 
+    # Resolve features from alignment interval on both strands, regardless of alignment strand
     feat_matches = [match for match in
-                    (features.chrom_vectors[iv.chrom][iv.strand]  # GenomicArrayOfSets -> ChromVector
-                             .array[iv.start:iv.end]              # ChromVector -> StepVector
-                             .get_steps(merge_steps=True))        # StepVector -> (iv_start, iv_end, {features})]
+                    (features.chrom_vectors[iv.chrom]['.']  # GenomicArrayOfSets -> ChromVector
+                             .array[iv.start:iv.end]        # ChromVector -> StepVector
+                             .get_steps(merge_steps=True))  # StepVector -> (iv_start, iv_end, {features})]
                     # If an alignment does not map to a feature, an empty set is returned at tuple position 2
                     if len(match[2]) != 0]
 
@@ -152,7 +160,8 @@ def count_reads(library: dict, return_queue: mp.Queue, intermediate_file: bool =
     # 1. Change the following line to HTSeq.BAM_Reader(sam_file)
     # 2. Change FeatureSelector.choose() to assign nt5end from chr(alignment.read.seq[0])
     read_seq = parser.read_SAM(library["File"])
-    stats = LibraryStats(library, out_prefix, intermediate_file)
+    stats = LibraryStats(library, out_prefix, intermediate_file, run_diags)
+    if run_diags: selector.enable_diagnostics(stats.selection_diags)
 
     # For each sequence in the sam file...
     # Note: HTSeq only performs bundling. The alignments are our own Alignment objects
@@ -163,7 +172,7 @@ def count_reads(library: dict, return_queue: mp.Queue, intermediate_file: bool =
         alignment: parser.Alignment
         for alignment in bundle:
             hits, n_candidates = assign_features(alignment)
-            stats.count_bundle_alignments(bundle_stats, alignment, hits)
+            stats.count_bundle_alignments(bundle_stats, alignment, hits, n_candidates)
 
         stats.finalize_bundle(bundle_stats)
 
@@ -189,7 +198,7 @@ def map_and_reduce(libraries, work_args, ret_queue):
 
     # Collect counts from all pool workers and merge
     out_prefix = work_args[0][-1]
-    summary = SummaryStats(out_prefix)
+    summary = SummaryStats(out_prefix, run_diags)
     for _ in libraries:
         lib_stats = ret_queue.get()
         summary.add_library(lib_stats)
@@ -202,26 +211,34 @@ def main():
     # Get command line arguments.
     args = get_args()
 
-    # Determine SAM inputs and their associated library names
-    libraries = load_samples(args.input_csv)
+    try:
+        # Determine SAM inputs and their associated library names
+        libraries = load_samples(args.input_csv)
 
-    # Load selection rules and feature sources from config
-    selection_rules, gff_file_set = load_config(args.config)
+        # Load selection rules and feature sources from config
+        selection_rules, gff_file_set = load_config(args.config)
 
-    # Build features table and selector, global for multiprocessing
-    global features, selector
-    features, attributes, alias = parser.build_reference_tables(gff_file_set, selection_rules)
-    selector = FeatureSelector(selection_rules, attributes)
+        # Build features table and selector, global for multiprocessing
+        global features, selector
+        features, attributes, alias = parser.build_reference_tables(gff_file_set, selection_rules)
+        selector = FeatureSelector(selection_rules, attributes)
 
-    # Prepare for multiprocessing pool
-    ret_queue = mp.Manager().Queue() if len(libraries) > 1 else queue.Queue()
-    work_args = [(assignment, ret_queue, args.intermed_file, args.out_prefix) for assignment in libraries]
+        # Prepare for multiprocessing pool
+        ret_queue = mp.Manager().Queue() if len(libraries) > 1 else queue.Queue()
+        work_args = [(assignment, ret_queue, args.intermed_file, args.out_prefix) for assignment in libraries]
 
-    # Assign and count features using multiprocessing and merge results
-    merged_counts = map_and_reduce(libraries, work_args, ret_queue)
+        # Assign and count features using multiprocessing and merge results
+        merged_counts = map_and_reduce(libraries, work_args, ret_queue)
 
-    # Write final outputs
-    merged_counts.write_report_files(alias, args.out_prefix)
+        # Write final outputs
+        merged_counts.write_report_files(alias, args.out_prefix)
+    except:
+        traceback.print_exception(*sys.exc_info())
+        print("\n\nCounter encountered an error. Don't worry! You don't have to start over.\n"
+              "You can resume the pipeline at Counter. To do so:\n\t"
+              "1. cd into your Run Directory\n\t"
+              '2. Run "aquatx recount --config your_run_config.yml"\n\t'
+              '   (that\'s the processed run config) ^^^\n\n', file=sys.stderr)
 
 
 if __name__ == '__main__':

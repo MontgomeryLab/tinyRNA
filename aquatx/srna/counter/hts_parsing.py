@@ -4,6 +4,7 @@ import sys
 import re
 import os
 
+from collections import Counter
 from typing import Tuple, List, Dict
 from ..util import report_execution_time
 
@@ -38,7 +39,7 @@ class Alignment:
             self.nt5 = nt5
 
         def __repr__(self):
-            return f"<Sequence Object: '{self.name}', {self.seq} ({self.len} bases)"
+            return f"<Sequence Object: '{self.name}', {self.seq} ({self.len} bases)>"
 
         def __len__(self):
             return self.len
@@ -49,7 +50,7 @@ class Alignment:
         self.iv = iv
 
     def __repr__(self):
-        return f"<Alignment Object: Read '{self.read.name}' aligned to {self.iv}"
+        return f"<Alignment Object: Read '{self.read.name}' aligned to {self.iv}>"
 
 
 def read_SAM(file):
@@ -65,6 +66,7 @@ def read_SAM(file):
         while line:
             cols = line.split(b'\t')
 
+            # Note: we assume sRNA sequencing data is NOT reversely stranded
             strand = "+" if (int(cols[1]) & 16) >> 4 == 0 else "-"
             chrom = cols[2].decode('utf-8')
             name = cols[0].decode('utf-8')
@@ -75,6 +77,42 @@ def read_SAM(file):
             yield Alignment(iv, name, seq)
 
             line = f.readline()
+
+
+def infer_strandedness(sam_file: str, intervals: dict) -> str:
+    """Infers strandedness from a sample SAM file and intervals from a parsed GFF file
+
+    Credit: this technique is an adaptation of those in RSeQC's infer_experiment.py.
+    It has been modified to accept a GFF reference file rather than a BED file,
+    and to use HTSeq rather than bx-python.
+    """
+
+    unstranded = HTSeq.GenomicArrayOfSets("auto", stranded=False)
+
+    for orig_iv in intervals.values():
+        iv_convert = orig_iv.copy()
+        iv_convert.strand = '.'
+        unstranded[iv_convert] = orig_iv.strand
+
+    # Assumes read_SAM() defaults to non-reverse strandedness
+    sample_read = read_SAM(sam_file)
+    gff_sam_map = Counter()
+    for count in range(1, 20000):
+        try:
+            rec = next(sample_read)
+            rec.iv.strand = '.'
+            gff_strand = ':'.join(unstranded[rec.iv].get_steps())
+            sam_strand = rec.iv.strand
+            gff_sam_map[sam_strand + gff_strand] += 1
+        except StopIteration:
+            break
+
+    non_rev = (gff_sam_map['++'] + gff_sam_map['--']) / sum(gff_sam_map.values())
+    reverse = (gff_sam_map['+-'] + gff_sam_map['-+']) / sum(gff_sam_map.values())
+    unknown = 1 - reverse - non_rev
+
+    if reverse > non_rev: return "reverse"
+    else: return "non-reverse"
 
 
 def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
@@ -139,12 +177,12 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
     # Obtain an ordered list of unique attributes of interest from selection rules
     attrs_of_interest = list(np.unique(["Class"] + [attr['Identity'][0] for attr in rules]))
 
-    feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+    feats = HTSeq.GenomicArrayOfSets("auto", stranded=False)
     attrs, alias, intervals = {}, {}, {}
 
     def check_namespace(feature_id, row_iv, file):
         # Rename feature_id if it has already been defined for another interval
-        if feature_id in intervals and row_iv != intervals[feature_id]:
+        while feature_id in intervals and row_iv != intervals[feature_id]:
             feature_id = f"{feature_id} ({os.path.basename(file)})"
         return feature_id
 
@@ -182,11 +220,10 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
     for file, preferred_ids in gff_files.items():
         gff = HTSeq.GFF_Reader(file)
         for row in gff:
-            if row.iv.strand == ".":
-                raise ValueError(f"Feature {row.name} in {file} has no strand information.")
-
             try:
                 feature_id = row.attr["ID"][0]
+                # Remove strand info
+                row.iv.strand = '.'
                 # Ensure one interval per feat ID, else rename feat ID
                 feature_id = check_namespace(feature_id, row.iv, file)
                 # Add feature_id <-> feature_interval records

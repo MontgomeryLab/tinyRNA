@@ -39,6 +39,8 @@ inputs:
   counter_alignment_stats: File?
   counter_summary_stats: File?
   counter_intermed: File[]?
+  counter_aln_diag: File?
+  counter_selection_diag: File?
 
   dge_name: string?
   dge_norm: File?
@@ -93,7 +95,8 @@ steps:
     when: $(inputs.dir_name != null)
     in:
       dir_files:
-        source: [ counter_features, counter_other, counter_alignment_stats, counter_summary_stats, counter_intermed, features_csv ]
+        source: [ counter_features, counter_other, counter_alignment_stats, counter_summary_stats,
+                  counter_intermed, counter_aln_diag, counter_selection_diag, features_csv ]
         linkMerge: merge_flattened
       dir_name: counter_name
     out: [ subdir ]

@@ -212,6 +212,9 @@ shared_memory: False
 ##-- If True: save intermediate table for each library with all alignment information --##
 intermed_file: False
 
+##-- If True: produce diagnostic logs to indicate what was eliminated and why --##
+counter_diags: False
+
 
 ######--------------------------- DIFFERENTIAL EXPRESSION ---------------------------######
 #
@@ -220,7 +223,7 @@ intermed_file: False
 ######-------------------------------------------------------------------------------######
 
 
-##-- If True: produce principal component analysis plots for each sample comparison
+##-- If True: produce principal component analysis plots for each sample comparison --##
 dge_pca_plots: true
 
 
