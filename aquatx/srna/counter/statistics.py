@@ -38,6 +38,7 @@ class LibraryStats:
         self.library_stats = {stat: 0 for stat in LibraryStats.summary_categories}
         self.alignment_diags = {stat: 0 for stat in SummaryStats.aln_diag_categories}
         self.selection_diags = defaultdict(Counter)
+        self.identity_roster = set()
         self.alignments = []
 
     def count_bundle(self, aln_bundle: iter) -> Bundle:
@@ -150,7 +151,7 @@ class SummaryStats:
 
     def __init__(self, out_prefix, report_diagnostics=False):
         self.out_prefix = out_prefix
-        self.diag = report_diagnostics
+        self.report_diagnostics = report_diagnostics
 
         # Will become False if an added library lacks its corresponding Collapser and Bowtie outputs
         self.report_summary_statistics = True
@@ -159,6 +160,7 @@ class SummaryStats:
         self.feat_counts_df = pd.DataFrame(index=FeatureSelector.attributes.keys())
         self.lib_stats_df = pd.DataFrame(index=LibraryStats.summary_categories)
         self.aln_diags = pd.DataFrame(columns=SummaryStats.aln_diag_categories)
+        self.identity_roster = set()
         self.selection_diags = {}
         self.nt_len_mat = {}
 
@@ -201,8 +203,10 @@ class SummaryStats:
         formatted for each library as {group}_rep_{replicate}
         """
 
+        # Subset the counts table to only show features that were matched on identity (regardless of count)
+        summary = self.feat_counts_df.loc[self.identity_roster]
         # Sort columns by title and round all counts to 2 decimal places
-        summary = self.sort_cols_and_round(self.feat_counts_df)
+        summary = self.sort_cols_and_round(summary)
         # Add Feature Name column, which is the feature alias (default is Feature ID if no alias exists)
         summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(alias.get(feat, [feat]))))
         # Add Classes column for classes associated with the given feature
@@ -214,7 +218,7 @@ class SummaryStats:
         summary.to_csv(prefix + '_feature_counts.csv', index=False)
 
     def write_diagnostics(self, prefix: str) -> None:
-        if not self.diag: return
+        if not self.report_diagnostics: return
         self.aln_diags = self.sort_cols_and_round(self.aln_diags, "index")
         self.aln_diags.index.name = "Sample"
         self.aln_diags.to_csv(prefix + "_alignment_diags.csv")
@@ -244,32 +248,38 @@ class SummaryStats:
         self.feat_counts_df[other.library["Name"]] = self.feat_counts_df.index.map(other.feat_counts)
         self.lib_stats_df[other.library["Name"]] = self.lib_stats_df.index.map(other.library_stats)
         self.nt_len_mat[other.library["Name"]] = other.nt_len_mat
+        self.identity_roster.update(other.identity_roster)
 
-        if self.diag: self.add_diags(other)
+        if self.report_diagnostics: self.add_diags(other)
 
         # Process pipeline step outputs for this library, if they exist, to provide Summary Statistics
         if self.report_summary_statistics and self.library_has_pipeline_outputs(other):
-            mapped_seqs = sum([other.library_stats[stat] for stat in [
-                "Total Assigned Sequences",
-                "Total Unassigned Sequences"]])
-            mapped_reads = sum([other.library_stats[stat] for stat in [
-                'Assigned Multi-Mapping Reads',
-                'Assigned Single-Mapping Reads',
-                'Total Unassigned Reads']])
-            aligned_reads = other.library_stats["Total Assigned Reads"]
-            total_reads, retained_reads = self.get_fastp_stats(other)
-            unique_seqs = self.get_collapser_stats(other)
+            self.add_summary_stats(other)
 
-            other_summary = {
-                "Total Reads": total_reads,
-                "Retained Reads": retained_reads,
-                "Unique Sequences": unique_seqs,
-                "Mapped Sequences": mapped_seqs,
-                "Mapped Reads": mapped_reads,
-                "Aligned Reads": aligned_reads
-            }
+    def add_summary_stats(self, other: LibraryStats):
+        """Add incoming summary stats as new column in the master table"""
 
-            self.pipeline_stats_df[other.library["Name"]] = self.pipeline_stats_df.index.map(other_summary)
+        mapped_seqs = sum([other.library_stats[stat] for stat in
+                           ["Total Assigned Sequences",
+                            "Total Unassigned Sequences"]])
+        mapped_reads = sum([other.library_stats[stat] for stat in
+                            ['Assigned Multi-Mapping Reads',
+                             'Assigned Single-Mapping Reads',
+                             'Total Unassigned Reads']])
+        aligned_reads = other.library_stats["Total Assigned Reads"]
+        total_reads, retained_reads = self.get_fastp_stats(other)
+        unique_seqs = self.get_collapser_stats(other)
+
+        other_summary = {
+            "Total Reads": total_reads,
+            "Retained Reads": retained_reads,
+            "Unique Sequences": unique_seqs,
+            "Mapped Sequences": mapped_seqs,
+            "Mapped Reads": mapped_reads,
+            "Aligned Reads": aligned_reads
+        }
+
+        self.pipeline_stats_df[other.library["Name"]] = self.pipeline_stats_df.index.map(other_summary)
 
     def add_diags(self, other: LibraryStats) -> None:
         """Append alignment and selection diagnostics to the master tables"""
