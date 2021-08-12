@@ -246,12 +246,8 @@ steps:
       counter_intermed:
         source: counter/intermed_out_files
         default: []
-      counter_aln_diag:
-        source: counter/alignment_diags
-        default: []
-      counter_selection_diag:
-        source: counter/selection_diags
-        default: []
+      counter_aln_diag: counter/alignment_diags
+      counter_selection_diag: counter/selection_diags
       features_csv: features_csv
 
       dge_name: dir_name_dge

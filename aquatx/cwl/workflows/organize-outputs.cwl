@@ -16,6 +16,7 @@ requirements:
 inputs:
 
   bt_build_name: string?
+  run_bowtie_build: boolean?
   bt_build_indexes: File[]?
 
   fastp_name: string?
@@ -54,8 +55,9 @@ steps:
 
   organize_bt_indexes:
     run: ../tools/make-subdir.cwl
-    when: $(inputs.dir_name != null)
+    when: $(inputs.run_bowtie_build)
     in:
+      run_bowtie_build: {source: run_bowtie_build, default: false}
       dir_files: bt_build_indexes
       dir_name: bt_build_name
     out: [ subdir ]
