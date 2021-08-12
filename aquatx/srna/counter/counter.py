@@ -161,7 +161,7 @@ def count_reads(library: dict, return_queue: mp.Queue, intermediate_file: bool =
     # 2. Change FeatureSelector.choose() to assign nt5end from chr(alignment.read.seq[0])
     read_seq = parser.read_SAM(library["File"])
     stats = LibraryStats(library, out_prefix, intermediate_file, run_diags)
-    if run_diags: selector.enable_diagnostics(stats.selection_diags)
+    selector.set_stats_collectors(stats, diags=run_diags)
 
     # For each sequence in the sam file...
     # Note: HTSeq only performs bundling. The alignments are our own Alignment objects
