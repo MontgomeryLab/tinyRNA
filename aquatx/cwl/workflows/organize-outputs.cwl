@@ -69,6 +69,7 @@ steps:
       dir_files:
         source: [ fastp_cleaned_fastq, fastp_html_report, fastp_json_report ]
         linkMerge: merge_flattened
+        pickValue: all_non_null
       dir_name: fastp_name
     out: [ subdir ]
 
@@ -79,6 +80,7 @@ steps:
       dir_files:
         source: [ collapser_uniq, collapser_low ]
         linkMerge: merge_flattened
+        pickValue: all_non_null
       dir_name: collapser_name
     out: [ subdir ]
 
@@ -89,6 +91,7 @@ steps:
       dir_files:
         source: [ bowtie_sam, bowtie_unal, bowtie_log ]
         linkMerge: merge_flattened
+        pickValue: all_non_null
       dir_name: bowtie_name
     out: [ subdir ]
 
@@ -100,6 +103,7 @@ steps:
         source: [ counter_features, counter_other, counter_alignment_stats, counter_summary_stats,
                   counter_intermed, counter_aln_diag, counter_selection_diag, features_csv ]
         linkMerge: merge_flattened
+        pickValue: all_non_null
       dir_name: counter_name
     out: [ subdir ]
 
@@ -110,6 +114,7 @@ steps:
       dir_files:
         source: [ dge_norm, dge_comparisons, dge_pca ]
         linkMerge: merge_flattened
+        pickValue: all_non_null
       dir_name: dge_name
     out: [ subdir ]
 
@@ -120,6 +125,7 @@ steps:
       dir_files:
         source: [ plotter_plots ]
         linkMerge: merge_flattened
+        pickValue: all_non_null
       dir_name: plotter_name
     out: [ subdir ]
 
