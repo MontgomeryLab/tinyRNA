@@ -195,9 +195,7 @@ steps:
       bowtie_name: dir_name_bowtie
       bowtie_sam: counter-prep/aln_seqs
       bowtie_log: counter-prep/bowtie_log
-      bowtie_unal:
-        source: counter-prep/unal_seqs
-        default: [ ]
+      bowtie_unal: counter-prep/unal_seqs
     out: [ bt_build_dir, fastp_dir, collapser_dir, bowtie_dir ]
 
   counter:
@@ -220,7 +218,7 @@ steps:
     in:
       input_file: counter/feature_counts
       outfile_prefix: run_name
-      pca: dge_pca_plots
+      plots: dge_pca_plots
     out: [ norm_counts, comparisons, pca_plots ]
 
   plotter:
@@ -243,9 +241,7 @@ steps:
       counter_other: counter/other_counts
       counter_alignment_stats: counter/alignment_stats
       counter_summary_stats: counter/summary_stats
-      counter_intermed:
-        source: counter/intermed_out_files
-        default: []
+      counter_intermed: counter/intermed_out_files
       counter_aln_diag: counter/alignment_diags
       counter_selection_diag: counter/selection_diags
       features_csv: features_csv
@@ -253,14 +249,10 @@ steps:
       dge_name: dir_name_dge
       dge_norm: dge/norm_counts
       dge_comparisons: dge/comparisons
-      dge_pca:
-        source: dge/pca_plots
-        default: []
+      dge_pca: dge/pca_plots
 
       plotter_name: dir_name_plotter
-      plotter_plots:
-        source: plotter/plots
-        default: []
+      plotter_plots: plotter/plots
     out: [ counter_dir, dge_dir, plotter_dir ]
 
 outputs:
