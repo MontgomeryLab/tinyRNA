@@ -18,10 +18,10 @@ inputs:
       prefix: -nc
     doc: "Normalized feature counts from DESeq"
 
-  deg_tables:
+  dge_tables:
     type: File[]
     inputBinding:
-      prefix: -deg
+      prefix: -dge
     doc: "Sample comparison tables from DESeq"
 
   len_dist:

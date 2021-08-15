@@ -248,7 +248,7 @@ plot_requests:
   - 'replicate_scatter'
   - 'sample_avg_scatter'
   - 'sample_avg_scatter_by_class'
-  - 'sample_avg_scatter_by_deg'
+  - 'sample_avg_scatter_by_dge'
   - 'sample_avg_scatter_by_both'
 
 ##-- You may supply your own matplotlib style sheet to override defaults here --##

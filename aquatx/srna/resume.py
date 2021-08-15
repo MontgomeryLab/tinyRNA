@@ -167,7 +167,7 @@ class ResumePlotterConfig(ResumeConfig):
         inputs = {
             'raw_counts': {'var': "resume_raw", 'type': "File"},
             'norm_counts': {'var': "resume_norm", 'type': "File"},
-            'deg_tables': {'var': "resume_deg", 'type': "File[]"},
+            'dge_tables': {'var': "resume_dge", 'type': "File[]"},
             'len_dist': {'var': "resume_len_dist", 'type': "File[]"}
         }
 
@@ -189,6 +189,6 @@ class ResumePlotterConfig(ResumeConfig):
             self['resume_raw'] = self.cwl_file(glob(counter + "/*_feature_counts.csv")[0])
             self['resume_norm'] = self.cwl_file(glob(dge + "/*_norm_counts.csv")[0])
             self['resume_len_dist'] = list(map(self.cwl_file, glob(counter + "/*_nt_len_dist.csv")))
-            self['resume_deg'] = list(map(self.cwl_file, glob(dge + "/*_deseq_table.csv")))
+            self['resume_dge'] = list(map(self.cwl_file, glob(dge + "/*_deseq_table.csv")))
         except (FileNotFoundError, IndexError) as e:
             sys.exit("The following pipeline output could not be found:\n%s" % (e.filename,))

@@ -226,7 +226,7 @@ steps:
     in:
       raw_counts: counter/feature_counts
       norm_counts: dge/norm_counts
-      deg_tables: dge/comparisons
+      dge_tables: dge/comparisons
       len_dist: counter/other_counts
       style_sheet: plot_style_sheet
       out_prefix: run_name
