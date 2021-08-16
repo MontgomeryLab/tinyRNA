@@ -461,7 +461,7 @@ def setup(args: argparse.Namespace) -> dict:
     return relevant_vars
 
 
-@report_execution_time("Main routine")
+@report_execution_time("Plotter runtime")
 def main():
     """
     Main routine

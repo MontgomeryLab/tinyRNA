@@ -43,6 +43,7 @@ from argparse import ArgumentParser
 
 from aquatx.srna.Configuration import Configuration, ConfigBase
 from aquatx.srna.resume import ResumeCounterConfig, ResumePlotterConfig
+from aquatx.srna.util import report_execution_time
 
 
 def get_args():
@@ -73,6 +74,7 @@ def get_args():
     return parser.parse_args()
 
 
+@report_execution_time("Pipeline runtime")
 def run(aquatx_cwl_path: str, config_file: str) -> None:
     """Processes the provided config file and executes the workflow it defines
 
@@ -101,21 +103,25 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
 
     if config_object['run_native']:  # experimental
         # Execute the CWL runner via native Python
-        run_native(config_object, workflow, run_directory, debug=debug)
+        return_code = run_native(config_object, workflow, run_directory, debug=debug)
     else:
         if config_object['run_parallel']:
             print("WARNING: parallel execution with cwltool is an experimental feature")
 
         # Use the cwltool CWL runner via command line
-        run_cwltool_subprocess(cwl_conf_file, workflow, run_directory=run_directory, parallel=parallel, debug=debug)
+        return_code = run_cwltool_subprocess(
+            cwl_conf_file, workflow,
+            run_directory=run_directory,
+            parallel=parallel, debug=debug)
 
-    # For now, we assume bowtie-build completed successfully if requested
-    # We want to update the Paths Sheet to point to the new index prefix
-    if config_object['run_bowtie_build']:
+    # If the workflow completed without errors, we want to update
+    # the Paths Sheet to point to the new bowtie index prefix
+    if config_object['run_bowtie_build'] and return_code == 0:
         paths_sheet_filename = config_object.paths.inf
         config_object.paths.write_processed_config(paths_sheet_filename)
 
 
+@report_execution_time("Pipeline resume runtime")
 def resume(aquatx_cwl_path: str, config_file: str, step: str) -> None:
     """Resumes pipeline execution at either the Counter or Plotter step
 
@@ -164,7 +170,7 @@ def resume(aquatx_cwl_path: str, config_file: str, step: str) -> None:
         os.remove(resume_wf)
 
 
-def run_cwltool_subprocess(config_file: str, workflow: str, run_directory=None, parallel=False, debug=False) -> None:
+def run_cwltool_subprocess(config_file: str, workflow: str, run_directory=None, parallel=False, debug=False) -> int:
     """Executes the workflow using a command line invocation of cwltool
 
     Args:
@@ -184,10 +190,10 @@ def run_cwltool_subprocess(config_file: str, workflow: str, run_directory=None, 
                  f"{'--parallel ' if parallel else ''}" \
                  f"{workflow} {config_file}"
 
-    subprocess.run(cwl_runner, shell=True)
+    return subprocess.run(cwl_runner, shell=True).returncode
 
 
-def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = '.', debug=False) -> None:
+def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = '.', debug=False) -> int:
     """Executes the workflow using native Python rather than subprocess "command line"
 
     Args:
@@ -250,9 +256,15 @@ def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = 
         executor=parallel if parallel else serial
     )
 
-    # Load the workflow document and execute
-    pipeline = cwl.make(workflow)
-    pipeline(**config_object.config)
+    try:
+        # Load the workflow document and execute
+        pipeline = cwl.make(workflow)
+        pipeline(**config_object.config)
+    except cwltool.factory.WorkflowStatus:
+        # For now, return non-zero if workflow did not complete
+        return 1
+
+    return 0
 
 
 def get_template(aquatx_extras_path: str) -> None:
