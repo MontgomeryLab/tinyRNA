@@ -99,11 +99,11 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
 
     workflow = f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl"
     parallel = config_object['run_parallel']
-    debug = config_object['debug']
+    loudness = config_object['verbosity']
 
     if config_object['run_native']:  # experimental
         # Execute the CWL runner via native Python
-        return_code = run_native(config_object, workflow, run_directory, debug=debug)
+        return_code = run_native(config_object, workflow, run_directory, verbosity=loudness)
     else:
         if config_object['run_parallel']:
             print("WARNING: parallel execution with cwltool is an experimental feature")
@@ -112,7 +112,7 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
         return_code = run_cwltool_subprocess(
             cwl_conf_file, workflow,
             run_directory=run_directory,
-            parallel=parallel, debug=debug)
+            parallel=parallel, verbosity=loudness)
 
     # If the workflow completed without errors, we want to update
     # the Paths Sheet to point to the new bowtie index prefix
@@ -158,19 +158,19 @@ def resume(aquatx_cwl_path: str, config_file: str, step: str) -> None:
 
     if config['run_native']:
         # We can pass our config object directly without writing to disk first
-        run_native(config, resume_wf, debug=config['debug'])
+        run_native(config, resume_wf, verbosity=config['verbosity'])
     else:
         # Processed Run Config must be written to disk first
         resume_conf_file = "resume_" + os.path.basename(config_file)
         config.write_processed_config(resume_conf_file)
-        run_cwltool_subprocess(resume_conf_file, resume_wf, debug=config['debug'])
+        run_cwltool_subprocess(resume_conf_file, resume_wf, verbosity=config['verbosity'])
 
     if os.path.isfile(resume_wf):
         # We don't want the generated workflow to be returned by a call to setup-cwl
         os.remove(resume_wf)
 
 
-def run_cwltool_subprocess(config_file: str, workflow: str, run_directory=None, parallel=False, debug=False) -> int:
+def run_cwltool_subprocess(config_file: str, workflow: str, run_directory=None, parallel=False, verbosity="normal") -> int:
     """Executes the workflow using a command line invocation of cwltool
 
     Args:
@@ -178,22 +178,23 @@ def run_cwltool_subprocess(config_file: str, workflow: str, run_directory=None, 
         workflow: the path to the workflow to be executed
         run_directory: the destination folder for workflow output subdirectories (default: CWD)
         parallel: process libraries in parallel where possible
-        debug: instruct the CWL runner to provide additional debug info
+        verbosity: controls the depth of information written to terminal by cwltool
 
     Returns: None
 
     """
 
-    cwl_runner = "cwltool --copy-outputs --timestamps --relax-path-checks " \
-                 f"{'--leave-tmpdir --debug --js-console ' if debug else ''}" \
-                 f"{'--outdir ' + run_directory + ' ' if run_directory else ''}" \
-                 f"{'--parallel ' if parallel else ''}" \
-                 f"{workflow} {config_file}"
+    command = ['cwltool --copy-outputs --timestamps --relax-path-checks']
+    if verbosity == 'debug': command.append('--debug --js-console')
+    if verbosity == 'quiet': command.append('--quiet')
+    if run_directory: command.append(f'--outdir {run_directory}')
+    if parallel: command.append('--parallel')
 
+    cwl_runner = ' '.join(command + [workflow, config_file])
     return subprocess.run(cwl_runner, shell=True).returncode
 
 
-def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = '.', debug=False) -> int:
+def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = '.', verbosity="normal") -> int:
     """Executes the workflow using native Python rather than subprocess "command line"
 
     Args:
@@ -201,7 +202,7 @@ def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = 
         workflow: the path to the workflow to be executed
         run_directory: the destination folder for workflow output subdirectories (default: CWD)
         parallel: process libraries in parallel where possible
-        debug: instruct the CWL runner to provide additional debug info
+        verbosity: controls the depth of information written to terminal by cwltool
 
     Returns: None
 
@@ -227,8 +228,8 @@ def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = 
         'outdir': run_directory,
         'move_outputs': "copy",
         'on_error': "continue",
-        'js_console': debug,
-        'debug': debug
+        'js_console': verbosity == "debug",
+        'debug': verbosity == "debug"
     })
 
     # Set proper temp directory for Mac users
@@ -242,8 +243,9 @@ def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = 
     # Enable rich terminal output (timestamp, color, formatting)
     logger = logging.getLogger("cwltool")
     logger.handlers.clear()  # executors.py loads a default handler; outputs are printed twice if we don't clear it
+    level = 'DEBUG' if verbosity == 'debug' else 'WARN' if verbosity == "quiet" else "INFO"
     coloredlogs.install(logger=logger, stream=sys.stderr, fmt="[%(asctime)s] %(levelname)s %(message)s",
-                        datefmt="%Y-%m-%d %H:%M:%S", level='DEBUG' if debug else 'INFO', isatty=True)
+                        datefmt="%Y-%m-%d %H:%M:%S", level=level, isatty=True)
 
     # Create a wrapper for the executors so that we may pass our logger to them (unsupported by Factory)
     parallel: MultithreadedJobExecutor = functools.partial(MultithreadedJobExecutor(), logger=logger)

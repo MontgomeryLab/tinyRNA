@@ -26,7 +26,7 @@ paths_config: ./paths.yml
 
 ##-- The label for final outputs --##
 ##-- If none provided, the default of user_aquatx will be used --##
-run_name: my_first_run
+run_name: unit_tests
 
 ##-- If True: run bowtie-build before analyzing libraries --##
 ##-- NOTE: this option may be ignored depending on your Paths file. See Paths file. --##
@@ -36,8 +36,8 @@ run_bowtie_build: True
 ##-- For best performance, this should be equal to your computer's processor core count --##
 threads: 4
 
-##-- If True: cwltool will print detailed workflow operation details --##
-debug: False
+##-- Control the amount of information printed to terminal: debug, normal, quiet --##
+verbosity: normal
 
 ##-- (EXPERIMENTAL) If True: process each sample library in parallel --##
 run_parallel: False
