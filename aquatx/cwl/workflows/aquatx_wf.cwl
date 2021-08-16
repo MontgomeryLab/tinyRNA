@@ -187,10 +187,7 @@ steps:
 
       collapser_name: dir_name_collapser
       collapser_uniq: counter-prep/uniq_seqs
-      collapser_low:
-        # Due to scatter, this optional output is actually an array of nulls when not produced (can't use default)
-        source: counter-prep/uniq_seqs_low
-        pickValue: all_non_null
+      collapser_low: counter-prep/uniq_seqs_low
 
       bowtie_name: dir_name_bowtie
       bowtie_sam: counter-prep/aln_seqs

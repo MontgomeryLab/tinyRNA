@@ -19,8 +19,8 @@ requirements:
 arguments: [":"]
 
 inputs:
-  dir_files: File[]?
-  dir_name: string
+  dir_files: File[]
+  dir_name: {type: string?, default: "default_dirname"}
 
 outputs:
   subdir:
