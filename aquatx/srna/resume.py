@@ -86,6 +86,7 @@ class ResumeConfig(ConfigBase, ABC):
         # Load the organize-outputs subworkflow so that we may copy relevant steps
         with open(resource_filename('aquatx', 'cwl/workflows/organize-outputs.cwl')) as f:
             organizer_sub_wf = self.yaml.load(f)
+            self.workflow['requirements'].extend(organizer_sub_wf['requirements'])
 
         for step in self.steps:
             # Copy relevant steps from organize-outputs.cwl
@@ -95,11 +96,7 @@ class ResumeConfig(ConfigBase, ABC):
 
             # Update WorkflowStepInputs
             context['in']['dir_name'] = f'dir_name_{step}'
-            context['in']['dir_files'] = {
-                'source': [f"{step}/{output}" for output in wf_steps[step]['out']],
-                'pickValue': 'all_non_null',
-                'linkMerge': 'merge_flattened'
-            }
+            context['in']['dir_files']['source'] = [f"{step}/{output}" for output in wf_steps[step]['out']]
 
             # Update WorkflowOutputParameter
             wf_outputs[f'{step}_out_dir'] = {
