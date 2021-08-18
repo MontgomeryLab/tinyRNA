@@ -16,21 +16,21 @@
     - [Paths File](#paths-file)
     - [Samples Sheet](#samples-sheet)
     - [Features Sheet](#features-sheet)
-  - [Input formats](#input-formats)
-  - [Running the end-to-end analysis](#running-the-end-to-end-analysis)
-  - [Running individual steps](#running-individual-steps)
+  - [User-Provided Input Files](#user-provided-input-files)
+  - [Running the End-to-End Analysis](#running-the-end-to-end-analysis)
+  - [Running Individual Steps](#running-individual-steps)
       - [Create Workflow](#create-workflow)
       - [Collapser](#collapser)
       - [Counter](#counter)
       - [fastp, bowtie-build, and bowtie](#fastp-bowtie-build-and-bowtie)
-  - [Using a different workflow runner](#using-a-different-workflow-runner)
+  - [Using a Different Workflow Runner](#using-a-different-workflow-runner)
 - [Outputs](#outputs)
-  - [Fastq file quality analysis](#fastq-file-quality-analysis)
-  - [Counts and pipeline statistics](#counts-and-pipeline-statistics)
+  - [Data Pre-Processing](#data-pre-processing)
+  - [Counts and Pipeline Statistics](#counts-and-pipeline-statistics)
     - [Feature Counts](#feature-counts)
     - [Alignment Statistics](#alignment-statistics)
     - [Summary Statistics](#summary-statistics)
-    - [5'nt vs. length matrix](#5nt-vs-length-matrix)
+    - [5'nt vs. Length Matrix](#5nt-vs-length-matrix)
 - [Contributing](#contributing)
 - [Authors](#authors)
 - [License](#license)
@@ -73,74 +73,91 @@ cd aquatx-srna
 
 # Install the aquatx-srna environment and dependencies
 conda env create -f environment.yml
+
+# Activate (or reactivate) the aquatx-srna environment
+conda activate aquatx-srna
+
+# When you are done running AQuATx, you can deactivate the conda environment
+conda deactivate
 ```
 
 ## Usage
 If you'd like to jump right in and start using AQuATx, see our [tutorial](./START_HERE/TUTORIAL.md).
 
-You may execute the workflow in its entirety for a full end-to-end analysis pipeline, or you may choose to execute individual steps on their own. In most cases you will use the `aquatx` command for pipeline level operations, including running the pipeline.
+You can execute the workflow in its entirety for a full end-to-end analysis pipeline, or you can execute individual steps on their own. In most cases you will use the `aquatx` command for pipeline level operations, including running the pipeline.
 
 ### Configuration Files
-The pipeline requires that you specify your input library files (Samples Sheet), your selection rules for feature counting (Features Sheet), the paths to your configuration files and other file inputs (Paths), and your preferences for the overall pipeline configuration (Run Config).
+The pipeline requires that you specify your input library files (Samples Sheet - `samples.csv`), your selection rules for feature counting (Features Sheet - `features.csv`), the paths to your configuration files and other file inputs (Paths - `paths.yml`), and your preferences for the overall pipeline configuration (Run Config - `run_config.yml`).
 
 ![AQuATx basic pipeline](images/config-files.png)
 
-You may obtain a template copy of these files with the command:
+You can obtain template copies of these files with the command (they're also available in the `START_HERE` directory):
 ```
 aquatx get-template
 ```
-:warning: You may use either relative or absolute paths in your configuration files. **Relative paths will be evaluated relative to the file in which they are defined.** This means that you may store your configuration files each in a different location, allowing for flexibility in your project organization. :warning:
+:warning: You may use either relative or absolute paths in your configuration files. **Relative paths will be evaluated relative to the file in which they are defined.** This means that you can store your configuration files each in a different location, allowing for flexibility in your project organization. To avoid confusion, we recommend using absolute paths.:warning:
 
 #### Run Config
 
-The pipeline revolves around a configuration file to make it easy to set up and run. This `YAML` Run Config file can be edited using a simple text editor. Within it you must define the location of your Paths file, and you may optionally define your preferences for the pipeline and its individual steps. During the setup phase of pipeline execution, AQuATx will further process this configuration file based on its contents and the contents of your Paths, Samples, and Features files. The processed configuration is what ultimately determines the behavior of the workflow. A copy will be saved in the final run directory specified in your Paths file.
+The pipeline revolves around a configuration file to make it easy to set up and run. This `YAML` Run Config file (`run_config.yml`) can be edited using a simple text editor (such as BBEDIT for Mac or notepad++ for Windows). Within it you must define the location of your Paths file (`paths.yml`), and you can optionally define your preferences for the pipeline and its individual steps. During the setup phase of pipeline execution, AQuATx will further process this configuration file based on its contents and the contents of your Paths (`paths.yml`), Samples (`samples.csv`), and Features (`features.csv`) files. The processed configuration is what ultimately determines the behavior of the workflow. A copy will be saved in the final run directory specified in your Paths file providing a configuration record for each run.
 
 #### Paths File
 
-The locations of pipeline file inputs are defined in the Paths file. This `YAML` file includes your Samples and Features Sheets, in addition to your bowtie index prefix (optional) and the final run directory name. The final run directory will contain all pipeline outputs, and is therefore recreated and prepended with the `run_name` and current date and time of each run to keep outputs separate.
+The locations of pipeline file inputs are defined in the Paths file (`paths.yml`). This `YAML` file includes paths to your Samples and Features Sheets, in addition to your bowtie index prefix (optional) and the final run directory name. The final run directory will contain all pipeline outputs, and is therefore recreated and prepended with the `run_name` and current date and time of each run to keep outputs separate.
 
 #### Samples Sheet
 
-To make it simple to specify your sample files, along with associated sample names and replicate numbers, we provide a `csv` file which can be edited in a spreadsheet editor such as Microsoft Excel or LibreOffice Calc.
+To make it simple to specify your fastq files and their locations, along with associated sample names and replicate numbers, we provide a `csv` file (`samples.csv`) which can be edited in a spreadsheet editor such as Microsoft Excel or LibreOffice Calc.
 
 #### Features Sheet
 
-sRNA research is often confounded by the fact that loci of features of interest may overlap with the loci of overabundant features, such as rRNA coding genes. These cases can lead to artificial inflation or deflation of feature counts of interest. Thus, we provide a Features Sheet in which you may define selection rules and obtain a more honest representation of a library's sRNA feature counts. These rules may be defined, per GFF file, on the basis of any attribute key/value pair, strand, 5' end nucleotide, and length, with options for full or partial interval matching with the target sequence.
+Small RNAs can often be classified by sequence features, such as length, strandedness, and 5' nucleotide. We provide a Features Sheet (`features.csv`) in which you can define selection rules to more accurately capture counts for the small RNAs of interest.  These rules can be defined per GFF3 file (a file containing the coordinates of features of interest) on the basis of any attribute key/value pair (for example, `Class=miRNA`), strand relative to the feature of interest, 5' end nucleotide, and length, with options for full or partial interval matching with the target sequence.
 
-Selection takes place for every feature associated with every alignment of every read. It occurs in two phases:
-1. Against the candidate feature's attribute key/value pairs, as defined in your reference annotation files
-2. Against the target sequence's attributes (strand, 5' end nucleotide, and length)
+Selection takes place for every feature associated with every alignment of every small RNA sequence. It occurs in two phases:
+1. Against the candidate feature's attribute key/value pairs, as defined in your reference annotation files.
+2. Against the small RNA attributes (strand relative to feature of interest, 5' end nucleotide, and length).
 
-Each rule must be assigned a hierarchy value. A lower value indicates higher selection preference and multiple rules may share the same value. We utilize this value only during the first phase of selection; if multiple features match the attribute key/value pairs defined in your rules, then only the feature(s) with the lowest hierarchy values move to the second selection phase. The remaining features are discarded for the given read alignment.
+Each rule must be assigned a hierarchy value. A lower value indicates higher selection preference and multiple rules may share the same value. We utilize this value only during the first phase of selection; if multiple features match the attribute key/value pairs defined in your rules, then only the feature(s) with the lowest hierarchy values move to the second selection phase. The remaining features are discarded for the given read alignment. You can use the higher hierarchy values to exclude counts features that are not of interest from features of interest. For example, suppose you have a miRNA locus embedded within a coding gene locus (within an intron for example). By assigning a hierarchy of 1 to miRNA and a hierarchy of 2 to coding genes, all small RNA counts from sequences matching to the miRNA would be excluded from total counts for the coding gene. Reversing the hierarchy such that miRNA had a hierarchy of 2 and coding genes had a hierarchy of 1 would instead exclude reads from sequences matching to the coding gene from total counts for the miRNA. If a hierarchy of 1 was assigned to both miRNAs and coding genes, counts for sequences matching both features would be split between them.
 
-Any candidate features which pass selection will receive a normalized count increment. Read counts are normalized twice before being assigned to a feature. A read's count is divided: 
-1. By the number of loci it aligns to in the genome
+Small RNA reads passing selection will receive a normalized count increment. By default, read counts are normalized twice before being assigned to a feature (these settings can be changed in `run_config.yml`). Counts for each small RNA sequence are divided: 
+1. By the number of loci it aligns to in the genome.
 2. By the number of selected features for each of its alignments.
 
-You may wish for your final feature counts to be expressed in terms of a particular feature attribute key, e.g. by sequence name, and we have provided the option to do so with the `ID Attribute` column. 
+Final feature counts will be expressed in terms of a particular feature attribute key such as sequence name (often denoted with `ID` in column 9 of the GFF3, e.g. `ID=let-7` ), which must be specified within the `Name Attribute` column of `features.csv`. In many cases, such as the example above, the identifier in the `Name Attribute` column will simply be `ID` and as the GFF3 is scanned, feature identifiers following `ID=` will be used as feature names.
 
-### Input formats
+### User-Provided Input Files
 
-The pipeline accepts the following formats:
-  1. Reference annotations must be in GFF3
-     - Each feature must have an attributes column which defines its `ID` and `Class` (case-sensitive)
-     - Each feature's `ID` attribute must be unique
-     - All features must be stranded
-     - Attribute values which contain commas will be parsed as lists
-  2. Library files must be FASTQ(.gz) <sup>*</sup>
-  3. Reference genome files must be FASTA
-  4. Bowtie indexes must be small indexes (.ebwt)
+Running the pipeline requires the following files:
+  1. A GFF3 formatted file with with genomic coordinates for your features of interest, such as miRNAs (see ce_WS279_chrI.gff3 in the reference_data folder for an example)
+     - Each feature must have an attributes column (column 9) which defines its `ID` and `Class` (case-sensitive).
+       - For example: `chrI	.	miRNA	100	121	.	+	.	ID=miR-1;Class=miRNA`
+     - Each feature's `ID` attribute must be unique.
+     - All features must be stranded.
+     - Attribute values which contain commas will be parsed as lists.
+  2. FASTQ(.gz) <sup>*</sup> formatted files with your small RNA high-throughput sequencing data (files must be demultiplexed).
+  3. A reference genome file in FASTA format (be sure that chromosome identifiers are identical between your reference annotations and genome sequence files).
+  4. Optional: Bowtie indexes (must be small indexes (.ebwt)). By default, bowtie indexes will be created when the pipeline is run for the first time).
 
-<sup>*</sup> `aquatx-count` accepts SAM files in your Samples Sheet only when invoked as an individual step. If these entries are present during an end-to-end run, an error will be thrown at pipeline start.
+<sup>*</sup> `aquatx-count` accepts SAM files in your Samples Sheet only when invoked as an individual step. Because genome alignments are done after collapsing reads, the pipeline does not currently support SAM files from other sources.
 
-### Running the end-to-end analysis
-In most cases you will use this toolset as an end-to-end pipeline. This will run a full, standard small RNA sequencing data analysis according to your configuration files, from raw fastq files to feature counts and summary statistics.
+### Running the End-to-End Analysis
+In most cases you will use this toolset as an end-to-end pipeline. This will run a full, standard small RNA sequencing data analysis according to your configuration file. Before starting, you will need the following:
+
+1. High-throughput sequencing data in fastq format. 
+2. The genome sequence of interest in fasta format.
+3. Genome coordinates of small RNA features of interest in gff3 format.
+4. A completed Samples Sheet (`samples.csv`) with paths to the fastq files.
+5. A completed Features Sheet (`features.csv`) with paths to the gff3 file(s).
+6. An updated Paths File (`paths.yml`) with the path to the genome sequence.
+7. A Run Config file (`run_config.yml`) located in your working directory or the path to the file. The template provided does not need to be updated if you wish to use the default settings.
+
+To run an end-to-end analysis, be sure that your working within the conda aquatx-srna environment (instructions above) in your terminal and optionally set your working directory that contains the Run Config file. Than, simply enter the following code into your terminal (if you are not working in the directory containing `run_config.yml`, provide the path before the name of the file - `path/to/run_config.yml`:
 
 ```
-aquatx run --config path/to/Run_Config.yml
+aquatx run --config run_config.yml
 ```
 
-### Running individual steps
+### Running Individual Steps
 The process for running individual steps differs depending on whether the step is an AQuATx Python component, or a CWL wrapped third party tool.
 
 The following steps are Python components. Their corresponding commands may be invoked at the command line:
@@ -200,7 +217,7 @@ These are CWL wrapped third party tools.
 4. Fill in your preferences and inputs in this step configuration file and save it
 5. Execute the tool with the command `cwltool step-file.cwl step-config.YML`
 
-### Using a different workflow runner
+### Using a Different Workflow Runner
 
 We have used CWL to define the workflow for scalability and interoperability. The default runner, or interpreter, utilized by AQuATx is `cwltool`. You may use a different CWL runner if you would like, and in order to do so you will need the workflow CWL and your **processed** Run Config file. The following will copy these files to your current working directory:
 
@@ -217,49 +234,49 @@ aquatx setup-cwl --config none
 
 The files produced by each pipeline step will be included in the final run directory by default. These intermediate files are organized into subdirectories by step.
 
-### Fastq file quality analysis
+### Data Pre-Processing
 
-[Fastp](https://github.com/OpenGene/fastp) produces a quality filtered FASTQ file along with a summary and quality statistics report file for each library. These report files determine the pipeline summary statistics for total reads and retained reads.
+[fastp](https://github.com/OpenGene/fastp) is used to trim adapters and remove poor quality reads from FASTQ input files. Summary and quality statistics reports are generated for each library. These reports are used to calculate the pipeline summary statistics for total reads and retained reads.
 
-### Counts and pipeline statistics
-The Counter step produces final analysis tables for feature counts, alignment statistics, pipeline summary statistics, and 5'nt vs. length matrices for each library.
+### Counts and Pipeline Statistics
+Custom Python scripts are used at the Counter step to generate alignment statistics, pipeline summary statistics, and 5'nt vs. length matrices for each library.
 
 #### Feature Counts
-A single table of feature counts includes columns for each library analyzed. A gene's _Feature ID_ and _Feature Class_ are simply the values of its `ID` and `class` attributes. However, we don't often think of genes by their ID attribute, so we have included a _Feature Name_ column to display a more human friendly alias of your choice. In the Features Sheet you will find the _ID Attribute_ column. Here you may choose another attribute to represent each feature in the _Feature Name_ column of this table.
+Custom Python scripts and HTSeq are used to generate a single table of feature counts that includes columns for each library analyzed. A feature's _Feature ID_ and _Feature Class_ are simply the values of its `ID` and `Class` attributes. We have also included a _Feature Name_ column which displays aliases of your choice, as specified in the Features Sheet. In the _Name Attribute_ column of the Features Sheet, you can choose an additional attribute to be included in the _Feature Name_ column of this table. If the _Name Attribute_ in the Features Sheet is set to`ID`, the _Feature Name_ column is left empty.
 
-For example, say your Features Sheet has a rule which specifies an ID Attribute of `sequence_name`, which has a value of "abc123,def456,123.456" for gene1. Let's also say gene1 is both ALG and CSR class. The GFF entry for this feature would have the following attributes column:
+For example, if your Features Sheet has a rule which specifies an ID Attribute of `sequence_name` and the GFF entry for this feature has the following attributes column:
 ```
-... ID=gene1;sequence_name=abc123,def456,123.456;Class=ALG,CSR; ...
+... ID=406904;sequence_name=mir-1,hsa-miR-1;Class=miRNA; ...
 ```
 The row for this feature in the feature counts table would read:
 
 | Feature ID | Feature Name | Feature Class | Group1_rep_1 | Group1_rep_2 | ... |
 |------------|--------------|---------------|-----------|-----------|-----|
-| gene1 | abc123,def456,123.456 | ALG, CSR | 1234 | 999 | ... |
+| 406904 | mir-1,hsa-miR-1 | miRNA | 1234 | 999 | ... |
 
 
 #### Alignment Statistics
 A single table of alignment statistics includes columns for each library and the following rows:
-- Total Assigned Reads
-- Total Assigned Sequences
-- Assigned Single-Mapping Reads
-- Assigned Multi-Mapping Reads
-- Reads Assigned to Single Feature
-- Sequences Assigned to Single Feature
-- Reads Assigned to Multiple Features
-- Sequences Assigned to Multiple Features
-- Total Unassigned Reads
-- Total Unassigned Sequences
+- Total Assigned Reads (i.e. counts from sequences that aligned to at least one feature in your Features Sheet)
+- Total Assigned Sequences (i.e. unique sequences that aligned to at least one feature in your Features Sheet)
+- Assigned Single-Mapping Reads (i.e. counts from sequences mapping to a single genomic locus and aligning to at least one feature in your Features Sheet)
+- Assigned Multi-Mapping Reads (i.e. counts from sequences mapping to multiple genomic loci that aligned to at leats one feature in your Features Sheet)
+- Reads Assigned to Single Feature (i.e. counts from sequences that aligned to a single feature in your Features Sheet)
+- Sequences Assigned to Single Feature (i.e. unique sequences that aligned to a single feature in your Features Sheet)
+- Reads Assigned to Multiple Features (i.e. counts from sequences that aligned to multiple features in your Features Sheet)
+- Sequences Assigned to Multiple Features (i.e. unique sequences that aligned to multiple features in your Features Sheet)
+- Total Unassigned Reads (i.e. total counts for sequences that didn't align to any features in your Features Sheet)
+- Total Unassigned Sequences (i.e. total unique sequences that didn't align to any features in your Features Sheet)
 
 #### Summary Statistics
 A single table of summary statistics includes columns for each library and the following rows:
-- Total Reads
-- Retained Reads
-- Unique Sequences
-- Mapped Sequences
-- Aligned Reads
+- Total Reads (i.e. total reads represented in FASTQ input files)
+- Retained Reads (i.e. total reads passing quality filtering)
+- Unique Sequences (i.e. total unique sequences passing quality filtering)
+- Mapped Sequences (i.e. total genome-mapping sequences passing quality filtering)
+- Aligned Reads (i.e. total genome-mapping reads passing quality filtering that were aligned to at least one feature in your Features Sheet)
 
-#### 5'nt vs. length matrix
+#### 5'nt vs. Length Matrix
 
 After alignment, a size and 5'nt distribution table is created for each library. The distribution of lengths and 5'nt can be used to assess the overall quality of your libraries. This can also be used for analyzing small RNA distributions in non-model organisms without annotations.
 
