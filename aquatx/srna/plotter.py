@@ -16,6 +16,7 @@ from collections import defaultdict
 from typing import Optional, Dict, Union
 from pkg_resources import resource_filename
 
+from aquatx.srna.Configuration import timestamp_format
 from aquatx.srna.plotterlib import plotterlib as lib
 from aquatx.srna.util import report_execution_time
 
@@ -95,11 +96,11 @@ def len_dist_plots(files_list: list, out_prefix:str, **kwargs):
 
         # Parse the "sample_rep_N" string from the input filename to avoid duplicate out_prefix's in the basename
         basename = os.path.splitext(os.path.basename(size_file))[0]
-        date_prefix_pos = re.search(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_", basename).span()
+        date_prefix_pos = re.search(timestamp_format, basename).span()
 
         if date_prefix_pos is not None:
             # File is a pipeline product
-            begin = date_prefix_pos[1]
+            begin = date_prefix_pos[1] + 1
             end = basename.rfind("_nt_len_dist")
             condition_and_rep = basename[begin:end]
         else:
@@ -215,7 +216,7 @@ def load_dge_tables(comparisons: list) -> pd.DataFrame:
     return de_table
 
 
-def scatter_samples(count_df, output_prefix, classes=None, dges=None, unknown=False, pval=0.05):
+def scatter_samples(count_df, output_prefix, classes=None, dges=None, show_unknown=False, pval=0.05):
     """Creates PDFs of all pairwise comparison scatter plots from a count table.
     Can highlight classes and/or differentially expressed genes as different colors.
 
@@ -224,14 +225,14 @@ def scatter_samples(count_df, output_prefix, classes=None, dges=None, unknown=Fa
         output_prefix: A string to use as a prefix for saving files
         classes: A dataframe containing class(es) per feature
         dges: A dataframe of differential gene table output to highlight
-        unknown: Boolean indicating if "unknown" classes should be highlighted
+        show_unknown: Boolean indicating if "unknown" classes should be highlighted
     """
     samples = get_pairs(list(count_df.columns))
 
     if (classes is not None) and (dges is not None):
         uniq_classes = list(pd.unique(classes))
         
-        if not unknown:
+        if not show_unknown and 'unknown' in uniq_classes:
             uniq_classes.remove('unknown')
         
         for pair in dges:
@@ -255,7 +256,7 @@ def scatter_samples(count_df, output_prefix, classes=None, dges=None, unknown=Fa
     elif classes is not None:
         uniq_classes = list(pd.unique(classes))
         
-        if not unknown:
+        if not show_unknown and 'unknown' in uniq_classes:
             uniq_classes.remove('unknown')
         
         grp_args = []
