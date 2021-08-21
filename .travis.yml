@@ -12,7 +12,7 @@ before_install:
 
 install:
   - conda env update -f environment.yml
-  - conda activate tinyrna-srna
+  - conda activate tinyrna
 
 script:
   - python -m unittest tests.unit_tests_entry
