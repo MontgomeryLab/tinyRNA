@@ -1,6 +1,6 @@
-""" Plotting script for the sRNA AQuATx workflow.
+""" Plotting script for the sRNA tinyRNA workflow.
 
-This script produces basic static plots for publications as part of the AQuATx
+This script produces basic static plots for publications as part of the tinyRNA
 workflow. It uses a default style and produces multiple PDFs, but you may provide
 your own styles sheet.
 """
@@ -16,9 +16,9 @@ from collections import defaultdict
 from typing import Optional, Dict, Union
 from pkg_resources import resource_filename
 
-from aquatx.srna.Configuration import timestamp_format
-from aquatx.srna.plotterlib import plotterlib as lib
-from aquatx.srna.util import report_execution_time
+from tinyrna.srna.Configuration import timestamp_format
+from tinyrna.srna.plotterlib import plotterlib as lib
+from tinyrna.srna.util import report_execution_time
 
 
 def get_args():
@@ -44,7 +44,7 @@ def get_args():
     parser.add_argument('-o', '--out-prefix', metavar='OUTFILE', default='',
                         help='Optional prefix to use for output PDF files.')
     parser.add_argument('-s', '--style-sheet', metavar='MPLSTYLE',
-                        default=resource_filename('aquatx', 'extras/aquatx-srna-light.mplstyle'),
+                        default=resource_filename('tinyrna', 'extras/tinyrna-light.mplstyle'),
                         help='Optional matplotlib style sheet to use for plots.')
     parser.add_argument('-p', '--plots', metavar='PLOTS', required=True, nargs='+',
                         help='List of plots to create. Options: \n'
