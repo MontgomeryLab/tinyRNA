@@ -7,7 +7,7 @@ usage <- "The following arguments are accepted:
 
        --input-file <count_file>
               A text file containing a table of features x samples of the run to
-              process by DESeq2. The [...]feature_counts.csv output of aquatx-count is expected here.
+              process by DESeq2. The [...]feature_counts.csv output of tinyrna-count is expected here.
 
        --outfile-prefix <outfile>
               Name of the output files to write. These will be created:
