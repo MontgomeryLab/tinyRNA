@@ -5,10 +5,11 @@ import shutil
 import sys
 import time
 import unittest
+from glob import glob
 
 import psutil
 
-import aquatx.entry as aquatx
+import aquatx.entry as entry
 import tests.unit_test_helpers as helpers
 
 """
@@ -20,7 +21,7 @@ test covers both environments.
 """
 
 
-class test_aquatx(unittest.TestCase):
+class test_entry(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         # Change CWD to test folder if test was invoked from project root (ex: by Travis)
@@ -60,7 +61,7 @@ class test_aquatx(unittest.TestCase):
 
     def test_get_template(self):
         test_functions = [
-            helpers.LambdaCapture(lambda: aquatx.get_template(self.aquatx_extras_path)),  # The pre-install invocation
+            helpers.LambdaCapture(lambda: entry.get_template(self.aquatx_extras_path)),  # The pre-install invocation
             helpers.ShellCapture("aquatx get-template")                                   # The post-install command
         ]
         template_files = ['run_config_template.yml', 'samples.csv', 'features.csv',
@@ -100,7 +101,7 @@ class test_aquatx(unittest.TestCase):
         no_config = ['None', 'none']
         for config in no_config:
             test_functions = [
-                helpers.LambdaCapture(lambda: aquatx.setup_cwl(self.aquatx_cwl_path, config)),
+                helpers.LambdaCapture(lambda: entry.setup_cwl(self.aquatx_cwl_path, config)),
                 helpers.ShellCapture(f"aquatx setup-cwl --config {config}")
             ]
 
@@ -130,7 +131,7 @@ class test_aquatx(unittest.TestCase):
 
     def test_setup_cwl_withconfig(self):
         test_functions = [
-            helpers.LambdaCapture(lambda: aquatx.setup_cwl(self.aquatx_cwl_path, self.config_file)),
+            helpers.LambdaCapture(lambda: entry.setup_cwl(self.aquatx_cwl_path, self.config_file)),
             helpers.ShellCapture(f"aquatx setup-cwl --config {self.config_file}")
         ]
         for test_context in test_functions:
@@ -178,7 +179,7 @@ class test_aquatx(unittest.TestCase):
     def test_run(self):
         # Non-blocking test functions (invocations continue to run in background until test_context is left)
         test_functions = [
-            helpers.LambdaCapture(lambda: aquatx.run(self.aquatx_cwl_path, self.config_file), blocking=False),
+            helpers.LambdaCapture(lambda: entry.run(self.aquatx_cwl_path, self.config_file), blocking=False),
             helpers.ShellCapture(f"aquatx run --config {self.config_file}", blocking=False)
         ]
 
@@ -186,18 +187,23 @@ class test_aquatx(unittest.TestCase):
             return psutil.Process(os.getpid()).children(recursive=True)
 
         for test_context in test_functions:
-            with test_context as test:
-                test()
+            try:
+                with test_context as test:
+                    test()
 
-                # Check for cwltool in child processes up to 5 times, waiting 1 second in between
-                for i in range(10):
-                    time.sleep(1)
-                    sub_names = {sub.name() for sub in get_children()}
-                    if 'node' in sub_names:
-                        break
+                    # Check for cwltool in child processes up to 5 times, waiting 1 second in between
+                    for i in range(10):
+                        time.sleep(1)
+                        sub_names = {sub.name() for sub in get_children()}
+                        if 'node' in sub_names:
+                            break
 
-                self.assertIn('node', sub_names,
-                              f"The cwltool subprocess does not appear to have started. Function: {test_context}")
+                    self.assertIn('node', sub_names,
+                                  f"The cwltool subprocess does not appear to have started. Function: {test_context}")
+            finally:
+                run_dirs = glob("./testdata/entry_test_*_run_directory")
+                for dir in run_dirs:
+                    shutil.rmtree(dir)
 
     """
     A very minimal test for the subprocess context manager that is used

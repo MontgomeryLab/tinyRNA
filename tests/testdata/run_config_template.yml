@@ -26,7 +26,7 @@ paths_config: ./paths.yml
 
 ##-- The label for final outputs --##
 ##-- If none provided, the default of user_aquatx will be used --##
-run_name: unit_tests
+run_name: entry_test
 
 ##-- If True: run bowtie-build before analyzing libraries --##
 ##-- NOTE: this option may be ignored depending on your Paths file. See Paths file. --##
