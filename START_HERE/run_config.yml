@@ -1,4 +1,4 @@
-######----------------------------- AQuATx Configuration -----------------------------######
+######----------------------------- tinyRNA Configuration -----------------------------######
 #
 # In this file you may specify your configuration preferences for the workflow and
 # each workflow step.
@@ -11,7 +11,7 @@
 #   1. Add a username to identify the person performing runs, if desired for record keeping
 #   2. Add a run directory name in your Paths file. If not provided, "run_directory" is used
 #   3. Add a run name to label your run directory and run-specific summary reports.
-#      If not provided, user_aquatx will be used.
+#      If not provided, user_tinyrna will be used.
 #
 # This file will be further processed at run time to generate the appropriate pipeline
 # settings for each workflow step. A copy of this processed configuration will be stored
@@ -25,7 +25,7 @@ run_time: 11-15-28
 paths_config: ./paths.yml
 
 ##-- The label for final outputs --##
-##-- If none provided, the default of user_aquatx will be used --##
+##-- If none provided, the default of user_tinyrna will be used --##
 run_name: my_first_run
 
 ##-- If True: run bowtie-build before analyzing libraries --##
@@ -76,7 +76,7 @@ ftabchars: ~
 # and QC analysis for an output QC report. See https://github.com/OpenGene/fastp for more
 # information on the fastp tool. We have limited the options available to those appropriate
 # for small RNA sequencing data. If you require an addition option, create an issue on the
-# pipeline github: https://github.com/MontgomeryLab/aquatx-srna
+# pipeline github: https://github.com/MontgomeryLab/tinyrna
 #
 # We have specified default parameters for small RNA data based on our own "best practices".
 # You may change the parameters here.
