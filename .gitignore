@@ -2,6 +2,7 @@
 *.swp
 *.html
 *.svg
+*.DS_Store
 .idea/*
 tests/run_dir/
 */fil-result/*
