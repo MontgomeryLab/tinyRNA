@@ -206,7 +206,7 @@ def map_and_reduce(libraries, work_args, ret_queue):
     return summary
 
 
-@report_execution_time("Overall runtime")
+@report_execution_time("Counter's overall runtime")
 def main():
     # Get command line arguments.
     args = get_args()

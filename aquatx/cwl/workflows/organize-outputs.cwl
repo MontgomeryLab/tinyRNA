@@ -12,6 +12,7 @@ class: Workflow
 requirements:
   - class: MultipleInputFeatureRequirement
   - class: InlineJavascriptRequirement
+  - class: StepInputExpressionRequirement
 
 inputs:
 
@@ -26,7 +27,12 @@ inputs:
 
   collapser_name: string?
   collapser_uniq: File[]?
-  collapser_low: File[]?
+  collapser_low:
+    # Optional scatter output is an odd feller
+    type:
+      - 'null'
+      - type: array
+        items: ["null", File]
 
   bowtie_name: string?
   bowtie_sam: File[]?
@@ -58,8 +64,13 @@ steps:
     when: $(inputs.run_bowtie_build)
     in:
       run_bowtie_build: {source: run_bowtie_build, default: false}
-      dir_files: bt_build_indexes
-      dir_name: bt_build_name
+      dir_files:
+        source: [bt_build_indexes]
+        valueFrom: ${if (self.length == 1){return [self];} else {return self;}}
+        default: []
+      dir_name:
+        source: [bt_build_name]
+        # valueFrom: ${return self}  # No purpose except appeasing the CWL validator's lack of `when` awareness *eye roll*
     out: [ subdir ]
 
   organize_fastp:
@@ -70,6 +81,7 @@ steps:
         source: [ fastp_cleaned_fastq, fastp_html_report, fastp_json_report ]
         linkMerge: merge_flattened
         pickValue: all_non_null
+        valueFrom: ${if (self.length == 1){return [self];} else {return self}}
       dir_name: fastp_name
     out: [ subdir ]
 
@@ -81,6 +93,7 @@ steps:
         source: [ collapser_uniq, collapser_low ]
         linkMerge: merge_flattened
         pickValue: all_non_null
+        valueFrom: ${if (self.length == 1){return [self];} else {return self}}
       dir_name: collapser_name
     out: [ subdir ]
 
@@ -92,6 +105,7 @@ steps:
         source: [ bowtie_sam, bowtie_unal, bowtie_log ]
         linkMerge: merge_flattened
         pickValue: all_non_null
+        valueFrom: ${if (self.length == 1){return [self];} else {return self}}
       dir_name: bowtie_name
     out: [ subdir ]
 
@@ -104,6 +118,7 @@ steps:
                   counter_intermed, counter_aln_diag, counter_selection_diag, features_csv ]
         linkMerge: merge_flattened
         pickValue: all_non_null
+        valueFrom: ${if (self.length == 1){return [self];} else {return self}}
       dir_name: counter_name
     out: [ subdir ]
 
@@ -115,6 +130,7 @@ steps:
         source: [ dge_norm, dge_comparisons, dge_pca ]
         linkMerge: merge_flattened
         pickValue: all_non_null
+        valueFrom: ${if (self.length == 1){return [self];} else {return self}}
       dir_name: dge_name
     out: [ subdir ]
 
@@ -126,6 +142,7 @@ steps:
         source: [ plotter_plots ]
         linkMerge: merge_flattened
         pickValue: all_non_null
+        valueFrom: ${if (self.length == 1){return [self];} else {return self}}
       dir_name: plotter_name
     out: [ subdir ]
 

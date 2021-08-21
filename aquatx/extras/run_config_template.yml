@@ -36,8 +36,8 @@ run_bowtie_build: True
 ##-- For best performance, this should be equal to your computer's processor core count --##
 threads: 4
 
-##-- If True: cwltool will print detailed workflow operation details --##
-debug: False
+##-- Control the amount of information printed to terminal: debug, normal, quiet --##
+verbosity: normal
 
 ##-- (EXPERIMENTAL) If True: process each sample library in parallel --##
 run_parallel: False
@@ -248,7 +248,7 @@ plot_requests:
   - 'replicate_scatter'
   - 'sample_avg_scatter'
   - 'sample_avg_scatter_by_class'
-  - 'sample_avg_scatter_by_deg'
+  - 'sample_avg_scatter_by_dge'
   - 'sample_avg_scatter_by_both'
 
 ##-- You may supply your own matplotlib style sheet to override defaults here --##

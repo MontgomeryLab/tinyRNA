@@ -86,6 +86,7 @@ class ResumeConfig(ConfigBase, ABC):
         # Load the organize-outputs subworkflow so that we may copy relevant steps
         with open(resource_filename('aquatx', 'cwl/workflows/organize-outputs.cwl')) as f:
             organizer_sub_wf = self.yaml.load(f)
+            self.workflow['requirements'].extend(organizer_sub_wf['requirements'])
 
         for step in self.steps:
             # Copy relevant steps from organize-outputs.cwl
@@ -95,11 +96,7 @@ class ResumeConfig(ConfigBase, ABC):
 
             # Update WorkflowStepInputs
             context['in']['dir_name'] = f'dir_name_{step}'
-            context['in']['dir_files'] = {
-                'source': [f"{step}/{output}" for output in wf_steps[step]['out']],
-                'pickValue': 'all_non_null',
-                'linkMerge': 'merge_flattened'
-            }
+            context['in']['dir_files']['source'] = [f"{step}/{output}" for output in wf_steps[step]['out']]
 
             # Update WorkflowOutputParameter
             wf_outputs[f'{step}_out_dir'] = {
@@ -167,7 +164,7 @@ class ResumePlotterConfig(ResumeConfig):
         inputs = {
             'raw_counts': {'var': "resume_raw", 'type': "File"},
             'norm_counts': {'var': "resume_norm", 'type': "File"},
-            'deg_tables': {'var': "resume_deg", 'type': "File[]"},
+            'dge_tables': {'var': "resume_dge", 'type': "File[]"},
             'len_dist': {'var': "resume_len_dist", 'type': "File[]"}
         }
 
@@ -189,6 +186,6 @@ class ResumePlotterConfig(ResumeConfig):
             self['resume_raw'] = self.cwl_file(glob(counter + "/*_feature_counts.csv")[0])
             self['resume_norm'] = self.cwl_file(glob(dge + "/*_norm_counts.csv")[0])
             self['resume_len_dist'] = list(map(self.cwl_file, glob(counter + "/*_nt_len_dist.csv")))
-            self['resume_deg'] = list(map(self.cwl_file, glob(dge + "/*_deseq_table.csv")))
+            self['resume_dge'] = list(map(self.cwl_file, glob(dge + "/*_deseq_table.csv")))
         except (FileNotFoundError, IndexError) as e:
             sys.exit("The following pipeline output could not be found:\n%s" % (e.filename,))

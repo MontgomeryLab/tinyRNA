@@ -187,10 +187,7 @@ steps:
 
       collapser_name: dir_name_collapser
       collapser_uniq: counter-prep/uniq_seqs
-      collapser_low:
-        # Due to scatter, this optional output is actually an array of nulls when not produced (can't use default)
-        source: counter-prep/uniq_seqs_low
-        pickValue: all_non_null
+      collapser_low: counter-prep/uniq_seqs_low
 
       bowtie_name: dir_name_bowtie
       bowtie_sam: counter-prep/aln_seqs
@@ -226,7 +223,7 @@ steps:
     in:
       raw_counts: counter/feature_counts
       norm_counts: dge/norm_counts
-      deg_tables: dge/comparisons
+      dge_tables: dge/comparisons
       len_dist: counter/other_counts
       style_sheet: plot_style_sheet
       out_prefix: run_name
