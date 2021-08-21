@@ -2,6 +2,6 @@
 *.swp
 *.html
 *.svg
-*.DS_Store
+.DS_Store
 .idea/*
 tests/run_dir/
