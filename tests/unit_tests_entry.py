@@ -9,12 +9,12 @@ from glob import glob
 
 import psutil
 
-import aquatx.entry as entry
+import tinyrna.entry as entry
 import tests.unit_test_helpers as helpers
 
 """
 
-Contains tests for aquatx.py, both from direct source-level calls
+Contains tests for entry.py, both from direct source-level calls
 as well as post-install testing of invocation by terminal. Each
 test covers both environments.
 
@@ -25,12 +25,12 @@ class test_entry(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         # Change CWD to test folder if test was invoked from project root (ex: by Travis)
-        if os.path.basename(os.getcwd()) == 'aquatx-srna':
+        if os.path.basename(os.getcwd()) == 'tinyrna':
             os.chdir(f".{os.sep}tests")
 
         # For pre-install tests
-        self.aquatx_cwl_path = '../aquatx/cwl'
-        self.aquatx_extras_path = '../aquatx/extras'
+        self.tinyrna_cwl_path = '../tinyrna/cwl'
+        self.tinyrna_extras_path = '../tinyrna/extras'
 
         # For post-install tests
         os.system("pip install -e ../ > /dev/null")
@@ -42,13 +42,13 @@ class test_entry(unittest.TestCase):
                 'files': set(),
                 'tools': {
                     'files': {
-                        'aquatx-deseq.cwl', 'aquatx-plot.cwl', 'bowtie.cwl', 'aquatx-collapse.cwl',
-                        'bowtie-build.cwl', 'aquatx-count.cwl', 'fastp.cwl', 'make-subdir.cwl'
+                        'tinyrna-deseq.cwl', 'tinyrna-plot.cwl', 'bowtie.cwl', 'tinyrna-collapse.cwl',
+                        'bowtie-build.cwl', 'tinyrna-count.cwl', 'fastp.cwl', 'make-subdir.cwl'
                     }
                 },
                 'workflows': {
                     'files': {
-                        'aquatx_wf.cwl', 'per-library.cwl', 'organize-outputs.cwl'
+                        'tinyrna_wf.cwl', 'per-library.cwl', 'organize-outputs.cwl'
                     }
                 }
             }
@@ -61,11 +61,11 @@ class test_entry(unittest.TestCase):
 
     def test_get_template(self):
         test_functions = [
-            helpers.LambdaCapture(lambda: entry.get_template(self.aquatx_extras_path)),  # The pre-install invocation
-            helpers.ShellCapture("aquatx get-template")                                   # The post-install command
+            helpers.LambdaCapture(lambda: entry.get_template(self.tinyrna_extras_path)),  # The pre-install invocation
+            helpers.ShellCapture("tinyrna get-template")                                   # The post-install command
         ]
         template_files = ['run_config_template.yml', 'samples.csv', 'features.csv',
-                          'paths.yml', 'aquatx-srna-light.mplstyle']
+                          'paths.yml', 'tinyrna-light.mplstyle']
 
         def dir_entry_ct():
             return len(os.listdir('.'))
@@ -101,8 +101,8 @@ class test_entry(unittest.TestCase):
         no_config = ['None', 'none']
         for config in no_config:
             test_functions = [
-                helpers.LambdaCapture(lambda: entry.setup_cwl(self.aquatx_cwl_path, config)),
-                helpers.ShellCapture(f"aquatx setup-cwl --config {config}")
+                helpers.LambdaCapture(lambda: entry.setup_cwl(self.tinyrna_cwl_path, config)),
+                helpers.ShellCapture(f"tinyrna setup-cwl --config {config}")
             ]
 
             for test_context in test_functions:
@@ -131,8 +131,8 @@ class test_entry(unittest.TestCase):
 
     def test_setup_cwl_withconfig(self):
         test_functions = [
-            helpers.LambdaCapture(lambda: entry.setup_cwl(self.aquatx_cwl_path, self.config_file)),
-            helpers.ShellCapture(f"aquatx setup-cwl --config {self.config_file}")
+            helpers.LambdaCapture(lambda: entry.setup_cwl(self.tinyrna_cwl_path, self.config_file)),
+            helpers.ShellCapture(f"tinyrna setup-cwl --config {self.config_file}")
         ]
         for test_context in test_functions:
             # So that we may reference the filename in the finally block below
@@ -169,7 +169,7 @@ class test_entry(unittest.TestCase):
 
     """
     Test that run invocation produces a cwltool subprocess. Since subprocess.run() 
-    is a blocking call, we need to call aquatx.run() in its own thread so we can 
+    is a blocking call, we need to call tinyrna.run() in its own thread so we can 
     measure its behavior. Otherwise we would have to wait for the whole pipeline 
     to finish before being able to measure it here, and by that time the relevant 
     subprocesses would have already exited. The post-install command accomplishes
@@ -179,8 +179,8 @@ class test_entry(unittest.TestCase):
     def test_run(self):
         # Non-blocking test functions (invocations continue to run in background until test_context is left)
         test_functions = [
-            helpers.LambdaCapture(lambda: entry.run(self.aquatx_cwl_path, self.config_file), blocking=False),
-            helpers.ShellCapture(f"aquatx run --config {self.config_file}", blocking=False)
+            helpers.LambdaCapture(lambda: entry.run(self.tinyrna_cwl_path, self.config_file), blocking=False),
+            helpers.ShellCapture(f"tinyrna run --config {self.config_file}", blocking=False)
         ]
 
         def get_children():
@@ -207,7 +207,7 @@ class test_entry(unittest.TestCase):
 
     """
     A very minimal test for the subprocess context manager that is used
-    to execute post-install aquatx commands via a shell.
+    to execute post-install tinyrna commands via a shell.
     """
 
     def test_ShellCapture_helper(self):
@@ -243,7 +243,7 @@ class test_entry(unittest.TestCase):
 
     """
     A very minimal test for the function context manager that is used
-    to execute pre-install invocations of aquatx Python functions
+    to execute pre-install invocations of tinyrna Python functions
     """
 
     def test_LambdaCapture_helper(self):

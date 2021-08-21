@@ -1,6 +1,6 @@
 import unittest
 
-from aquatx.srna.Configuration import Configuration
+from tinyrna.srna.Configuration import Configuration
 
 
 class MyTestCase(unittest.TestCase):
@@ -13,7 +13,7 @@ class MyTestCase(unittest.TestCase):
         result.write_processed_config()
 
     def test_rundir(self):
-        from aquatx.aquatx import run
+        from tinyrna.entry import run
 
         run("../aquatx/cwl", "./testdata/run_config_template.yml")
 

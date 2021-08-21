@@ -1,6 +1,6 @@
 @HD	VN:1.0	SO:unsorted
 @SQ	SN:I	LN:15072434
-@PG	ID:Bowtie	VN:1.2.3	CL:"/opt/anaconda3/envs/aquatx-srna/bin/bowtie-align-s --wrapper basic-0 -f -v 0 --all -t --no-unal --un Lib304_test_unaligned_seqs.fa --sam --threads 2 --seed 0 chr1 /private/tmp/docker_tmpssa633xy/stg3e0c7c81-2c32-42cc-bebd-cd96a6490227/Lib304_test_collapsed.fa Lib304_test_aligned_seqs.sam"
+@PG	ID:Bowtie	VN:1.2.3	CL:"/opt/anaconda3/envs/tinyrna/bin/bowtie-align-s --wrapper basic-0 -f -v 0 --all -t --no-unal --un Lib304_test_unaligned_seqs.fa --sam --threads 2 --seed 0 chr1 /private/tmp/docker_tmpssa633xy/stg3e0c7c81-2c32-42cc-bebd-cd96a6490227/Lib304_test_collapsed.fa Lib304_test_aligned_seqs.sam"
 0_count=1	0	I	5465965	255	20M	*	0	0	GCTACTTGAGCTCTCATTGT	IIIIIIIIIIIIIIIIIIII	XA:i:0	MD:Z:20	NM:i:0	XM:i:2
 1_count=1	0	I	12840321	255	23M	*	0	0	GTTGTAGCAATTCTATCTGCCTC	IIIIIIIIIIIIIIIIIIIIIII	XA:i:0	MD:Z:23	NM:i:0	XM:i:2
 18_count=1	0	I	10528611	255	21M	*	0	0	GTTTTCCAACTGGTTGAATTT	IIIIIIIIIIIIIIIIIIIII	XA:i:0	MD:Z:21	NM:i:0	XM:i:3

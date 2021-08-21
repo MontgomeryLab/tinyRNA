@@ -5,9 +5,9 @@ from unittest.mock import patch, mock_open, call
 from collections import defaultdict
 
 import tests.unit_test_helpers as helpers
-import aquatx.srna.counter.counter as counter
-from aquatx.srna.counter.hts_parsing import Alignment, read_SAM
-from aquatx.srna.util import from_here
+import tinyrna.srna.counter.counter as counter
+from tinyrna.srna.counter.hts_parsing import Alignment, read_SAM
+from tinyrna.srna.util import from_here
 
 resources = "./testdata/counter"
 
@@ -72,7 +72,7 @@ class CounterTests(unittest.TestCase):
         row = {'File': inp_file, 'Group': "test_group", 'Rep': "0"}
         csv = self.csv("samples.csv", [row.values()])
 
-        with patch('aquatx.srna.counter.counter.open', mock_open(read_data=csv)):
+        with patch('tinyrna.srna.counter.counter.open', mock_open(read_data=csv)):
             inputs = counter.load_samples(dummy_file)
 
         expected_lib_name = f"{row['Group']}_rep_{row['Rep']}"
@@ -85,7 +85,7 @@ class CounterTests(unittest.TestCase):
         row = {'File': "test.fastq", 'Group': "N/A", 'Rep': "N/A"}
         csv = self.csv("samples.csv", [row.values(), row.values()])
 
-        with patch('aquatx.srna.counter.counter.open', mock_open(read_data=csv)):
+        with patch('tinyrna.srna.counter.counter.open', mock_open(read_data=csv)):
             dummy_file = '/dev/null'
             inputs = counter.load_samples(dummy_file)
 
@@ -98,7 +98,7 @@ class CounterTests(unittest.TestCase):
         row = {'File': sam_filename, 'Group': "test_group", 'Rep': "0"}
         csv = self.csv("samples.csv", [row.values()])
 
-        with patch('aquatx.srna.counter.counter.open', mock_open(read_data=csv)):
+        with patch('tinyrna.srna.counter.counter.open', mock_open(read_data=csv)):
             dummy_file = '/dev/null'
             inputs = counter.load_samples(dummy_file)
 
@@ -116,7 +116,7 @@ class CounterTests(unittest.TestCase):
 
         expected_error = "The following file must be expressed as an absolute path:\n" + bad
 
-        with patch('aquatx.srna.counter.counter.open', mock_open(read_data=csv)):
+        with patch('tinyrna.srna.counter.counter.open', mock_open(read_data=csv)):
             with self.assertRaisesRegex(ValueError, expected_error):
                 dummy_file = '/dev/null'
                 counter.load_samples(dummy_file)
@@ -131,7 +131,7 @@ class CounterTests(unittest.TestCase):
         expected_error = r"The filenames defined in your Samples Sheet must have a \.fastq\(\.gz\) or \.sam extension\.\n" \
                          r"The following filename contained neither\:\n" + bad
 
-        with patch('aquatx.srna.counter.counter.open', mock_open(read_data=csv)):
+        with patch('tinyrna.srna.counter.counter.open', mock_open(read_data=csv)):
             with self.assertRaisesRegex(ValueError, expected_error):
                 dummy_file = '/dev/null'
                 counter.load_samples(dummy_file)
@@ -143,7 +143,7 @@ class CounterTests(unittest.TestCase):
         row = self.csv_feat_row_dict.values()
         csv = self.csv("features.csv", [row])
 
-        with patch('aquatx.srna.counter.counter.open', mock_open(read_data=csv)):
+        with patch('tinyrna.srna.counter.counter.open', mock_open(read_data=csv)):
             dummy_file = '/dev/null'
             ruleset, gff_files = counter.load_config(dummy_file)
 
@@ -162,7 +162,7 @@ class CounterTests(unittest.TestCase):
         row = self.csv_feat_row_dict.values()
         csv = self.csv("features.csv", [row, row])  # Duplicate rows
         
-        with patch('aquatx.srna.counter.counter.open', mock_open(read_data=csv)):
+        with patch('tinyrna.srna.counter.counter.open', mock_open(read_data=csv)):
             dummy_filename = '/dev/null'
             ruleset, gff_files = counter.load_config(dummy_filename)
 
@@ -181,7 +181,7 @@ class CounterTests(unittest.TestCase):
         row['nt5'] = 'U'
         csv = self.csv("features.csv", [row.values()])
 
-        with patch('aquatx.srna.counter.counter.open', mock_open(read_data=csv)):
+        with patch('tinyrna.srna.counter.counter.open', mock_open(read_data=csv)):
             dummy_file = '/dev/null'
             ruleset, _ = counter.load_config(dummy_file)
 
@@ -194,7 +194,7 @@ class CounterTests(unittest.TestCase):
         row['Name'] = 'ID'
         csv = self.csv("features.csv", [row.values()])
 
-        with patch('aquatx.srna.counter.counter.open', mock_open(read_data=csv)):
+        with patch('tinyrna.srna.counter.counter.open', mock_open(read_data=csv)):
             dummy_file = '/dev/null'
             _, gff_files = counter.load_config(dummy_file)
 
