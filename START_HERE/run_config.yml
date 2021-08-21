@@ -36,6 +36,9 @@ run_bowtie_build: True
 ##-- For best performance, this should be equal to your computer's processor core count --##
 threads: 4
 
+##-- Control the amount of information printed to terminal: debug, normal, quiet --##
+verbosity: normal
+
 ##-- (EXPERIMENTAL) If True: process each sample library in parallel --##
 run_parallel: False
 
@@ -209,6 +212,9 @@ shared_memory: False
 ##-- If True: save intermediate table for each library with all alignment information --##
 intermed_file: False
 
+##-- If True: produce diagnostic logs to indicate what was eliminated and why --##
+counter_diags: False
+
 
 ######--------------------------- DIFFERENTIAL EXPRESSION ---------------------------######
 #
@@ -217,8 +223,8 @@ intermed_file: False
 ######-------------------------------------------------------------------------------######
 
 
-##-- If True: produce principal component analysis plots for each sample comparison
-dge_pca_plots: true
+##-- If True: produce principal component analysis plots for each sample comparison --##
+dge_pca_plots: True
 
 
 ######-------------------------------- PLOTTING OPTIONS -----------------------------######
@@ -234,16 +240,19 @@ dge_pca_plots: true
 ######-------------------------------------------------------------------------------######
 
 
-# Enable plots by uncommenting (removing the '#') for the desired plot type
-# Disable plots by commenting (adding a '#') for the undesired plot type
+##-- Enable plots by uncommenting (removing the '#') for the desired plot type --##
+##-- Disable plots by commenting (adding a '#') for the undesired plot type --##
 plot_requests:
   - 'len_dist'
   - 'class_charts'
   - 'replicate_scatter'
   - 'sample_avg_scatter'
   - 'sample_avg_scatter_by_class'
-  - 'sample_avg_scatter_by_deg'
+  - 'sample_avg_scatter_by_dge'
   - 'sample_avg_scatter_by_both'
+
+##-- You may supply your own matplotlib style sheet to override defaults here --##
+plot_style_sheet: ~
 
 
 ######----------------------------- OUTPUT DIRECTORIES ------------------------------######

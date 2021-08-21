@@ -18,7 +18,7 @@ inputs:
       prefix: --outfile-prefix
     doc: The prefix for naming output files
 
-  pca_plots:
+  plots:
     type: boolean?
     inputBinding:
       prefix: --pca

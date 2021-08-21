@@ -128,8 +128,8 @@ class CounterTests(unittest.TestCase):
         row = [bad, "test_group", "0"]
         csv = self.csv("samples.csv", [row])
 
-        expected_error = "The filenames defined in your samples CSV file must have a .fastq or .sam extension.\n" \
-                         "The following filename contained neither:\n" + bad
+        expected_error = r"The filenames defined in your Samples Sheet must have a \.fastq\(\.gz\) or \.sam extension\.\n" \
+                         r"The following filename contained neither\:\n" + bad
 
         with patch('aquatx.srna.counter.counter.open', mock_open(read_data=csv)):
             with self.assertRaisesRegex(ValueError, expected_error):
@@ -231,14 +231,46 @@ class CounterTests(unittest.TestCase):
         self.assertEqual(matches_with_cooridnates[0][0], HTSeq.GenomicInterval("I", 9,10,'+'))
         self.assertEqual(matches_with_cooridnates[1][0], HTSeq.GenomicInterval("I", 10,15,'+'))
         self.assertEqual(matches_with_cooridnates[2][0], HTSeq.GenomicInterval("I", 15,20,'+'))
+        self.assertEqual(matches_with_cooridnates[2][0], HTSeq.GenomicInterval("I", 15,20,'+'))
+
+    """What happens if we invert the previous test's strand? Do intervals behave differently?"""
+
+    def test_HTSeq_antisense_iv_slice(self):
+        gas = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+        iva = HTSeq.GenomicInterval("I", 1, 10, '-')
+        ivb = HTSeq.GenomicInterval("I", 5, 15, '-')
+        ivc = HTSeq.GenomicInterval("I", 9, 20, '-')
+        ivd = HTSeq.GenomicInterval("I", 2, 4, "-")
+        gas[iva] += "TestA"
+        gas[ivb] += "TestB"
+        gas[ivd] += "TestD"
+
+        """
+        iva:  1 |--TestA--| 10
+        ivb:      5 |---TestB--| 15
+        ivc:          9 |-----------| 20
+        ivd:   2 |--| 4
+                         ^ Single base overlap: iva ∩ ivc
+        Expect:       9 |-|{B}-|-{}-| 20
+                     [9, 10)   [15,20)
+                         ^ {A ∩ B}
+        """
+
+        matches = list(gas[ivc].array[ivc.start:ivc.end].get_steps(values_only=True))
+        matches_with_cooridnates = list(gas[ivc].steps())
+        self.assertEqual(matches, [{"TestA", "TestB"}, {"TestB"}, set()])
+        self.assertEqual(matches_with_cooridnates[0][0], HTSeq.GenomicInterval("I", 9,10,'-'))
+        self.assertEqual(matches_with_cooridnates[1][0], HTSeq.GenomicInterval("I", 10,15,'-'))
+        self.assertEqual(matches_with_cooridnates[2][0], HTSeq.GenomicInterval("I", 15,20,'-'))
+        self.assertEqual(matches_with_cooridnates[2][0], HTSeq.GenomicInterval("I", 15,20,'-'))
 
     """Does assign_features return features that overlap the query interval by a single base?"""
 
     def test_assign_features_single_base_overlap(self):
-        features = HTSeq.GenomicArrayOfSets("auto", stranded=True)
-        iv_feat = HTSeq.GenomicInterval("I", 0, 2, "+")  # The "feature"
-        iv_olap = HTSeq.GenomicInterval("I", 1, 2, "+")  # A single-base overlapping feature
-        iv_none = HTSeq.GenomicInterval("I", 2, 3, "+")  # A non-overlapping interval
+        features = HTSeq.GenomicArrayOfSets("auto", stranded=False)
+        iv_feat = HTSeq.GenomicInterval("I", 0, 2, ".")  # The "feature"
+        iv_olap = HTSeq.GenomicInterval("I", 1, 2, ".")  # A single-base overlapping feature
+        iv_none = HTSeq.GenomicInterval("I", 2, 3, ".")  # A non-overlapping interval
 
         features[iv_feat] += 'The "feature"'
         features[iv_none] += "Non-overlapping feature"
@@ -255,9 +287,9 @@ class CounterTests(unittest.TestCase):
     """Does assign_features correctly handle alignments with zero feature matches?"""
 
     def test_assign_features_no_match(self):
-        features = HTSeq.GenomicArrayOfSets("auto", stranded=True)
-        iv_feat = HTSeq.GenomicInterval("I", 0, 2, "+")
-        iv_none = HTSeq.GenomicInterval("I", 2, 3, "+")
+        features = HTSeq.GenomicArrayOfSets("auto", stranded=False)
+        iv_feat = HTSeq.GenomicInterval("I", 0, 2, ".")
+        iv_none = HTSeq.GenomicInterval("I", 2, 3, ".")
 
         features[iv_feat] += "Should not match"
         none_alignment = Alignment(iv_none, "Non-overlap", b"A")
@@ -282,9 +314,9 @@ class CounterTests(unittest.TestCase):
 
         expected_calls_to_stats = [
             call(),  # Produced above when grabbing the return value of count_bundle
-            call(library, None, False),  # Call to constructor
+            call(library, None, False, False),  # Call to constructor
             call().count_bundle([alignment]),
-            call().count_bundle_alignments(bundle, alignment, {'mock_feat'}),
+            call().count_bundle_alignments(bundle, alignment, {'mock_feat'}, len({'mock_feat'})),
             call().finalize_bundle(bundle)
         ]
 

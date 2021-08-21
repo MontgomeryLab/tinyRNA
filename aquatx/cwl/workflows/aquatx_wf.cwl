@@ -80,12 +80,14 @@ inputs:
   gff_files: File[]?
   aligned_seqs: File[]?
   is_pipeline: boolean?
+  counter_diags: boolean?
 
   # deseq inputs
   dge_pca_plots: boolean?
 
   # plotter options
   plot_requests: string[]
+  plot_style_sheet: File?
 
   # output directory names
   dir_name_bt_build: string
@@ -170,41 +172,8 @@ steps:
       shared_memory: shared_memory
       seed: seed
     out: [fastq_clean, html_report_file, json_report_file, uniq_seqs, uniq_seqs_low, aln_seqs, unal_seqs, bowtie_log]
-
-  counter:
-    run: ../tools/aquatx-count.cwl
-    in:
-      aligned_seqs: counter-prep/aln_seqs
-      gff_files: gff_files
-      samples_csv: samples_csv
-      config_csv: features_csv
-      out_prefix: run_name
-      intermed_file: intermed_file
-      fastp_logs: counter-prep/json_report_file
-      collapsed_fa: counter-prep/uniq_seqs
-      is_pipeline: {default: true}
-    out: [feature_counts, other_counts, alignment_stats, summary_stats, intermed_out_files]
-
-  dge:
-    run: ../tools/aquatx-deseq.cwl
-    in:
-      input_file: counter/feature_counts
-      outfile_prefix: run_name
-      pca_plots: dge_pca_plots
-    out: [ norm_counts, comparisons, pca_plots ]
-
-  plotter:
-    run: ../tools/aquatx-plot.cwl
-    in:
-      raw_counts: counter/feature_counts
-      norm_counts: dge/norm_counts
-      deg_tables: dge/comparisons
-      len_dist: counter/other_counts
-      out_prefix: run_name
-      plot_requests: plot_requests
-    out: [ plots ]
-
-  subdirs:
+    
+  counter-prep-subdirs:
     run: organize-outputs.cwl
     in:
       bt_build_name: dir_name_bt_build
@@ -218,68 +187,99 @@ steps:
 
       collapser_name: dir_name_collapser
       collapser_uniq: counter-prep/uniq_seqs
-      collapser_low:
-        # This optional output is actually an array of nulls when not produced (can't use default)
-        source: counter-prep/uniq_seqs_low
-        pickValue: all_non_null
+      collapser_low: counter-prep/uniq_seqs_low
 
       bowtie_name: dir_name_bowtie
       bowtie_sam: counter-prep/aln_seqs
       bowtie_log: counter-prep/bowtie_log
-      bowtie_unal:
-        source: counter-prep/unal_seqs
-        default: []
+      bowtie_unal: counter-prep/unal_seqs
+    out: [ bt_build_dir, fastp_dir, collapser_dir, bowtie_dir ]
 
+  counter:
+    run: ../tools/aquatx-count.cwl
+    in:
+      aligned_seqs: counter-prep/aln_seqs
+      gff_files: gff_files
+      samples_csv: samples_csv
+      config_csv: features_csv
+      out_prefix: run_name
+      intermed_file: intermed_file
+      fastp_logs: counter-prep/json_report_file
+      collapsed_fa: counter-prep/uniq_seqs
+      is_pipeline: {default: true}
+      diagnostics: counter_diags
+    out: [feature_counts, other_counts, alignment_stats, summary_stats, intermed_out_files, alignment_diags, selection_diags]
+
+  dge:
+    run: ../tools/aquatx-deseq.cwl
+    in:
+      input_file: counter/feature_counts
+      outfile_prefix: run_name
+      plots: dge_pca_plots
+    out: [ norm_counts, comparisons, pca_plots ]
+
+  plotter:
+    run: ../tools/aquatx-plot.cwl
+    in:
+      raw_counts: counter/feature_counts
+      norm_counts: dge/norm_counts
+      dge_tables: dge/comparisons
+      len_dist: counter/other_counts
+      style_sheet: plot_style_sheet
+      out_prefix: run_name
+      plot_requests: plot_requests
+    out: [ plots ]
+
+  post-counter-subdirs:
+    run: organize-outputs.cwl
+    in:
       counter_name: dir_name_counter
       counter_features: counter/feature_counts
       counter_other: counter/other_counts
       counter_alignment_stats: counter/alignment_stats
       counter_summary_stats: counter/summary_stats
-      counter_intermed:
-        source: counter/intermed_out_files
-        default: []
+      counter_intermed: counter/intermed_out_files
+      counter_aln_diag: counter/alignment_diags
+      counter_selection_diag: counter/selection_diags
+      features_csv: features_csv
 
       dge_name: dir_name_dge
       dge_norm: dge/norm_counts
       dge_comparisons: dge/comparisons
-      dge_pca:
-        source: dge/pca_plots
-        default: []
+      dge_pca: dge/pca_plots
 
       plotter_name: dir_name_plotter
-      plotter_plots:
-        source: plotter/plots
-        default: []
-    out: [ bt_build_dir, fastp_dir, collapser_dir, bowtie_dir, counter_dir, dge_dir, plotter_dir ]
+      plotter_plots: plotter/plots
+    out: [ counter_dir, dge_dir, plotter_dir ]
 
 outputs:
 
   # Subdirectory outputs
   bt_build_out_dir:
     type: Directory?
-    outputSource: subdirs/bt_build_dir
+    outputSource: counter-prep-subdirs/bt_build_dir
 
   fastp_out_dir:
-    type: Directory
-    outputSource: subdirs/fastp_dir
+    type: Directory?
+    outputSource: counter-prep-subdirs/fastp_dir
 
   collapser_out_dir:
-    type: Directory
-    outputSource: subdirs/collapser_dir
+    type: Directory?
+    outputSource: counter-prep-subdirs/collapser_dir
 
   bowtie_out_dir:
-    type: Directory
-    outputSource: subdirs/bowtie_dir
+    type: Directory?
+    outputSource: counter-prep-subdirs/bowtie_dir
 
   counter_out_dir:
-    type: Directory
-    outputSource: subdirs/counter_dir
+    type: Directory?
+    outputSource: post-counter-subdirs/counter_dir
 
   dge_out_dir:
-    type: Directory
-    outputSource: subdirs/dge_dir
+    type: Directory?
+    outputSource: post-counter-subdirs/dge_dir
 
-  plotter_out_dir:
-    type: Directory
-    outputSource: plotter/plots
+  plotter_dir:
+    type: Directory?
+    outputSource: post-counter-subdirs/plotter_dir
 

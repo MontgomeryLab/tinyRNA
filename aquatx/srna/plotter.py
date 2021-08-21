@@ -16,6 +16,7 @@ from collections import defaultdict
 from typing import Optional, Dict, Union
 from pkg_resources import resource_filename
 
+from aquatx.srna.Configuration import timestamp_format
 from aquatx.srna.plotterlib import plotterlib as lib
 from aquatx.srna.util import report_execution_time
 
@@ -25,7 +26,7 @@ def get_args():
 
     parser = argparse.ArgumentParser()
     counter_files = parser.add_argument_group("Input files produced by Counter")
-    diffexp_files = parser.add_argument_group("Input files produced by DEG")
+    diffexp_files = parser.add_argument_group("Input files produced by DGE")
 
     # Single file inputs
     counter_files.add_argument('-rc', '--raw-counts', metavar='RAW_COUNTS',
@@ -34,7 +35,7 @@ def get_args():
                                help='The ...norm_counts.csv file.')
 
     # Multi-file inputs
-    diffexp_files.add_argument('-deg', '--deg-tables', metavar='DEG_COMPARISONS ...', nargs='+',
+    diffexp_files.add_argument('-dge', '--dge-tables', metavar='DGE_COMPARISONS ...', nargs='+',
                                help='The ...cond1...cond2...deseq.csv files, separated by a space.')
     counter_files.add_argument('-len', '--len-dist', metavar='5P_LEN_DISTS ...', nargs='+',
                                help='The ...nt_len_dist.csv files, separated by a space.')
@@ -54,7 +55,7 @@ def get_args():
                                 'averaged by replicate. Uses the normalized counts for averaging.\n'
                              'sample_avg_scatter_by_class: A scatter plot comparing all sample groups,'
                                 'with different classes highlighted.\n'
-                             'sample_avg_scatter_by_deg: A scatter plot comparing all sample groups,'
+                             'sample_avg_scatter_by_dge: A scatter plot comparing all sample groups,'
                                 'with significantly different (padj<0.05) genes highlighted.\n'
                              'sample_avg_scatter_by_both: A scatter plot comparing all sample groups,'
                                 'with classes and significantly different genes highlighted')
@@ -95,11 +96,11 @@ def len_dist_plots(files_list: list, out_prefix:str, **kwargs):
 
         # Parse the "sample_rep_N" string from the input filename to avoid duplicate out_prefix's in the basename
         basename = os.path.splitext(os.path.basename(size_file))[0]
-        date_prefix_pos = re.search(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_", basename).span()
+        date_prefix_pos = re.search(timestamp_format, basename).span()
 
         if date_prefix_pos is not None:
             # File is a pipeline product
-            begin = date_prefix_pos[1]
+            begin = date_prefix_pos[1] + 1
             end = basename.rfind("_nt_len_dist")
             condition_and_rep = basename[begin:end]
         else:
@@ -192,12 +193,12 @@ def scatter_replicates(count_df: pd.DataFrame, output_prefix: str, output_postfi
             rscat.figure.savefig(pdf_name, bbox_inches='tight')
 
 
-def load_deg_tables(comparisons: list) -> pd.DataFrame:
+def load_dge_tables(comparisons: list) -> pd.DataFrame:
     """Creates a new dataframe containing all features and padj values for each comparison
-    from a list of DEG tables.
+    from a list of DGE tables.
 
     Args:
-        comparisons: DEG tables (files) produced by DESeq2
+        comparisons: DGE tables (files) produced by DESeq2
 
     Returns:
         de_table: A single table of padj values per feature/comparison
@@ -205,17 +206,17 @@ def load_deg_tables(comparisons: list) -> pd.DataFrame:
 
     de_table = pd.DataFrame()
 
-    for degfile in comparisons:
+    for dgefile in comparisons:
         # Negative indexes are used since prefixes are allowed to contain underscores
-        name_split = os.path.basename(degfile).split('_')
+        name_split = os.path.basename(dgefile).split('_')
         comparison_name = name_split[-5] + "_vs_" + name_split[-3]
 
-        de_table[comparison_name] = pd.read_csv(degfile, index_col=0)['padj']
+        de_table[comparison_name] = pd.read_csv(dgefile, index_col=0)['padj']
     
     return de_table
 
 
-def scatter_samples(count_df, output_prefix, classes=None, degs=None, unknown=False, pval=0.05):
+def scatter_samples(count_df, output_prefix, classes=None, dges=None, show_unknown=False, pval=0.05):
     """Creates PDFs of all pairwise comparison scatter plots from a count table.
     Can highlight classes and/or differentially expressed genes as different colors.
 
@@ -223,66 +224,66 @@ def scatter_samples(count_df, output_prefix, classes=None, degs=None, unknown=Fa
         count_df: A dataframe of counts per feature
         output_prefix: A string to use as a prefix for saving files
         classes: A dataframe containing class(es) per feature
-        degs: A dataframe of differential gene table output to highlight
-        unknown: Boolean indicating if "unknown" classes should be highlighted
+        dges: A dataframe of differential gene table output to highlight
+        show_unknown: Boolean indicating if "unknown" classes should be highlighted
     """
     samples = get_pairs(list(count_df.columns))
 
-    if (classes is not None) and (degs is not None):
+    if (classes is not None) and (dges is not None):
         uniq_classes = list(pd.unique(classes))
         
-        if not unknown:
+        if not show_unknown and 'unknown' in uniq_classes:
             uniq_classes.remove('unknown')
         
-        for pair in degs:
+        for pair in dges:
             p1, p2 = pair.split("_vs_")
-            deg_list = list(degs.index[degs[pair] < pval])
-            class_degs = classes.loc[deg_list]
+            dge_list = list(dges.index[dges[pair] < pval])
+            class_dges = classes.loc[dge_list]
 
             grp_args = []
             for cls in uniq_classes:
-                grp_args.append(list(class_degs.index[class_degs == cls]))
+                grp_args.append(list(class_dges.index[class_dges == cls]))
 
             labels = ['p > %6.2f' % pval] + uniq_classes
             sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2],
                                           *grp_args, log_norm=True, labels=labels) 
-            sscat.set_title(pair)
+            sscat.set_title('%s vs %s' % (p1, p2))
             sscat.set_xlabel(p1)
             sscat.set_ylabel(p2)
-            pdf_name = '_'.join([output_prefix, pair, 'scatter_by_deg_class.pdf'])
+            pdf_name = '_'.join([output_prefix, pair, 'scatter_by_dge_class.pdf'])
             sscat.figure.savefig(pdf_name, bbox_inches='tight')
 
     elif classes is not None:
         uniq_classes = list(pd.unique(classes))
         
-        if not unknown:
+        if not show_unknown and 'unknown' in uniq_classes:
             uniq_classes.remove('unknown')
         
         grp_args = []
         for cls in uniq_classes:
             grp_args.append(list(classes.index[classes == cls]))
     
-        for pair in samples:
-            sscat = aqplt.scatter_grouped(count_df.loc[:,pair[0]], count_df.loc[:,pair[1]],
-                                          *grp_args, log_norm=True, labels=uniq_classes) 
-            sscat.set_title('%s vs %s' % (pair[0], pair[1]))
-            sscat.set_xlabel(pair[0])
-            sscat.set_ylabel(pair[1])
-            pdf_name = '_'.join([output_prefix, pair[0], 'vs', pair[1], 'scatter_by_class.pdf'])
+        for p1, p2 in samples:
+            sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2],
+                                          *grp_args, log_norm=True, labels=uniq_classes)
+            sscat.set_title('%s vs %s' % (p1, p2))
+            sscat.set_xlabel(p1)
+            sscat.set_ylabel(p2)
+            pdf_name = '_'.join([output_prefix, p1, 'vs', p2, 'scatter_by_class.pdf'])
             sscat.figure.savefig(pdf_name, bbox_inches='tight')
     
-    elif degs is not None:
-        for pair in degs:
-            grp_args = list(degs.index[degs[pair] < pval])
+    elif dges is not None:
+        for pair in dges:
+            grp_args = list(dges.index[dges[pair] < pval])
             p1, p2 = pair.split("_vs_")
 
             labels = ['p < %d' % pval]
             sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2],
-                                          *grp_args, log_norm=True, labels=labels) 
-            sscat.set_title(pair)
+                                          grp_args, log_norm=True, labels=labels)
+            sscat.set_title('%s vs %s' % (p1, p2))
             sscat.set_xlabel(p1)
             sscat.set_ylabel(p2)
-            pdf_name = '_'.join([output_prefix, pair, 'scatter_by_deg.pdf'])
+            pdf_name = '_'.join([output_prefix, pair, 'scatter_by_dge.pdf'])
             sscat.figure.savefig(pdf_name, bbox_inches='tight')
     
     else:
@@ -369,18 +370,14 @@ def get_class_counts(counts_df: pd.DataFrame) -> pd.DataFrame:
         class_counts: A DataFrame with an index of classes and count entries, per comparison
     """
 
-    # 1. Group and sum by Feature Class. This makes the next step less expensive.
-    grouped = counts_df.groupby("Feature.Class").sum()
+    # 1. Group by Feature Class. Class "lists" are strings. Normalize their counts by the number of commas.
+    grouped = counts_df.groupby("Feature.Class").apply(lambda grp: grp.sum() / (grp.name.count(',') + 1))
 
-    # 2. Groups may also contain list (string) entries which need to be flattened for proper attribution.
-    grouped_flat_index = [row._replace(Index=split.strip()) if ',' in row[0] else row
-                          for row in grouped.itertuples()
-                          for split in row[0].split(',')]
+    # 2. Convert class "list" strings to true lists since we no longer need a hashable index
+    grouped.index = grouped.index.map(lambda x: [cls.strip() for cls in x.split(',')])
 
-    # 3. Finally, group and sum again now that class lists have been flattened.
-    class_counts = pd.DataFrame(grouped_flat_index, columns=counts_df.columns).groupby("Feature.Class").sum()
-
-    return class_counts
+    # 3. Finally, flatten class lists and add the normalized counts to their groups
+    return grouped.reset_index().explode("Feature.Class").groupby("Feature.Class").sum()
 
 
 def validate_inputs(args: argparse.Namespace) -> None:
@@ -398,13 +395,13 @@ def validate_inputs(args: argparse.Namespace) -> None:
         'replicate_scatter': any([args.norm_counts, args.raw_counts]),
         'sample_avg_scatter': all([args.norm_counts]),
         'sample_avg_scatter_by_class': all([args.norm_counts]),
-        'sample_avg_scatter_by_deg': all([args.norm_counts, args.deg_tables]),
-        'sample_avg_scatter_by_both': all([args.norm_counts, args.deg_tables]),
+        'sample_avg_scatter_by_dge': all([args.norm_counts, args.dge_tables]),
+        'sample_avg_scatter_by_both': all([args.norm_counts, args.dge_tables]),
     }
 
     nc_file = "normalized count file (-nc/--norm-counts)"
     rc_file = "raw count file (-rc/--raw-counts)"
-    deg_files = "differential expression tables (-deg/--deg-tables)"
+    dge_files = "differential expression tables (-dge/--dge-tables)"
 
     error_message = {
         'len_dist': "5' nucleotide/length tables (-len/--len-dist) are required for ",
@@ -412,11 +409,15 @@ def validate_inputs(args: argparse.Namespace) -> None:
         'replicate_scatter': f"A {nc_file} or a {rc_file} is required for ",
         'sample_avg_scatter': f"A {nc_file} is required for ",
         'sample_avg_scatter_by_class': f"A {nc_file} is required for ",
-        'sample_avg_scatter_by_deg': f"A {nc_file} and {deg_files} are required for ",
-        'sample_avg_scatter_by_both': f"A {nc_file} and {deg_files} are required for ",
+        'sample_avg_scatter_by_dge': f"A {nc_file} and {dge_files} are required for ",
+        'sample_avg_scatter_by_both': f"A {nc_file} and {dge_files} are required for ",
     }
 
     for plot_name in args.plots.copy():
+        if plot_name not in dependencies_satisfied_for:
+            print(f"Skipping unrecognized plot type: {plot_name}")
+            args.plots.remove(plot_name)
+            continue
         if not dependencies_satisfied_for[plot_name]:
             print(error_message[plot_name] + plot_name)
             args.plots.remove(plot_name)
@@ -438,7 +439,7 @@ def setup(args: argparse.Namespace) -> dict:
         'replicate_scatter': ["raw_count_df", "norm_count_df", "sample_rep_dict"],
         'sample_avg_scatter': ["norm_count_df", "sample_rep_dict", "norm_count_avg_df"],
         'sample_avg_scatter_by_class': ["norm_count_df", "sample_rep_dict", "norm_count_avg_df", "feat_classes"],
-        'sample_avg_scatter_by_deg': ["norm_count_df", "sample_rep_dict", "norm_count_avg_df", "de_table"],
+        'sample_avg_scatter_by_dge': ["norm_count_df", "sample_rep_dict", "norm_count_avg_df", "de_table"],
         'sample_avg_scatter_by_both': ["norm_count_df", "sample_rep_dict", "norm_count_avg_df", "feat_classes", "de_table"],
     }
 
@@ -446,7 +447,7 @@ def setup(args: argparse.Namespace) -> dict:
     input_getters = {
         'raw_count_df': lambda: load_raw_counts(args.raw_counts),
         'norm_count_df': lambda: load_norm_counts(args.norm_counts),
-        'de_table': lambda: load_deg_tables(args.deg_tables),
+        'de_table': lambda: load_dge_tables(args.dge_tables),
         'sample_rep_dict': lambda x="norm" if args.norm_counts else "raw": get_sample_rep_dict(relevant_vars[f"{x}_count_df"]),
         'norm_count_avg_df': lambda: get_sample_averages(relevant_vars["norm_count_df"], relevant_vars["sample_rep_dict"]),
         'feat_classes': lambda: get_flat_classes(relevant_vars["norm_count_df"]),
@@ -461,7 +462,7 @@ def setup(args: argparse.Namespace) -> dict:
     return relevant_vars
 
 
-@report_execution_time("Main routine")
+@report_execution_time("Plotter runtime")
 def main():
     """
     Main routine
@@ -473,6 +474,7 @@ def main():
     global aqplt
     aqplt = lib(args.style_sheet)
 
+    # Assemble work units for multiprocessing pool
     itinerary = []
 
     # generate plots requested
@@ -490,10 +492,10 @@ def main():
             itinerary.append((scatter_samples, (inputs["norm_count_avg_df"], args.out_prefix), {}))
         elif plot == 'sample_avg_scatter_by_class':
             itinerary.append((scatter_samples, (inputs["norm_count_avg_df"], args.out_prefix), {"classes": inputs["feat_classes"]}))
-        elif plot == 'sample_avg_scatter_by_deg':
-            itinerary.append((scatter_samples, (inputs["norm_count_avg_df"], args.out_prefix), {"degs": inputs["de_table"]}))
+        elif plot == 'sample_avg_scatter_by_dge':
+            itinerary.append((scatter_samples, (inputs["norm_count_avg_df"], args.out_prefix), {"dges": inputs["de_table"]}))
         elif plot == 'sample_avg_scatter_by_both':
-            itinerary.append((scatter_samples, (inputs["norm_count_avg_df"], args.out_prefix), {"classes": inputs["feat_classes"], "degs": inputs["de_table"]}))
+            itinerary.append((scatter_samples, (inputs["norm_count_avg_df"], args.out_prefix), {"classes": inputs["feat_classes"], "dges": inputs["de_table"]}))
         else:
             print('Plot type %s not recognized, please check the -p/--plot arguments' % plot)
 

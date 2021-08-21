@@ -6,15 +6,24 @@ You may override these styles by obtaining a copy of the style sheet (aquatx get
 modifying it, and passing it to aquatx-plot via the -s/--style-sheet argument. If
 using this module directly, it may be passed at construction time.
 """
-
-import itertools
-from typing import Union
-
-import numpy as np
 import pandas as pd
+import numpy as np
+import itertools
+import locale
+import os
+
+# cwltool appears to unset all environment variables including those related to locale
+# This leads to warnings from plt's FontConfig manager, but only for pipeline/cwl runs
+curr_locale = locale.getlocale()
+if curr_locale[0] is None:
+    # Default locale otherwise unset
+    os.environ['LC_CTYPE'] = 'en_US.UTF-8'
+
 import matplotlib as mpl
+import matplotlib.ticker as tix
 import matplotlib.pyplot as plt
-import warnings; warnings.filterwarnings(action='once')
+
+from typing import Union
 
 
 class plotterlib:
@@ -86,7 +95,7 @@ class plotterlib:
         class_prop = class_s / class_s.sum()
 
         # Create the plot
-        cpie = class_prop.plot(kind='pie', **kwargs)
+        cpie = class_prop.plot(kind='pie', normalize=True, **kwargs)
         cpie.legend(loc='best', bbox_to_anchor=(1, 0.5), fontsize=10, labels=class_prop.index)
         cpie.set_aspect("equal")
         cpie.set_ylabel('')
@@ -155,15 +164,16 @@ class plotterlib:
             lim_min: The minimum value to set axis limits
             lim_max: The maximum value to set axis limits
         """
-        if np.min(np.min(df)) == -np.inf:
+
+        if np.min(df) == -np.inf:
             df_min = 0
         else:
-            df_min = np.min(np.min(df))
+            df_min = np.min(df)
 
-        if np.max(np.max(df)) == np.inf:
-            df_max = np.max(np.max(df[~(df == np.inf)]))
+        if np.max(df) == np.inf:
+            df_max = np.max(df[~(df == np.inf)])
         else:
-            df_max = np.max(np.max(df))
+            df_max = np.max(df)
 
         intv = (df_max - df_min) / 12
 
@@ -172,7 +182,7 @@ class plotterlib:
 
         return lim_min, lim_max
 
-    def scatter_simple(self, count_x: pd.DataFrame, count_y: pd.DataFrame, log_norm=False, **kwargs) -> plt.Axes:
+    def scatter_simple(self, count_x: pd.DataFrame, count_y: pd.DataFrame, log_norm=False, lim=None, **kwargs) -> plt.Axes:
         """Creates a simple scatter plot of counts.
 
         Args:
@@ -192,9 +202,11 @@ class plotterlib:
         if log_norm:
             count_x = count_x.apply(np.log2)
             count_y = count_y.apply(np.log2)
-            sscat_lims = self.scatter_range(pd.concat([count_x, count_y]))
-            ax.set_xlim(sscat_lims)
-            ax.set_ylim(sscat_lims)
+            # Shouldn't this be done for the entire plotted dataset and not for the initial omitted subset?
+            sscat_lims = lim if lim is not None else self.scatter_range(pd.concat([count_x, count_y]))
+            if not np.isnan(sscat_lims).any():
+                ax.set_xlim(sscat_lims)
+                ax.set_ylim(sscat_lims)
             ax.scatter(count_x, count_y, **kwargs)
 
             oldticks = ax.get_xticks()
@@ -204,6 +216,11 @@ class plotterlib:
                 newticks[i,:] = np.arange(2**oldticks[i-1], 2**oldticks[i], (2**oldticks[i] - 2**oldticks[i-1])/8)
 
             newticks = np.sort(newticks[2:,:].flatten())
+
+            # These lines have been added to address the FixedLocator warning
+            ax.xaxis.set_major_locator(tix.FixedLocator(oldticks))
+            ax.yaxis.set_major_locator(tix.FixedLocator(oldticks))
+
             ax.set_xticks(np.log2(newticks), minor=True)
             ax.set_xticklabels(np.round(2**oldticks))
             ax.set_yticks(np.log2(newticks), minor=True)
@@ -231,13 +248,9 @@ class plotterlib:
             gscat: A scatter plot containing groups highlighted with different colors
         """
 
-        # Subset the base points to avoid overplotting
+        # Subset counts not in *args (for example, points with p-val above threshold)
         count_x_base = count_x.drop(list(itertools.chain(*args)))
         count_y_base = count_y.drop(list(itertools.chain(*args)))
-
-        # Create a base plot using counts not in *args
-        colors = iter(kwargs.get('colors', plt.rcParams['axes.prop_cycle'].by_key()['color']))
-        gscat = self.scatter_simple(count_x_base, count_y_base, log_norm=log_norm, color='#888888', marker='s', alpha=0.3, s=50, edgecolors='none', **kwargs)
 
         if log_norm:
             count_x = count_x.apply(np.log2).replace(-np.inf, 0)
@@ -246,9 +259,23 @@ class plotterlib:
         if labels is None:
             labels = list(range(len(args)))
 
+        colors = iter(kwargs.get('colors', plt.rcParams['axes.prop_cycle'].by_key()['color']))
+        ax_lim = self.scatter_range(pd.concat([count_x, count_y]))
+        argsit = iter(args)
+
+        if any([len(base_axis) == 0 for base_axis in [count_x_base, count_y_base]]):
+            group = next(argsit)
+            gscat = self.scatter_simple(count_x.loc[group], count_y.loc[group], log_norm=log_norm, color=next(colors),
+                                        marker='.', alpha=0.3, s=50, edgecolors='none', lim=ax_lim, **kwargs)
+        else:
+            # Create a base plot using counts not in *args
+            gscat = self.scatter_simple(count_x_base, count_y_base, log_norm=log_norm, color='#888888', marker='.',
+                                        alpha=0.3, s=50, edgecolors='none', lim=ax_lim, **kwargs)
+
         # Add points for each *args
-        for group in args:
-            gscat.scatter(count_x.loc[group], count_y.loc[group], color=next(colors), marker='s', alpha=0.9, s=50, edgecolors='none', **kwargs)
+        for group in argsit:
+            gscat.scatter(count_x.loc[group], count_y.loc[group], color=next(colors), marker='.',
+                          alpha=0.9, s=50, edgecolors='none', **kwargs)
 
         gscat.legend(labels=labels)
 

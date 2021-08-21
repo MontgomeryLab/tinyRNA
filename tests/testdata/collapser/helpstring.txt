@@ -16,7 +16,7 @@ optional arguments:
 
 required arguments:
   -i FASTQFILE, --input-file FASTQFILE
-                        The input fastq file to collapse
+                        The input fastq(.gz) file to collapse
   -o OUTPREFIX, --out-prefix OUTPREFIX
                         The prefix for output files {prefix}_collapsed.fa and,
                         if counts fall below threshold,

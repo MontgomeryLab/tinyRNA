@@ -155,18 +155,6 @@ class MyTestCase(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, expected_err):
             build_reference_tables(feature_source, selection_rules)
 
-    """Does build_reference_tables raise ValueError when it encounters a GFF entry without strand information?"""
-
-    def test_ref_tables_unstranded(self):
-        gff_file = f"{resources}/unstranded.gff3"
-        feature_source = {gff_file: ["ID"]}
-        selection_rules = []
-
-        expected_err = f"Feature Gene:WBGene00023193 in {gff_file} has no strand information."
-
-        with self.assertRaisesRegex(ValueError, expected_err):
-            build_reference_tables(feature_source, selection_rules)
-
     """Does build_reference_tables properly concatenate aliases if there is more than one alias for a feature?"""
     """Does build_reference_tables properly concatenate aliases when Name Attribute refers to a list-type alias?"""
     # 2 for 1!

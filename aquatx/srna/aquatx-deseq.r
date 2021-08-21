@@ -1,4 +1,4 @@
-#!/usr/bin/env Rscript --vanilla
+#!/usr/bin/env Rscript
 
 #### ---- Get the command line arguments ---- ####
 
@@ -65,14 +65,14 @@ classes <- data.frame(counts[2])
 counts <- data.frame(sapply(counts[3:length(counts)], as.integer), row.names = rownames(counts))
 # Create a data frame matching the file, name, condition
 samples <- colnames(counts)
-condition <- rep('none', length(samples))
+sampleCondition <- rep('none', length(samples))
 for (i in 1:length(samples)){
   sample <- as.character(samples[i])
-  condition[i] <- strsplit(sample, '_rep_')[[1]][1]
+  sampleCondition[i] <- strsplit(sample, '_rep_')[[1]][1]
 }
 
 # Create the deseqdataset
-sample_table <- data.frame(row.names=samples, condition=condition)
+sample_table <- data.frame(row.names=samples, condition=factor(sampleCondition))
 deseq_ds <- DESeqDataSetFromMatrix(countData = counts, colData = sample_table, design = ~ condition)
 
 #### ---- Run DESeq2 & write outputs ---- ####
@@ -85,7 +85,7 @@ deseq_counts <- df_with_classes(counts(deseq_run, normalized=TRUE))
 write.csv(deseq_counts, paste(out_pref, "norm_counts.csv", sep="_"))
 
 # Create & retrieve all possible comparisons
-all_comparisons <- t(combn(unique(condition), 2))
+all_comparisons <- t(combn(unique(sampleCondition), 2))
 for (i in 1:nrow(all_comparisons)){
   comparison <- all_comparisons[i,]
 

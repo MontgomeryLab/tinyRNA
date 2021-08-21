@@ -25,21 +25,25 @@ of the run you wish to resume. The config file you supply must be the processed
 Run Configuration file within the Run Directory.
 """
 
-import cwltool.executors
 import cwltool.factory
 import cwltool.secrets
+import coloredlogs
 import subprocess
+import functools
+import logging
 import shutil
 import sys
 import os
 
-from cwltool.context import LoadingContext
+from cwltool.context import LoadingContext, RuntimeContext
+from cwltool.executors import SingleJobExecutor, MultithreadedJobExecutor
 from cwltool.utils import DEFAULT_TMP_PREFIX
 from pkg_resources import resource_filename
 from argparse import ArgumentParser
 
 from aquatx.srna.Configuration import Configuration, ConfigBase
 from aquatx.srna.resume import ResumeCounterConfig, ResumePlotterConfig
+from aquatx.srna.util import report_execution_time
 
 
 def get_args():
@@ -70,7 +74,8 @@ def get_args():
     return parser.parse_args()
 
 
-def run(tinyrna_cwl_path: str, config_file: str) -> None:
+@report_execution_time("Pipeline runtime")
+def run(aquatx_cwl_path: str, config_file: str) -> None:
     """Processes the provided config file and executes the workflow it defines
 
     The provided configuration file will be processed to reflect the contents of all
@@ -90,24 +95,34 @@ def run(tinyrna_cwl_path: str, config_file: str) -> None:
     # First get the configuration file set up for this run
     config_object = Configuration(config_file)
     run_directory = config_object.create_run_directory()
-    cwl_conf_file = config_object.write_processed_config()
+    cwl_conf_file = config_object.save_run_profile()
 
-    workflow = f"{tinyrna_cwl_path}/workflows/aquatx_wf.cwl"
+    workflow = f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl"
     parallel = config_object['run_parallel']
-    debug = False
+    loudness = config_object['verbosity']
 
     if config_object['run_native']:  # experimental
         # Execute the CWL runner via native Python
-        run_native(config_object, workflow, run_directory, debug=debug, parallel=parallel)
+        return_code = run_native(config_object, workflow, run_directory, verbosity=loudness)
     else:
         if config_object['run_parallel']:
             print("WARNING: parallel execution with cwltool is an experimental feature")
 
         # Use the cwltool CWL runner via command line
-        run_cwltool_subprocess(cwl_conf_file, workflow, run_directory=run_directory, parallel=parallel, debug=debug)
+        return_code = run_cwltool_subprocess(
+            cwl_conf_file, workflow,
+            run_directory=run_directory,
+            parallel=parallel, verbosity=loudness)
+
+    # If the workflow completed without errors, we want to update
+    # the Paths Sheet to point to the new bowtie index prefix
+    if config_object['run_bowtie_build'] and return_code == 0:
+        paths_sheet_filename = config_object.paths.inf
+        config_object.paths.write_processed_config(paths_sheet_filename)
 
 
-def resume(tinyrna_cwl_path: str, config_file: str, step: str) -> None:
+@report_execution_time("Pipeline resume runtime")
+def resume(aquatx_cwl_path: str, config_file: str, step: str) -> None:
     """Resumes pipeline execution at either the Counter or Plotter step
 
     The user must invoke this from the RUN DIRECTORY for which they wish to
@@ -128,31 +143,34 @@ def resume(tinyrna_cwl_path: str, config_file: str, step: str) -> None:
 
     """
 
+    # Maps step to Configuration class
     entry_config = {
         "Counter": ResumeCounterConfig,
         "Plotter": ResumePlotterConfig
     }
 
     print(f"Resuming pipeline execution at the {step} step...")
-    config = entry_config[step](config_file, f"{tinyrna_cwl_path}/workflows/aquatx_wf.cwl")
-    resume_wf = f"{tinyrna_cwl_path}/workflows/aquatx-resume.cwl"
+
+    # Make appropriate config and workflow for this step; write modified workflow to disk
+    config = entry_config[step](config_file, f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl")
+    resume_wf = f"{aquatx_cwl_path}/workflows/aquatx-resume.cwl"
     config.write_workflow(resume_wf)
 
-    debug = False
     if config['run_native']:
-        # Don't need to write processed config, pass in directly
-        run_native(config, resume_wf, run_directory=".", debug=debug)
+        # We can pass our config object directly without writing to disk first
+        run_native(config, resume_wf, verbosity=config['verbosity'])
     else:
+        # Processed Run Config must be written to disk first
         resume_conf_file = "resume_" + os.path.basename(config_file)
         config.write_processed_config(resume_conf_file)
-        run_cwltool_subprocess(resume_conf_file, resume_wf, debug=debug)
+        run_cwltool_subprocess(resume_conf_file, resume_wf, verbosity=config['verbosity'])
 
     if os.path.isfile(resume_wf):
         # We don't want the generated workflow to be returned by a call to setup-cwl
         os.remove(resume_wf)
 
 
-def run_cwltool_subprocess(config_file: str, workflow: str, run_directory=None, parallel=False, debug=False) -> None:
+def run_cwltool_subprocess(config_file: str, workflow: str, run_directory=None, parallel=False, verbosity="normal") -> int:
     """Executes the workflow using a command line invocation of cwltool
 
     Args:
@@ -160,22 +178,23 @@ def run_cwltool_subprocess(config_file: str, workflow: str, run_directory=None, 
         workflow: the path to the workflow to be executed
         run_directory: the destination folder for workflow output subdirectories (default: CWD)
         parallel: process libraries in parallel where possible
-        debug: instruct the CWL runner to provide additional debug info
+        verbosity: controls the depth of information written to terminal by cwltool
 
     Returns: None
 
     """
 
-    cwl_runner = "cwltool --copy-outputs --timestamps --relax-path-checks " \
-                 f"{'--leave-tmpdir --debug --js-console ' if debug else ''}" \
-                 f"{'--outdir ' + run_directory + ' ' if run_directory else ''}" \
-                 f"{'--parallel ' if parallel else ''}" \
-                 f"{workflow} {config_file}"
+    command = ['cwltool --copy-outputs --timestamps --relax-path-checks']
+    if verbosity == 'debug': command.append('--debug --js-console')
+    if verbosity == 'quiet': command.append('--quiet')
+    if run_directory: command.append(f'--outdir {run_directory}')
+    if parallel: command.append('--parallel')
 
-    subprocess.run(cwl_runner, shell=True)
+    cwl_runner = ' '.join(command + [workflow, config_file])
+    return subprocess.run(cwl_runner, shell=True).returncode
 
 
-def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = None, parallel=False, debug=False) -> None:
+def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = '.', verbosity="normal") -> int:
     """Executes the workflow using native Python rather than subprocess "command line"
 
     Args:
@@ -183,7 +202,7 @@ def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = 
         workflow: the path to the workflow to be executed
         run_directory: the destination folder for workflow output subdirectories (default: CWD)
         parallel: process libraries in parallel where possible
-        debug: instruct the CWL runner to provide additional debug info
+        verbosity: controls the depth of information written to terminal by cwltool
 
     Returns: None
 
@@ -195,6 +214,7 @@ def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = 
             file_dict['location'] = file_dict['path']
             file_dict['contents'] = None
 
+    # Upgrade file entries in Run Config with extra descriptors cwltool expects
     for _, config_param in config_object.config.items():
         if isinstance(config_param, list):
             for config_dict in config_param:
@@ -202,16 +222,17 @@ def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = 
         else:
             furnish_if_file_record(config_param)
 
-    runtime_context = cwltool.factory.RuntimeContext({
+    # Set overall config for cwltool
+    runtime_context = RuntimeContext({
         'secret_store': cwltool.secrets.SecretStore(),
-        'default_stdout': subprocess.PIPE,
-        'default_stderr': subprocess.PIPE,
         'outdir': run_directory,
         'move_outputs': "copy",
         'on_error': "continue",
-        'debug': debug
+        'js_console': verbosity == "debug",
+        'debug': verbosity == "debug"
     })
 
+    # Set proper temp directory for Mac users
     if sys.platform == "darwin":
         default_mac_path = "/private/tmp/docker_tmp"
         if runtime_context.tmp_outdir_prefix == DEFAULT_TMP_PREFIX:
@@ -219,18 +240,36 @@ def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = 
         if runtime_context.tmpdir_prefix == DEFAULT_TMP_PREFIX:
             runtime_context.tmpdir_prefix = default_mac_path
 
+    # Enable rich terminal output (timestamp, color, formatting)
+    logger = logging.getLogger("cwltool")
+    logger.handlers.clear()  # executors.py loads a default handler; outputs are printed twice if we don't clear it
+    level = 'DEBUG' if verbosity == 'debug' else 'WARN' if verbosity == "quiet" else "INFO"
+    coloredlogs.install(logger=logger, stream=sys.stderr, fmt="[%(asctime)s] %(levelname)s %(message)s",
+                        datefmt="%Y-%m-%d %H:%M:%S", level=level, isatty=True)
+
+    # Create a wrapper for the executors so that we may pass our logger to them (unsupported by Factory)
+    parallel: MultithreadedJobExecutor = functools.partial(MultithreadedJobExecutor(), logger=logger)
+    serial: SingleJobExecutor = functools.partial(SingleJobExecutor(), logger=logger)
+
+    # Instantiate Factory with our run preferences
     cwl = cwltool.factory.Factory(
         runtime_context=runtime_context,
         loading_context=LoadingContext({'relax_path_checks': True}),
-        executor=cwltool.executors.MultithreadedJobExecutor()   # Run jobs in parallel
-        if parallel else cwltool.executors.SingleJobExecutor()  # Run one library at a time
+        executor=parallel if parallel else serial
     )
 
-    pipeline = cwl.make(workflow)
-    pipeline(**config_object.config)
+    try:
+        # Load the workflow document and execute
+        pipeline = cwl.make(workflow)
+        pipeline(**config_object.config)
+    except cwltool.factory.WorkflowStatus:
+        # For now, return non-zero if workflow did not complete
+        return 1
+
+    return 0
 
 
-def get_template(tinyrna_extras_path: str) -> None:
+def get_template(aquatx_extras_path: str) -> None:
     """Copies all configuration file templates to the current working directory
 
     Args:
@@ -249,10 +288,10 @@ def get_template(tinyrna_extras_path: str) -> None:
 
     # Copy template files to the current working directory
     for template in template_files:
-        shutil.copyfile(f"{tinyrna_extras_path}/{template}", f"{os.getcwd()}/{template}")
+        shutil.copyfile(f"{aquatx_extras_path}/{template}", f"{os.getcwd()}/{template}")
 
 
-def setup_cwl(tinyrna_cwl_path: str, config_file: str) -> None:
+def setup_cwl(aquatx_cwl_path: str, config_file: str) -> None:
     """Retrieves the project's workflow files, and if provided, processes the run config file
 
     Args:
@@ -272,7 +311,7 @@ def setup_cwl(tinyrna_cwl_path: str, config_file: str) -> None:
         print("The processed configuration file is located at: " + outfile_name)
 
     # Copy the entire cwl directory to the current working directory
-    shutil.copytree(tinyrna_cwl_path, os.getcwd() + "/cwl/")
+    shutil.copytree(aquatx_cwl_path, os.getcwd() + "/cwl/")
     print("The workflow and files are under: cwl/tools/ and cwl/workflows/")
 
 
@@ -303,16 +342,16 @@ def main():
     args = get_args()
 
     # Get the package data
-    tinyrna_cwl_path = resource_filename('aquatx', 'cwl/')
-    tinyrna_extras_path = resource_filename('aquatx', 'extras/')
+    aquatx_cwl_path = resource_filename('aquatx', 'cwl/')
+    aquatx_extras_path = resource_filename('aquatx', 'extras/')
 
     # Execute appropriate command based on command line input
     command_map = {
-        "run": lambda: run(tinyrna_cwl_path, args.config),
-        "replot": lambda: resume(tinyrna_cwl_path, args.config, "Plotter"),
-        "recount": lambda: resume(tinyrna_cwl_path, args.config, "Counter"),
-        "setup-cwl": lambda: setup_cwl(tinyrna_cwl_path, args.config),
-        "get-template": lambda: get_template(tinyrna_extras_path),
+        "run": lambda: run(aquatx_cwl_path, args.config),
+        "replot": lambda: resume(aquatx_cwl_path, args.config, "Plotter"),
+        "recount": lambda: resume(aquatx_cwl_path, args.config, "Counter"),
+        "setup-cwl": lambda: setup_cwl(aquatx_cwl_path, args.config),
+        "get-template": lambda: get_template(aquatx_extras_path),
         "setup-nextflow": lambda: setup_nextflow(args.config)
     }
 

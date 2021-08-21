@@ -4,7 +4,7 @@ import sys
 import os
 
 from typing import Tuple, Union
-from collections import Counter
+from collections import Counter, defaultdict
 
 from .FeatureSelector import FeatureSelector
 from .hts_parsing import Alignment
@@ -27,14 +27,18 @@ class LibraryStats:
                           'Reads Assigned to Multiple Features', 'Sequences Assigned to Multiple Features',
                           'Total Unassigned Reads', 'Total Unassigned Sequences']
 
-    def __init__(self, library: dict, out_prefix: str = None, save_intermediate_file: bool = False):
+    def __init__(self, library: dict, out_prefix: str = None, save_intermediate_file: bool = False, diag: bool = False):
         self.library = library
         self.out_prefix = out_prefix
         self.save_intermediate_file = save_intermediate_file
+        self.diag = diag
 
         self.feat_counts = Counter()
         self.nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
         self.library_stats = {stat: 0 for stat in LibraryStats.summary_categories}
+        self.alignment_diags = {stat: 0 for stat in SummaryStats.aln_diag_categories}
+        self.selection_diags = defaultdict(Counter)
+        self.identity_roster = set()
         self.alignments = []
 
     def count_bundle(self, aln_bundle: iter) -> Bundle:
@@ -53,7 +57,7 @@ class LibraryStats:
 
         return self.Bundle(loci_counts, read_counts, corr_counts)
 
-    def count_bundle_alignments(self, bundle: Bundle, aln: Alignment, assignments: set) -> None:
+    def count_bundle_alignments(self, bundle: Bundle, aln: Alignment, assignments: set, n_candidates: int) -> None:
         """Called for each alignment for each read"""
 
         assigned_count = len(assignments)
@@ -78,6 +82,8 @@ class LibraryStats:
 
         if self.save_intermediate_file:
             self.record_alignment_details(aln, bundle, assignments)
+        if self.diag:
+            self.record_diagnostics(assignments, n_candidates, aln, bundle)
 
     def finalize_bundle(self, bundle: Bundle) -> None:
         """Called at the conclusion of processing each multiple-alignment bundle"""
@@ -121,13 +127,31 @@ class LibraryStats:
                 map(lambda rec: "%s\t%f\t%c\t%d\t%d\t%s\n" % rec, self.alignments)
             )
 
+    def record_diagnostics(self, assignments, n_candidates, aln, bundle):
+        """Records basic diagnostic info"""
+
+        if len(assignments) == 0:
+            if aln.iv.strand == '+':
+                self.alignment_diags['Uncounted alignments (+)'] += 1
+            else:
+                self.alignment_diags['Uncounted alignments (-)'] += 1
+            if n_candidates == 0:
+                self.alignment_diags['No feature counts'] += bundle.corr_count
+            else:
+                self.alignment_diags['Eliminated counts'] += bundle.corr_count
+
 
 class SummaryStats:
 
-    summary_categories = ["Total Reads", "Retained Reads", "Unique Sequences", "Mapped Sequences", "Aligned Reads"]
+    summary_categories = ["Total Reads", "Retained Reads", "Unique Sequences",
+                          "Mapped Sequences", "Mapped Reads", "Aligned Reads"]
 
-    def __init__(self, out_prefix):
+    aln_diag_categories = ['Eliminated counts', 'No feature counts',
+                           'Uncounted alignments (+)', 'Uncounted alignments (-)']
+
+    def __init__(self, out_prefix, report_diagnostics=False):
         self.out_prefix = out_prefix
+        self.report_diagnostics = report_diagnostics
 
         # Will become False if an added library lacks its corresponding Collapser and Bowtie outputs
         self.report_summary_statistics = True
@@ -135,6 +159,9 @@ class SummaryStats:
         self.pipeline_stats_df = pd.DataFrame(index=SummaryStats.summary_categories)
         self.feat_counts_df = pd.DataFrame(index=FeatureSelector.attributes.keys())
         self.lib_stats_df = pd.DataFrame(index=LibraryStats.summary_categories)
+        self.aln_diags = pd.DataFrame(columns=SummaryStats.aln_diag_categories)
+        self.identity_roster = set()
+        self.selection_diags = {}
         self.nt_len_mat = {}
 
     def write_report_files(self, alias: dict, prefix=None) -> None:
@@ -142,6 +169,7 @@ class SummaryStats:
         self.write_alignment_statistics(prefix)
         self.write_pipeline_statistics(prefix)
         self.write_feat_counts(alias, prefix)
+        self.write_diagnostics(prefix)
         self.write_nt_len_mat(prefix)
 
     def write_alignment_statistics(self, prefix: str) -> None:
@@ -175,8 +203,10 @@ class SummaryStats:
         formatted for each library as {group}_rep_{replicate}
         """
 
+        # Subset the counts table to only show features that were matched on identity (regardless of count)
+        summary = self.feat_counts_df.loc[self.identity_roster]
         # Sort columns by title and round all counts to 2 decimal places
-        summary = self.sort_cols_and_round(self.feat_counts_df)
+        summary = self.sort_cols_and_round(summary)
         # Add Feature Name column, which is the feature alias (default is Feature ID if no alias exists)
         summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(alias.get(feat, [feat]))))
         # Add Classes column for classes associated with the given feature
@@ -186,6 +216,23 @@ class SummaryStats:
         summary = summary.sort_index().reset_index().rename(columns={"index": "Feature ID"})
 
         summary.to_csv(prefix + '_feature_counts.csv', index=False)
+
+    def write_diagnostics(self, prefix: str) -> None:
+        if not self.report_diagnostics: return
+        self.aln_diags = self.sort_cols_and_round(self.aln_diags, "index")
+        self.aln_diags.index.name = "Sample"
+        self.aln_diags.to_csv(prefix + "_alignment_diags.csv")
+
+        out = []
+        for lib in sorted(self.selection_diags.keys()):
+            out.append(lib)
+            for feat_class in sorted(self.selection_diags[lib].keys()):
+                out.append('\t' + feat_class)
+                for stat in sorted(self.selection_diags[lib][feat_class].keys()):
+                    out.append("\t\t%s: %d" % (stat, self.selection_diags[lib][feat_class][stat]))
+
+        with open(prefix + "_selection_diags.txt", 'w') as f:
+            f.write('\n'.join(out))
 
     def write_nt_len_mat(self, prefix: str) -> None:
         """Writes each library's 5' end nucleotide / length matrix to its own file."""
@@ -201,23 +248,45 @@ class SummaryStats:
         self.feat_counts_df[other.library["Name"]] = self.feat_counts_df.index.map(other.feat_counts)
         self.lib_stats_df[other.library["Name"]] = self.lib_stats_df.index.map(other.library_stats)
         self.nt_len_mat[other.library["Name"]] = other.nt_len_mat
+        self.identity_roster.update(other.identity_roster)
+
+        if self.report_diagnostics: self.add_diags(other)
 
         # Process pipeline step outputs for this library, if they exist, to provide Summary Statistics
         if self.report_summary_statistics and self.library_has_pipeline_outputs(other):
-            mapped_seqs = other.library_stats["Total Assigned Sequences"] + other.library_stats["Total Unassigned Sequences"]
-            aligned_reads = other.library_stats["Total Assigned Reads"]
-            total_reads, retained_reads = self.get_fastp_stats(other)
-            unique_seqs = self.get_collapser_stats(other)
+            self.add_summary_stats(other)
 
-            other_summary = {
-                "Total Reads": total_reads,
-                "Retained Reads": retained_reads,
-                "Unique Sequences": unique_seqs,
-                "Mapped Sequences": mapped_seqs,
-                "Aligned Reads": aligned_reads
-            }
+    def add_summary_stats(self, other: LibraryStats):
+        """Add incoming summary stats as new column in the master table"""
 
-            self.pipeline_stats_df[other.library["Name"]] = self.pipeline_stats_df.index.map(other_summary)
+        mapped_seqs = sum([other.library_stats[stat] for stat in
+                           ["Total Assigned Sequences",
+                            "Total Unassigned Sequences"]])
+        mapped_reads = sum([other.library_stats[stat] for stat in
+                            ['Assigned Multi-Mapping Reads',
+                             'Assigned Single-Mapping Reads',
+                             'Total Unassigned Reads']])
+        aligned_reads = other.library_stats["Total Assigned Reads"]
+        total_reads, retained_reads = self.get_fastp_stats(other)
+        unique_seqs = self.get_collapser_stats(other)
+
+        other_summary = {
+            "Total Reads": total_reads,
+            "Retained Reads": retained_reads,
+            "Unique Sequences": unique_seqs,
+            "Mapped Sequences": mapped_seqs,
+            "Mapped Reads": mapped_reads,
+            "Aligned Reads": aligned_reads
+        }
+
+        self.pipeline_stats_df[other.library["Name"]] = self.pipeline_stats_df.index.map(other_summary)
+
+    def add_diags(self, other: LibraryStats) -> None:
+        """Append alignment and selection diagnostics to the master tables"""
+
+        other_lib = other.library['Name']
+        self.selection_diags[other_lib] = other.selection_diags
+        self.aln_diags.loc[other_lib] = other.alignment_diags
 
     def library_has_pipeline_outputs(self, other: LibraryStats) -> bool:
         """Check working directory for pipeline outputs from previous steps"""
@@ -277,7 +346,6 @@ class SummaryStats:
             return "err"
 
     @staticmethod
-    def sort_cols_and_round(df: pd.DataFrame) -> pd.DataFrame:
+    def sort_cols_and_round(df: pd.DataFrame, axis="columns") -> pd.DataFrame:
         """Convenience function to sort columns by title and round all values to 2 decimal places"""
-        sorted_columns = sorted(df.columns)
-        return df.round(decimals=2).reindex(sorted_columns, axis="columns")
+        return df.round(decimals=2).sort_index(axis=axis)

@@ -2,11 +2,16 @@ import itertools
 import HTSeq
 import re
 
-from collections import defaultdict
+from collections import defaultdict, Counter
 from typing import List, Tuple, FrozenSet, Dict, Set
+
+from .hts_parsing import Alignment
 
 # Type aliases for human readability
 IntervalFeatures = Tuple[int, int, Set[str]]  # A set of features associated with an interval
+
+# Global indexes for Hits produced by choose_identity()
+RANK, RULE, FEAT = 0, 1, 2
 
 
 class FeatureSelector:
@@ -30,7 +35,6 @@ class FeatureSelector:
     by the alignment interval.
     """
 
-    rank, rule, feat = 0, 1, 2
     attributes = {}
 
     def __init__(self, rules: List[dict], reference_table: Dict):
@@ -45,9 +49,13 @@ class FeatureSelector:
             inverted_identities[rule['Identity']].append(i)
         self.inv_ident = dict(inverted_identities)
 
-    def choose(self, feat_set, alignment) -> set:
+        self.report_eliminations = False
+        self.elim_stats: defaultdict['Counter']
+        self.phase1_candidates: set
+
+    def choose(self, feat_list: List[IntervalFeatures], alignment: 'Alignment') -> set:
         # Perform hierarchy-based first round of selection for identities
-        finalists = self.choose_identities(feat_set, alignment.iv)
+        finalists = self.choose_identities(feat_list, alignment.iv)
         if not finalists: return set()
 
         strand = alignment.iv.strand
@@ -57,8 +65,11 @@ class FeatureSelector:
         eliminated = set()
         for step, read in zip(self.interest[1:], (strand, nt5end, length)):
             for hit in finalists:
-                if read not in self.rules_table[hit[self.rule]][step]:
+                if read not in self.rules_table[hit[RULE]][step]:
                     eliminated.add(hit)
+                    if self.report_eliminations:
+                        feat_class = self.attributes[hit[FEAT]][0][1][0]
+                        self.elim_stats[feat_class][f"{step}={read}"] += 1
 
             finalists -= eliminated
             eliminated.clear()
@@ -66,7 +77,7 @@ class FeatureSelector:
             if not finalists: return set()
 
         # Remaining finalists have passed all filters
-        return {choice[self.feat] for choice in finalists}
+        return {choice[FEAT] for choice in finalists}
 
     @staticmethod
     def is_perfect_iv_match(feat_start, feat_end, aln_iv):
@@ -116,19 +127,21 @@ class FeatureSelector:
                             pass
         # -> identity_hits: [(hierarchy, rule, feature), ...]
 
+        self.phase1_candidates.update(hit[FEAT] for hit in identity_hits)
+
         # Only one feature matched only one rule
         if len(identity_hits) == 1:
             finalists.add(identity_hits[0])
         # Perform any possible hierarchy-based eliminations
         elif len(identity_hits) > 1:
-            uniq_ranks = {hit[self.rank] for hit in identity_hits}
+            uniq_ranks = {hit[RANK] for hit in identity_hits}
 
             if len(identity_hits) == len(uniq_ranks):
-                finalists.add(min(identity_hits, key=lambda x: x[self.rank]))
+                finalists.add(min(identity_hits, key=lambda x: x[RANK]))
             else:
                 # Two or more hits share the same hierarchy.
                 min_rank = min(uniq_ranks)
-                finalists.update(hit for hit in identity_hits if hit[self.rank] == min_rank)
+                finalists.update(hit for hit in identity_hits if hit[RANK] == min_rank)
 
         return finalists
 
@@ -171,7 +184,15 @@ class FeatureSelector:
                 if not wildcard(step):
                     row[step] = filt()
 
+    def set_stats_collectors(self, libstats: 'LibraryStats', diags=False):
+        """Enables diagnostic reporting for eliminations made in selection phase 2"""
+
+        self.phase1_candidates = libstats.identity_roster
+        if diags:
+            self.elim_stats = libstats.selection_diags
+            self.report_eliminations = diags
+
     @classmethod
     def get_hit_indexes(cls):
         """Hits are stored as tuples for performance. This returns a human friendly index map for the tuple."""
-        return cls.rank, cls.rule, cls.feat
+        return RANK, RULE, FEAT
