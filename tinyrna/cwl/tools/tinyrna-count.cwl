@@ -13,7 +13,7 @@ requirements:
       $(inputs.collapsed_fa)
     ]
 
-baseCommand: aquatx-count
+baseCommand: tinyrna-count
 
 inputs:
   samples_csv:
@@ -64,7 +64,7 @@ inputs:
   fastp_logs:
     type: File[]?
 
-  # Specifies the collapsed Fasta files produced by aquatx-collapse for producing pipeline Summary Statistics
+  # Specifies the collapsed Fasta files produced by tinyrna-collapse for producing pipeline Summary Statistics
   collapsed_fa:
     type: File[]?
 

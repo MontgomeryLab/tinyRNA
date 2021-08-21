@@ -196,7 +196,7 @@ steps:
     out: [ bt_build_dir, fastp_dir, collapser_dir, bowtie_dir ]
 
   counter:
-    run: ../tools/aquatx-count.cwl
+    run: ../tools/tinyrna-count.cwl
     in:
       aligned_seqs: counter-prep/aln_seqs
       gff_files: gff_files
@@ -211,7 +211,7 @@ steps:
     out: [feature_counts, other_counts, alignment_stats, summary_stats, intermed_out_files, alignment_diags, selection_diags]
 
   dge:
-    run: ../tools/aquatx-deseq.cwl
+    run: ../tools/tinyrna-deseq.cwl
     in:
       input_file: counter/feature_counts
       outfile_prefix: run_name
@@ -219,7 +219,7 @@ steps:
     out: [ norm_counts, comparisons, pca_plots ]
 
   plotter:
-    run: ../tools/aquatx-plot.cwl
+    run: ../tools/tinyrna-plot.cwl
     in:
       raw_counts: counter/feature_counts
       norm_counts: dge/norm_counts

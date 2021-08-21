@@ -87,7 +87,7 @@ steps:
     out: [fastq1, report_json, report_html]
 
   collapse:
-    run: ../tools/aquatx-collapse.cwl
+    run: ../tools/tinyrna-collapse.cwl
     in:
       input_file: fastp/fastq1
       out_prefix: uniq_seq_prefix

@@ -18,7 +18,7 @@ steps:
     out: [ls_files]
 
   organize_output:
-    run: ../../../aquatx/cwl/tools/make-subdir.cwl
+    run: ../../../tinyrna/cwl/tools/make-subdir.cwl
     in:
       dir_files: get_files/ls_files
       dir_name: outdir_name

@@ -3,7 +3,7 @@
 cwlVersion: v1.0
 class: CommandLineTool
 
-baseCommand: aquatx-collapse
+baseCommand: tinyrna-collapse
 
 inputs:
   # Fastq files

@@ -3,14 +3,14 @@
 cwlVersion: v1.0
 class: CommandLineTool
 
-baseCommand: aquatx-deseq.r
+baseCommand: tinyrna-deseq.r
 
 inputs:
   input_file:
     type: File
     inputBinding:
       prefix: --input-file
-    doc: The merged count table output of aquatx-count
+    doc: The merged count table output of tinyrna-count
 
   outfile_prefix:
     type: string
