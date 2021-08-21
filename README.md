@@ -1,15 +1,15 @@
-# AQuATx for small RNA sequencing data
+# tinyRNA for small RNA sequencing data
 :warning: **Under Development & Testing** :warning:
 
-*This repository is being actively developed and tested, and is thus incomplete and only recommended for testing until a release is made. Feedback, suggestions, and bug reports are welcome under the [issues tab](https://github.com/biokcb/aquatx-srna/issues). Thank you!*
+*This repository is being actively developed and tested, and is thus incomplete and only recommended for testing until a release is made. Feedback, suggestions, and bug reports are welcome under the [issues tab](https://github.com/MontgomeryLab/tinyrna/issues). Thank you!*
 
-[![Build Status](https://travis-ci.com/MontgomeryLab/aquatx-srna.svg?branch=master)](https://travis-ci.com/MontgomeryLab/aquatx-srna)
+[![Build Status](https://travis-ci.com/MontgomeryLab/tinyrna.svg?branch=master)](https://travis-ci.com/MontgomeryLab/tinyrna)
 
 - [Getting Started](#getting-started)
   - [Prerequisites & Installation](#prerequisites--installation)
     - [1. Install conda](#1-install-conda)
     - [2. Install R & DESeq2](#2-install-r--deseq2)
-    - [3. Install AQuATx](#3-install-aquatx)
+    - [3. Install tinyRNA](#3-install-tinyrna)
 - [Usage](#usage)
   - [Configuration Files](#configuration-files)
     - [Run Config](#run-config)
@@ -36,11 +36,11 @@
 - [License](#license)
 
 
-AQuATx (Automated QUantitative Analysis of Transcript eXpression) is a set of tools to simplify the analysis of next-generation sequencing data. The goal of this specific repository is to provide an entire workflow for processing small RNA sequencing data with options for advanced hierarchical feature selection.
+tinyRNA (Automated QUantitative Analysis of Transcript eXpression) is a set of tools to simplify the analysis of next-generation sequencing data. The goal of this specific repository is to provide an entire workflow for processing small RNA sequencing data with options for advanced hierarchical feature selection.
 
 The current workflow is as follows:
 
-![AQuATx basic pipeline](images/aquatx-workflow_current.png)
+![tinyRNA basic pipeline](images/tinyrna-workflow_current.png)
 
 Steps outlined in orange are Python scripts we've created for this task, optional steps are teal, and purple steps are part of the end-to-end standard workflow. Outputs are shown in green.
 
@@ -48,7 +48,7 @@ Steps outlined in orange are Python scripts we've created for this task, optiona
 
 ### Prerequisites & Installation
 
-A conda environment file has been provided for easy installation of the AQuATx environment and its dependencies.
+A conda environment file has been provided for easy installation of the tinyRNA environment and its dependencies.
 
 #### 1. Install conda
 To install `conda` you can download and follow instructions for either:
@@ -63,43 +63,43 @@ Rather than installing R via conda, we recommend you install it yourself first f
 #### 3a. XQuartz (mac only)
 DESeq2 is quiet about it, but if you're on a mac you'll also need to download and install [XQuartz](https://www.xquartz.org/).
 
-#### 3. Install AQuATx
+#### 3. Install tinyRNA
 
-To install AQuATx and its remaining dependencies:
+To install tinyRNA and its remaining dependencies:
 ```
 # Clone the repository into a local directory
-git clone https://github.com/MontgomeryLab/aquatx-srna.git
-cd aquatx-srna
+git clone https://github.com/MontgomeryLab/tinyrna.git
+cd tinyrna
 
-# Install the aquatx-srna environment and dependencies
+# Install the tinyrna environment and dependencies
 conda env create -f environment.yml
 
-# Activate (or reactivate) the aquatx-srna environment
-conda activate aquatx-srna
+# Activate (or reactivate) the tinyrna environment
+conda activate tinyrna
 
-# When you are done running AQuATx, you can deactivate the conda environment
+# When you are done running tinyRNA, you can deactivate the conda environment
 conda deactivate
 ```
 
 ## Usage
-If you'd like to jump right in and start using AQuATx, see our [tutorial](./START_HERE/TUTORIAL.md).
+If you'd like to jump right in and start using tinyRNA, see our [tutorial](./START_HERE/TUTORIAL.md).
 
-You can execute the workflow in its entirety for a full end-to-end analysis pipeline, or you can execute individual steps on their own. In most cases you will use the `aquatx` command for pipeline level operations, including running the pipeline.
+You can execute the workflow in its entirety for a full end-to-end analysis pipeline, or you can execute individual steps on their own. In most cases you will use the `tinyrna` command for pipeline level operations, including running the pipeline.
 
 ### Configuration Files
 The pipeline requires that you specify your input library files (Samples Sheet - `samples.csv`), your selection rules for feature counting (Features Sheet - `features.csv`), the paths to your configuration files and other file inputs (Paths - `paths.yml`), and your preferences for the overall pipeline configuration (Run Config - `run_config.yml`).
 
-![AQuATx basic pipeline](images/config-files.png)
+![tinyRNA basic pipeline](images/config-files.png)
 
 You can obtain template copies of these files with the command (they're also available in the `START_HERE` directory):
 ```
-aquatx get-template
+tinyrna get-template
 ```
 :warning: You may use either relative or absolute paths in your configuration files. **Relative paths will be evaluated relative to the file in which they are defined.** This means that you can store your configuration files each in a different location, allowing for flexibility in your project organization. To avoid confusion, we recommend using absolute paths.:warning:
 
 #### Run Config
 
-The pipeline revolves around a configuration file to make it easy to set up and run. This `YAML` Run Config file (`run_config.yml`) can be edited using a simple text editor (such as BBEDIT for Mac or notepad++ for Windows). Within it you must define the location of your Paths file (`paths.yml`), and you can optionally define your preferences for the pipeline and its individual steps. During the setup phase of pipeline execution, AQuATx will further process this configuration file based on its contents and the contents of your Paths (`paths.yml`), Samples (`samples.csv`), and Features (`features.csv`) files. The processed configuration is what ultimately determines the behavior of the workflow. A copy will be saved in the final run directory specified in your Paths file providing a configuration record for each run.
+The pipeline revolves around a configuration file to make it easy to set up and run. This `YAML` Run Config file (`run_config.yml`) can be edited using a simple text editor (such as BBEDIT for Mac or notepad++ for Windows). Within it you must define the location of your Paths file (`paths.yml`), and you can optionally define your preferences for the pipeline and its individual steps. During the setup phase of pipeline execution, tinyRNA will further process this configuration file based on its contents and the contents of your Paths (`paths.yml`), Samples (`samples.csv`), and Features (`features.csv`) files. The processed configuration is what ultimately determines the behavior of the workflow. A copy will be saved in the final run directory specified in your Paths file providing a configuration record for each run.
 
 #### Paths File
 
@@ -138,7 +138,7 @@ Running the pipeline requires the following files:
   3. A reference genome file in FASTA format (be sure that chromosome identifiers are identical between your reference annotations and genome sequence files).
   4. Optional: Bowtie indexes (must be small indexes (.ebwt)). By default, bowtie indexes will be created when the pipeline is run for the first time).
 
-<sup>*</sup> `aquatx-count` accepts SAM files in your Samples Sheet only when invoked as an individual step. Because genome alignments are done after collapsing reads, the pipeline does not currently support SAM files from other sources.
+<sup>*</sup> `tinyrna-count` accepts SAM files in your Samples Sheet only when invoked as an individual step. Because genome alignments are done after collapsing reads, the pipeline does not currently support SAM files from other sources.
 
 ### Running the End-to-End Analysis
 In most cases you will use this toolset as an end-to-end pipeline. This will run a full, standard small RNA sequencing data analysis according to your configuration file. Before starting, you will need the following:
@@ -151,19 +151,19 @@ In most cases you will use this toolset as an end-to-end pipeline. This will run
 6. An updated Paths File (`paths.yml`) with the path to the genome sequence.
 7. A Run Config file (`run_config.yml`) located in your working directory or the path to the file. The template provided does not need to be updated if you wish to use the default settings.
 
-To run an end-to-end analysis, be sure that your working within the conda aquatx-srna environment (instructions above) in your terminal and optionally set your working directory that contains the Run Config file. Than, simply enter the following code into your terminal (if you are not working in the directory containing `run_config.yml`, provide the path before the name of the file - `path/to/run_config.yml`:
+To run an end-to-end analysis, be sure that you're working within the conda tinyrna environment (instructions above) in your terminal and optionally set your working directory that contains the Run Config file. Than, simply enter the following code into your terminal (if you are not working in the directory containing `run_config.yml`, provide the path before the name of the file - `path/to/run_config.yml`:
 
 ```
-aquatx run --config run_config.yml
+tinyrna run --config run_config.yml
 ```
 
 ### Running Individual Steps
-The process for running individual steps differs depending on whether the step is an AQuATx Python component, or a CWL wrapped third party tool.
+The process for running individual steps differs depending on whether the step is an tinyRNA Python component, or a CWL wrapped third party tool.
 
 The following steps are Python components. Their corresponding commands may be invoked at the command line:
 ##### Create Workflow
 ```
-aquatx-config -i CONFIG
+tinyrna-config -i CONFIG
 
   required arguments:
     -i CONFIG, --input-file CONFIG
@@ -171,7 +171,7 @@ aquatx-config -i CONFIG
 ```
 ##### Collapser
 ```
-aquatx-collapse [-h] -i FASTQFILE -o OUTPREFIX [-t THRESHOLD] [-c]
+tinyrna-collapse [-h] -i FASTQFILE -o OUTPREFIX [-t THRESHOLD] [-c]
 
   optional arguments:
     -h, --help            show this help message and exit
@@ -191,13 +191,13 @@ aquatx-collapse [-h] -i FASTQFILE -o OUTPREFIX [-t THRESHOLD] [-c]
 ```
 ##### Counter
 ```
-aquatx-count [-h] -i SAMPLES -c CONFIGFILE -o OUTPUTPREFIX [-t] [-p]
+tinyrna-count [-h] -i SAMPLES -c CONFIGFILE -o OUTPUTPREFIX [-t] [-p]
 
   optional arguments:
     -h, --help            show this help message and exit
     -t, --intermed-file   Save the intermediate file containing all alignments
                           and associated features.
-    -p, --is-pipeline     Indicates that counter was invoked from the aquatx
+    -p, --is-pipeline     Indicates that counter was invoked from the tinyrna
                           pipeline and that input files should be sources as
                           such.
   
@@ -211,7 +211,7 @@ aquatx-count [-h] -i SAMPLES -c CONFIGFILE -o OUTPUTPREFIX [-t] [-p]
 ```
 ##### fastp, bowtie-build, and bowtie
 These are CWL wrapped third party tools.
-1. Copy the workflow CWL folder to your current working directory with the command `aquatx setup-cwl --config none`
+1. Copy the workflow CWL folder to your current working directory with the command `tinyrna setup-cwl --config none`
 2. Within `./CWL/tools` find the file for the step you wish to run. Navigate to this folder in terminal (or copy your target .cwl file to a more convenient location)
 3. Run `cwltool --make-template step-file.cwl > step-config.YML`. This will produce a `YML` configuration file specific to this step. Optional arguments will be indicated as such; if you do not wish to set a value for an optional argument, best practice is to remove it from the file
 4. Fill in your preferences and inputs in this step configuration file and save it
@@ -219,15 +219,15 @@ These are CWL wrapped third party tools.
 
 ### Using a Different Workflow Runner
 
-We have used CWL to define the workflow for scalability and interoperability. The default runner, or interpreter, utilized by AQuATx is `cwltool`. You may use a different CWL runner if you would like, and in order to do so you will need the workflow CWL and your **processed** Run Config file. The following will copy these files to your current working directory:
+We have used CWL to define the workflow for scalability and interoperability. The default runner, or interpreter, utilized by tinyRNA is `cwltool`. You may use a different CWL runner if you would like, and in order to do so you will need the workflow CWL and your **processed** Run Config file. The following will copy these files to your current working directory:
 
 ```
-aquatx setup-cwl --config <path/to/Run_Config.yml>
+tinyrna setup-cwl --config <path/to/Run_Config.yml>
 ```
 
 If you don't have a Run Config file or do not wish to obtain a processed copy, you may instead use "None" or "none" in the `--config` argument:
 ```
-aquatx setup-cwl --config none
+tinyrna setup-cwl --config none
 ```
 
 ## Outputs
@@ -282,14 +282,14 @@ After alignment, a size and 5'nt distribution table is created for each library.
 
 ## Contributing
 
-See the [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. To see what is actively being worked or planned go to the [projects tab](https://github.com/MontgomeryLab/aquatx-srna/projects) or the [issues tab](https://github.com/MontgomeryLab/aquatx-srna/issues).
+See the [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. To see what is actively being worked or planned go to the [projects tab](https://github.com/MontgomeryLab/tinyrna/projects) or the [issues tab](https://github.com/MontgomeryLab/tinyrna/issues).
 
 ## Authors
 
 * **Kristen Brown** - 2018-2019 - Colorado State University - [biokcb](https://github.com/biokcb)
 * **Alex Tate** - 01/2021-present - Colorado State University - [AlexTate](https://github.com/AlexTate)
 
-See also the list of [contributors](https://github.com/MontgomeryLab/aquatx-srna/contributors) who participated in this project.
+See also the list of [contributors](https://github.com/MontgomeryLab/tinyrna/contributors) who participated in this project.
 
 ## License
 
