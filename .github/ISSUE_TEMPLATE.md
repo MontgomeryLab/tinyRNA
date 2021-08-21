@@ -8,9 +8,9 @@ assignees: ''
 ---
 
 --- Delete this text ---
-If you would like to report a bug, please fill out the template below. Before submitting your issue, make sure it is not repeated in [open issues](https://github.com/MontgomeryLab/aquatx-srna/issues). 
+If you would like to report a bug, please fill out the template below. Before submitting your issue, make sure it is not repeated in [open issues](https://github.com/MontgomeryLab/tinyrna/issues). 
 
-For enhancements, please make sure we are already not working on this under [projects](https://github.com/MontgomeryLab/aquatx-srna/projects). Instead of filling out the template, just describe the feature you think would be useful to have. Any additional info that provides context or how you envision it implemented is also helpful. 
+For enhancements, please make sure we are already not working on this under [projects](https://github.com/MontgomeryLab/tinyrna/projects). Instead of filling out the template, just describe the feature you think would be useful to have. Any additional info that provides context or how you envision it implemented is also helpful. 
 --- Delete this text ---
 
 
@@ -19,7 +19,7 @@ Please describe what you believe should have happened and what actually happened
 
 ## Environment
 **Operating System:** Mac OS Mojave
-**aquatx version:** v0.1
+**tinyrna version:** v0.1
 **Additional comments:** 
 
 ## Reproducible example
