@@ -1,6 +1,6 @@
 import unittest
 
-from tinyrna.srna.counter.hts_parsing import *
+from tiny.srna.counter.hts_parsing import *
 from tests.unit_tests_counter import resources
 import tests.unit_test_helpers as helpers
 

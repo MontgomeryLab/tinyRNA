@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from glob import glob
 
-from tinyrna.srna.Configuration import ConfigBase, timestamp_format
+from tiny.srna.Configuration import ConfigBase, timestamp_format
 
 
 class ResumeConfig(ConfigBase, ABC):
@@ -84,7 +84,7 @@ class ResumeConfig(ConfigBase, ABC):
             wf_steps[self.steps[0]]['in'][param] = new_input['var']
 
         # Load the organize-outputs subworkflow so that we may copy relevant steps
-        with open(resource_filename('tinyrna', 'cwl/workflows/organize-outputs.cwl')) as f:
+        with open(resource_filename('tiny', 'cwl/workflows/organize-outputs.cwl')) as f:
             organizer_sub_wf = self.yaml.load(f)
             self.workflow['requirements'].extend(organizer_sub_wf['requirements'])
 

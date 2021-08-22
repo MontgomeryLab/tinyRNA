@@ -13,7 +13,7 @@ Subcommands:
     - run
 
 When installed, run, recount and setup-cwl should be invoked with:
-    tinyrna <subcommand> --config <config-file>
+    tiny <subcommand> --config <config-file>
 
 The Run Config file should be supplied for the run subcommand (required)
 and for the setup-cwl subcommand (optional; alternatively you may use the
@@ -41,9 +41,9 @@ from cwltool.utils import DEFAULT_TMP_PREFIX
 from pkg_resources import resource_filename
 from argparse import ArgumentParser
 
-from tinyrna.srna.Configuration import Configuration, ConfigBase
-from tinyrna.srna.resume import ResumeCounterConfig, ResumePlotterConfig
-from tinyrna.srna.util import report_execution_time
+from tiny.srna.Configuration import Configuration, ConfigBase
+from tiny.srna.resume import ResumeCounterConfig, ResumePlotterConfig
+from tiny.srna.util import report_execution_time
 
 
 def get_args():
@@ -153,7 +153,7 @@ def resume(tinyrna_cwl_path: str, config_file: str, step: str) -> None:
 
     # Make appropriate config and workflow for this step; write modified workflow to disk
     config = entry_config[step](config_file, f"{tinyrna_cwl_path}/workflows/tinyrna_wf.cwl")
-    resume_wf = f"{tinyrna_cwl_path}/workflows/tinyrna-resume.cwl"
+    resume_wf = f"{tinyrna_cwl_path}/workflows/tiny-resume.cwl"
     config.write_workflow(resume_wf)
 
     if config['run_native']:
@@ -342,8 +342,8 @@ def main():
     args = get_args()
 
     # Get the package data
-    tinyrna_cwl_path = resource_filename('tinyrna', 'cwl/')
-    tinyrna_extras_path = resource_filename('tinyrna', 'extras/')
+    tinyrna_cwl_path = resource_filename('tiny', 'cwl')
+    tinyrna_extras_path = resource_filename('tiny', 'extras')
 
     # Execute appropriate command based on command line input
     command_map = {

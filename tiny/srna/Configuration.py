@@ -268,7 +268,7 @@ class Configuration(ConfigBase):
         run_dir_withdt = self['run_name'] + '_' + os.path.basename(run_dir_resolved)
         self['run_directory'] = self.joinpath(run_dir_parent, run_dir_withdt)
 
-        self.extras = resource_filename('tinyrna', 'extras/')
+        self.extras = resource_filename('tiny', 'extras/')
 
     def setup_ebwt_idx(self):
         """Bowtie index files and prefix"""

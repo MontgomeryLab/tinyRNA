@@ -25,7 +25,7 @@ class test_entry(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         # Change CWD to test folder if test was invoked from project root (ex: by Travis)
-        if os.path.basename(os.getcwd()) == 'tinyrna':
+        if os.path.basename(os.getcwd()) == 'tiny':
             os.chdir(f".{os.sep}tests")
 
         # For pre-install tests
@@ -42,8 +42,8 @@ class test_entry(unittest.TestCase):
                 'files': set(),
                 'tools': {
                     'files': {
-                        'tinyrna-deseq.cwl', 'tinyrna-plot.cwl', 'bowtie.cwl', 'tinyrna-collapse.cwl',
-                        'bowtie-build.cwl', 'tinyrna-count.cwl', 'fastp.cwl', 'make-subdir.cwl'
+                        'tiny-deseq.cwl', 'tiny-plot.cwl', 'bowtie.cwl', 'tiny-collapse.cwl',
+                        'bowtie-build.cwl', 'tiny-count.cwl', 'fastp.cwl', 'make-subdir.cwl'
                     }
                 },
                 'workflows': {
@@ -62,7 +62,7 @@ class test_entry(unittest.TestCase):
     def test_get_template(self):
         test_functions = [
             helpers.LambdaCapture(lambda: entry.get_template(self.tinyrna_extras_path)),  # The pre-install invocation
-            helpers.ShellCapture("tinyrna get-template")                                   # The post-install command
+            helpers.ShellCapture("tiny get-template")                                   # The post-install command
         ]
         template_files = ['run_config_template.yml', 'samples.csv', 'features.csv',
                           'paths.yml', 'tinyrna-light.mplstyle']
@@ -102,7 +102,7 @@ class test_entry(unittest.TestCase):
         for config in no_config:
             test_functions = [
                 helpers.LambdaCapture(lambda: entry.setup_cwl(self.tinyrna_cwl_path, config)),
-                helpers.ShellCapture(f"tinyrna setup-cwl --config {config}")
+                helpers.ShellCapture(f"tiny setup-cwl --config {config}")
             ]
 
             for test_context in test_functions:
@@ -132,7 +132,7 @@ class test_entry(unittest.TestCase):
     def test_setup_cwl_withconfig(self):
         test_functions = [
             helpers.LambdaCapture(lambda: entry.setup_cwl(self.tinyrna_cwl_path, self.config_file)),
-            helpers.ShellCapture(f"tinyrna setup-cwl --config {self.config_file}")
+            helpers.ShellCapture(f"tiny setup-cwl --config {self.config_file}")
         ]
         for test_context in test_functions:
             # So that we may reference the filename in the finally block below
@@ -169,7 +169,7 @@ class test_entry(unittest.TestCase):
 
     """
     Test that run invocation produces a cwltool subprocess. Since subprocess.run() 
-    is a blocking call, we need to call tinyrna.run() in its own thread so we can 
+    is a blocking call, we need to call tiny.run() in its own thread so we can 
     measure its behavior. Otherwise we would have to wait for the whole pipeline 
     to finish before being able to measure it here, and by that time the relevant 
     subprocesses would have already exited. The post-install command accomplishes
@@ -180,7 +180,7 @@ class test_entry(unittest.TestCase):
         # Non-blocking test functions (invocations continue to run in background until test_context is left)
         test_functions = [
             helpers.LambdaCapture(lambda: entry.run(self.tinyrna_cwl_path, self.config_file), blocking=False),
-            helpers.ShellCapture(f"tinyrna run --config {self.config_file}", blocking=False)
+            helpers.ShellCapture(f"tiny run --config {self.config_file}", blocking=False)
         ]
 
         def get_children():
@@ -207,7 +207,7 @@ class test_entry(unittest.TestCase):
 
     """
     A very minimal test for the subprocess context manager that is used
-    to execute post-install tinyrna commands via a shell.
+    to execute post-install tiny commands via a shell.
     """
 
     def test_ShellCapture_helper(self):
@@ -243,7 +243,7 @@ class test_entry(unittest.TestCase):
 
     """
     A very minimal test for the function context manager that is used
-    to execute pre-install invocations of tinyrna Python functions
+    to execute pre-install invocations of tiny Python functions
     """
 
     def test_LambdaCapture_helper(self):

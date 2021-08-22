@@ -3,7 +3,7 @@
 cwlVersion: v1.0
 class: CommandLineTool
 
-baseCommand: tinyrna-plot
+baseCommand: tiny-plot
 
 inputs:
   raw_counts:

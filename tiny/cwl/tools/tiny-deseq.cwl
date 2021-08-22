@@ -3,14 +3,14 @@
 cwlVersion: v1.0
 class: CommandLineTool
 
-baseCommand: tinyrna-deseq.r
+baseCommand: tiny-deseq.r
 
 inputs:
   input_file:
     type: File
     inputBinding:
       prefix: --input-file
-    doc: The merged count table output of tinyrna-count
+    doc: The merged count table output of tiny-count
 
   outfile_prefix:
     type: string

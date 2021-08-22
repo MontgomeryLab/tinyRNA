@@ -151,6 +151,7 @@ steps:
       bt_index_files:
         source: [bt_build_optional/index_files, bt_index_files]
         pickValue: first_non_null
+        default: []  # To appease the workflow validator
       ebwt: ebwt
       outfile: outfile
       logfile: logfile
@@ -196,7 +197,7 @@ steps:
     out: [ bt_build_dir, fastp_dir, collapser_dir, bowtie_dir ]
 
   counter:
-    run: ../tools/tinyrna-count.cwl
+    run: ../tools/tiny-count.cwl
     in:
       aligned_seqs: counter-prep/aln_seqs
       gff_files: gff_files
@@ -211,7 +212,7 @@ steps:
     out: [feature_counts, other_counts, alignment_stats, summary_stats, intermed_out_files, alignment_diags, selection_diags]
 
   dge:
-    run: ../tools/tinyrna-deseq.cwl
+    run: ../tools/tiny-deseq.cwl
     in:
       input_file: counter/feature_counts
       outfile_prefix: run_name
@@ -219,7 +220,7 @@ steps:
     out: [ norm_counts, comparisons, pca_plots ]
 
   plotter:
-    run: ../tools/tinyrna-plot.cwl
+    run: ../tools/tiny-plot.cwl
     in:
       raw_counts: counter/feature_counts
       norm_counts: dge/norm_counts

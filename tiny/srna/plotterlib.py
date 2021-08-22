@@ -2,8 +2,8 @@
 
 This module contains functions to create relevant plots for small RNA data for use
 with the tinyRNA pipeline. The plots are built using matplotlib and our style sheet.
-You may override these styles by obtaining a copy of the style sheet (tinyrna get-template),
-modifying it, and passing it to tinyrna-plot via the -s/--style-sheet argument. If
+You may override these styles by obtaining a copy of the style sheet (tiny get-template),
+modifying it, and passing it to tiny-plot via the -s/--style-sheet argument. If
 using this module directly, it may be passed at construction time.
 """
 import pandas as pd

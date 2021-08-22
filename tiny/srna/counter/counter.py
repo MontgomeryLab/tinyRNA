@@ -10,11 +10,11 @@ import os
 from typing import Tuple
 from collections import defaultdict
 
-import tinyrna.srna.counter.hts_parsing as parser
-from tinyrna.srna.counter.FeatureSelector import FeatureSelector
-from tinyrna.srna.counter.statistics import LibraryStats, SummaryStats
-from tinyrna.srna.counter.hts_parsing import SelectionRules, FeatureSources
-from tinyrna.srna.util import report_execution_time, from_here
+import tiny.srna.counter.hts_parsing as parser
+from tiny.srna.counter.FeatureSelector import FeatureSelector
+from tiny.srna.counter.statistics import LibraryStats, SummaryStats
+from tiny.srna.counter.hts_parsing import SelectionRules, FeatureSources
+from tiny.srna.util import report_execution_time, from_here
 
 # Global variables for multiprocessing
 features: 'HTSeq.GenomicArrayOfSets' = HTSeq.GenomicArrayOfSets("auto", stranded=True)
@@ -237,7 +237,7 @@ def main():
         print("\n\nCounter encountered an error. Don't worry! You don't have to start over.\n"
               "You can resume the pipeline at Counter. To do so:\n\t"
               "1. cd into your Run Directory\n\t"
-              '2. Run "tinyrna recount --config your_run_config.yml"\n\t'
+              '2. Run "tiny recount --config your_run_config.yml"\n\t'
               '   (that\'s the processed run config) ^^^\n\n', file=sys.stderr)
 
 
