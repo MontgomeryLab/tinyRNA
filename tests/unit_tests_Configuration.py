@@ -1,6 +1,6 @@
 import unittest
 
-from tiny.srna.Configuration import Configuration
+from tiny.rna.Configuration import Configuration
 
 
 class MyTestCase(unittest.TestCase):

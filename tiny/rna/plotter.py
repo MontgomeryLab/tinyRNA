@@ -16,9 +16,9 @@ from collections import defaultdict
 from typing import Optional, Dict, Union
 from pkg_resources import resource_filename
 
-from tiny.srna.Configuration import timestamp_format
-from tiny.srna.plotterlib import plotterlib as lib
-from tiny.srna.util import report_execution_time
+from tiny.rna.Configuration import timestamp_format
+from tiny.rna.plotterlib import plotterlib as lib
+from tiny.rna.util import report_execution_time
 
 
 def get_args():

@@ -8,7 +8,7 @@ from unittest.mock import patch, MagicMock, call, mock_open, Mock
 from collections import OrderedDict
 from io import StringIO
 
-import tiny.srna.collapser as collapser
+import tiny.rna.collapser as collapser
 
 class MyTestCase(unittest.TestCase):
     @classmethod
@@ -93,7 +93,7 @@ class MyTestCase(unittest.TestCase):
     def test_seq_counter_gzip(self):
         # MIN TEST
         # Need to patch 1) builtins.open in gzip, 2) file_reader in seq_counter's __defaults__
-        with patch('tiny.srna.collapser.gzip.builtins.open', new=mock_open(read_data=self.min_fastq_gz)):
+        with patch('tiny.rna.collapser.gzip.builtins.open', new=mock_open(read_data=self.min_fastq_gz)):
             with patch.object(collapser.seq_counter, '__defaults__', new=(mock_open(read_data=self.min_fastq_gz),)) as mo:
                 # Read the mock gzipped single record fastq file
                 gz_min_result = collapser.seq_counter("mockPrefixDNE")
@@ -107,9 +107,9 @@ class MyTestCase(unittest.TestCase):
     """
     Testing gzip writing in seq2fasta()
     """
-    @patch('tiny.srna.collapser.open', new_callable=mock_open())
+    @patch('tiny.rna.collapser.open', new_callable=mock_open())
     def test_seq2fasta_gzip(self, mock_open_f):
-        with patch('tiny.srna.collapser.gzip.builtins.open', new_callable=mock_open) as gz_open:
+        with patch('tiny.rna.collapser.gzip.builtins.open', new_callable=mock_open) as gz_open:
             # MIN TEST
             collapser.seq2fasta(self.min_counts_dict, "min_gz", gz=True)
             output = reassemble_gz_w(gz_open.mock_calls)
@@ -134,8 +134,8 @@ class MyTestCase(unittest.TestCase):
     or when the specified prefix conflicts with files that already exist.
     """
     @patch('sys.stdout', new_callable=StringIO)
-    @patch('tiny.srna.collapser.os', autospec=True)
-    @patch('tiny.srna.collapser.open', new_callable=mock_open())
+    @patch('tiny.rna.collapser.os', autospec=True)
+    @patch('tiny.rna.collapser.open', new_callable=mock_open())
     def test_seq2fasta_usage(self, mock_open_f, mock_os, mock_stdout):
         # Simulate that prefix "mockPrefixExists" exists for both output files
         mock_os.path.isfile.configure_mock(side_effect=self.prefix_exists_fn)
@@ -173,8 +173,8 @@ class MyTestCase(unittest.TestCase):
     sequence count dictionary, single record fastq, and thresholds of 0 and 1.
     """
     @patch('sys.stdout', new_callable=StringIO)
-    @patch('tiny.srna.collapser.os', autospec=True)
-    @patch('tiny.srna.collapser.open', new_callable=mock_open())
+    @patch('tiny.rna.collapser.os', autospec=True)
+    @patch('tiny.rna.collapser.open', new_callable=mock_open())
     def test_seq2fasta_min(self, mock_open_f, mock_os, mock_stdout):
         # Simulate that prefix "mockPrefixExists" exists for both output files
         mock_os.path.isfile.configure_mock(side_effect=self.prefix_exists_fn)
@@ -225,8 +225,8 @@ class MyTestCase(unittest.TestCase):
     Since test_seq2fasta_min() only tested with a single record fastq at most, this test 
     """
     @patch('sys.stdout', new_callable=StringIO)
-    @patch('tiny.srna.collapser.os', autospec=True)
-    @patch('tiny.srna.collapser.open', new_callable=mock_open())
+    @patch('tiny.rna.collapser.os', autospec=True)
+    @patch('tiny.rna.collapser.open', new_callable=mock_open())
     def test_seq2fasta_thresh_0_4(self, mock_open_f, mock_os, mock_stdout):
         # Simulate that prefix "mockPrefixExists" exists for both output files
         mock_os.path.isfile.configure_mock(side_effect=self.prefix_exists_fn)
@@ -361,8 +361,8 @@ class MyTestCase(unittest.TestCase):
     """
     Testing argparse requirements.
     """
-    @patch('tiny.srna.collapser.os', autospec=True)
-    @patch('tiny.srna.collapser.gzip.os', autospec=True)
+    @patch('tiny.rna.collapser.os', autospec=True)
+    @patch('tiny.rna.collapser.gzip.os', autospec=True)
     @patch('sys.stdout', new_callable=StringIO)
     @patch('sys.stderr',  new_callable=StringIO)
     def test_collapser_args(self, mock_stderr, mock_stdout, os_gz, os_aq):
@@ -412,10 +412,10 @@ class MyTestCase(unittest.TestCase):
         # gzip, and seq2fasta. Also need to mock file existence.
         no_compression_args = f"tiny-collapse -i min_gz -o min_gz".split(" ")
         [os.path.isfile.configure_mock(side_effect=self.prefix_exists_fn) for os in [os_aq, os_gz]]
-        with patch('tiny.srna.collapser.gzip.builtins.open', new=mock_open(read_data=self.min_fastq_gz)) as gzopen:
+        with patch('tiny.rna.collapser.gzip.builtins.open', new=mock_open(read_data=self.min_fastq_gz)) as gzopen:
             with patch.object(collapser.seq_counter, '__defaults__',
                               new=(mock_open(read_data=self.min_fastq_gz),)) as seq_counter_open:
-                with patch('tiny.srna.collapser.open', new_callable=mock_open) as seq2fasta_open:
+                with patch('tiny.rna.collapser.open', new_callable=mock_open) as seq2fasta_open:
 
                     # Without compression (no -c flag)
                     with patch('sys.argv', no_compression_args):

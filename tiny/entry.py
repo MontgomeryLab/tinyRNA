@@ -41,9 +41,9 @@ from cwltool.utils import DEFAULT_TMP_PREFIX
 from pkg_resources import resource_filename
 from argparse import ArgumentParser
 
-from tiny.srna.Configuration import Configuration, ConfigBase
-from tiny.srna.resume import ResumeCounterConfig, ResumePlotterConfig
-from tiny.srna.util import report_execution_time
+from tiny.rna.Configuration import Configuration, ConfigBase
+from tiny.rna.resume import ResumeCounterConfig, ResumePlotterConfig
+from tiny.rna.util import report_execution_time
 
 
 def get_args():

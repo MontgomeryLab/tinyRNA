@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from glob import glob
 
-from tiny.srna.Configuration import ConfigBase, timestamp_format
+from tiny.rna.Configuration import ConfigBase, timestamp_format
 
 
 class ResumeConfig(ConfigBase, ABC):

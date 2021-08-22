@@ -10,11 +10,11 @@ import os
 from typing import Tuple
 from collections import defaultdict
 
-import tiny.srna.counter.hts_parsing as parser
-from tiny.srna.counter.FeatureSelector import FeatureSelector
-from tiny.srna.counter.statistics import LibraryStats, SummaryStats
-from tiny.srna.counter.hts_parsing import SelectionRules, FeatureSources
-from tiny.srna.util import report_execution_time, from_here
+import tiny.rna.counter.hts_parsing as parser
+from tiny.rna.counter.FeatureSelector import FeatureSelector
+from tiny.rna.counter.statistics import LibraryStats, SummaryStats
+from tiny.rna.counter.hts_parsing import SelectionRules, FeatureSources
+from tiny.rna.util import report_execution_time, from_here
 
 # Global variables for multiprocessing
 features: 'HTSeq.GenomicArrayOfSets' = HTSeq.GenomicArrayOfSets("auto", stranded=True)

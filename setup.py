@@ -43,13 +43,13 @@ setuptools.setup(
     entry_points={
         'console_scripts': [
             'tiny = tiny.entry:main',
-            'tiny-config = tiny.srna.Configuration:Configuration.main',
-            'tiny-collapse = tiny.srna.collapser:main',
-            'tiny-count = tiny.srna.counter.counter:main',
-            'tiny-plot = tiny.srna.plotter:main'
+            'tiny-config = tiny.rna.Configuration:Configuration.main',
+            'tiny-collapse = tiny.rna.collapser:main',
+            'tiny-count = tiny.rna.counter.counter:main',
+            'tiny-plot = tiny.rna.plotter:main'
         ]
     },
-    scripts=['tiny/srna/tiny-deseq.r'],
+    scripts=['tiny/rna/tiny-deseq.r'],
     python_requires=REQUIRES_PYTHON,
     install_requires=REQUIRED,
     classifiers=[
