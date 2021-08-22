@@ -42,14 +42,14 @@ setuptools.setup(
     zip_safe=False,
     entry_points={
         'console_scripts': [
-            'tinyrna = tinyrna.entry:main',
-            'tinyrna-config = tinyrna.srna.Configuration:Configuration.main',
-            'tinyrna-collapse = tinyrna.srna.collapser:main',
-            'tinyrna-count = tinyrna.srna.counter.counter:main',
-            'tinyrna-plot = tinyrna.srna.plotter:main'
+            'tiny = tiny.entry:main',
+            'tiny-config = tiny.srna.Configuration:Configuration.main',
+            'tiny-collapse = tiny.srna.collapser:main',
+            'tiny-count = tiny.srna.counter.counter:main',
+            'tiny-plot = tiny.srna.plotter:main'
         ]
     },
-    scripts=['tinyrna/srna/tinyrna-deseq.r'],
+    scripts=['tiny/srna/tiny-deseq.r'],
     python_requires=REQUIRES_PYTHON,
     install_requires=REQUIRED,
     classifiers=[
