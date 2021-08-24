@@ -5,31 +5,32 @@ import shutil
 import sys
 import time
 import unittest
+from glob import glob
 
 import psutil
 
-import aquatx.entry as aquatx
+import tiny.entry as entry
 import tests.unit_test_helpers as helpers
 
 """
 
-Contains tests for aquatx.py, both from direct source-level calls
+Contains tests for entry.py, both from direct source-level calls
 as well as post-install testing of invocation by terminal. Each
 test covers both environments.
 
 """
 
 
-class test_aquatx(unittest.TestCase):
+class test_entry(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         # Change CWD to test folder if test was invoked from project root (ex: by Travis)
-        if os.path.basename(os.getcwd()) == 'aquatx-srna':
+        if os.path.basename(os.getcwd()) == 'tiny':
             os.chdir(f".{os.sep}tests")
 
         # For pre-install tests
-        self.aquatx_cwl_path = '../aquatx/cwl'
-        self.aquatx_extras_path = '../aquatx/extras'
+        self.cwl_path = '../tiny/cwl'
+        self.templates_path = '../tiny/templates'
 
         # For post-install tests
         os.system("pip install -e ../ > /dev/null")
@@ -41,13 +42,13 @@ class test_aquatx(unittest.TestCase):
                 'files': set(),
                 'tools': {
                     'files': {
-                        'aquatx-deseq.cwl', 'aquatx-plot.cwl', 'bowtie.cwl', 'aquatx-collapse.cwl',
-                        'bowtie-build.cwl', 'aquatx-count.cwl', 'fastp.cwl', 'make-subdir.cwl'
+                        'tiny-deseq.cwl', 'tiny-plot.cwl', 'bowtie.cwl', 'tiny-collapse.cwl',
+                        'bowtie-build.cwl', 'tiny-count.cwl', 'fastp.cwl', 'make-subdir.cwl'
                     }
                 },
                 'workflows': {
                     'files': {
-                        'aquatx_wf.cwl', 'per-library.cwl', 'organize-outputs.cwl'
+                        'tinyrna_wf.cwl', 'per-library.cwl', 'organize-outputs.cwl'
                     }
                 }
             }
@@ -60,11 +61,11 @@ class test_aquatx(unittest.TestCase):
 
     def test_get_template(self):
         test_functions = [
-            helpers.LambdaCapture(lambda: aquatx.get_template(self.aquatx_extras_path)),  # The pre-install invocation
-            helpers.ShellCapture("aquatx get-template")                                   # The post-install command
+            helpers.LambdaCapture(lambda: entry.get_template(self.templates_path)),  # The pre-install invocation
+            helpers.ShellCapture("tiny get-template")                                   # The post-install command
         ]
         template_files = ['run_config_template.yml', 'samples.csv', 'features.csv',
-                          'paths.yml', 'aquatx-srna-light.mplstyle']
+                          'paths.yml', 'tinyrna-light.mplstyle']
 
         def dir_entry_ct():
             return len(os.listdir('.'))
@@ -100,8 +101,8 @@ class test_aquatx(unittest.TestCase):
         no_config = ['None', 'none']
         for config in no_config:
             test_functions = [
-                helpers.LambdaCapture(lambda: aquatx.setup_cwl(self.aquatx_cwl_path, config)),
-                helpers.ShellCapture(f"aquatx setup-cwl --config {config}")
+                helpers.LambdaCapture(lambda: entry.setup_cwl(self.cwl_path, config)),
+                helpers.ShellCapture(f"tiny setup-cwl --config {config}")
             ]
 
             for test_context in test_functions:
@@ -130,8 +131,8 @@ class test_aquatx(unittest.TestCase):
 
     def test_setup_cwl_withconfig(self):
         test_functions = [
-            helpers.LambdaCapture(lambda: aquatx.setup_cwl(self.aquatx_cwl_path, self.config_file)),
-            helpers.ShellCapture(f"aquatx setup-cwl --config {self.config_file}")
+            helpers.LambdaCapture(lambda: entry.setup_cwl(self.cwl_path, self.config_file)),
+            helpers.ShellCapture(f"tiny setup-cwl --config {self.config_file}")
         ]
         for test_context in test_functions:
             # So that we may reference the filename in the finally block below
@@ -168,7 +169,7 @@ class test_aquatx(unittest.TestCase):
 
     """
     Test that run invocation produces a cwltool subprocess. Since subprocess.run() 
-    is a blocking call, we need to call aquatx.run() in its own thread so we can 
+    is a blocking call, we need to call tiny.run() in its own thread so we can 
     measure its behavior. Otherwise we would have to wait for the whole pipeline 
     to finish before being able to measure it here, and by that time the relevant 
     subprocesses would have already exited. The post-install command accomplishes
@@ -178,30 +179,35 @@ class test_aquatx(unittest.TestCase):
     def test_run(self):
         # Non-blocking test functions (invocations continue to run in background until test_context is left)
         test_functions = [
-            helpers.LambdaCapture(lambda: aquatx.run(self.aquatx_cwl_path, self.config_file), blocking=False),
-            helpers.ShellCapture(f"aquatx run --config {self.config_file}", blocking=False)
+            helpers.LambdaCapture(lambda: entry.run(self.cwl_path, self.config_file), blocking=False),
+            helpers.ShellCapture(f"tiny run --config {self.config_file}", blocking=False)
         ]
 
         def get_children():
             return psutil.Process(os.getpid()).children(recursive=True)
 
         for test_context in test_functions:
-            with test_context as test:
-                test()
+            try:
+                with test_context as test:
+                    test()
 
-                # Check for cwltool in child processes up to 5 times, waiting 1 second in between
-                for i in range(10):
-                    time.sleep(1)
-                    sub_names = {sub.name() for sub in get_children()}
-                    if 'node' in sub_names:
-                        break
+                    # Check for cwltool in child processes up to 5 times, waiting 1 second in between
+                    for i in range(10):
+                        time.sleep(1)
+                        sub_names = {sub.name() for sub in get_children()}
+                        if 'node' in sub_names:
+                            break
 
-                self.assertIn('node', sub_names,
-                              f"The cwltool subprocess does not appear to have started. Function: {test_context}")
+                    self.assertIn('node', sub_names,
+                                  f"The cwltool subprocess does not appear to have started. Function: {test_context}")
+            finally:
+                run_dirs = glob("./testdata/entry_test_*_run_directory")
+                for dir in run_dirs:
+                    shutil.rmtree(dir)
 
     """
     A very minimal test for the subprocess context manager that is used
-    to execute post-install aquatx commands via a shell.
+    to execute post-install tiny commands via a shell.
     """
 
     def test_ShellCapture_helper(self):
@@ -237,7 +243,7 @@ class test_aquatx(unittest.TestCase):
 
     """
     A very minimal test for the function context manager that is used
-    to execute pre-install invocations of aquatx Python functions
+    to execute pre-install invocations of tiny Python functions
     """
 
     def test_LambdaCapture_helper(self):

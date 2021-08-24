@@ -15,14 +15,14 @@ timestamp_format = re.compile(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}")
 
 
 class ConfigBase:
-    """Base class for basic aquatx configuration operations
+    """Base class for basic tinyrna configuration operations
 
     Attributes:
         yaml: the YAML interface for reading config and writing processed config
         config: the configuration object produced by loading the config file
         inf: the filename of the configuration .yml file to process
         dir: parent directory of the input file. Used for calculating paths relative to config file.
-        extras: path to the package extras directory
+        templates: path to the package templates directory
         dt: a date-time string for default output naming
     """
 
@@ -31,7 +31,7 @@ class ConfigBase:
         self.dir = os.path.dirname(os.path.abspath(config_file))
         self.inf = config_file
         self.basename = os.path.basename(config_file)
-        self.extras = ''
+        self.templates = ''
         self.dt = ''
 
         self.yaml = ruamel.yaml.YAML()
@@ -259,7 +259,7 @@ class Configuration(ConfigBase):
             'run_time': self.dt.split('_')[1]
         })
 
-        default_run_name = '_'.join(x for x in [self['user'], "aquatx"] if x)
+        default_run_name = '_'.join(x for x in [self['user'], "tinyrna"] if x)
         self['run_name'] = self.get('run_name', default=default_run_name) + "_" + self.dt
 
         # Create prefixed Run Directory name
@@ -268,7 +268,7 @@ class Configuration(ConfigBase):
         run_dir_withdt = self['run_name'] + '_' + os.path.basename(run_dir_resolved)
         self['run_directory'] = self.joinpath(run_dir_parent, run_dir_withdt)
 
-        self.extras = resource_filename('aquatx', 'extras/')
+        self.templates = resource_filename('tiny', 'templates/')
 
     def setup_ebwt_idx(self):
         """Bowtie index files and prefix"""

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""The main entry point for AQuATx for small RNA data analysis.
+"""The main entry point for tinyRNA for small RNA data analysis.
 
 This tool provides an end-to-end workflow for analyzing small RNA sequencing
 data from raw fastq files. This entry point also provides options for only
@@ -13,7 +13,7 @@ Subcommands:
     - run
 
 When installed, run, recount and setup-cwl should be invoked with:
-    aquatx <subcommand> --config <config-file>
+    tiny <subcommand> --config <config-file>
 
 The Run Config file should be supplied for the run subcommand (required)
 and for the setup-cwl subcommand (optional; alternatively you may use the
@@ -41,9 +41,9 @@ from cwltool.utils import DEFAULT_TMP_PREFIX
 from pkg_resources import resource_filename
 from argparse import ArgumentParser
 
-from aquatx.srna.Configuration import Configuration, ConfigBase
-from aquatx.srna.resume import ResumeCounterConfig, ResumePlotterConfig
-from aquatx.srna.util import report_execution_time
+from tiny.rna.configuration import Configuration, ConfigBase
+from tiny.rna.resume import ResumeCounterConfig, ResumePlotterConfig
+from tiny.rna.util import report_execution_time
 
 
 def get_args():
@@ -75,7 +75,7 @@ def get_args():
 
 
 @report_execution_time("Pipeline runtime")
-def run(aquatx_cwl_path: str, config_file: str) -> None:
+def run(tinyrna_cwl_path: str, config_file: str) -> None:
     """Processes the provided config file and executes the workflow it defines
 
     The provided configuration file will be processed to reflect the contents of all
@@ -83,7 +83,7 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
     library processing is supported.
 
     Args:
-        aquatx_cwl_path: The path to the project's CWL workflow file directory
+        tinyrna_cwl_path: The path to the project's CWL workflow file directory
         config_file: The configuration file for this run
 
     Returns: None
@@ -97,7 +97,7 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
     run_directory = config_object.create_run_directory()
     cwl_conf_file = config_object.save_run_profile()
 
-    workflow = f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl"
+    workflow = f"{tinyrna_cwl_path}/workflows/tinyrna_wf.cwl"
     parallel = config_object['run_parallel']
     loudness = config_object['verbosity']
 
@@ -122,7 +122,7 @@ def run(aquatx_cwl_path: str, config_file: str) -> None:
 
 
 @report_execution_time("Pipeline resume runtime")
-def resume(aquatx_cwl_path: str, config_file: str, step: str) -> None:
+def resume(tinyrna_cwl_path: str, config_file: str, step: str) -> None:
     """Resumes pipeline execution at either the Counter or Plotter step
 
     The user must invoke this from the RUN DIRECTORY for which they wish to
@@ -135,7 +135,7 @@ def resume(aquatx_cwl_path: str, config_file: str, step: str) -> None:
     (timestamped) counts output directory.
 
     Args:
-        aquatx_cwl_path: The path to the project's CWL file directory
+        tinyrna_cwl_path: The path to the project's CWL file directory
         config_file: The PROCESSED config file for the run to resume
         step: The stepname to serve as the new workflow entrypoint
 
@@ -152,8 +152,8 @@ def resume(aquatx_cwl_path: str, config_file: str, step: str) -> None:
     print(f"Resuming pipeline execution at the {step} step...")
 
     # Make appropriate config and workflow for this step; write modified workflow to disk
-    config = entry_config[step](config_file, f"{aquatx_cwl_path}/workflows/aquatx_wf.cwl")
-    resume_wf = f"{aquatx_cwl_path}/workflows/aquatx-resume.cwl"
+    config = entry_config[step](config_file, f"{tinyrna_cwl_path}/workflows/tinyrna_wf.cwl")
+    resume_wf = f"{tinyrna_cwl_path}/workflows/tiny-resume.cwl"
     config.write_workflow(resume_wf)
 
     if config['run_native']:
@@ -174,7 +174,7 @@ def run_cwltool_subprocess(config_file: str, workflow: str, run_directory=None, 
     """Executes the workflow using a command line invocation of cwltool
 
     Args:
-        config_file: the processed configuration file produced by Configuration.py
+        config_file: the processed configuration file produced by configuration.py
         workflow: the path to the workflow to be executed
         run_directory: the destination folder for workflow output subdirectories (default: CWD)
         parallel: process libraries in parallel where possible
@@ -269,11 +269,11 @@ def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = 
     return 0
 
 
-def get_template(aquatx_extras_path: str) -> None:
+def get_template(templates_path: str) -> None:
     """Copies all configuration file templates to the current working directory
 
     Args:
-        aquatx_extras_path: The path to the project's extras directory. This directory
+        templates_path: The path to the project's templates directory. This directory
             contains templates for the run configuration, sample inputs, feature selection
             rules, the project's matplotlib stylesheet, and paths for all the above.
 
@@ -284,18 +284,18 @@ def get_template(aquatx_extras_path: str) -> None:
     print("Copying template input files to current directory...")
 
     template_files = ['run_config_template.yml', 'samples.csv', 'features.csv',
-                      'paths.yml', 'aquatx-srna-light.mplstyle']
+                      'paths.yml', 'tinyrna-light.mplstyle']
 
     # Copy template files to the current working directory
     for template in template_files:
-        shutil.copyfile(f"{aquatx_extras_path}/{template}", f"{os.getcwd()}/{template}")
+        shutil.copyfile(f"{templates_path}/{template}", f"{os.getcwd()}/{template}")
 
 
-def setup_cwl(aquatx_cwl_path: str, config_file: str) -> None:
+def setup_cwl(tinyrna_cwl_path: str, config_file: str) -> None:
     """Retrieves the project's workflow files, and if provided, processes the run config file
 
     Args:
-        aquatx_cwl_path: The path to the project's CWL workflow file directory
+        tinyrna_cwl_path: The path to the project's CWL workflow file directory
         config_file: The configuration file to be processed (or None/none to skip processing)
 
     Returns: None
@@ -311,7 +311,7 @@ def setup_cwl(aquatx_cwl_path: str, config_file: str) -> None:
         print("The processed configuration file is located at: " + outfile_name)
 
     # Copy the entire cwl directory to the current working directory
-    shutil.copytree(aquatx_cwl_path, os.getcwd() + "/cwl/")
+    shutil.copytree(tinyrna_cwl_path, os.getcwd() + "/cwl/")
     print("The workflow and files are under: cwl/tools/ and cwl/workflows/")
 
 
@@ -342,16 +342,16 @@ def main():
     args = get_args()
 
     # Get the package data
-    aquatx_cwl_path = resource_filename('aquatx', 'cwl/')
-    aquatx_extras_path = resource_filename('aquatx', 'extras/')
+    cwl_path = resource_filename('tiny', 'cwl')
+    templates_path = resource_filename('tiny', 'templates')
 
     # Execute appropriate command based on command line input
     command_map = {
-        "run": lambda: run(aquatx_cwl_path, args.config),
-        "replot": lambda: resume(aquatx_cwl_path, args.config, "Plotter"),
-        "recount": lambda: resume(aquatx_cwl_path, args.config, "Counter"),
-        "setup-cwl": lambda: setup_cwl(aquatx_cwl_path, args.config),
-        "get-template": lambda: get_template(aquatx_extras_path),
+        "run": lambda: run(cwl_path, args.config),
+        "replot": lambda: resume(cwl_path, args.config, "Plotter"),
+        "recount": lambda: resume(cwl_path, args.config, "Counter"),
+        "setup-cwl": lambda: setup_cwl(cwl_path, args.config),
+        "get-template": lambda: get_template(templates_path),
         "setup-nextflow": lambda: setup_nextflow(args.config)
     }
 

@@ -1,4 +1,4 @@
-usage: aquatx-collapse [-h] -i FASTQFILE -o OUTPREFIX [-t THRESHOLD] [-c]
+usage: tiny-collapse [-h] -i FASTQFILE -o OUTPREFIX [-t THRESHOLD] [-c]
 
 Collapse sequences from a fastq file to a fasta file. Headers in the output
 fasta file will contain the number of times each sequence occurred in the

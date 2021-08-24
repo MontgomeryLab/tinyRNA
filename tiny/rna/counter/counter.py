@@ -10,11 +10,11 @@ import os
 from typing import Tuple
 from collections import defaultdict
 
-import aquatx.srna.counter.hts_parsing as parser
-from aquatx.srna.counter.FeatureSelector import FeatureSelector
-from aquatx.srna.counter.statistics import LibraryStats, SummaryStats
-from aquatx.srna.counter.hts_parsing import SelectionRules, FeatureSources
-from aquatx.srna.util import report_execution_time, from_here
+import tiny.rna.counter.hts_parsing as parser
+from tiny.rna.counter.feature_selector import FeatureSelector
+from tiny.rna.counter.statistics import LibraryStats, SummaryStats
+from tiny.rna.counter.hts_parsing import SelectionRules, FeatureSources
+from tiny.rna.util import report_execution_time, from_here
 
 # Global variables for multiprocessing
 features: 'HTSeq.GenomicArrayOfSets' = HTSeq.GenomicArrayOfSets("auto", stranded=True)
@@ -46,7 +46,7 @@ def get_args():
                         help='Save the intermediate file containing all alignments and '
                              'associated features.')
     arg_parser.add_argument('-p', '--is-pipeline', action='store_true',
-                        help='Indicates that counter was invoked from the aquatx pipeline '
+                        help='Indicates that counter was invoked from the tinyrna pipeline '
                              'and that input files should be sources as such.')
     arg_parser.add_argument('-d', '--diagnostics', action='store_true',
                         help='Produce diagnostic information about uncounted/eliminated '
@@ -237,7 +237,7 @@ def main():
         print("\n\nCounter encountered an error. Don't worry! You don't have to start over.\n"
               "You can resume the pipeline at Counter. To do so:\n\t"
               "1. cd into your Run Directory\n\t"
-              '2. Run "aquatx recount --config your_run_config.yml"\n\t'
+              '2. Run "tiny recount --config your_run_config.yml"\n\t'
               '   (that\'s the processed run config) ^^^\n\n', file=sys.stderr)
 
 

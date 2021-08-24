@@ -41,6 +41,7 @@ inputs:
  
   compression:
     type: int?
+    default: 4
     inputBinding:
       prefix: --compression
     doc: |
@@ -67,6 +68,7 @@ inputs:
 
   adapter_sequence:
     type: string?
+    default: 'auto'
     inputBinding:
       prefix: --adapter_sequence
     doc: |
@@ -102,27 +104,27 @@ inputs:
 
   qualified_quality_phred:
     type: int?
+    default: 15
     inputBinding:
       prefix: --qualified_quality_phred
-    default: 30
     doc: |
       the quality value that a base is qualified. Default
       15 means phred quality >=Q15 is qualified. (int [=15])
 
   unqualified_percent_limit:
     type: int?
+    default: 0
     inputBinding:
       prefix: --unqualified_percent_limit
-    default: 0
     doc: |
       how many percents of bases are allowed to be unqualified
       (0~100). Default 40 means 40% (int [=40])
 
   n_base_limit:
     type: int?
+    default: 1
     inputBinding:
       prefix: --n_base_limit
-    default: 1
     doc: |
       if one read's number of N base is >n_base_limit, then
       this read/pair is discarded. Default is 5 (int [=5])
@@ -138,18 +140,18 @@ inputs:
   
   length_required:
     type: int?
+    default: 15
     inputBinding:
       prefix: --length_required
-    default: 15
     doc: |
       reads shorter than length_required will be discarded,
       default is 15. (int [=15]) 
 
   length_limit:
     type: int?
+    default: 30
     inputBinding:
       prefix: --length_limit
-    default: 30
     doc: |
       reads longer than length_limit will be discarded,
       default 0 means no limitation. (int [=0])

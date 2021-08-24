@@ -6,9 +6,9 @@ import setuptools
 from setuptools.command.install import install
 
 # Package metadata
-NAME = 'aquatx'
+NAME = 'tinyrna'
 DESCRIPTION = 'Automated Quantitative Analysis of Transcript Expression'
-URL = 'https://github.com/MontgomeryLab/aquatx-srna/'
+URL = 'https://github.com/MontgomeryLab/tinyrna/'
 EMAIL = 'ajtate@colostate.edu'
 AUTHOR = 'Kristen Brown, Alex Tate'
 REQUIRES_PYTHON = '>=3.7.0'
@@ -36,20 +36,20 @@ setuptools.setup(
     cmdclass={'install': PreFlight},
     packages=setuptools.find_packages(exclude=['tests/*']),
     include_package_data=True,
-    package_data={'aquatx': ['cwl/tools/*.cwl',
+    package_data={'tinyrna': ['cwl/tools/*.cwl',
                              'cwl/workflows/*.cwl', 
-                             'extras/*']},
+                             'templates/*']},
     zip_safe=False,
     entry_points={
         'console_scripts': [
-            'aquatx = aquatx.entry:main',
-            'aquatx-config = aquatx.srna.Configuration:Configuration.main',
-            'aquatx-collapse = aquatx.srna.collapser:main',
-            'aquatx-count = aquatx.srna.counter.counter:main',
-            'aquatx-plot = aquatx.srna.plotter:main'
+            'tiny = tiny.entry:main',
+            'tiny-config = tiny.rna.Configuration:Configuration.main',
+            'tiny-collapse = tiny.rna.collapser:main',
+            'tiny-count = tiny.rna.counter.counter:main',
+            'tiny-plot = tiny.rna.plotter:main'
         ]
     },
-    scripts=['aquatx/srna/aquatx-deseq.r'],
+    scripts=['tiny/rna/tiny-deseq.r'],
     python_requires=REQUIRES_PYTHON,
     install_requires=REQUIRED,
     classifiers=[

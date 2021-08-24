@@ -1,10 +1,10 @@
 # Getting Started
 
-This folder (`START_HERE`) contains a working configuration and a sample input dataset derived from C. elegans chromosome 1 of Wormbase WS279. We've assembled this configuration to make it easy to start using AQuATx, and to provide a basis from which you may model your project's configuration.
+This folder (`START_HERE`) contains a working configuration and a sample input dataset derived from C. elegans chromosome 1 of Wormbase WS279. We've assembled this configuration to make it easy to start using tinyRNA, and to provide a basis from which you may model your project's configuration.
 
 ## Installation
 
-Installation is pretty easy. You'll install AQuATx in an isolated environment so that it (and its dependencies) don't interfere with your daily. We've provided an environment file to make things simple. First, you'll need to install `conda` for managing the environment.
+Installation is pretty easy. You'll install tinyRNA in an isolated environment so that it (and its dependencies) don't interfere with your daily. We've provided an environment file to make things simple. First, you'll need to install `conda` for managing the environment.
 
 #### 1. Install conda
 To install `conda` with the least time and disk space commitment, you can download and follow instructions for [Miniconda3](https://docs.conda.io/en/latest/miniconda.html), which contains only conda and its dependencies.
@@ -15,15 +15,15 @@ Rather than installing R via conda, we recommend you install it yourself first f
 #### 3a. XQuartz (mac only)
 DESeq2 is quiet about it, but if you're on a mac you'll also need to download and install [XQuartz](https://www.xquartz.org/).
 
-#### 3b. Install AQuATx
+#### 3b. Install tinyRNA
 
-To install AQuATx and its remaining dependencies:
+To install tinyRNA and its remaining dependencies:
 ```
 # Clone the repository into a local directory
-git clone https://github.com/MontgomeryLab/aquatx-srna.git
-cd aquatx-srna
+git clone https://github.com/MontgomeryLab/tinyrna.git
+cd tinyrna
 
-# Install the aquatx-srna environment and dependencies
+# Install the tinyrna environment and dependencies
 conda env create -f environment.yml
 ```
 
@@ -41,11 +41,11 @@ Here's what you'll find:
 ## First run
 All of the above files are mapped out in `run_config.yml` and the tree of configuration files that it references. Since we already have a working configuration let's run an end-to-end analysis on our sample data using the command:
 ```
-aquatx run --config run_config.yml
+tinyrna run --config run_config.yml
 ```
-Did you receive "command not found"? Make sure that you activate the aquatx environment before using it.
+Did you receive "command not found"? Make sure that you activate the tinyrna environment before using it.
 ```
-conda activate aquatx-srna
+conda activate tinyrna
 ```
 And when you're done, you can close your terminal or use `conda deactivate` to return to a normal shell.
 

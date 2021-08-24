@@ -3,7 +3,7 @@
 cwlVersion: v1.0
 class: CommandLineTool
 
-baseCommand: aquatx-plot
+baseCommand: tiny-plot
 
 inputs:
   raw_counts:
@@ -34,7 +34,7 @@ inputs:
     type: File?
     inputBinding:
       prefix: -s
-    doc: "A .mplstyle sheet to use instead of aquatx default styles"
+    doc: "A .mplstyle sheet to use instead of tinyrna default styles"
 
   out_prefix:
     type: string?
