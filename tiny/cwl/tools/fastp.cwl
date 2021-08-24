@@ -102,9 +102,18 @@ inputs:
       quality filtering is enabled by default. If this
       option is specified, quality filtering is disabled
 
+  average_qual:
+    type: int?
+    default: 30
+    inputBinding:
+      prefix: --average_qual
+    doc: |
+      if one read's average quality score <avg_qual, then this
+      read is discarded. Default 0 means no requirement (int [=0])
+
   qualified_quality_phred:
     type: int?
-    default: 15
+    default: 20
     inputBinding:
       prefix: --qualified_quality_phred
     doc: |
@@ -113,7 +122,7 @@ inputs:
 
   unqualified_percent_limit:
     type: int?
-    default: 0
+    default: 10
     inputBinding:
       prefix: --unqualified_percent_limit
     doc: |
@@ -149,7 +158,7 @@ inputs:
 
   length_limit:
     type: int?
-    default: 30
+    default: 35
     inputBinding:
       prefix: --length_limit
     doc: |

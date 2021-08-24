@@ -43,7 +43,7 @@ verbosity: normal
 run_parallel: False
 
 ##-- (EXPERIMENTAL) If True: execute the pipeline using native cwltool Python --##
-run_native: False
+run_native: True
 
 ######------------------------- BOWTIE INDEX BUILD OPTIONS --------------------------######
 #
@@ -89,13 +89,16 @@ adapter_sequence: 'auto'
 
 ##-- Minumum & maximum accepted lengths after trimming --##
 length_required: 15
-length_limit: 30
+length_limit: 35
+
+##-- Minimum average score for a read to pass quality filter --##
+average_qual: 35
 
 ##-- Minimum phred score for a base to pass quality filter --##
-qualified_quality_phred: 15
+qualified_quality_phred: 20
 
 ##-- Minimum % of bases that can be below minimum phred score (above) --##
-unqualified_percent_limit: 0
+unqualified_percent_limit: 10
 
 ##-- Minimum allowed number of bases --##
 n_base_limit: 1
