@@ -9,7 +9,7 @@ from glob import glob
 
 import psutil
 
-import tinyrna.entry as entry
+import tiny.entry as entry
 import tests.unit_test_helpers as helpers
 
 """
@@ -29,8 +29,8 @@ class test_entry(unittest.TestCase):
             os.chdir(f".{os.sep}tests")
 
         # For pre-install tests
-        self.tinyrna_cwl_path = '../tinyrna/cwl'
-        self.tinyrna_extras_path = '../tinyrna/extras'
+        self.cwl_path = '../tiny/cwl'
+        self.templates_path = '../tiny/templates'
 
         # For post-install tests
         os.system("pip install -e ../ > /dev/null")
@@ -61,7 +61,7 @@ class test_entry(unittest.TestCase):
 
     def test_get_template(self):
         test_functions = [
-            helpers.LambdaCapture(lambda: entry.get_template(self.tinyrna_extras_path)),  # The pre-install invocation
+            helpers.LambdaCapture(lambda: entry.get_template(self.templates_path)),  # The pre-install invocation
             helpers.ShellCapture("tiny get-template")                                   # The post-install command
         ]
         template_files = ['run_config_template.yml', 'samples.csv', 'features.csv',
@@ -101,7 +101,7 @@ class test_entry(unittest.TestCase):
         no_config = ['None', 'none']
         for config in no_config:
             test_functions = [
-                helpers.LambdaCapture(lambda: entry.setup_cwl(self.tinyrna_cwl_path, config)),
+                helpers.LambdaCapture(lambda: entry.setup_cwl(self.cwl_path, config)),
                 helpers.ShellCapture(f"tiny setup-cwl --config {config}")
             ]
 
@@ -131,7 +131,7 @@ class test_entry(unittest.TestCase):
 
     def test_setup_cwl_withconfig(self):
         test_functions = [
-            helpers.LambdaCapture(lambda: entry.setup_cwl(self.tinyrna_cwl_path, self.config_file)),
+            helpers.LambdaCapture(lambda: entry.setup_cwl(self.cwl_path, self.config_file)),
             helpers.ShellCapture(f"tiny setup-cwl --config {self.config_file}")
         ]
         for test_context in test_functions:
@@ -179,7 +179,7 @@ class test_entry(unittest.TestCase):
     def test_run(self):
         # Non-blocking test functions (invocations continue to run in background until test_context is left)
         test_functions = [
-            helpers.LambdaCapture(lambda: entry.run(self.tinyrna_cwl_path, self.config_file), blocking=False),
+            helpers.LambdaCapture(lambda: entry.run(self.cwl_path, self.config_file), blocking=False),
             helpers.ShellCapture(f"tiny run --config {self.config_file}", blocking=False)
         ]
 
