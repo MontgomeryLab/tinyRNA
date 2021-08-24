@@ -6,7 +6,7 @@ import os
 from typing import Tuple, Union
 from collections import Counter, defaultdict
 
-from .FeatureSelector import FeatureSelector
+from .feature_selector import FeatureSelector
 from .hts_parsing import Alignment
 
 

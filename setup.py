@@ -38,7 +38,7 @@ setuptools.setup(
     include_package_data=True,
     package_data={'tinyrna': ['cwl/tools/*.cwl',
                              'cwl/workflows/*.cwl', 
-                             'extras/*']},
+                             'templates/*']},
     zip_safe=False,
     entry_points={
         'console_scripts': [

@@ -11,8 +11,8 @@
 ######-------------------------------------------------------------------------------######
 
 ##-- Path to Sample & Features Sheets (relative paths are relative to this config file) --##
-samples_csv: '../../tiny/extras/samples.csv'
-features_csv: '../../tiny/extras/features.csv'
+samples_csv: '../../tiny/templates/samples.csv'
+features_csv: '../../tiny/templates/features.csv'
 
 ##-- The final output directory for files produced by the pipeline --#
 run_directory: run_directory

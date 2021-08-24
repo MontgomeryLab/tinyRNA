@@ -11,7 +11,7 @@ from typing import Tuple
 from collections import defaultdict
 
 import tiny.rna.counter.hts_parsing as parser
-from tiny.rna.counter.FeatureSelector import FeatureSelector
+from tiny.rna.counter.feature_selector import FeatureSelector
 from tiny.rna.counter.statistics import LibraryStats, SummaryStats
 from tiny.rna.counter.hts_parsing import SelectionRules, FeatureSources
 from tiny.rna.util import report_execution_time, from_here

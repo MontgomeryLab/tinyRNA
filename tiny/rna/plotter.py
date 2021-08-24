@@ -16,7 +16,7 @@ from collections import defaultdict
 from typing import Optional, Dict, Union
 from pkg_resources import resource_filename
 
-from tiny.rna.Configuration import timestamp_format
+from tiny.rna.configuration import timestamp_format
 from tiny.rna.plotterlib import plotterlib as lib
 from tiny.rna.util import report_execution_time
 
@@ -44,7 +44,7 @@ def get_args():
     parser.add_argument('-o', '--out-prefix', metavar='OUTFILE', default='',
                         help='Optional prefix to use for output PDF files.')
     parser.add_argument('-s', '--style-sheet', metavar='MPLSTYLE',
-                        default=resource_filename('tiny', 'extras/tinyrna-light.mplstyle'),
+                        default=resource_filename('tiny', 'templates/tinyrna-light.mplstyle'),
                         help='Optional matplotlib style sheet to use for plots.')
     parser.add_argument('-p', '--plots', metavar='PLOTS', required=True, nargs='+',
                         help='List of plots to create. Options: \n'

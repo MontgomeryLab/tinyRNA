@@ -41,7 +41,7 @@ from cwltool.utils import DEFAULT_TMP_PREFIX
 from pkg_resources import resource_filename
 from argparse import ArgumentParser
 
-from tiny.rna.Configuration import Configuration, ConfigBase
+from tiny.rna.configuration import Configuration, ConfigBase
 from tiny.rna.resume import ResumeCounterConfig, ResumePlotterConfig
 from tiny.rna.util import report_execution_time
 
@@ -174,7 +174,7 @@ def run_cwltool_subprocess(config_file: str, workflow: str, run_directory=None, 
     """Executes the workflow using a command line invocation of cwltool
 
     Args:
-        config_file: the processed configuration file produced by Configuration.py
+        config_file: the processed configuration file produced by configuration.py
         workflow: the path to the workflow to be executed
         run_directory: the destination folder for workflow output subdirectories (default: CWD)
         parallel: process libraries in parallel where possible
@@ -269,11 +269,11 @@ def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = 
     return 0
 
 
-def get_template(tinyrna_extras_path: str) -> None:
+def get_template(templates_path: str) -> None:
     """Copies all configuration file templates to the current working directory
 
     Args:
-        tinyrna_extras_path: The path to the project's extras directory. This directory
+        templates_path: The path to the project's templates directory. This directory
             contains templates for the run configuration, sample inputs, feature selection
             rules, the project's matplotlib stylesheet, and paths for all the above.
 
@@ -288,7 +288,7 @@ def get_template(tinyrna_extras_path: str) -> None:
 
     # Copy template files to the current working directory
     for template in template_files:
-        shutil.copyfile(f"{tinyrna_extras_path}/{template}", f"{os.getcwd()}/{template}")
+        shutil.copyfile(f"{templates_path}/{template}", f"{os.getcwd()}/{template}")
 
 
 def setup_cwl(tinyrna_cwl_path: str, config_file: str) -> None:
@@ -342,16 +342,16 @@ def main():
     args = get_args()
 
     # Get the package data
-    tinyrna_cwl_path = resource_filename('tiny', 'cwl')
-    tinyrna_extras_path = resource_filename('tiny', 'extras')
+    cwl_path = resource_filename('tiny', 'cwl')
+    templates_path = resource_filename('tiny', 'templates')
 
     # Execute appropriate command based on command line input
     command_map = {
-        "run": lambda: run(tinyrna_cwl_path, args.config),
-        "replot": lambda: resume(tinyrna_cwl_path, args.config, "Plotter"),
-        "recount": lambda: resume(tinyrna_cwl_path, args.config, "Counter"),
-        "setup-cwl": lambda: setup_cwl(tinyrna_cwl_path, args.config),
-        "get-template": lambda: get_template(tinyrna_extras_path),
+        "run": lambda: run(cwl_path, args.config),
+        "replot": lambda: resume(cwl_path, args.config, "Plotter"),
+        "recount": lambda: resume(cwl_path, args.config, "Counter"),
+        "setup-cwl": lambda: setup_cwl(cwl_path, args.config),
+        "get-template": lambda: get_template(templates_path),
         "setup-nextflow": lambda: setup_nextflow(args.config)
     }
 
