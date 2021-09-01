@@ -6,6 +6,7 @@ from collections import defaultdict, Counter
 from typing import List, Tuple, FrozenSet, Dict, Set
 
 from .hts_parsing import Alignment
+from .statistics import LibraryStats
 
 # Type aliases for human readability
 IntervalFeatures = Tuple[int, int, Set[str]]  # A set of features associated with an interval
@@ -37,7 +38,7 @@ class FeatureSelector:
 
     attributes = {}
 
-    def __init__(self, rules: List[dict], reference_table: Dict):
+    def __init__(self, rules: List[dict], reference_table: Dict, libstats: 'LibraryStats', diags=False):
         FeatureSelector.attributes = reference_table
         self.interest = ('Identity', 'Strand', 'nt5', 'Length')
         self.rules_table = sorted(rules, key=lambda x: x['Hierarchy'])
@@ -49,9 +50,7 @@ class FeatureSelector:
             inverted_identities[rule['Identity']].append(i)
         self.inv_ident = dict(inverted_identities)
 
-        self.report_eliminations = False
-        self.elim_stats: defaultdict['Counter']
-        self.phase1_candidates: set
+        self.set_stats_collectors(libstats, diags)
 
     def choose(self, feat_list: List[IntervalFeatures], alignment: 'Alignment') -> set:
         # Perform hierarchy-based first round of selection for identities
@@ -68,7 +67,7 @@ class FeatureSelector:
                 if read not in self.rules_table[hit[RULE]][step]:
                     eliminated.add(hit)
                     if self.report_eliminations:
-                        feat_class = self.attributes[hit[FEAT]][0][1][0]
+                        feat_class = FeatureSelector.attributes[hit[FEAT]][0][1][0]
                         self.elim_stats[feat_class][f"{step}={read}"] += 1
 
             finalists -= eliminated
@@ -184,7 +183,7 @@ class FeatureSelector:
                 if not wildcard(step):
                     row[step] = filt()
 
-    def set_stats_collectors(self, libstats: 'LibraryStats', diags=False):
+    def set_stats_collectors(self, libstats: 'LibraryStats', diags: bool):
         """Enables diagnostic reporting for eliminations made in selection phase 2"""
 
         self.phase1_candidates = libstats.identity_roster

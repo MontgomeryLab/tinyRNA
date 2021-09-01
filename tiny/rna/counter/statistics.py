@@ -10,6 +10,13 @@ from .feature_selector import FeatureSelector
 from .hts_parsing import Alignment
 
 
+class Diagnostics:
+    def __init__(self):
+        self.alignment_diags = {stat: 0 for stat in SummaryStats.aln_diag_categories}
+        self.selection_diags = defaultdict(Counter)
+        self.alignments = []
+
+
 class LibraryStats:
     class Bundle:
         def __init__(self, loci_count, read_count, corr_count):
@@ -27,19 +34,16 @@ class LibraryStats:
                           'Reads Assigned to Multiple Features', 'Sequences Assigned to Multiple Features',
                           'Total Unassigned Reads', 'Total Unassigned Sequences']
 
-    def __init__(self, library: dict, out_prefix: str = None, save_intermediate_file: bool = False, diag: bool = False):
+    def __init__(self, library: dict, out_prefix: str = None, diag: bool = False):
         self.library = library
         self.out_prefix = out_prefix
-        self.save_intermediate_file = save_intermediate_file
-        self.diag = diag
+        self.diags = Diagnostics() if diag else None
 
         self.feat_counts = Counter()
         self.nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
         self.library_stats = {stat: 0 for stat in LibraryStats.summary_categories}
-        self.alignment_diags = {stat: 0 for stat in SummaryStats.aln_diag_categories}
-        self.selection_diags = defaultdict(Counter)
+
         self.identity_roster = set()
-        self.alignments = []
 
     def count_bundle(self, aln_bundle: iter) -> Bundle:
         """Called for each multiple-alignment bundle before it is processed"""
@@ -80,10 +84,9 @@ class LibraryStats:
             for feat in assignments:
                 self.feat_counts[feat] += feature_corrected_count
 
-        if self.save_intermediate_file:
-            self.record_alignment_details(aln, bundle, assignments)
-        if self.diag:
+        if self.diags is not None:
             self.record_diagnostics(assignments, n_candidates, aln, bundle)
+            self.record_alignment_details(aln, bundle, assignments)
 
     def finalize_bundle(self, bundle: Bundle) -> None:
         """Called at the conclusion of processing each multiple-alignment bundle"""
@@ -101,10 +104,10 @@ class LibraryStats:
             self.library_stats['Assigned Multi-Mapping Reads'] += bundle.read_count * (bundle.loci_count > 1)
 
     def record_alignment_details(self, aln, bundle, assignments):
-        """Record detailed alignment info if user elects to save intermediate files
+        """Record detailed alignment info if user elects to save diagnostics info with the run
 
         This is called once per locus per read (every alignment) when the user elects to save
-        intermediate files. The recorded information is later written to {library['Name']}_aln_table.txt
+        diagnostics. The recorded information is later written to {library['Name']}_aln_table.txt
         after the entire SAM file has been processed."""
 
         # Perform reverse complement for anti-sense reads
@@ -113,7 +116,7 @@ class LibraryStats:
             else aln.read.seq[::-1].translate(self.complement)
 
         # sequence, cor_counts, strand, start, end, feat1;feat2;feat3
-        self.alignments.append((read, bundle.corr_count, aln.iv.strand, aln.iv.start, aln.iv.end,
+        self.diags.alignments.append((read, bundle.corr_count, aln.iv.strand, aln.iv.start, aln.iv.end,
                                 ';'.join(assignments)))
 
     def write_intermediate_file(self) -> None:
@@ -124,7 +127,7 @@ class LibraryStats:
         with open(f"{self.out_prefix}_{self.library['Name']}_aln_table.txt", 'w') as imf:
             imf.writelines(
                 # sequence, cor_counts, strand, start, end, feat1a/feat1b;feat2;...
-                map(lambda rec: "%s\t%f\t%c\t%d\t%d\t%s\n" % rec, self.alignments)
+                map(lambda rec: "%s\t%f\t%c\t%d\t%d\t%s\n" % rec, self.diags.alignments)
             )
 
     def record_diagnostics(self, assignments, n_candidates, aln, bundle):
@@ -132,13 +135,13 @@ class LibraryStats:
 
         if len(assignments) == 0:
             if aln.iv.strand == '+':
-                self.alignment_diags['Uncounted alignments (+)'] += 1
+                self.diags.alignment_diags['Uncounted alignments (+)'] += 1
             else:
-                self.alignment_diags['Uncounted alignments (-)'] += 1
+                self.diags.alignment_diags['Uncounted alignments (-)'] += 1
             if n_candidates == 0:
-                self.alignment_diags['No feature counts'] += bundle.corr_count
+                self.diags.alignment_diags['No feature counts'] += bundle.corr_count
             else:
-                self.alignment_diags['Eliminated counts'] += bundle.corr_count
+                self.diags.alignment_diags['Eliminated counts'] += bundle.corr_count
 
 
 class SummaryStats:
@@ -149,9 +152,8 @@ class SummaryStats:
     aln_diag_categories = ['Eliminated counts', 'No feature counts',
                            'Uncounted alignments (+)', 'Uncounted alignments (-)']
 
-    def __init__(self, out_prefix, report_diagnostics=False):
+    def __init__(self, out_prefix):
         self.out_prefix = out_prefix
-        self.report_diagnostics = report_diagnostics
 
         # Will become False if an added library lacks its corresponding Collapser and Bowtie outputs
         self.report_summary_statistics = True
@@ -159,10 +161,12 @@ class SummaryStats:
         self.pipeline_stats_df = pd.DataFrame(index=SummaryStats.summary_categories)
         self.feat_counts_df = pd.DataFrame(index=FeatureSelector.attributes.keys())
         self.lib_stats_df = pd.DataFrame(index=LibraryStats.summary_categories)
-        self.aln_diags = pd.DataFrame(columns=SummaryStats.aln_diag_categories)
         self.identity_roster = set()
-        self.selection_diags = {}
         self.nt_len_mat = {}
+
+        # Only populated if a LibraryStat contains a diagnostics instance variable
+        self.aln_diags = pd.DataFrame(columns=SummaryStats.aln_diag_categories)
+        self.selection_diags = {}
 
     def write_report_files(self, alias: dict, prefix=None) -> None:
         if prefix is None: prefix = self.out_prefix
@@ -218,7 +222,8 @@ class SummaryStats:
         summary.to_csv(prefix + '_feature_counts.csv', index=False)
 
     def write_diagnostics(self, prefix: str) -> None:
-        if not self.report_diagnostics: return
+        if any([d is None for d in [self.selection_diags, self.aln_diags]]): return
+
         self.aln_diags = self.sort_cols_and_round(self.aln_diags, "index")
         self.aln_diags.index.name = "Sample"
         self.aln_diags.to_csv(prefix + "_alignment_diags.csv")
