@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-#### ---- Get the command line arguments ---- ####
+#### ---- Validate the provided command line arguments ---- ####
 
 args <- commandArgs(trailingOnly = TRUE)
 usage <- "The following arguments are accepted:
@@ -17,10 +17,14 @@ usage <- "The following arguments are accepted:
 
        --pca
               Optional. This will produce principle component analysis plots
-              using the DESeq2 library. Output files are PDF format."
+              using the DESeq2 library. Output files are PDF format.
 
+       --drop-zero
+              Optional. Prior to performing analysis, this will drop all
+              rows/features which have a zero count in all libraries."
+
+## Returns the provided data as a dataframe with a corresponding classes column, regardless of order
 df_with_classes <- function(data){
-  # Returns the provided data as a dataframe with a corresponding classes column, regardless of order
   return(
     transform(
       merge(classes, data.frame(data), by=0),
@@ -31,7 +35,7 @@ df_with_classes <- function(data){
 }
 
 ## Throw an error if an unexpected number of arguments is provided
-if (length(args) > 5){
+if (length(args) > 6){
   stop(gettextf("Too many arguments given. %d arguments were parsed.
   Was there an unquoted space in your arguments?\n\n%s", length(args), usage))
 } else if (length(args) == 0){
@@ -44,11 +48,12 @@ if (length(args) > 5){
 count_file <- args[match('--input-file', args) + 1]
 out_pref <- args[match('--outfile-prefix', args) + 1]
 plot_pca <- '--pca' %in% args
+drop_zero <- '--drop-zero' %in% args
 
-## Make sure that argument parameters weren't skipped
-if (out_pref %in% c('--input-file', '--pca')){
+## Make sure that required argument parameters weren't skipped
+if (out_pref %in% c('--input-file', '--pca', '--drop-zero')){
   stop(gettextf("Please be sure to include your outfile prefix.\n\n%s", usage))
-} else if (count_file %in% c('--outfile-prefix', '--pca')){
+} else if (count_file %in% c('--outfile-prefix', '--pca', '--drop-zero')){
   stop(gettextf("Please be sure to include your count file.\n\n%s", usage))
 }
 
@@ -59,45 +64,66 @@ library(utils)
 
 #### ---- Set up the parameters ---- ####
 
-counts <- read.csv(count_file,row.names = 1)
+## Resolve relative paths and perform tilde expansion for input file path
+count_file <- normalizePath(count_file)
+
+## DESeq2 prefers R-safe column names. We want to preserve the original col names to use in final outputs
+orig_sample_names <- colnames(read.csv(count_file, check.names = FALSE, row.names = 1, nrows = 1))[-(1:2)]
+
+## Read counts CSV with sanitized column names for handling. Subset classes.
+counts <- read.csv(count_file, row.names = 1)
 classes <- data.frame(counts[2])
-# Feature Name and Feature Class columns need to be dropped before integer sapply
-counts <- data.frame(sapply(counts[3:length(counts)], as.integer), row.names = rownames(counts))
-# Create a data frame matching the file, name, condition
+
+## Subset counts table to drop Feature Name and Feature Class columns before integer sapply
+counts <- data.frame(sapply(counts[-(1:2)], as.integer), row.names = rownames(counts))
+
+## Remove rows containing all zeros if user requests
+if (drop_zero){
+  counts <- counts[rowSums(counts[]) > 0, ]
+}
+
+## Get samples and corresponding conditions
 samples <- colnames(counts)
 sampleCondition <- rep('none', length(samples))
-for (i in 1:length(samples)){
+for (i in seq_along(samples)){
   sample <- as.character(samples[i])
   sampleCondition[i] <- strsplit(sample, '_rep_')[[1]][1]
 }
 
-# Create the deseqdataset
+## Create the deseqdataset
 sample_table <- data.frame(row.names=samples, condition=factor(sampleCondition))
-deseq_ds <- DESeqDataSetFromMatrix(countData = counts, colData = sample_table, design = ~ condition)
+deseq_ds <- DESeq2::DESeqDataSetFromMatrix(countData = counts, colData = sample_table, design = ~ condition)
 
 #### ---- Run DESeq2 & write outputs ---- ####
 
-# Create the DESeq Object
-deseq_run <- DESeq(deseq_ds)
+## Create the DESeq Object
+deseq_run <- DESeq2::DESeq(deseq_ds)
 
-# Get the normalized counts
+## Produce PCA plot if requested
+if (plot_pca){
+    plt <- plotPCA(DESeq2::rlog(deseq_ds))
+    trellis.device(device="pdf", file=paste(out_pref, "pca_plot.pdf", sep="_"))
+    print(plt)
+    dev.off()
+}
+
+# Get normalized counts and write them to CSV with original sample names in header
 deseq_counts <- df_with_classes(counts(deseq_run, normalized=TRUE))
+colnames(deseq_counts) <- c("Feature Class", unname(orig_sample_names))
 write.csv(deseq_counts, paste(out_pref, "norm_counts.csv", sep="_"))
 
 # Create & retrieve all possible comparisons
 all_comparisons <- t(combn(unique(sampleCondition), 2))
-for (i in 1:nrow(all_comparisons)){
+for (i in seq_len(nrow(all_comparisons))){
   comparison <- all_comparisons[i,]
 
-  deseq_res <- results(deseq_run, c("condition", comparison[1], comparison[2]))
+  deseq_res <- DESeq2::results(deseq_run, c("condition", comparison[1], comparison[2]))
   result_df <- df_with_classes(deseq_res[order(deseq_res$padj),])
-  write.csv(result_df, paste(out_pref, "cond1", comparison[1], "cond2", comparison[2], "deseq_table.csv", sep="_"))
+  colnames(result_df)[1] <- "Feature Class"
 
-  if (plot_pca){
-    plt <- plotPCA(rlog(deseq_ds))
-    trellis.device(device="pdf", file=paste(out_pref, "cond1", comparison[1], "cond2", comparison[2], "pca_plot.pdf", sep="_"))
-    print(plt)
-    dev.off()
-  }
+  write.csv(
+    result_df,
+    paste(out_pref, "cond1", comparison[1], "cond2", comparison[2], "deseq_table.csv", sep="_")
+  )
 }
 
