@@ -106,6 +106,9 @@ n_base_limit: 1
 ##-- Compression level for gzip output --##
 compression: 4
 
+##-- Disable duplicaiton evaluation to improve performance --##
+dont_eval_duplication: True
+
 ###-- Unused optional inputs: Remove '#' in front to use --###
 ##-- Trim poly x tails of a given length --##
 # trim_poly_x: false
