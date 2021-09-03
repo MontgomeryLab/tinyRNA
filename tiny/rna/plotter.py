@@ -298,24 +298,6 @@ def scatter_samples(count_df, output_prefix, classes=None, dges=None, show_unkno
             sscat.figure.savefig(pdf_name, bbox_inches='tight')
 
 
-def get_r_safename(name: str) -> str:
-    """Converts a string to a syntactically valid R name
-
-    This is used on tables which haven't been produced by R (ex: raw_counts),
-    so that column headers match the column headers of those that have (ex: norm_counts).
-    https://stat.ethz.ch/R-manual/R-devel/library/base/html/make.names.html
-
-    Args:
-        name: The string to be sanitized
-    Returns:
-        The sanitized string
-    """
-
-    leading_char = lambda x: re.sub(r"^(?=[^a-zA-Z.]+|\.\d)", "X", x)
-    special_char = lambda x: re.sub(r"[^a-zA-Z0-9_.]", ".", x)
-    return special_char(leading_char(name))
-
-
 def load_raw_counts(raw_counts_file: str) -> Optional[pd.DataFrame]:
     """Loads a raw_counts CSV as a DataFrame and sanitizes its column headers
     Args:
@@ -326,7 +308,6 @@ def load_raw_counts(raw_counts_file: str) -> Optional[pd.DataFrame]:
 
     if raw_counts_file is None: return None
     raw_count_df = pd.read_csv(raw_counts_file, index_col=0)
-    raw_count_df.rename(get_r_safename, axis="columns", inplace=True)
 
     return raw_count_df
 
