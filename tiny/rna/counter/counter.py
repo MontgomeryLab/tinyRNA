@@ -70,7 +70,7 @@ def map_and_reduce(libraries, work_args, ret_queue):
 
     # Collect counts from all pool workers and merge
     out_prefix = work_args[0][-1]
-    summary = SummaryStats(out_prefix, feature_counter.run_diags)
+    summary = SummaryStats(feature_counter.attributes, out_prefix, feature_counter.run_diags)
     for _ in libraries:
         lib_stats = ret_queue.get()
         summary.add_library(lib_stats)
@@ -152,6 +152,7 @@ class FeatureCounter:
     # Reference Tables
     features: HTSeq.GenomicArrayOfSets
     attributes: dict
+    ivs: dict
     alias: dict
 
     selection_rules: List[dict]
@@ -163,6 +164,7 @@ class FeatureCounter:
         FeatureCounter.features = reference_tables[0]
         FeatureCounter.attributes = reference_tables[1]
         FeatureCounter.alias = reference_tables[2]
+        FeatureCounter.ivs = reference_tables[3]
 
         FeatureCounter.selection_rules = selection_rules
         FeatureCounter.out_prefix = out_prefix
@@ -202,7 +204,7 @@ class FeatureCounter:
         # 2. Change FeatureSelector.choose() to assign nt5end from chr(alignment.read.seq[0])
         read_seq = parser.read_SAM(library["File"])
         stats = LibraryStats(library, self.out_prefix, self.run_diags)
-        self.selector = FeatureSelector(self.selection_rules, self.attributes, stats, self.run_diags)
+        self.selector = FeatureSelector(self.selection_rules, self.attributes, self.ivs, stats, self.run_diags)
 
         # For each sequence in the sam file...
         # Note: HTSeq only performs bundling. The alignments are our own Alignment objects
@@ -222,7 +224,7 @@ class FeatureCounter:
 
         # While stats are being merged, write intermediate file
         if run_diags:
-            stats.write_intermediate_file()
+            stats.diags.write_intermediate_file()
 
 
 @report_execution_time("Counter's overall runtime")
@@ -239,7 +241,7 @@ def main():
 
         # global for multiprocessing
         global feature_counter
-        feature_counter = FeatureCounter(gff_file_set, selection_rules, args.run_diags, args.out_prefix)
+        feature_counter = FeatureCounter(gff_file_set, selection_rules, args.diagnostics, args.out_prefix)
 
         # Prepare for multiprocessing pool
         ret_queue = mp.Manager().Queue() if len(libraries) > 1 else queue.Queue()

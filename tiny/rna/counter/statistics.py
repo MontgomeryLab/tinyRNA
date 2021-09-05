@@ -6,7 +6,6 @@ import os
 from typing import Tuple, Union
 from collections import Counter, defaultdict
 
-from .feature_selector import FeatureSelector
 from .hts_parsing import Alignment
 
 
@@ -155,21 +154,23 @@ class SummaryStats:
     aln_diag_categories = ['Eliminated counts', 'No feature counts',
                            'Uncounted alignments (+)', 'Uncounted alignments (-)']
 
-    def __init__(self, out_prefix):
+    def __init__(self, feature_attributes, out_prefix: str, report_diags: bool):
+        self.feature_attributes = feature_attributes
         self.out_prefix = out_prefix
+        self.report_diags = report_diags
 
         # Will become False if an added library lacks its corresponding Collapser and Bowtie outputs
         self.report_summary_statistics = True
 
         self.pipeline_stats_df = pd.DataFrame(index=SummaryStats.summary_categories)
-        self.feat_counts_df = pd.DataFrame(index=FeatureSelector.attributes.keys())
+        self.feat_counts_df = pd.DataFrame(index=feature_attributes.keys())
         self.lib_stats_df = pd.DataFrame(index=LibraryStats.summary_categories)
         self.identity_roster = set()
         self.nt_len_mat = {}
 
-        # Only populated if a LibraryStat contains a diagnostics instance variable
-        self.aln_diags = pd.DataFrame(columns=SummaryStats.aln_diag_categories)
-        self.selection_diags = {}
+        if report_diags:
+            self.aln_diags = pd.DataFrame(columns=SummaryStats.aln_diag_categories)
+            self.selection_diags = {}
 
     def write_report_files(self, alias: dict, prefix=None) -> None:
         if prefix is None: prefix = self.out_prefix
@@ -213,7 +214,7 @@ class SummaryStats:
         # Add Feature Name column, which is the feature alias (default is Feature ID if no alias exists)
         summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(alias.get(feat, [feat]))))
         # Add Classes column for classes associated with the given feature
-        feat_class_map = lambda feat: ', '.join(FeatureSelector.attributes[feat][0][1])
+        feat_class_map = lambda feat: ', '.join(self.feature_attributes[feat][0][1])
         summary.insert(1, "Feature Class", summary.index.map(feat_class_map))
         # Sort by index, make index its own column, and rename it to Feature ID
         summary = summary.sort_index().reset_index().rename(columns={"index": "Feature ID"})
@@ -221,8 +222,7 @@ class SummaryStats:
         summary.to_csv(prefix + '_feature_counts.csv', index=False)
 
     def write_diagnostics(self, prefix: str) -> None:
-        # Todo: fix this hackiness
-        if any([d is None for d in [self.selection_diags, self.aln_diags]]):
+        if not self.report_diags:
             return
 
         self.df_to_csv(self.aln_diags, "Sample", prefix, "_alignment_diags.csv", sort_axis="index")
@@ -254,7 +254,7 @@ class SummaryStats:
         self.nt_len_mat[other.library["Name"]] = other.nt_len_mat
         self.identity_roster.update(other.identity_roster)
 
-        if self.report_diagnostics: self.add_diags(other)
+        if self.report_diags: self.add_diags(other)
 
         # Process pipeline step outputs for this library, if they exist, to provide Summary Statistics
         if self.report_summary_statistics and self.library_has_pipeline_outputs(other):

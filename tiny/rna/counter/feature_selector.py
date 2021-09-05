@@ -2,8 +2,8 @@ import itertools
 import HTSeq
 import re
 
-from collections import defaultdict, Counter
-from typing import List, Tuple, FrozenSet, Dict, Set
+from collections import defaultdict
+from typing import List, Tuple, Dict, Set
 
 from .hts_parsing import Alignment
 from .statistics import LibraryStats
@@ -166,9 +166,9 @@ class FeatureSelector:
         """Enables diagnostic reporting for eliminations made in selection phase 2"""
 
         self.phase1_candidates = libstats.identity_roster
+        self.report_eliminations = diags
         if diags:
-            self.elim_stats = libstats.selection_diags
-            self.report_eliminations = diags
+            self.elim_stats = libstats.diags.election_diags
 
     @classmethod
     def get_hit_indexes(cls):
