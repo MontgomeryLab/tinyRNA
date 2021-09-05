@@ -62,7 +62,9 @@ library(DESeq2)
 library(lattice)
 library(utils)
 
-#### ---- Set up the parameters ---- ####
+
+#### ---- Read in inputs ---- ####
+
 
 ## Resolve relative paths and perform tilde expansion for input file path
 count_file <- normalizePath(count_file)
@@ -82,19 +84,28 @@ if (drop_zero){
   counts <- counts[rowSums(counts[]) > 0, ]
 }
 
-## Get samples and corresponding conditions
-samples <- colnames(counts)
+
+#### ---- Set up the parameters ---- ####
+
+
+## Get samples and corresponding conditions as a named vector
+## sampleCondition: "names" are R safe sample names, members are the original sample names
+samples <- orig_sample_names
 sampleCondition <- rep('none', length(samples))
 for (i in seq_along(samples)){
   sample <- as.character(samples[i])
-  sampleCondition[i] <- strsplit(sample, '_rep_')[[1]][1]
+  condition <- strsplit(sample, '_rep_')[[1]][1]
+  sampleCondition[i] <- condition
+  names(sampleCondition)[i] <- make.names(condition)
 }
 
 ## Create the deseqdataset
-sample_table <- data.frame(row.names=samples, condition=factor(sampleCondition))
+sample_table <- data.frame(row.names=make.names(samples), condition=factor(names(sampleCondition)))
 deseq_ds <- DESeq2::DESeqDataSetFromMatrix(countData = counts, colData = sample_table, design = ~ condition)
 
+
 #### ---- Run DESeq2 & write outputs ---- ####
+
 
 ## Create the DESeq Object
 deseq_run <- DESeq2::DESeq(deseq_ds)
@@ -107,13 +118,13 @@ if (plot_pca){
     dev.off()
 }
 
-# Get normalized counts and write them to CSV with original sample names in header
+## Get normalized counts and write them to CSV with original sample names in header
 deseq_counts <- df_with_classes(counts(deseq_run, normalized=TRUE))
-colnames(deseq_counts) <- c("Feature Class", unname(orig_sample_names))
+colnames(deseq_counts) <- c("Feature Class", orig_sample_names)
 write.csv(deseq_counts, paste(out_pref, "norm_counts.csv", sep="_"))
 
-# Create & retrieve all possible comparisons
-all_comparisons <- t(combn(unique(sampleCondition), 2))
+## Create & retrieve all possible comparisons
+all_comparisons <- t(combn(unique(names(sampleCondition)), 2))
 for (i in seq_len(nrow(all_comparisons))){
   comparison <- all_comparisons[i,]
 
@@ -123,7 +134,11 @@ for (i in seq_len(nrow(all_comparisons))){
 
   write.csv(
     result_df,
-    paste(out_pref, "cond1", comparison[1], "cond2", comparison[2], "deseq_table.csv", sep="_")
+    paste(out_pref,
+          # Resolve original condition names for use in output filename
+          "cond1", sampleCondition[[comparison[1]]],
+          "cond2", sampleCondition[[comparison[2]]],
+          "deseq_table.csv", sep="_")
   )
 }
 
