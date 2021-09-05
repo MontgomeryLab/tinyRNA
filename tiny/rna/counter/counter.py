@@ -57,22 +57,24 @@ def get_args():
 
 
 @report_execution_time("Counting and merging")
-def map_and_reduce(libraries, work_args, ret_queue):
+def map_and_reduce(libraries):
     """Assigns one worker process per library and merges the statistics they report"""
+
+    worker_outputs = []
 
     # Use a multiprocessing pool if multiple sam files were provided
     # Otherwise perform counts in this process
     if len(libraries) > 1:
         with mp.Pool(len(libraries)) as pool:
-            pool.starmap(feature_counter.count_reads, work_args)
+            async_result = pool.map_async(feature_counter.count_reads, libraries)
+            worker_outputs.append(async_result)
     else:
-        feature_counter.count_reads(*work_args[0])
+        feature_counter.count_reads(libraries[0])
 
     # Collect counts from all pool workers and merge
-    out_prefix = work_args[0][-1]
-    summary = SummaryStats(feature_counter.attributes, out_prefix, feature_counter.run_diags)
-    for _ in libraries:
-        lib_stats = ret_queue.get()
+    summary = SummaryStats(feature_counter.attributes, feature_counter.out_prefix, feature_counter.run_diags)
+    for stats_result in worker_outputs:
+        lib_stats = stats_result.get()
         summary.add_library(lib_stats)
 
     return summary
@@ -196,7 +198,7 @@ class FeatureCounter:
 
         return assignment, len(feat_matches)
 
-    def count_reads(self, library: dict, return_queue: mp.Queue):
+    def count_reads(self, library: dict):
         """Collects statistics on features assigned to each alignment associated with each read"""
 
         # For complete SAM records (slower):
@@ -219,12 +221,11 @@ class FeatureCounter:
 
             stats.finalize_bundle(bundle_stats)
 
-        # Place results in the multiprocessing queue to be merged by parent process
-        return_queue.put(stats)
-
         # While stats are being merged, write intermediate file
         if run_diags:
             stats.diags.write_intermediate_file()
+
+        return stats
 
 
 @report_execution_time("Counter's overall runtime")
@@ -243,12 +244,8 @@ def main():
         global feature_counter
         feature_counter = FeatureCounter(gff_file_set, selection_rules, args.diagnostics, args.out_prefix)
 
-        # Prepare for multiprocessing pool
-        ret_queue = mp.Manager().Queue() if len(libraries) > 1 else queue.Queue()
-        work_args = [(assignment, ret_queue) for assignment in libraries]
-
         # Assign and count features using multiprocessing and merge results
-        merged_counts = map_and_reduce(libraries, work_args, ret_queue)
+        merged_counts = map_and_reduce(libraries)
 
         # Write final outputs
         merged_counts.write_report_files(feature_counter.alias, args.out_prefix)
