@@ -37,12 +37,13 @@ class FeatureSelector:
     """
 
     attributes = {}
+    intervals = {}
 
-    def __init__(self, rules: List[dict], reference_table: Dict, libstats: 'LibraryStats', diags=False):
+    def __init__(self, rules: List[dict], reference_table: Dict, intervals: Dict, libstats: 'LibraryStats', diags=False):
         FeatureSelector.attributes = reference_table
-        self.interest = ('Identity', 'Strand', 'nt5', 'Length')
+        FeatureSelector.intervals = intervals
         self.rules_table = sorted(rules, key=lambda x: x['Hierarchy'])
-        self.build_filters()
+        self.build_selectors()
 
         # Inverted ident rules: (Attrib Key, Attrib Val) as key, [associated rules] as val
         inverted_identities = defaultdict(list)
@@ -57,18 +58,23 @@ class FeatureSelector:
         finalists = self.choose_identities(feat_list, alignment.iv)
         if not finalists: return set()
 
-        strand = alignment.iv.strand
-        nt5end = alignment.read.nt5
-        length = len(alignment.read)
+        read_aln_attrs = {
+            'Strand': (alignment.iv.strand,),
+            'nt5end': alignment.read.nt5,
+            'Length': len(alignment.read)
+        }
 
         eliminated = set()
-        for step, read in zip(self.interest[1:], (strand, nt5end, length)):
+        for selector, read in read_aln_attrs.items():
             for hit in finalists:
-                if read not in self.rules_table[hit[RULE]][step]:
+                if selector == "Strand":
+                    feat_strand = FeatureSelector.intervals[hit[FEAT]].strand
+                    read = (read[0], feat_strand)
+                if read not in self.rules_table[hit[RULE]][selector]:
                     eliminated.add(hit)
                     if self.report_eliminations:
                         feat_class = FeatureSelector.attributes[hit[FEAT]][0][1][0]
-                        self.elim_stats[feat_class][f"{step}={read}"] += 1
+                        self.elim_stats[feat_class][f"{selector}={read}"] += 1
 
             finalists -= eliminated
             eliminated.clear()
@@ -144,46 +150,19 @@ class FeatureSelector:
 
         return finalists
 
-    def build_filters(self):
-        """Builds single/list/range/wildcard membership-matching filters
+    def build_selectors(self):
+        """Builds single/list/range/wildcard membership-matching selectors."""
 
-        Any combination of the above filter types may be present in each rule.
-        These filter types are only supported for 5' End Nucleotide and Length.
-        """
-
-        class Wildcard:
-            @staticmethod
-            def __contains__(x): return True
-            def __repr__(self): return "all"
-
-        def wildcard(step) -> bool:
-            if "all" in row[step].lower():
-                row[step] = Wildcard()
-                return True
-
-        def nt_filter() -> Tuple:
-            rule = row["nt5"].split(',')
-            return tuple(map(lambda x: x.strip().upper(), rule))
-
-        def numerical_filter() -> FrozenSet[int]:
-            # Supports intermixed lists and ranges
-            rule, lengths = row["Length"].split(','), []
-            for piece in rule:
-                if '-' in piece:
-                    for lo, hi in re.findall(r"(\d+)-(\d+)", piece):
-                        lengths.extend([*range(int(lo), int(hi) + 1)])
-                else:
-                    lengths.append(int(piece))
-
-            return frozenset(lengths)
-
-        filters = [("nt5", nt_filter), ("Length", numerical_filter)]
+        selector_builders = {"Strand": StrandMatch, "nt5end": NtMatch, "Length": NumericalMatch}
         for row in self.rules_table:
-            for step, filt in filters:
-                if not wildcard(step):
-                    row[step] = filt()
+            for selector, build_fn in selector_builders.items():
+                defn = row[selector]
+                if type(defn) is str and any([wc in defn.lower() for wc in ['all', 'both']]):
+                    row[selector] = Wildcard()
+                else:
+                    row[selector] = build_fn(defn)
 
-    def set_stats_collectors(self, libstats: 'LibraryStats', diags: bool):
+    def set_stats_collectors(self, libstats: 'LibraryStats', diags=False):
         """Enables diagnostic reporting for eliminations made in selection phase 2"""
 
         self.phase1_candidates = libstats.identity_roster
@@ -195,3 +174,49 @@ class FeatureSelector:
     def get_hit_indexes(cls):
         """Hits are stored as tuples for performance. This returns a human friendly index map for the tuple."""
         return RANK, RULE, FEAT
+
+
+class Wildcard:
+    @staticmethod
+    def __contains__(x): return True
+    def __repr__(self): return "all"
+
+
+class StrandMatch:
+    """Evaluates BOTH the alignment's strand and the feature's strand for a match
+
+    If sense: alignment's strand == feature strand for a match
+    If antisense: alignment's strand != feature strand for a match
+    """
+    def __init__(self, strand):
+        self.strand = strand.lower()
+        self.select = (self.strand == 'sense')
+
+    def __contains__(self, x):
+        return self.select == (x[0] == x[1])
+
+    def __repr__(self): return str(self.strand)
+
+
+class NtMatch(tuple):
+    """For evaluating a single nucleotide against a list of desired bases"""
+
+    def __new__(cls, nts):
+        nts = nts.split(',')
+        return super().__new__(cls, map(lambda x: x.strip().upper(), nts))
+
+
+class NumericalMatch(frozenset):
+    """For evaluating sequence length against a list and/or range of desired values"""
+
+    def __new__(cls, lengths):
+        # Supports intermixed lists and ranges
+        rule, lengths = lengths.split(','), []
+        for piece in rule:
+            if '-' in piece:
+                for lo, hi in re.findall(r"(\d+)-(\d+)", piece):
+                    lengths.extend([*range(int(lo), int(hi) + 1)])
+            else:
+                lengths.append(int(piece))
+
+        return super().__new__(cls, lengths)

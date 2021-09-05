@@ -48,6 +48,11 @@ def get_args():
                         help='Produce diagnostic information about uncounted/eliminated '
                              'selection elements.')
 
+    parsed_args = arg_parser.parse_args()
+
+    global is_pipeline, run_diags
+    is_pipeline = parsed_args.is_pipeline
+    run_diags = parsed_args.diagnostics
     return arg_parser.parse_args()
 
 
@@ -88,9 +93,8 @@ def load_samples(samples_csv: str) -> list:
             if not os.path.isabs(csv_row_file):
                 raise ValueError("The following file must be expressed as an absolute path:\n%s" % (csv_row_file,))
         else:
-            raise ValueError(
-                "The filenames defined in your Samples Sheet must have a .fastq(.gz) or .sam extension.\n"
-                "The following filename contained neither:\n%s" % (csv_row_file,))
+            raise ValueError("The filenames defined in your Samples Sheet must have a .fastq(.gz) or .sam extension.\n"
+                             "The following filename contained neither:\n%s" % (csv_row_file,))
         return csv_row_file
 
     inputs = list()
@@ -122,20 +126,18 @@ def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
     """
 
     rules, gff_files = list(), defaultdict(list)
-    convert_strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
 
     with open(os.path.expanduser(features_csv), 'r', encoding='utf-8-sig') as f:
-        fieldnames = ("Name", "Key", "Value", "Hierarchy", "Strand", "nt5", "Length", "Strict", "Source")
+        fieldnames = ("Name", "Key", "Value", "Hierarchy", "Strand", "nt5end", "Length", "Strict", "Source")
         csv_reader = csv.DictReader(f, fieldnames=fieldnames, delimiter=',')
 
         next(csv_reader)  # Skip header line
         for row in csv_reader:
-            rule = {col: row[col] for col in ["Strand", "Hierarchy", "nt5", "Length", "Strict"]}
-            rule['nt5'] = rule['nt5'].upper().translate({ord('U'): 'T'})  # Convert RNA base to cDNA base
-            rule['Strand'] = convert_strand[rule['Strand'].lower()]  # Convert sense/antisense to +/-
-            rule['Identity'] = (row['Key'], row['Value'])  # Create identity tuple
-            rule['Hierarchy'] = int(rule['Hierarchy'])  # Convert hierarchy to number
-            rule['Strict'] = rule['Strict'] == 'Full'  # Convert strict intersection to boolean
+            rule = {col: row[col] for col in ["Strand", "Hierarchy", "nt5end", "Length", "Strict"]}
+            rule['nt5end'] = rule['nt5end'].upper().translate({ord('U'): 'T'})  # Convert RNA base to cDNA base
+            rule['Identity'] = (row['Key'], row['Value'])                       # Create identity tuple
+            rule['Hierarchy'] = int(rule['Hierarchy'])                          # Convert hierarchy to number
+            rule['Strict'] = rule['Strict'] == 'Full'                           # Convert strict intersection to boolean
 
             gff = os.path.basename(row['Source']) if is_pipeline else from_here(features_csv, row['Source'])
 
@@ -177,10 +179,10 @@ class FeatureCounter:
 
         try:
             # Resolve features from alignment interval on both strands, regardless of alignment strand
-            feat_matches = [match for match in
-                            (self.features.chrom_vectors[iv.chrom]['.']  # GenomicArrayOfSets -> ChromVector
-                             .array[iv.start:iv.end]                     # ChromVector -> StepVector
-                             .get_steps(merge_steps=True))               # StepVector -> (iv_start, iv_end, {features})]
+            feat_matches = [match for strand in ('+', '-') for match in
+                            (self.features.chrom_vectors[iv.chrom][strand]  # GenomicArrayOfSets -> ChromVector
+                                          .array[iv.start:iv.end]           # ChromVector -> StepVector
+                                          .get_steps(merge_steps=True))     # StepVector -> (iv_start, iv_end, {features})]
                             # If an alignment does not map to a feature, an empty set is returned at tuple position 2
                             if len(match[2]) != 0]
         except KeyError as ke:
