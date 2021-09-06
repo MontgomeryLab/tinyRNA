@@ -12,6 +12,8 @@ from .statistics import LibraryStats
 AssignedFeatures = set
 N_Candidates = int
 
+BOTH_STRANDS = ('+', '-')
+
 
 class FeatureCounter:
     # Reference Tables
@@ -35,8 +37,6 @@ class FeatureCounter:
         FeatureCounter.out_prefix = out_prefix
         FeatureCounter.run_diags = run_diags
 
-        # Todo: move this to LibraryStats
-        self.chrom_misses = set()
         self.selector: FeatureSelector
 
     def assign_features(self, alignment: 'parser.Alignment') -> Tuple[AssignedFeatures, N_Candidates]:
@@ -47,14 +47,14 @@ class FeatureCounter:
 
         try:
             # Resolve features from alignment interval on both strands, regardless of alignment strand
-            feat_matches = [match for strand in ('+', '-') for match in
+            feat_matches = [match for strand in BOTH_STRANDS for match in
                             (FeatureCounter.features.chrom_vectors[iv.chrom][strand]  # GenomicArrayOfSets -> ChromVector
                                            .array[iv.start:iv.end]                    # ChromVector -> StepVector
                                            .get_steps(merge_steps=True))              # StepVector -> (iv_start, iv_end, {features})]
                             # If an alignment does not map to a feature, an empty set is returned at tuple position 2
                             if len(match[2]) != 0]
         except KeyError as ke:
-            self.chrom_misses.add(ke.args[0])
+            self.stats.chrom_misses.add(ke.args[0])
 
         # If features are associated with the alignment interval, perform selection
         if len(feat_matches):
@@ -69,32 +69,32 @@ class FeatureCounter:
         # 1. Change the following line to HTSeq.BAM_Reader(sam_file)
         # 2. Change FeatureSelector.choose() to assign nt5end from chr(alignment.read.seq[0])
         read_seq = parser.read_SAM(library["File"])
-        stats = LibraryStats(library, FeatureCounter.out_prefix, FeatureCounter.run_diags)
+        self.stats = LibraryStats(library, FeatureCounter.out_prefix, FeatureCounter.run_diags)
         self.selector = FeatureSelector(
             FeatureCounter.selection_rules,
             FeatureCounter.attributes,
             FeatureCounter.ivs,
-            stats,
+            self.stats,
             diags=FeatureCounter.run_diags)
 
         # For each sequence in the sam file...
         # Note: HTSeq only performs bundling. The alignments are our own Alignment objects
         for bundle in HTSeq.bundle_multiple_alignments(read_seq):
-            bundle_stats = stats.count_bundle(bundle)
+            bundle_stats = self.stats.count_bundle(bundle)
 
             # For each alignment of the given sequence...
             alignment: parser.Alignment
             for alignment in bundle:
                 hits, n_candidates = self.assign_features(alignment)
-                stats.count_bundle_alignments(bundle_stats, alignment, hits, n_candidates)
+                self.stats.count_bundle_alignments(bundle_stats, alignment, hits, n_candidates)
 
-            stats.finalize_bundle(bundle_stats)
+            self.stats.finalize_bundle(bundle_stats)
 
         # While stats are being merged, write intermediate file
         if FeatureCounter.run_diags:
-            stats.diags.write_intermediate_file()
+            self.stats.diags.write_intermediate_file()
 
-        return stats
+        return self.stats
 
 # Type aliases for human readability
 IntervalFeatures = Tuple[int, int, Set[str]]  # A set of features associated with an interval

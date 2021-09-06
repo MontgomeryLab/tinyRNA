@@ -9,8 +9,8 @@ from collections import defaultdict
 from typing import Tuple
 
 from tiny.rna.counter.feature_selector import FeatureCounter
-from tiny.rna.counter.statistics import LibraryStats, SummaryStats
 from tiny.rna.counter.hts_parsing import SelectionRules, FeatureSources
+from tiny.rna.counter.statistics import SummaryStats
 from tiny.rna.util import report_execution_time, from_here
 
 # Global variables for multiprocessing
@@ -127,7 +127,6 @@ def map_and_reduce(libraries):
     summary = SummaryStats(FeatureCounter.attributes, FeatureCounter.out_prefix, FeatureCounter.run_diags)
 
     # Use a multiprocessing pool if multiple sam files were provided
-    # Otherwise perform counts in this process
     if len(libraries) > 1:
         with mp.Pool(len(libraries)) as pool:
             async_results = pool.imap_unordered(feature_counter.count_reads, libraries)
@@ -135,6 +134,7 @@ def map_and_reduce(libraries):
             for stats_result in async_results:
                 summary.add_library(stats_result)
     else:
+        # Only one library, multiprocessing not beneficial for task
         summary.add_library(feature_counter.count_reads(libraries[0]))
 
     return summary
@@ -158,6 +158,9 @@ def main():
 
         # Assign and count features using multiprocessing and merge results
         merged_counts = map_and_reduce(libraries)
+
+        # Print any warnings that have accumulated
+        merged_counts.print_warnings()
 
         # Write final outputs
         merged_counts.write_report_files(feature_counter.alias, args.out_prefix)

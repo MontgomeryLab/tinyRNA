@@ -1,12 +1,14 @@
+import HTSeq
 import pandas as pd
 import json
 import sys
 import os
 
-from typing import Tuple, Union
+from typing import Tuple, Optional
 from collections import Counter, defaultdict
 
 from .hts_parsing import Alignment
+from ..util import prefix_filename
 
 
 class Diagnostics:
@@ -59,6 +61,24 @@ class Diagnostics:
             else:
                 self.alignment_diags['Eliminated counts'] += bundle.corr_count
 
+    @classmethod
+    def write_summary(cls, out_prefix: str, alignment_summary, selection_summary) -> None:
+        """Write summary diagnostics, gathered by SummaryStatistics, for all libraries"""
+
+        SummaryStats.df_to_csv(alignment_summary, "Sample", out_prefix, "alignment_diags", sort_axis="index")
+
+        out = []
+        for lib in sorted(selection_summary.keys()):
+            out.append(lib)
+            for feat_class in sorted(selection_summary[lib].keys()):
+                out.append('\t' + feat_class)
+                for stat in sorted(selection_summary[lib][feat_class].keys()):
+                    out.append("\t\t%s: %d" % (stat, selection_summary[lib][feat_class][stat]))
+
+        selection_summary_filename = prefix_filename([out_prefix, 'selection_diags'], ext='.txt')
+        with open(selection_summary_filename, 'w') as f:
+            f.write('\n'.join(out))
+
 
 class LibraryStats:
     class Bundle:
@@ -76,16 +96,16 @@ class LibraryStats:
                           'Reads Assigned to Multiple Features', 'Sequences Assigned to Multiple Features',
                           'Total Unassigned Reads', 'Total Unassigned Sequences']
 
-    def __init__(self, library: dict, out_prefix: str = None, diag: bool = False):
+    def __init__(self, library: dict, out_prefix: str = None, report_diags: bool = False):
         self.library = library
         self.out_prefix = out_prefix
-        self.diags = Diagnostics(library, out_prefix) if diag else None
+        self.diags = Diagnostics(library, out_prefix) if report_diags else None
 
         self.feat_counts = Counter()
+        self.chrom_misses = Counter()
+        self.identity_roster = set()
         self.nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
         self.library_stats = {stat: 0 for stat in LibraryStats.summary_categories}
-
-        self.identity_roster = set()
 
     def count_bundle(self, aln_bundle: iter) -> Bundle:
         """Called for each multiple-alignment bundle before it is processed"""
@@ -154,7 +174,7 @@ class SummaryStats:
     aln_diag_categories = ['Eliminated counts', 'No feature counts',
                            'Uncounted alignments (+)', 'Uncounted alignments (-)']
 
-    def __init__(self, feature_attributes, out_prefix: str, report_diags: bool):
+    def __init__(self, feature_attributes: dict, out_prefix: str, report_diags: bool):
         self.feature_attributes = feature_attributes
         self.out_prefix = out_prefix
         self.report_diags = report_diags
@@ -165,8 +185,10 @@ class SummaryStats:
         self.pipeline_stats_df = pd.DataFrame(index=SummaryStats.summary_categories)
         self.feat_counts_df = pd.DataFrame(index=feature_attributes.keys())
         self.lib_stats_df = pd.DataFrame(index=LibraryStats.summary_categories)
+        self.chrom_misses = Counter()
         self.identity_roster = set()
         self.nt_len_mat = {}
+        self.warnings = []
 
         if report_diags:
             self.aln_diags = pd.DataFrame(columns=SummaryStats.aln_diag_categories)
@@ -174,20 +196,20 @@ class SummaryStats:
 
     def write_report_files(self, alias: dict, prefix=None) -> None:
         if prefix is None: prefix = self.out_prefix
+        if self.report_diags: Diagnostics.write_summary(prefix, self.aln_diags, self.selection_diags)
         self.write_alignment_statistics(prefix)
         self.write_pipeline_statistics(prefix)
         self.write_feat_counts(alias, prefix)
-        self.write_diagnostics(prefix)
         self.write_nt_len_mat(prefix)
 
     def write_alignment_statistics(self, prefix: str) -> None:
         # Sort columns by title and round all counts to 2 decimal places
-        self.df_to_csv(self.lib_stats_df, "Alignment Statistics", prefix, '_alignment_stats.csv')
+        self.df_to_csv(self.lib_stats_df, "Alignment Statistics", prefix, 'alignment_stats')
 
     def write_pipeline_statistics(self, prefix: str) -> None:
         if self.report_summary_statistics:
             # Sort columns by title and round all counts to 2 decimal places
-            self.df_to_csv(self.pipeline_stats_df, "Summary Statistics", prefix, "_summary_stats.csv")
+            self.df_to_csv(self.pipeline_stats_df, "Summary Statistics", prefix, "summary_stats")
 
     def write_feat_counts(self, alias: dict, prefix: str) -> None:
         """Writes selected features and their associated counts to {prefix}_out_feature_counts.csv
@@ -221,23 +243,6 @@ class SummaryStats:
 
         summary.to_csv(prefix + '_feature_counts.csv', index=False)
 
-    def write_diagnostics(self, prefix: str) -> None:
-        if not self.report_diags:
-            return
-
-        self.df_to_csv(self.aln_diags, "Sample", prefix, "_alignment_diags.csv", sort_axis="index")
-
-        out = []
-        for lib in sorted(self.selection_diags.keys()):
-            out.append(lib)
-            for feat_class in sorted(self.selection_diags[lib].keys()):
-                out.append('\t' + feat_class)
-                for stat in sorted(self.selection_diags[lib][feat_class].keys()):
-                    out.append("\t\t%s: %d" % (stat, self.selection_diags[lib][feat_class][stat]))
-
-        with open(prefix + "_selection_diags.txt", 'w') as f:
-            f.write('\n'.join(out))
-
     def write_nt_len_mat(self, prefix: str) -> None:
         """Writes each library's 5' end nucleotide / length matrix to its own file."""
 
@@ -253,6 +258,7 @@ class SummaryStats:
         self.lib_stats_df[other.library["Name"]] = self.lib_stats_df.index.map(other.library_stats)
         self.nt_len_mat[other.library["Name"]] = other.nt_len_mat
         self.identity_roster.update(other.identity_roster)
+        self.chrom_misses.update(other.chrom_misses)
 
         if self.report_diags: self.add_diags(other)
 
@@ -292,6 +298,19 @@ class SummaryStats:
         self.selection_diags[other_lib] = other.diags.selection_diags
         self.aln_diags.loc[other_lib] = other.diags.alignment_diags
 
+    def print_warnings(self):
+        if len(self.chrom_misses) != 0:
+            self.warnings.append("\nSome reads aligned to chromosomes not defined in your GFF files.")
+            self.warnings.append("This may be due to a mismatch in formatting (e.g. roman vs arabic numerals),")
+            self.warnings.append("or your bowtie indexes may contain chromosomes not defined in your GFF files.\n")
+            self.warnings.append("The misses and their associated counts are:")
+            for chr in sorted(self.chrom_misses.keys()):
+                self.warnings.append("\t" + chr + ": " + self.chrom_misses[chr])
+            self.warnings.append("\n\n")
+
+        for warning in self.warnings:
+            print(warning, file=sys.stderr)
+
     def library_has_pipeline_outputs(self, other: LibraryStats) -> bool:
         """Check working directory for pipeline outputs from previous steps"""
 
@@ -309,8 +328,7 @@ class SummaryStats:
             other.library['collapsed'] = collapsed_fa
             return True
 
-    @staticmethod
-    def get_fastp_stats(other: LibraryStats) -> Tuple[Union[int, str], Union[int, str]]:
+    def get_fastp_stats(self, other: LibraryStats) -> Optional[Tuple[int, int]]:
         """Determine the total number of reads for this library, and the total number retained by fastp"""
 
         try:
@@ -320,14 +338,13 @@ class SummaryStats:
             total_reads = fastp_summary['before_filtering']['total_reads']
             retained_reads = fastp_summary['after_filtering']['total_reads']
         except (KeyError, json.JSONDecodeError):
-            print("Unable to parse fastp json logs for Summary Statistics.", file=sys.stderr)
-            print("Associated file: " + other.library['File'], file=sys.stderr)
-            return "err", "err"
+            self.warnings.append("Unable to parse fastp json logs for Summary Statistics.")
+            self.warnings.append("Associated file: " + other.library['File'])
+            return None
 
         return total_reads, retained_reads
 
-    @staticmethod
-    def get_collapser_stats(other: LibraryStats) -> Union[int, str]:
+    def get_collapser_stats(self, other: LibraryStats) -> Optional[int]:
         """Determine the total number of unique sequences (after quality filtering) in this library"""
 
         with open(other.library['collapsed'], 'r') as f:
@@ -345,9 +362,9 @@ class SummaryStats:
         try:
             return int(tail[from_pos:to_pos])
         except ValueError:
-            print("Unable to parse collapsed fasta associated with for Summary Statistics.", file=sys.stderr)
-            print("Associated file: " + other.library['File'], file=sys.stderr)
-            return "err"
+            self.warnings.append("Unable to parse collapsed fasta associated with for Summary Statistics.")
+            self.warnings.append("Associated file: " + other.library['File'])
+            return None
 
     @staticmethod
     def df_to_csv(df: pd.DataFrame, idx_name:str, prefix: str, postfix: str = None, sort_axis="columns"):
@@ -357,7 +374,7 @@ class SummaryStats:
         out_df = SummaryStats.sort_cols_and_round(df, axis=sort_axis)
         out_df.index.name = idx_name
 
-        file_name = '_'.join([prefix, postfix]) + '.csv'
+        file_name = prefix_filename([prefix, postfix])
         out_df.to_csv(file_name)
 
     @staticmethod
