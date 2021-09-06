@@ -5,8 +5,96 @@ import re
 from collections import defaultdict
 from typing import List, Tuple, Dict, Set
 
-from .hts_parsing import Alignment
+import tiny.rna.counter.hts_parsing as parser
 from .statistics import LibraryStats
+
+# Type aliases for human readability
+AssignedFeatures = set
+N_Candidates = int
+
+
+class FeatureCounter:
+    # Reference Tables
+    features: HTSeq.GenomicArrayOfSets
+    attributes: dict
+    ivs: dict
+    alias: dict
+
+    selection_rules: List[dict]
+    out_prefix: str
+    run_diags: bool
+
+    def __init__(self, gff_file_set, selection_rules, run_diags, out_prefix):
+        reference_tables = parser.build_reference_tables(gff_file_set, selection_rules)
+        FeatureCounter.features = reference_tables[0]
+        FeatureCounter.attributes = reference_tables[1]
+        FeatureCounter.alias = reference_tables[2]
+        FeatureCounter.ivs = reference_tables[3]
+
+        FeatureCounter.selection_rules = selection_rules
+        FeatureCounter.out_prefix = out_prefix
+        FeatureCounter.run_diags = run_diags
+
+        # Todo: move this to LibraryStats
+        self.chrom_misses = set()
+        self.selector: FeatureSelector
+
+    def assign_features(self, alignment: 'parser.Alignment') -> Tuple[AssignedFeatures, N_Candidates]:
+        """Determines features associated with the interval then performs rule-based feature selection"""
+
+        feat_matches, assignment = list(), set()
+        iv = alignment.iv
+
+        try:
+            # Resolve features from alignment interval on both strands, regardless of alignment strand
+            feat_matches = [match for strand in ('+', '-') for match in
+                            (FeatureCounter.features.chrom_vectors[iv.chrom][strand]  # GenomicArrayOfSets -> ChromVector
+                                           .array[iv.start:iv.end]                    # ChromVector -> StepVector
+                                           .get_steps(merge_steps=True))              # StepVector -> (iv_start, iv_end, {features})]
+                            # If an alignment does not map to a feature, an empty set is returned at tuple position 2
+                            if len(match[2]) != 0]
+        except KeyError as ke:
+            self.chrom_misses.add(ke.args[0])
+
+        # If features are associated with the alignment interval, perform selection
+        if len(feat_matches):
+            assignment = self.selector.choose(feat_matches, alignment)
+
+        return assignment, len(feat_matches)
+
+    def count_reads(self, library: dict):
+        """Collects statistics on features assigned to each alignment associated with each read"""
+
+        # For complete SAM records (slower):
+        # 1. Change the following line to HTSeq.BAM_Reader(sam_file)
+        # 2. Change FeatureSelector.choose() to assign nt5end from chr(alignment.read.seq[0])
+        read_seq = parser.read_SAM(library["File"])
+        stats = LibraryStats(library, FeatureCounter.out_prefix, FeatureCounter.run_diags)
+        self.selector = FeatureSelector(
+            FeatureCounter.selection_rules,
+            FeatureCounter.attributes,
+            FeatureCounter.ivs,
+            stats,
+            diags=FeatureCounter.run_diags)
+
+        # For each sequence in the sam file...
+        # Note: HTSeq only performs bundling. The alignments are our own Alignment objects
+        for bundle in HTSeq.bundle_multiple_alignments(read_seq):
+            bundle_stats = stats.count_bundle(bundle)
+
+            # For each alignment of the given sequence...
+            alignment: parser.Alignment
+            for alignment in bundle:
+                hits, n_candidates = self.assign_features(alignment)
+                stats.count_bundle_alignments(bundle_stats, alignment, hits, n_candidates)
+
+            stats.finalize_bundle(bundle_stats)
+
+        # While stats are being merged, write intermediate file
+        if FeatureCounter.run_diags:
+            stats.diags.write_intermediate_file()
+
+        return stats
 
 # Type aliases for human readability
 IntervalFeatures = Tuple[int, int, Set[str]]  # A set of features associated with an interval
@@ -53,7 +141,7 @@ class FeatureSelector:
 
         self.set_stats_collectors(libstats, diags)
 
-    def choose(self, feat_list: List[IntervalFeatures], alignment: 'Alignment') -> set:
+    def choose(self, feat_list: List[IntervalFeatures], alignment: 'parser.Alignment') -> set:
         # Perform hierarchy-based first round of selection for identities
         finalists = self.choose_identities(feat_list, alignment.iv)
         if not finalists: return set()
@@ -168,7 +256,7 @@ class FeatureSelector:
         self.phase1_candidates = libstats.identity_roster
         self.report_eliminations = diags
         if diags:
-            self.elim_stats = libstats.diags.election_diags
+            self.elim_stats = libstats.diags.selection_diags
 
     @classmethod
     def get_hit_indexes(cls):

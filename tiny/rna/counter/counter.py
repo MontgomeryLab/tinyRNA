@@ -1,29 +1,22 @@
 import multiprocessing as mp
 import traceback
 import argparse
-import HTSeq
-import queue
 import sys
 import csv
 import os
 
-from typing import Tuple, List
 from collections import defaultdict
+from typing import Tuple
 
-import tiny.rna.counter.hts_parsing as parser
-from tiny.rna.counter.feature_selector import FeatureSelector
+from tiny.rna.counter.feature_selector import FeatureCounter
 from tiny.rna.counter.statistics import LibraryStats, SummaryStats
 from tiny.rna.counter.hts_parsing import SelectionRules, FeatureSources
 from tiny.rna.util import report_execution_time, from_here
 
 # Global variables for multiprocessing
-feature_counter = None
+feature_counter: FeatureCounter
 is_pipeline = False
 run_diags = False
-
-# Type aliases for human readability
-AssignedFeatures = set
-N_Candidates = int
 
 
 def get_args():
@@ -54,30 +47,6 @@ def get_args():
     is_pipeline = parsed_args.is_pipeline
     run_diags = parsed_args.diagnostics
     return arg_parser.parse_args()
-
-
-@report_execution_time("Counting and merging")
-def map_and_reduce(libraries):
-    """Assigns one worker process per library and merges the statistics they report"""
-
-    worker_outputs = []
-
-    # Use a multiprocessing pool if multiple sam files were provided
-    # Otherwise perform counts in this process
-    if len(libraries) > 1:
-        with mp.Pool(len(libraries)) as pool:
-            async_result = pool.map_async(feature_counter.count_reads, libraries)
-            worker_outputs.append(async_result)
-    else:
-        feature_counter.count_reads(libraries[0])
-
-    # Collect counts from all pool workers and merge
-    summary = SummaryStats(feature_counter.attributes, feature_counter.out_prefix, feature_counter.run_diags)
-    for stats_result in worker_outputs:
-        lib_stats = stats_result.get()
-        summary.add_library(lib_stats)
-
-    return summary
 
 
 def load_samples(samples_csv: str) -> list:
@@ -150,82 +119,25 @@ def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
     return rules, gff_files
 
 
-class FeatureCounter:
-    # Reference Tables
-    features: HTSeq.GenomicArrayOfSets
-    attributes: dict
-    ivs: dict
-    alias: dict
+@report_execution_time("Counting and merging")
+def map_and_reduce(libraries):
+    """Assigns one worker process per library and merges the statistics they report"""
 
-    selection_rules: List[dict]
-    out_prefix: str
-    run_diags: bool
+    # SummaryStats handles final output files, regardless of multiprocessing status
+    summary = SummaryStats(FeatureCounter.attributes, FeatureCounter.out_prefix, FeatureCounter.run_diags)
 
-    def __init__(self, gff_file_set, selection_rules, run_diags, out_prefix):
-        reference_tables = parser.build_reference_tables(gff_file_set, selection_rules)
-        FeatureCounter.features = reference_tables[0]
-        FeatureCounter.attributes = reference_tables[1]
-        FeatureCounter.alias = reference_tables[2]
-        FeatureCounter.ivs = reference_tables[3]
+    # Use a multiprocessing pool if multiple sam files were provided
+    # Otherwise perform counts in this process
+    if len(libraries) > 1:
+        with mp.Pool(len(libraries)) as pool:
+            async_results = pool.imap_unordered(feature_counter.count_reads, libraries)
 
-        FeatureCounter.selection_rules = selection_rules
-        FeatureCounter.out_prefix = out_prefix
-        FeatureCounter.run_diags = run_diags
+            for stats_result in async_results:
+                summary.add_library(stats_result)
+    else:
+        summary.add_library(feature_counter.count_reads(libraries[0]))
 
-        self.chrom_misses = set()
-        self.selector: FeatureSelector
-
-    def assign_features(self, alignment: 'parser.Alignment') -> Tuple[AssignedFeatures, N_Candidates]:
-        """Determines features associated with the interval then performs rule-based feature selection"""
-
-        feat_matches, assignment = list(), set()
-        iv = alignment.iv
-
-        try:
-            # Resolve features from alignment interval on both strands, regardless of alignment strand
-            feat_matches = [match for strand in ('+', '-') for match in
-                            (self.features.chrom_vectors[iv.chrom][strand]  # GenomicArrayOfSets -> ChromVector
-                                          .array[iv.start:iv.end]           # ChromVector -> StepVector
-                                          .get_steps(merge_steps=True))     # StepVector -> (iv_start, iv_end, {features})]
-                            # If an alignment does not map to a feature, an empty set is returned at tuple position 2
-                            if len(match[2]) != 0]
-        except KeyError as ke:
-            self.chrom_misses.add(ke.args[0])
-
-        # If features are associated with the alignment interval, perform selection
-        if len(feat_matches):
-            assignment = self.selector.choose(feat_matches, alignment)
-
-        return assignment, len(feat_matches)
-
-    def count_reads(self, library: dict):
-        """Collects statistics on features assigned to each alignment associated with each read"""
-
-        # For complete SAM records (slower):
-        # 1. Change the following line to HTSeq.BAM_Reader(sam_file)
-        # 2. Change FeatureSelector.choose() to assign nt5end from chr(alignment.read.seq[0])
-        read_seq = parser.read_SAM(library["File"])
-        stats = LibraryStats(library, self.out_prefix, self.run_diags)
-        self.selector = FeatureSelector(self.selection_rules, self.attributes, self.ivs, stats, self.run_diags)
-
-        # For each sequence in the sam file...
-        # Note: HTSeq only performs bundling. The alignments are our own Alignment objects
-        for bundle in HTSeq.bundle_multiple_alignments(read_seq):
-            bundle_stats = stats.count_bundle(bundle)
-
-            # For each alignment of the given sequence...
-            alignment: parser.Alignment
-            for alignment in bundle:
-                hits, n_candidates = self.assign_features(alignment)
-                stats.count_bundle_alignments(bundle_stats, alignment, hits, n_candidates)
-
-            stats.finalize_bundle(bundle_stats)
-
-        # While stats are being merged, write intermediate file
-        if run_diags:
-            stats.diags.write_intermediate_file()
-
-        return stats
+    return summary
 
 
 @report_execution_time("Counter's overall runtime")
