@@ -6,10 +6,9 @@ import os
 
 from collections import Counter
 from typing import Tuple, List, Dict
-from ..util import report_execution_time
+from tiny.rna.util import report_execution_time
 
 # For parse_GFF_attribute_string()
-# Todo: I believe _re_attr_main may fail if user GFFs have escape characters, which are valid per GFF3 specification
 _re_attr_main = re.compile(r"\s*([^\s=]+)[\s=]+(.*)")
 _re_attr_empty = re.compile(r"^\s*$")
 
