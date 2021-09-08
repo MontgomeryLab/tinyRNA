@@ -1,30 +1,22 @@
 import multiprocessing as mp
 import traceback
 import argparse
-import HTSeq
-import queue
 import sys
 import csv
 import os
 
-from typing import Tuple
 from collections import defaultdict
+from typing import Tuple
 
-import tiny.rna.counter.hts_parsing as parser
-from tiny.rna.counter.feature_selector import FeatureSelector
-from tiny.rna.counter.statistics import LibraryStats, SummaryStats
+from tiny.rna.counter.features import Features, FeatureCounter
 from tiny.rna.counter.hts_parsing import SelectionRules, FeatureSources
+from tiny.rna.counter.statistics import SummaryStats
 from tiny.rna.util import report_execution_time, from_here
 
 # Global variables for multiprocessing
-features: 'HTSeq.GenomicArrayOfSets' = HTSeq.GenomicArrayOfSets("auto", stranded=True)
-selector: 'FeatureSelector' = None
+feature_counter: FeatureCounter
 is_pipeline = False
 run_diags = False
-
-# Type aliases for human readability
-AssignedFeatures = set
-N_Candidates = int
 
 
 def get_args():
@@ -42,9 +34,6 @@ def get_args():
                         help='output prefix to use for file names')
 
     # Optional arguments
-    arg_parser.add_argument('-t', '--intermed-file', action='store_true',
-                        help='Save the intermediate file containing all alignments and '
-                             'associated features.')
     arg_parser.add_argument('-p', '--is-pipeline', action='store_true',
                         help='Indicates that counter was invoked from the tinyrna pipeline '
                              'and that input files should be sources as such.')
@@ -130,76 +119,23 @@ def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
     return rules, gff_files
 
 
-def assign_features(alignment: 'parser.Alignment') -> Tuple[AssignedFeatures, N_Candidates]:
-    """Determines features associated with the interval then performs rule-based feature selection"""
-
-    feat_matches, assignment = list(), set()
-    iv = alignment.iv
-
-    # Resolve features from alignment interval on both strands, regardless of alignment strand
-    feat_matches = [match for strand in ('+', '-') for match in
-                    (features.chrom_vectors[iv.chrom][strand]  # GenomicArrayOfSets -> ChromVector
-                             .array[iv.start:iv.end]           # ChromVector -> StepVector
-                             .get_steps(merge_steps=True))     # StepVector -> (iv_start, iv_end, {features})]
-                    # If an alignment does not map to a feature, an empty set is returned at tuple position 2
-                    if len(match[2]) != 0]
-
-    # If features are associated with the alignment interval, perform selection
-    if len(feat_matches):
-        assignment = selector.choose(feat_matches, alignment)
-
-    return assignment, len(feat_matches)
-
-
-def count_reads(library: dict, return_queue: mp.Queue, intermediate_file: bool = False, out_prefix: str = None):
-    """Collects statistics on features assigned to each alignment associated with each read"""
-
-    # For complete SAM records (slower):
-    # 1. Change the following line to HTSeq.BAM_Reader(sam_file)
-    # 2. Change FeatureSelector.choose() to assign nt5end from chr(alignment.read.seq[0])
-    read_seq = parser.read_SAM(library["File"])
-    stats = LibraryStats(library, out_prefix, intermediate_file, run_diags)
-    selector.set_stats_collectors(stats, diags=run_diags)
-
-    # For each sequence in the sam file...
-    # Note: HTSeq only performs bundling. The alignments are our own Alignment objects
-    for bundle in HTSeq.bundle_multiple_alignments(read_seq):
-        bundle_stats = stats.count_bundle(bundle)
-
-        # For each alignment of the given sequence...
-        alignment: parser.Alignment
-        for alignment in bundle:
-            hits, n_candidates = assign_features(alignment)
-            stats.count_bundle_alignments(bundle_stats, alignment, hits, n_candidates)
-
-        stats.finalize_bundle(bundle_stats)
-
-    # Place results in the multiprocessing queue to be merged by parent process
-    return_queue.put(stats)
-
-    # While stats are being merged, write intermediate file
-    if intermediate_file:
-        stats.write_intermediate_file()
-
-
 @report_execution_time("Counting and merging")
-def map_and_reduce(libraries, work_args, ret_queue):
+def map_and_reduce(libraries):
     """Assigns one worker process per library and merges the statistics they report"""
 
+    # SummaryStats handles final output files, regardless of multiprocessing status
+    summary = SummaryStats(Features.attributes, FeatureCounter.out_prefix, FeatureCounter.run_diags)
+
     # Use a multiprocessing pool if multiple sam files were provided
-    # Otherwise perform counts in this process
     if len(libraries) > 1:
         with mp.Pool(len(libraries)) as pool:
-            pool.starmap(count_reads, work_args)
-    else:
-        count_reads(*work_args[0])
+            async_results = pool.imap_unordered(feature_counter.count_reads, libraries)
 
-    # Collect counts from all pool workers and merge
-    out_prefix = work_args[0][-1]
-    summary = SummaryStats(out_prefix, run_diags)
-    for _ in libraries:
-        lib_stats = ret_queue.get()
-        summary.add_library(lib_stats)
+            for stats_result in async_results:
+                summary.add_library(stats_result)
+    else:
+        # Only one library, multiprocessing not beneficial for task
+        summary.add_library(feature_counter.count_reads(libraries[0]))
 
     return summary
 
@@ -216,20 +152,18 @@ def main():
         # Load selection rules and feature sources from config
         selection_rules, gff_file_set = load_config(args.config)
 
-        # Build features table and selector, global for multiprocessing
-        global features, selector
-        features, attributes, alias, ivs = parser.build_reference_tables(gff_file_set, selection_rules)
-        selector = FeatureSelector(selection_rules, attributes, ivs)
-
-        # Prepare for multiprocessing pool
-        ret_queue = mp.Manager().Queue() if len(libraries) > 1 else queue.Queue()
-        work_args = [(assignment, ret_queue, args.intermed_file, args.out_prefix) for assignment in libraries]
+        # global for multiprocessing
+        global feature_counter
+        feature_counter = FeatureCounter(gff_file_set, selection_rules, args.diagnostics, args.out_prefix)
 
         # Assign and count features using multiprocessing and merge results
-        merged_counts = map_and_reduce(libraries, work_args, ret_queue)
+        merged_counts = map_and_reduce(libraries)
+
+        # Print any warnings that have accumulated
+        merged_counts.print_warnings()
 
         # Write final outputs
-        merged_counts.write_report_files(alias, args.out_prefix)
+        merged_counts.write_report_files(feature_counter.alias, args.out_prefix)
     except:
         traceback.print_exception(*sys.exc_info())
         print("\n\nCounter encountered an error. Don't worry! You don't have to start over.\n"
