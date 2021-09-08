@@ -1,10 +1,6 @@
-"""Selector classes which determine a match via __contains__()
-
-
-"""
+"""Selector classes which determine a match via __contains__()"""
 
 import re
-from types import GeneratorType
 
 
 class Wildcard:
@@ -38,7 +34,7 @@ class NtMatch(tuple):
     """
 
     def __new__(cls, nts):
-        if type(nts) is not tuple or not isinstance(nts, GeneratorType):
+        if type(nts) is not tuple:
             # Supports single or comma separated values
             nts = map(lambda x: x.strip().upper(), nts.split(','))
 
@@ -54,7 +50,7 @@ class NumericalMatch(frozenset):
     """
 
     def __new__(cls, lengths):
-        if type(lengths) is not list or not isinstance(lengths, GeneratorType):
+        if type(lengths) is not list:
             # Supports intermixed lists and ranges
             rule, lengths = lengths.split(','), []
             for piece in rule:

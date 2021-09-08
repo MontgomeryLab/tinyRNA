@@ -10,79 +10,6 @@ from .hts_parsing import Alignment
 from ..util import prefix_filename
 
 
-class Diagnostics:
-    complement = bytes.maketrans(b'ACGTacgt', b'TGCAtgca')
-
-    def __init__(self, out_prefix: str):
-        self.out_prefix = out_prefix
-        self.alignment_diags = {stat: 0 for stat in SummaryStats.aln_diag_categories}
-        self.selection_diags = defaultdict(Counter)
-        self.alignments = []
-
-    def record_alignment_details(self, aln, bundle, assignments):
-        """Record detailed alignment info if user elects to save diagnostics info with the run
-
-        This is called once per locus per read (every alignment) when the user elects to save
-        diagnostics. The recorded information is later written to {library['Name']}_aln_table.txt
-        after the entire SAM file has been processed."""
-
-        # Perform reverse complement for anti-sense reads
-        read = aln.read.seq \
-            if aln.iv.strand == '+' \
-            else aln.read.seq[::-1].translate(self.complement)
-
-        # sequence, cor_counts, strand, start, end, feat1;feat2;feat3
-        self.alignments.append((read, bundle.corr_count, aln.iv.strand, aln.iv.start, aln.iv.end,
-                                ';'.join(assignments)))
-
-    def write_intermediate_file(self, library_name: str) -> None:
-        """Write all recorded alignment info for this library to its corresponding alignment table."""
-
-        outfile = prefix_filename([self.out_prefix, library_name, 'aln_table'], ext='.txt')
-        with open(outfile, 'w') as imf:
-            imf.writelines(
-                # sequence, cor_counts, strand, start, end, feat1a/feat1b;feat2;...
-                map(lambda rec: "%s\t%f\t%c\t%d\t%d\t%s\n" % rec, self.alignments)
-            )
-
-    def record_diagnostics(self, assignments, n_candidates, aln, bundle):
-        """Records basic diagnostic info"""
-
-        if len(assignments) == 0:
-            if aln.iv.strand == '+':
-                self.alignment_diags['Uncounted alignments (+)'] += 1
-            else:
-                self.alignment_diags['Uncounted alignments (-)'] += 1
-            if n_candidates == 0:
-                self.alignment_diags['No feature counts'] += bundle.corr_count
-            else:
-                self.alignment_diags['Eliminated counts'] += bundle.corr_count
-
-    @classmethod
-    def write_summary(cls, out_prefix: str, alignment_summary: pd.DataFrame, selection_summary: dict) -> None:
-        """Write summary diagnostics, gathered by SummaryStatistics, for all libraries
-
-        Args:
-            out_prefix: prefix for the output diagnostic files
-            alignment_summary: alignment diagnostics for ALL libraries
-            selection_summary: selection diagnostics for ALL libraries
-        """
-
-        SummaryStats.df_to_csv(alignment_summary, "Sample", out_prefix, "alignment_diags", sort_axis="index")
-
-        out = []
-        for lib in sorted(selection_summary.keys()):
-            out.append(lib)
-            for feat_class in sorted(selection_summary[lib].keys()):
-                out.append('\t' + feat_class)
-                for stat in sorted(selection_summary[lib][feat_class].keys()):
-                    out.append("\t\t%s: %d" % (stat, selection_summary[lib][feat_class][stat]))
-
-        selection_summary_filename = prefix_filename([out_prefix, 'selection_diags'], ext='.txt')
-        with open(selection_summary_filename, 'w') as f:
-            f.write('\n'.join(out))
-
-
 class LibraryStats:
     class Bundle:
         def __init__(self, loci_count, read_count, corr_count):
@@ -387,3 +314,76 @@ class SummaryStats:
     def sort_cols_and_round(df: pd.DataFrame, axis="columns") -> pd.DataFrame:
         """Convenience function to sort columns by title and round all values to 2 decimal places"""
         return df.round(decimals=2).sort_index(axis=axis)
+
+
+class Diagnostics:
+    complement = bytes.maketrans(b'ACGTacgt', b'TGCAtgca')
+
+    def __init__(self, out_prefix: str):
+        self.out_prefix = out_prefix
+        self.alignment_diags = {stat: 0 for stat in SummaryStats.aln_diag_categories}
+        self.selection_diags = defaultdict(Counter)
+        self.alignments = []
+
+    def record_alignment_details(self, aln, bundle, assignments):
+        """Record detailed alignment info if user elects to save diagnostics info with the run
+
+        This is called once per locus per read (every alignment) when the user elects to save
+        diagnostics. The recorded information is later written to {library['Name']}_aln_table.txt
+        after the entire SAM file has been processed."""
+
+        # Perform reverse complement for anti-sense reads
+        read = aln.read.seq \
+            if aln.iv.strand == '+' \
+            else aln.read.seq[::-1].translate(self.complement)
+
+        # sequence, cor_counts, strand, start, end, feat1;feat2;feat3
+        self.alignments.append((read, bundle.corr_count, aln.iv.strand, aln.iv.start, aln.iv.end,
+                                ';'.join(assignments)))
+
+    def write_intermediate_file(self, library_name: str) -> None:
+        """Write all recorded alignment info for this library to its corresponding alignment table."""
+
+        outfile = prefix_filename([self.out_prefix, library_name, 'aln_table'], ext='.txt')
+        with open(outfile, 'w') as imf:
+            imf.writelines(
+                # sequence, cor_counts, strand, start, end, feat1a/feat1b;feat2;...
+                map(lambda rec: "%s\t%f\t%c\t%d\t%d\t%s\n" % rec, self.alignments)
+            )
+
+    def record_diagnostics(self, assignments, n_candidates, aln, bundle):
+        """Records basic diagnostic info"""
+
+        if len(assignments) == 0:
+            if aln.iv.strand == '+':
+                self.alignment_diags['Uncounted alignments (+)'] += 1
+            else:
+                self.alignment_diags['Uncounted alignments (-)'] += 1
+            if n_candidates == 0:
+                self.alignment_diags['No feature counts'] += bundle.corr_count
+            else:
+                self.alignment_diags['Eliminated counts'] += bundle.corr_count
+
+    @classmethod
+    def write_summary(cls, out_prefix: str, alignment_summary: pd.DataFrame, selection_summary: dict) -> None:
+        """Write summary diagnostics, gathered by SummaryStatistics, for all libraries
+
+        Args:
+            out_prefix: prefix for the output diagnostic files
+            alignment_summary: alignment diagnostics for ALL libraries
+            selection_summary: selection diagnostics for ALL libraries
+        """
+
+        SummaryStats.df_to_csv(alignment_summary, "Sample", out_prefix, "alignment_diags", sort_axis="index")
+
+        out = []
+        for lib in sorted(selection_summary.keys()):
+            out.append(lib)
+            for feat_class in sorted(selection_summary[lib].keys()):
+                out.append('\t' + feat_class)
+                for stat in sorted(selection_summary[lib][feat_class].keys()):
+                    out.append("\t\t%s: %d" % (stat, selection_summary[lib][feat_class][stat]))
+
+        selection_summary_filename = prefix_filename([out_prefix, 'selection_diags'], ext='.txt')
+        with open(selection_summary_filename, 'w') as f:
+            f.write('\n'.join(out))
