@@ -115,7 +115,6 @@ if (plot_pca){
     plt <- plotPCA(DESeq2::rlog(deseq_ds))
     trellis.device(device="pdf", file=paste(out_pref, "pca_plot.pdf", sep="_"))
     print(plt)
-    dev.off()
 }
 
 ## Get normalized counts and write them to CSV with original sample names in header
