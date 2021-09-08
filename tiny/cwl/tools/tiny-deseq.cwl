@@ -38,4 +38,4 @@ outputs:
   pca_plots:
     type: File[]?
     outputBinding:
-      glob: $(inputs.outfile_prefix)_*_*_pca_plot.pdf
+      glob: $(inputs.outfile_prefix)_pca_plot.pdf
