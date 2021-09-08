@@ -8,7 +8,7 @@ import os
 from collections import defaultdict
 from typing import Tuple
 
-from tiny.rna.counter.feature_selector import Features, FeatureCounter
+from tiny.rna.counter.features import Features, FeatureCounter
 from tiny.rna.counter.hts_parsing import SelectionRules, FeatureSources
 from tiny.rna.counter.statistics import SummaryStats
 from tiny.rna.util import report_execution_time, from_here
