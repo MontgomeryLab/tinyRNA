@@ -1,4 +1,3 @@
-import HTSeq
 import pandas as pd
 import json
 import sys
@@ -14,8 +13,7 @@ from ..util import prefix_filename
 class Diagnostics:
     complement = bytes.maketrans(b'ACGTacgt', b'TGCAtgca')
 
-    def __init__(self, library: dict, out_prefix: str):
-        self.library = library
+    def __init__(self, out_prefix: str):
         self.out_prefix = out_prefix
         self.alignment_diags = {stat: 0 for stat in SummaryStats.aln_diag_categories}
         self.selection_diags = defaultdict(Counter)
@@ -37,12 +35,11 @@ class Diagnostics:
         self.alignments.append((read, bundle.corr_count, aln.iv.strand, aln.iv.start, aln.iv.end,
                                 ';'.join(assignments)))
 
-    def write_intermediate_file(self) -> None:
-        """Write all recorded alignment info for this library to its corresponding alignment table
+    def write_intermediate_file(self, library_name: str) -> None:
+        """Write all recorded alignment info for this library to its corresponding alignment table."""
 
-        This is called once per library after the entire SAM file has been processed."""
-
-        with open(f"{self.out_prefix}_{self.library['Name']}_aln_table.txt", 'w') as imf:
+        outfile = prefix_filename([self.out_prefix, library_name, 'aln_table'], ext='.txt')
+        with open(outfile, 'w') as imf:
             imf.writelines(
                 # sequence, cor_counts, strand, start, end, feat1a/feat1b;feat2;...
                 map(lambda rec: "%s\t%f\t%c\t%d\t%d\t%s\n" % rec, self.alignments)
@@ -62,8 +59,14 @@ class Diagnostics:
                 self.alignment_diags['Eliminated counts'] += bundle.corr_count
 
     @classmethod
-    def write_summary(cls, out_prefix: str, alignment_summary, selection_summary) -> None:
-        """Write summary diagnostics, gathered by SummaryStatistics, for all libraries"""
+    def write_summary(cls, out_prefix: str, alignment_summary: pd.DataFrame, selection_summary: dict) -> None:
+        """Write summary diagnostics, gathered by SummaryStatistics, for all libraries
+
+        Args:
+            out_prefix: prefix for the output diagnostic files
+            alignment_summary: alignment diagnostics for ALL libraries
+            selection_summary: selection diagnostics for ALL libraries
+        """
 
         SummaryStats.df_to_csv(alignment_summary, "Sample", out_prefix, "alignment_diags", sort_axis="index")
 
@@ -96,16 +99,19 @@ class LibraryStats:
                           'Reads Assigned to Multiple Features', 'Sequences Assigned to Multiple Features',
                           'Total Unassigned Reads', 'Total Unassigned Sequences']
 
-    def __init__(self, library: dict, out_prefix: str = None, report_diags: bool = False):
-        self.library = library
+    def __init__(self, out_prefix: str = None, report_diags: bool = False):
+        self.library = {'Name': 'Unassigned', 'File': 'Unassigned'}
         self.out_prefix = out_prefix
-        self.diags = Diagnostics(library, out_prefix) if report_diags else None
+        self.diags = Diagnostics(out_prefix) if report_diags else None
 
         self.feat_counts = Counter()
         self.chrom_misses = Counter()
         self.identity_roster = set()
         self.nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
         self.library_stats = {stat: 0 for stat in LibraryStats.summary_categories}
+
+    def assign_library(self, library: dict):
+        self.library = library
 
     def count_bundle(self, aln_bundle: iter) -> Bundle:
         """Called for each multiple-alignment bundle before it is processed"""
