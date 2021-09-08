@@ -234,12 +234,13 @@ class SummaryStats:
     def print_warnings(self):
         if len(self.chrom_misses) != 0:
             self.warnings.append("\nSome reads aligned to chromosomes not defined in your GFF files.")
-            self.warnings.append("This may be due to a mismatch in formatting (e.g. roman vs arabic numerals),")
-            self.warnings.append("or your bowtie indexes may contain chromosomes not defined in your GFF files.\n")
-            self.warnings.append("The misses and their associated counts are:")
+            self.warnings.append("This may be due to a mismatch in formatting (e.g. roman vs. arabic numerals)")
+            self.warnings.append("between your bowtie indexes and GFF files, or your bowtie indexes may")
+            self.warnings.append("contain chromosomes not defined in your GFF files.")
+            self.warnings.append("The chromosome names and their alignment counts are:")
             for chr in sorted(self.chrom_misses.keys()):
-                self.warnings.append("\t" + chr + ": " + self.chrom_misses[chr])
-            self.warnings.append("\n\n")
+                self.warnings.append("\t" + chr + ": " + str(self.chrom_misses[chr]))
+            self.warnings.append("\n")
 
         for warning in self.warnings:
             print(warning, file=sys.stderr)
@@ -253,7 +254,7 @@ class SummaryStats:
         collapsed_fa = lib_basename + "_collapsed.fa"
 
         if not os.path.isfile(fastp_logfile) or not os.path.isfile(collapsed_fa):
-            print(f"Pipeline output for {lib_basename} not found. Skipping Summary Statistics.")
+            self.warnings.append(f"Pipeline output for {lib_basename} not found. Summary Statistics were skipped.")
             self.report_summary_statistics = False
             return False
         else:
