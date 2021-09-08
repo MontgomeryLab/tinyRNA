@@ -15,6 +15,7 @@ import re
 from collections import defaultdict
 from typing import Optional, Dict, Union
 from pkg_resources import resource_filename
+from urllib import parse
 
 from tiny.rna.configuration import timestamp_format
 from tiny.rna.plotterlib import plotterlib as lib
@@ -142,7 +143,7 @@ def get_sample_rep_dict(df: pd.DataFrame) -> dict:
     sample_dict = defaultdict(list)
 
     for col in df.columns:
-        if col == "Feature.Class": continue
+        if col == "Feature Class": continue
         sample = col.split("_rep_")[0]
         sample_dict[sample].append(col)
 
@@ -207,8 +208,9 @@ def load_dge_tables(comparisons: list) -> pd.DataFrame:
     de_table = pd.DataFrame()
 
     for dgefile in comparisons:
+        # Bugfix for cwltool until the arbitrary url encoding of output filenames is fixed
+        name_split = parse.unquote(os.path.basename(dgefile)).split('_')
         # Negative indexes are used since prefixes are allowed to contain underscores
-        name_split = os.path.basename(dgefile).split('_')
         comparison_name = name_split[-5] + "_vs_" + name_split[-3]
 
         de_table[comparison_name] = pd.read_csv(dgefile, index_col=0)['padj']
@@ -298,24 +300,6 @@ def scatter_samples(count_df, output_prefix, classes=None, dges=None, show_unkno
             sscat.figure.savefig(pdf_name, bbox_inches='tight')
 
 
-def get_r_safename(name: str) -> str:
-    """Converts a string to a syntactically valid R name
-
-    This is used on tables which haven't been produced by R (ex: raw_counts),
-    so that column headers match the column headers of those that have (ex: norm_counts).
-    https://stat.ethz.ch/R-manual/R-devel/library/base/html/make.names.html
-
-    Args:
-        name: The string to be sanitized
-    Returns:
-        The sanitized string
-    """
-
-    leading_char = lambda x: re.sub(r"^(?=[^a-zA-Z.]+|\.\d)", "X", x)
-    special_char = lambda x: re.sub(r"[^a-zA-Z0-9_.]", ".", x)
-    return special_char(leading_char(name))
-
-
 def load_raw_counts(raw_counts_file: str) -> Optional[pd.DataFrame]:
     """Loads a raw_counts CSV as a DataFrame and sanitizes its column headers
     Args:
@@ -326,7 +310,6 @@ def load_raw_counts(raw_counts_file: str) -> Optional[pd.DataFrame]:
 
     if raw_counts_file is None: return None
     raw_count_df = pd.read_csv(raw_counts_file, index_col=0)
-    raw_count_df.rename(get_r_safename, axis="columns", inplace=True)
 
     return raw_count_df
 
@@ -353,7 +336,7 @@ def get_flat_classes(counts_df: pd.DataFrame) -> pd.Series:
         A Series with an index of features, and entries for each associated class
     """
 
-    return counts_df["Feature.Class"] \
+    return counts_df["Feature Class"] \
         .apply(lambda x: [cls.strip() for cls in x.split(',')]) \
         .explode()
 
@@ -371,13 +354,13 @@ def get_class_counts(counts_df: pd.DataFrame) -> pd.DataFrame:
     """
 
     # 1. Group by Feature Class. Class "lists" are strings. Normalize their counts by the number of commas.
-    grouped = counts_df.groupby("Feature.Class").apply(lambda grp: grp.sum() / (grp.name.count(',') + 1))
+    grouped = counts_df.groupby("Feature Class").apply(lambda grp: grp.sum() / (grp.name.count(',') + 1))
 
     # 2. Convert class "list" strings to true lists since we no longer need a hashable index
     grouped.index = grouped.index.map(lambda x: [cls.strip() for cls in x.split(',')])
 
     # 3. Finally, flatten class lists and add the normalized counts to their groups
-    return grouped.reset_index().explode("Feature.Class").groupby("Feature.Class").sum()
+    return grouped.reset_index().explode("Feature Class").groupby("Feature Class").sum()
 
 
 def validate_inputs(args: argparse.Namespace) -> None:
