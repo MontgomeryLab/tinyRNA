@@ -18,11 +18,23 @@ inputs:
       prefix: --outfile-prefix
     doc: The prefix for naming output files
 
+  control:
+    type: string?
+    inputBinding:
+      prefix: --control
+    doc: If specified, comparisons will only be made against the control condition
+
   plots:
     type: boolean?
     inputBinding:
       prefix: --pca
     doc: Produce PCA plots for each library comparison
+
+  drop_zero:
+    type: boolean?
+    inputBinding:
+      prefix: --drop-zero
+    doc: Drop features which have a zero count across all samples before analysis
 
 outputs:
   norm_counts:

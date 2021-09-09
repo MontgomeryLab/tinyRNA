@@ -83,7 +83,9 @@ inputs:
   counter_diags: boolean?
 
   # deseq inputs
+  control_condition: string?
   dge_pca_plots: boolean?
+  dge_drop_zero: boolean?
 
   # plotter options
   plot_requests: string[]
@@ -216,7 +218,9 @@ steps:
     in:
       input_file: counter/feature_counts
       outfile_prefix: run_name
+      control: control_condition
       plots: dge_pca_plots
+      drop_zero: dge_drop_zero
     out: [ norm_counts, comparisons, pca_plots ]
 
   plotter:
