@@ -2,7 +2,9 @@
 
 #### ---- Validate the provided command line arguments ---- ####
 
-args <- commandArgs(trailingOnly = TRUE)
+# args <- commandArgs(trailingOnly = TRUE)
+args <- c('--input-file', '/Users/alex/Projects/PycharmProjects/aquatx-srna/TAI/full_dataset_2021-08-05_10-13-02_run_directory/counter_2021-09-08_09-47-08/full_dataset_2021-09-08_09-47-08_feature_counts.csv',
+          '--pca', '--outfile-prefix')
 usage <- "The following arguments are accepted:
 
        --input-file <count_file>
