@@ -27,6 +27,11 @@ def from_here(config_file, input_file):
 
     return input_file
 
+
+def prefix_filename(args, ext='.csv'):
+    return '_'.join([str(chnk) for chnk in args if chnk is not None]) + ext
+
+
 def get_r_safename(name: str) -> str:
     """Converts a string to a syntactically valid R name
 
