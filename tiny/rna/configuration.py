@@ -198,47 +198,41 @@ class Configuration(ConfigBase):
         sample_sheet = self.paths.from_here(self['samples_csv']['path'])
         sample_sheet_dir = os.path.dirname(sample_sheet)
 
-        with open(sample_sheet, 'r', encoding='utf-8-sig') as sf:
-            fieldnames = ("File", "Group", "Replicate")
-            csv_reader = csv.DictReader(sf, fieldnames=fieldnames, delimiter=',')
+        csv_reader = CSVReader(sample_sheet, "Samples Sheet")
+        for row in csv_reader.rows():
+            if not os.path.splitext(row['File'])[1] in [".fastq", ".gz"]:
+                raise ValueError("Files in samples.csv must have a .fastq(.gz) extension:\n%s" % (row['File'],))
+            fastq_file = self.from_here(row['File'], origin=sample_sheet_dir)
+            sample_basename = self.prefix(os.path.basename(fastq_file))
+            group_name = row['Group']
+            rep_number = row['Replicate']
 
-            next(csv_reader)  # Skip header line
-            for row in csv_reader:
-                if not os.path.splitext(row['File'])[1] in [".fastq", ".gz"]:
-                    raise ValueError("Files in samples.csv must have a .fastq(.gz) extension:\n%s" % (row['File'],))
-                fastq_file = self.from_here(row['File'], origin=sample_sheet_dir)
-                sample_basename = self.prefix(os.path.basename(fastq_file))
-                group_name = row['Group']
-                rep_number = row['Replicate']
+            self.append_to('out_fq', sample_basename + '_cleaned.fastq')
+            self.append_to('outfile', sample_basename + '_aligned_seqs.sam')
+            self.append_to('logfile', sample_basename + '_alignment_log.log')
+            self.append_to('un', sample_basename + '_unaligned_seqs.fa')
+            self.append_to('json', sample_basename + '_qc.json')
+            self.append_to('html', sample_basename + '_qc.html')
+            self.append_to('uniq_seq_prefix', sample_basename)
+            self.append_to('report_title', f"{group_name}_rep_{rep_number}")
+            if row['Control'].lower() == 'true':
+                self['control_condition'] = group_name
 
-                self.append_to('out_fq', sample_basename + '_cleaned.fastq')
-                self.append_to('outfile', sample_basename + '_aligned_seqs.sam')
-                self.append_to('logfile', sample_basename + '_alignment_log.log')
-                self.append_to('un', sample_basename + '_unaligned_seqs.fa')
-                self.append_to('json', sample_basename + '_qc.json')
-                self.append_to('html', sample_basename + '_qc.html')
-                self.append_to('uniq_seq_prefix', sample_basename)
-                self.append_to('report_title', f"{group_name}_rep_{rep_number}")
-
-                try:
-                    self.append_to('in_fq', self.cwl_file(fastq_file))
-                except FileNotFoundError:
-                    line = csv_reader.line_num
-                    sys.exit("The fastq file on line %d of your Samples Sheet was not found:\n%s" % (line, fastq_file))
+            try:
+                self.append_to('in_fq', self.cwl_file(fastq_file))
+            except FileNotFoundError:
+                line = csv_reader.line_num
+                sys.exit("The fastq file on line %d of your Samples Sheet was not found:\n%s" % (line, fastq_file))
 
     def process_feature_sheet(self):
         feature_sheet = self.paths.from_here(self['features_csv']['path'])
         feature_sheet_dir = os.path.dirname(feature_sheet)
 
-        with open(feature_sheet, 'r', encoding='utf-8-sig') as ff:
-            fieldnames = ("ID", "Key", "Value", "Hierarchy", "Strand", "nt5", "Length", "Strict", "Source")
-            csv_reader = csv.DictReader(ff, fieldnames=fieldnames, delimiter=',')
-            next(csv_reader)  # Skip header line
-
+        csv_reader = CSVReader(feature_sheet, "Features Sheet")
+        for row in csv_reader.rows():
+            gff_file = self.from_here(row['Source'], origin=feature_sheet_dir)
             try:
-                for row in csv_reader:
-                    gff_file = self.from_here(row['Source'], origin=feature_sheet_dir)
-                    self.append_if_absent('gff_files', self.cwl_file(gff_file))
+                self.append_if_absent('gff_files', self.cwl_file(gff_file))
             except FileNotFoundError:
                 line = csv_reader.line_num
                 sys.exit("The GFF file on line %d of your Features Sheet was not found:\n%s" % (line, gff_file))
@@ -326,5 +320,29 @@ class Configuration(ConfigBase):
         args = parser.parse_args()
         Configuration(args.input_file).write_processed_config()
 
-    if __name__ == '__main__':
-        main()
+
+class CSVReader(csv.DictReader):
+    """A simple wrapper class for csv.DictReader
+
+    This makes field labels consistent across the project and simplifies the code
+    """
+
+    tinyrna_sheet_fields = {
+        "Features Sheet": ("Name", "Key", "Value", "Hierarchy", "Strand", "nt5end", "Length", "Strict", "Source"),
+        "Samples Sheet": ("File", "Group", "Replicate", "Control")
+    }
+
+    def __init__(self, filename: str, fieldnames: str = None):
+        self.tinyrna_fields = CSVReader.tinyrna_sheet_fields.get(fieldnames, None)
+        self.tinyrna_file = filename
+
+    def rows(self):
+        with open(os.path.expanduser(self.tinyrna_file), 'r', encoding='utf-8-sig') as f:
+            super().__init__(f, fieldnames=self.tinyrna_fields, delimiter=',')
+            next(self)  # Skip header line
+            for row in self:
+                yield row
+
+
+if __name__ == '__main__':
+    Configuration.main()
