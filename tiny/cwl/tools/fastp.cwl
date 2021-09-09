@@ -181,13 +181,6 @@ inputs:
       one in (--overrepresentation_sampling) reads will be computed
       for overrepresentation analysis (1~10000), smaller is slower, 
       default is 20. (int [=20])
-
-  dont_eval_duplication:
-    type: bool?
-    inputBinding:
-      prefix: --dont_eval_duplication
-    doc: |
-      don't evaluate duplication rate to save time and use less memory.
   
   # Output report options
   json:

@@ -26,7 +26,6 @@ inputs:
   length_limit: int?
   overrepresentation_analysis: boolean?
   overrepresentation_sampling: int?
-  dont_eval_duplication: boolean?
   json: string # unscatter
   html: string # unscatter
   report_title: string # unscatter
@@ -82,7 +81,6 @@ steps:
       length_limit: length_limit
       overrepresentation_analysis: overrepresentation_analysis
       overrepresentation_sampling: overrepresentation_sampling
-      dont_eval_duplication: dont_eval_duplication
       json: json
       html: html
       report_title: report_title
