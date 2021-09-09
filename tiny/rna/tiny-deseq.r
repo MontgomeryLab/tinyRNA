@@ -15,6 +15,10 @@ usage <- "The following arguments are accepted:
                   2. Differential gene expression table per comparison
                   3. A PCA plot per comparison, if --pca is also provided.
 
+       --control <control_condition>
+              Opional. If the control condition is specified, comparisons will
+              only be made between the control and experimental conditions.
+
        --pca
               Optional. This will produce principle component analysis plots
               using the DESeq2 library. Output files are PDF format.
@@ -35,11 +39,9 @@ df_with_classes <- function(data){
 }
 
 ## Throw an error if an unexpected number of arguments is provided
-if (length(args) > 6){
+if (length(args) > 7){
   stop(gettextf("Too many arguments given. %d arguments were parsed.
   Was there an unquoted space in your arguments?\n\n%s", length(args), usage))
-} else if (length(args) == 0){
-  stop(gettextf("No arguments given.\n\n%s", usage))
 } else if (length(args) < 4){
   stop("Not enough arguments given. Only parsed %d arguments.\n\n%s", length(args), usage)
 }
@@ -47,20 +49,20 @@ if (length(args) > 6){
 ## Assign arg variables
 count_file <- args[match('--input-file', args) + 1]
 out_pref <- args[match('--outfile-prefix', args) + 1]
+control_grp <- args[match('--control', args) + 1]
+has_control <- !(control_grp %in% NA)
 plot_pca <- '--pca' %in% args
 drop_zero <- '--drop-zero' %in% args
 
-## Make sure that required argument parameters weren't skipped
-if (out_pref %in% c('--input-file', '--pca', '--drop-zero')){
-  stop(gettextf("Please be sure to include your outfile prefix.\n\n%s", usage))
-} else if (count_file %in% c('--outfile-prefix', '--pca', '--drop-zero')){
+## Make sure that the user included parameters for arguments that require them
+all_args <- append(args[startsWith(args, '--')], NA)
+if (count_file %in% all_args[all_args != '--input-file']){
   stop(gettextf("Please be sure to include your count file.\n\n%s", usage))
+} else if (out_pref %in% all_args[all_args != '--outfile-prefix']){
+  stop(gettextf("Please be sure to include your outfile prefix.\n\n%s", usage))
+} else if ('--control' %in% args && control_grp %in% all_args[all_args != '--control']){
+  stop(gettextf("Please be sure to include your control condition name.\n\n%s", usage))
 }
-
-## Now that command line args have been validated, load libraries for performing DEG and writing PCA plots
-library(DESeq2)
-library(lattice)
-library(utils)
 
 
 #### ---- Read in inputs ---- ####
@@ -88,19 +90,22 @@ if (drop_zero){
 #### ---- Set up the parameters ---- ####
 
 
-## Get samples and corresponding conditions as a named vector
-## sampleCondition: "names" are R safe sample names, members are the original sample names
-samples <- orig_sample_names
-sampleCondition <- rep('none', length(samples))
-for (i in seq_along(samples)){
-  sample <- as.character(samples[i])
-  condition <- strsplit(sample, '_rep_')[[1]][1]
-  sampleCondition[i] <- condition
-  names(sampleCondition)[i] <- make.names(condition)
+## Get sample conditions as a named vector where names are R safe names
+sampleConditions <- sapply(strsplit(as.character(orig_sample_names), '_rep_'), '[[', 1)
+names(sampleConditions) <- make.names(sampleConditions)
+
+## Ensure control group is present in samples, if specified
+if (has_control && !(control_grp %in% sampleConditions)){
+  stop("The control condition was not found among your samples.")
 }
 
+## Now that inputs have been validated and read, load libraries
+library(DESeq2)
+library(lattice)
+library(utils)
+
 ## Create the deseqdataset
-sample_table <- data.frame(row.names=make.names(samples), condition=factor(names(sampleCondition)))
+sample_table <- data.frame(row.names=names(orig_sample_names), condition=factor(names(sampleConditions)))
 deseq_ds <- DESeq2::DESeqDataSetFromMatrix(countData = counts, colData = sample_table, design = ~ condition)
 
 
@@ -122,8 +127,19 @@ deseq_counts <- df_with_classes(counts(deseq_run, normalized=TRUE))
 colnames(deseq_counts) <- c("Feature Class", orig_sample_names)
 write.csv(deseq_counts, paste(out_pref, "norm_counts.csv", sep="_"))
 
-## Create & retrieve all possible comparisons
-all_comparisons <- t(combn(unique(names(sampleCondition)), 2))
+if (has_control){
+  # Comparison is the cartesian product of control and experimental conditions
+  r_safe_control_name <- make.names(control_grp)
+  all_comparisons <- as.matrix(expand.grid(
+    r_safe_control_name,
+    unique(names(sampleConditions[sampleConditions != r_safe_control_name]))
+  ))
+} else {
+  # Comparison is all possible combinations of conditions
+  all_comparisons <- t(combn(unique(names(sampleConditions)), 2))
+}
+
+## Perform condition comparisons
 for (i in seq_len(nrow(all_comparisons))){
   comparison <- all_comparisons[i,]
 
@@ -135,8 +151,8 @@ for (i in seq_len(nrow(all_comparisons))){
     result_df,
     paste(out_pref,
           # Resolve original condition names for use in output filename
-          "cond1", sampleCondition[[comparison[1]]],
-          "cond2", sampleCondition[[comparison[2]]],
+          "cond1", sampleConditions[[comparison[1]]],
+          "cond2", sampleConditions[[comparison[2]]],
           "deseq_table.csv", sep="_")
   )
 }
