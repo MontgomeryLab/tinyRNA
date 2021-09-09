@@ -25,7 +25,7 @@ usage <- "The following arguments are accepted:
 
        --drop-zero
               Optional. Prior to performing analysis, this will drop all
-              rows/features which have a zero count in all libraries."
+              rows/features which have a zero count in all samples."
 
 ## Returns the provided data as a dataframe with a corresponding classes column, regardless of order
 df_with_classes <- function(data){
@@ -143,7 +143,7 @@ if (has_control){
 for (i in seq_len(nrow(all_comparisons))){
   comparison <- all_comparisons[i,]
 
-  deseq_res <- DESeq2::results(deseq_run, c("condition", comparison[1], comparison[2]))
+  deseq_res <- DESeq2::results(deseq_run, c("condition", comparison[2], comparison[1]))
   result_df <- df_with_classes(deseq_res[order(deseq_res$padj),])
   colnames(result_df)[1] <- "Feature Class"
 
