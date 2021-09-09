@@ -1,6 +1,7 @@
 import functools
 import time
 import os
+import re
 
 
 def report_execution_time(step_name: str):
@@ -25,3 +26,20 @@ def from_here(config_file, input_file):
         input_file = os.path.normpath(os.path.join(from_here, input_file))
 
     return input_file
+
+
+def prefix_filename(args, ext='.csv'):
+    return '_'.join([str(chnk) for chnk in args if chnk is not None]) + ext
+
+
+def get_r_safename(name: str) -> str:
+    """Converts a string to a syntactically valid R name
+
+    This can be used to match names along axes of DataFrames produced by R,
+    assuming that the R script takes no measures to preserve names itself.
+    https://stat.ethz.ch/R-manual/R-devel/library/base/html/make.names.html
+    """
+
+    leading_char = lambda x: re.sub(r"^(?=[^a-zA-Z.]+|\.\d)", "X", x)
+    special_char = lambda x: re.sub(r"[^a-zA-Z0-9_.]", ".", x)
+    return special_char(leading_char(name))

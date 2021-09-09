@@ -6,10 +6,9 @@ import os
 
 from collections import Counter
 from typing import Tuple, List, Dict
-from ..util import report_execution_time
+from tiny.rna.util import report_execution_time
 
 # For parse_GFF_attribute_string()
-# Todo: I believe _re_attr_main may fail if user GFFs have escape characters, which are valid per GFF3 specification
 _re_attr_main = re.compile(r"\s*([^\s=]+)[\s=]+(.*)")
 _re_attr_empty = re.compile(r"^\s*$")
 
@@ -159,7 +158,7 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
 
 
 @report_execution_time("GFF parsing")
-def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> Tuple[Features, Attributes, Alias]:
+def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> Tuple[Features, Attributes, Alias, Dict]:
     """A GFF parser which builds feature, attribute, and alias tables, with intelligent appends
 
     Features may be defined by multiple GFF files. If multiple files offer different attributes for
@@ -177,7 +176,7 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
     # Obtain an ordered list of unique attributes of interest from selection rules
     attrs_of_interest = list(np.unique(["Class"] + [attr['Identity'][0] for attr in rules]))
 
-    feats = HTSeq.GenomicArrayOfSets("auto", stranded=False)
+    feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
     attrs, alias, intervals = {}, {}, {}
 
     def check_namespace(feature_id, row_iv, file):
@@ -220,10 +219,11 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
     for file, preferred_ids in gff_files.items():
         gff = HTSeq.GFF_Reader(file)
         for row in gff:
+            if row.iv.strand == ".":
+                raise ValueError(f"Feature {row.name} in {file} has no strand information.")
+
             try:
                 feature_id = row.attr["ID"][0]
-                # Remove strand info
-                row.iv.strand = '.'
                 # Ensure one interval per feat ID, else rename feat ID
                 feature_id = check_namespace(feature_id, row.iv, file)
                 # Add feature_id <-> feature_interval records
@@ -236,4 +236,4 @@ def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> 
             # Add feature_id -> feature_attributes record
             incorporate_attributes(feature_id, row_attrs)
 
-    return feats, attrs, alias
+    return feats, attrs, alias, intervals
