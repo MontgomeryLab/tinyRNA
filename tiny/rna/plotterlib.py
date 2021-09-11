@@ -222,16 +222,18 @@ class plotterlib:
             ax.yaxis.set_major_locator(tix.FixedLocator(oldticks))
 
             ax.set_xticks(np.log2(newticks), minor=True)
-            ax.set_xticklabels(np.round(2**oldticks))
+            ax.set_xticklabels(np.round(2**oldticks).astype(int))
             ax.set_yticks(np.log2(newticks), minor=True)
-            ax.set_yticklabels(np.round(2**oldticks))
-
+            ax.set_yticklabels(np.round(2**oldticks).astype(int))
         else:
             ax.scatter(count_x, count_y, **kwargs)
             sscat_lims = self.scatter_range(pd.concat([count_x, count_y]))
             ax.set_xlim(sscat_lims)
             ax.set_ylim(sscat_lims)
 
+        ax.axline([0, 1], [1, 2], color='#CCCCCC', label='_nolegend_')
+        ax.axline([0, 0], [1, 1], color='#CCCCCC', label='_nolegend_')
+        ax.axline([0,-1], [1, 0], color='#CCCCCC', label='_nolegend_')
         return ax
 
     def scatter_grouped(self, count_x: pd.DataFrame, count_y: pd.DataFrame, *args, log_norm=False, labels=None, **kwargs):
@@ -265,17 +267,17 @@ class plotterlib:
 
         if any([len(base_axis) == 0 for base_axis in [count_x_base, count_y_base]]):
             group = next(argsit)
-            gscat = self.scatter_simple(count_x.loc[group], count_y.loc[group], log_norm=log_norm, color=next(colors),
-                                        marker='.', alpha=0.3, s=50, edgecolors='none', lim=ax_lim, **kwargs)
+            gscat = self.scatter_simple(count_x.loc[group], count_y.loc[group],
+                log_norm=log_norm, color=next(colors), edgecolors='none', lim=ax_lim, **kwargs)
         else:
             # Create a base plot using counts not in *args
-            gscat = self.scatter_simple(count_x_base, count_y_base, log_norm=log_norm, color='#888888', marker='.',
-                                        alpha=0.3, s=50, edgecolors='none', lim=ax_lim, **kwargs)
+            gscat = self.scatter_simple(count_x_base,count_y_base,
+                log_norm=log_norm, color='#B3B3B3', edgecolors='none', lim=ax_lim, **kwargs)
 
         # Add points for each *args
         for group in argsit:
-            gscat.scatter(count_x.loc[group], count_y.loc[group], color=next(colors), marker='.',
-                          alpha=0.9, s=50, edgecolors='none', **kwargs)
+            gscat.scatter(count_x.loc[group], count_y.loc[group],
+                          color=next(colors), edgecolors='none', **kwargs)
 
         gscat.legend(labels=labels)
 

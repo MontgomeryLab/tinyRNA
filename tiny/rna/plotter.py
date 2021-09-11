@@ -19,7 +19,9 @@ from urllib import parse
 
 from tiny.rna.configuration import timestamp_format
 from tiny.rna.plotterlib import plotterlib as lib
-from tiny.rna.util import report_execution_time
+from tiny.rna.util import report_execution_time, make_filename
+
+raster = False
 
 
 def get_args():
@@ -30,19 +32,17 @@ def get_args():
     diffexp_files = parser.add_argument_group("Input files produced by DGE")
 
     # Single file inputs
-    counter_files.add_argument('-rc', '--raw-counts', metavar='RAW_COUNTS',
-                               help='The ...feature_counts.csv file.')
     diffexp_files.add_argument('-nc', '--norm-counts', metavar='NORM_COUNTS',
                                help='The ...norm_counts.csv file.')
 
     # Multi-file inputs
-    diffexp_files.add_argument('-dge', '--dge-tables', metavar='DGE_COMPARISONS ...', nargs='+',
+    diffexp_files.add_argument('-dge', '--dge-tables', metavar='DGE_COMPARISONS', nargs='+',
                                help='The ...cond1...cond2...deseq.csv files, separated by a space.')
-    counter_files.add_argument('-len', '--len-dist', metavar='5P_LEN_DISTS ...', nargs='+',
+    counter_files.add_argument('-len', '--len-dist', metavar='5P_LEN_DISTS', nargs='+',
                                help='The ...nt_len_dist.csv files, separated by a space.')
 
     # Outputs options
-    parser.add_argument('-o', '--out-prefix', metavar='OUTFILE', default='',
+    parser.add_argument('-o', '--out-prefix', metavar='OUTPREFIX',
                         help='Optional prefix to use for output PDF files.')
     parser.add_argument('-s', '--style-sheet', metavar='MPLSTYLE',
                         default=resource_filename('tiny', 'templates/tinyrna-light.mplstyle'),
@@ -52,13 +52,9 @@ def get_args():
                              'len_dist: A stacked barplot showing size & 5p-nt distribution,\n'
                              'class_charts: A pie and barchart showing proportions of counts per class,\n'
                              'replicate_scatter: A scatter plot comparing replicates for all count files given,\n'
-                             'sample_avg_scatter: A scatter plot comparing all sample groups,'
-                                'averaged by replicate. Uses the normalized counts for averaging.\n'
-                             'sample_avg_scatter_by_class: A scatter plot comparing all sample groups,'
-                                'with different classes highlighted.\n'
                              'sample_avg_scatter_by_dge: A scatter plot comparing all sample groups,'
                                 'with significantly different (padj<0.05) genes highlighted.\n'
-                             'sample_avg_scatter_by_both: A scatter plot comparing all sample groups,'
+                             'sample_avg_scatter_by_dge_class: A scatter plot comparing all sample groups,'
                                 'with classes and significantly different genes highlighted')
     args = parser.parse_args()
 
@@ -108,8 +104,8 @@ def len_dist_plots(files_list: list, out_prefix:str, **kwargs):
             # File does not appear to have been produced by the pipeline
             condition_and_rep = basename
 
-        pdf_name = '_'.join([out_prefix, condition_and_rep, "len_dist.pdf"])
-        plot.figure.savefig(pdf_name, bbox_inches='tight')
+        pdf_name = make_filename([out_prefix, condition_and_rep, "len_dist"], ext='.pdf')
+        plot.figure.savefig(pdf_name)
 
 
 def class_plots(class_counts: pd.DataFrame, out_prefix:str, **kwargs):
@@ -126,8 +122,8 @@ def class_plots(class_counts: pd.DataFrame, out_prefix:str, **kwargs):
         fig = aqplt.class_pie_barh(class_counts[library], **kwargs)
 
         # Save the plot
-        pdf_name = f"{out_prefix}_{library}_class_chart.pdf"
-        fig.savefig(pdf_name, bbox_inches='tight')
+        pdf_name = make_filename([out_prefix, library, 'class_chart'], ext='.pdf')
+        fig.savefig(pdf_name)
 
 
 def get_sample_rep_dict(df: pd.DataFrame) -> dict:
@@ -169,29 +165,25 @@ def get_sample_averages(df: pd.DataFrame, samples:dict) -> pd.DataFrame:
     return new_df
 
 
-def scatter_replicates(count_df: pd.DataFrame, output_prefix: str, output_postfix: str, samples: dict, norm=False):
+def scatter_replicates(count_df: pd.DataFrame, output_prefix: str, samples: dict):
     """Creates PDFs of all pairwise comparison scatter plots from a count table.
     
     Args:
         count_df: A dataframe of counts per feature
         output_prefix: A string to use as a prefix for saving files
-        output_postfix: A string to use as postfix for differentiating between raw and norm counts
         samples: A dictionary containing sample names and their associated "sample_rep_N" replicates
-        norm: Boolean indicating if data was normalized
     """
 
     for samp, reps in samples.items():
         for pair in get_pairs(reps):
-            rscat = aqplt.scatter_simple(count_df.loc[:,pair[0]], count_df.loc[:,pair[1]], 
-                                        color='#888888', marker='s', alpha=0.5, s=50, 
-                                        edgecolors='none', log_norm=True)
-            rscat.set_title(samp if not norm else samp + " (normalized)")
+            rscat = aqplt.scatter_simple(count_df.loc[:,pair[0]], count_df.loc[:,pair[1]],
+                                        color='#888888', alpha=0.5, edgecolors='none', log_norm=True, rasterized=raster)
+            rscat.set_title(samp)
             rep1, rep2 = pair[0].split('_rep_')[1], pair[1].split('_rep_')[1]
             rscat.set_xlabel('Replicate ' + rep1)
             rscat.set_ylabel('Replicate ' + rep2)
-            pdf_name = '_'.join([output_prefix, samp, 'replicates', rep1, rep2,
-                                 output_postfix, 'scatter.pdf'])
-            rscat.figure.savefig(pdf_name, bbox_inches='tight')
+            pdf_name = make_filename([output_prefix, samp, 'replicates', rep1, rep2, 'scatter'], ext='.pdf')
+            rscat.figure.savefig(pdf_name)
 
 
 def load_dge_tables(comparisons: list) -> pd.DataFrame:
@@ -218,18 +210,17 @@ def load_dge_tables(comparisons: list) -> pd.DataFrame:
     return de_table
 
 
-def scatter_samples(count_df, output_prefix, classes=None, dges=None, show_unknown=False, pval=0.05):
+def scatter_samples(count_df, dges, output_prefix, classes=None, show_unknown=False, pval=0.05):
     """Creates PDFs of all pairwise comparison scatter plots from a count table.
     Can highlight classes and/or differentially expressed genes as different colors.
 
     Args:
         count_df: A dataframe of counts per feature
+        dges: A dataframe of differential gene table output to highlight
         output_prefix: A string to use as a prefix for saving files
         classes: A dataframe containing class(es) per feature
-        dges: A dataframe of differential gene table output to highlight
         show_unknown: Boolean indicating if "unknown" classes should be highlighted
     """
-    samples = get_pairs(list(count_df.columns))
 
     if (classes is not None) and (dges is not None):
         uniq_classes = list(pd.unique(classes))
@@ -246,72 +237,28 @@ def scatter_samples(count_df, output_prefix, classes=None, dges=None, show_unkno
             for cls in uniq_classes:
                 grp_args.append(list(class_dges.index[class_dges == cls]))
 
-            labels = ['p > %6.2f' % pval] + uniq_classes
+            labels = ['p > %.2f' % pval] + uniq_classes
             sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2],
-                                          *grp_args, log_norm=True, labels=labels) 
+                                          *grp_args, log_norm=True, labels=labels, rasterized=raster)
             sscat.set_title('%s vs %s' % (p1, p2))
             sscat.set_xlabel(p1)
             sscat.set_ylabel(p2)
-            pdf_name = '_'.join([output_prefix, pair, 'scatter_by_dge_class.pdf'])
-            sscat.figure.savefig(pdf_name, bbox_inches='tight')
-
-    elif classes is not None:
-        uniq_classes = list(pd.unique(classes))
-        
-        if not show_unknown and 'unknown' in uniq_classes:
-            uniq_classes.remove('unknown')
-        
-        grp_args = []
-        for cls in uniq_classes:
-            grp_args.append(list(classes.index[classes == cls]))
-    
-        for p1, p2 in samples:
-            sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2],
-                                          *grp_args, log_norm=True, labels=uniq_classes)
-            sscat.set_title('%s vs %s' % (p1, p2))
-            sscat.set_xlabel(p1)
-            sscat.set_ylabel(p2)
-            pdf_name = '_'.join([output_prefix, p1, 'vs', p2, 'scatter_by_class.pdf'])
-            sscat.figure.savefig(pdf_name, bbox_inches='tight')
+            pdf_name = make_filename([output_prefix, pair, 'scatter_by_dge_class'], ext='.pdf')
+            sscat.figure.savefig(pdf_name)
     
     elif dges is not None:
         for pair in dges:
             grp_args = list(dges.index[dges[pair] < pval])
             p1, p2 = pair.split("_vs_")
 
-            labels = ['p < %d' % pval]
-            sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2],
-                                          grp_args, log_norm=True, labels=labels)
+            labels = ['p > %.2f' % pval]
+            sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2], grp_args,
+                                          log_norm=True, labels=labels, alpha=0.5, rasterized=raster)
             sscat.set_title('%s vs %s' % (p1, p2))
             sscat.set_xlabel(p1)
             sscat.set_ylabel(p2)
-            pdf_name = '_'.join([output_prefix, pair, 'scatter_by_dge.pdf'])
-            sscat.figure.savefig(pdf_name, bbox_inches='tight')
-    
-    else:
-        for pair in samples:
-            sscat = aqplt.scatter_simple(count_df.loc[:,pair[0]], count_df.loc[:,pair[1]], 
-                                        color='#888888', marker='s', alpha=0.5, s=50, 
-                                        edgecolors='none', log_norm=True)
-            sscat.set_title('%s vs %s' % (pair[0], pair[1]))
-            sscat.set_xlabel(pair[0])
-            sscat.set_ylabel(pair[1])
-            pdf_name = '_'.join([output_prefix, pair[0], 'vs', pair[1], 'scatter.pdf'])
-            sscat.figure.savefig(pdf_name, bbox_inches='tight')
-
-
-def load_raw_counts(raw_counts_file: str) -> Optional[pd.DataFrame]:
-    """Loads a raw_counts CSV as a DataFrame and sanitizes its column headers
-    Args:
-        raw_counts_file: The raw counts CSV produced by Counter
-    Returns:
-        The raw counts DataFrame with sanitized column headers
-    """
-
-    if raw_counts_file is None: return None
-    raw_count_df = pd.read_csv(raw_counts_file, index_col=0)
-
-    return raw_count_df
+            pdf_name = make_filename([output_prefix, pair, 'scatter_by_dge'], ext='.pdf')
+            sscat.figure.savefig(pdf_name)
 
 
 def load_norm_counts(norm_counts_file: str) -> Optional[pd.DataFrame]:
@@ -331,7 +278,7 @@ def get_flat_classes(counts_df: pd.DataFrame) -> pd.Series:
     In these cases, the feature will be listed multiple times in the index with one associated class per row.
 
     Args:
-        counts_df: A counts DataFrame (raw or norm)
+        counts_df: A counts DataFrame
     Returns:
         A Series with an index of features, and entries for each associated class
     """
@@ -342,7 +289,7 @@ def get_flat_classes(counts_df: pd.DataFrame) -> pd.Series:
 
 
 def get_class_counts(counts_df: pd.DataFrame) -> pd.DataFrame:
-    """Calculates class counts from a counts DataFrame (raw or norm)
+    """Calculates class counts from a counts DataFrame
 
     If there are multiple classes associated with a feature, each class will receive
     the feature's full count without normalizing by the number of associated classes.
@@ -375,23 +322,18 @@ def validate_inputs(args: argparse.Namespace) -> None:
     dependencies_satisfied_for = {
         'len_dist': all([args.len_dist]),
         'class_charts': all([args.norm_counts]),
-        'replicate_scatter': any([args.norm_counts, args.raw_counts]),
-        'sample_avg_scatter': all([args.norm_counts]),
-        'sample_avg_scatter_by_class': all([args.norm_counts]),
+        'replicate_scatter': all([args.norm_counts]),
         'sample_avg_scatter_by_dge': all([args.norm_counts, args.dge_tables]),
         'sample_avg_scatter_by_both': all([args.norm_counts, args.dge_tables]),
     }
 
     nc_file = "normalized count file (-nc/--norm-counts)"
-    rc_file = "raw count file (-rc/--raw-counts)"
     dge_files = "differential expression tables (-dge/--dge-tables)"
 
     error_message = {
         'len_dist': "5' nucleotide/length tables (-len/--len-dist) are required for ",
         'class_charts': f"A {nc_file} is required for ",
-        'replicate_scatter': f"A {nc_file} or a {rc_file} is required for ",
-        'sample_avg_scatter': f"A {nc_file} is required for ",
-        'sample_avg_scatter_by_class': f"A {nc_file} is required for ",
+        'replicate_scatter': f"A {nc_file} is required for ",
         'sample_avg_scatter_by_dge': f"A {nc_file} and {dge_files} are required for ",
         'sample_avg_scatter_by_both': f"A {nc_file} and {dge_files} are required for ",
     }
@@ -419,19 +361,16 @@ def setup(args: argparse.Namespace) -> dict:
     required_inputs = {
         'len_dist': [],
         'class_charts': ["norm_count_df", "class_counts"],
-        'replicate_scatter': ["raw_count_df", "norm_count_df", "sample_rep_dict"],
-        'sample_avg_scatter': ["norm_count_df", "sample_rep_dict", "norm_count_avg_df"],
-        'sample_avg_scatter_by_class': ["norm_count_df", "sample_rep_dict", "norm_count_avg_df", "feat_classes"],
+        'replicate_scatter': ["norm_count_df", "sample_rep_dict"],
         'sample_avg_scatter_by_dge': ["norm_count_df", "sample_rep_dict", "norm_count_avg_df", "de_table"],
         'sample_avg_scatter_by_both': ["norm_count_df", "sample_rep_dict", "norm_count_avg_df", "feat_classes", "de_table"],
     }
 
     relevant_vars: Dict[str, Union[pd.DataFrame, pd.Series, dict, None]] = {}
     input_getters = {
-        'raw_count_df': lambda: load_raw_counts(args.raw_counts),
         'norm_count_df': lambda: load_norm_counts(args.norm_counts),
         'de_table': lambda: load_dge_tables(args.dge_tables),
-        'sample_rep_dict': lambda x="norm" if args.norm_counts else "raw": get_sample_rep_dict(relevant_vars[f"{x}_count_df"]),
+        'sample_rep_dict': lambda: get_sample_rep_dict(relevant_vars["norm_count_df"]),
         'norm_count_avg_df': lambda: get_sample_averages(relevant_vars["norm_count_df"], relevant_vars["sample_rep_dict"]),
         'feat_classes': lambda: get_flat_classes(relevant_vars["norm_count_df"]),
         'class_counts': lambda: get_class_counts(relevant_vars["norm_count_df"])
@@ -467,18 +406,11 @@ def main():
         elif plot == 'class_charts':
             itinerary.append((class_plots, (inputs["class_counts"], args.out_prefix), {}))
         elif plot == 'replicate_scatter':
-            if inputs["raw_count_df"] is not None:
-                itinerary.append((scatter_replicates, (inputs["raw_count_df"], args.out_prefix, "raw_count", inputs["sample_rep_dict"]), {}))
-            if inputs["norm_count_df"] is not None:
-                itinerary.append((scatter_replicates, (inputs["norm_count_df"], args.out_prefix, "norm_count", inputs["sample_rep_dict"]), {"norm": True}))
-        elif plot == 'sample_avg_scatter':
-            itinerary.append((scatter_samples, (inputs["norm_count_avg_df"], args.out_prefix), {}))
-        elif plot == 'sample_avg_scatter_by_class':
-            itinerary.append((scatter_samples, (inputs["norm_count_avg_df"], args.out_prefix), {"classes": inputs["feat_classes"]}))
+            itinerary.append((scatter_replicates, (inputs["norm_count_df"], args.out_prefix, inputs["sample_rep_dict"]), {}))
         elif plot == 'sample_avg_scatter_by_dge':
-            itinerary.append((scatter_samples, (inputs["norm_count_avg_df"], args.out_prefix), {"dges": inputs["de_table"]}))
+            itinerary.append((scatter_samples, (inputs["norm_count_avg_df"], inputs["de_table"], args.out_prefix), {}))
         elif plot == 'sample_avg_scatter_by_both':
-            itinerary.append((scatter_samples, (inputs["norm_count_avg_df"], args.out_prefix), {"classes": inputs["feat_classes"], "dges": inputs["de_table"]}))
+            itinerary.append((scatter_samples, (inputs["norm_count_avg_df"], inputs["de_table"], args.out_prefix), {"classes": inputs["feat_classes"]}))
         else:
             print('Plot type %s not recognized, please check the -p/--plot arguments' % plot)
 
@@ -489,7 +421,7 @@ def main():
                 results.append(pool.apply_async(task, args, kwds))
             for result in results:
                 result.wait()
-    else:
+    elif len(itinerary) == 1:
         # Don't use multiprocessing if only one plot type requested
         task = itinerary.pop()
         task[0](*task[1], **task[2])
