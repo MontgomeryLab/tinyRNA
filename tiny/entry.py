@@ -160,10 +160,15 @@ def resume(tinyrna_cwl_path: str, config_file: str, step: str) -> None:
         # We can pass our config object directly without writing to disk first
         run_native(config, resume_wf, verbosity=config['verbosity'])
     else:
+        print('Due to limitations in the CWL runner, you cannot resume with "run_native: False"', file=sys.stderr)
+        print('\t1. Navigate to %s' % (config.dir,), file=sys.stderr)
+        print('\t2. Open the Run Config file and change run_native to True', file=sys.stderr)
+        print('\t3. Save the file and try again', file=sys.stderr)
+
         # Processed Run Config must be written to disk first
-        resume_conf_file = "resume_" + os.path.basename(config_file)
-        config.write_processed_config(resume_conf_file)
-        run_cwltool_subprocess(resume_conf_file, resume_wf, verbosity=config['verbosity'])
+        # resume_conf_file = "resume_" + os.path.basename(config_file)
+        # config.write_processed_config(resume_conf_file)
+        # run_cwltool_subprocess(resume_conf_file, resume_wf, verbosity=config['verbosity'])
 
     if os.path.isfile(resume_wf):
         # We don't want the generated workflow to be returned by a call to setup-cwl
