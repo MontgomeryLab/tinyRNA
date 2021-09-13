@@ -252,13 +252,14 @@ plot_requests:
   - 'len_dist'
   - 'class_charts'
   - 'replicate_scatter'
-  - 'sample_avg_scatter'
-  - 'sample_avg_scatter_by_class'
   - 'sample_avg_scatter_by_dge'
-  - 'sample_avg_scatter_by_both'
+  - 'sample_avg_scatter_by_dge_class'
 
 ##-- You may supply your own matplotlib style sheet to override defaults here --##
 plot_style_sheet: ~
+
+##-- If True: scatter plot points will be vectorized. If False, only points are raster --##
+plot_vector_points: False
 
 
 ######----------------------------- OUTPUT DIRECTORIES ------------------------------######
@@ -335,6 +336,7 @@ un: [ ]
 ##-- Utilized by Deseq --##
 # The control for comparison. If unspecified, all comparisons are made
 control_condition: ''
+
 ######------------------------- DERIVED FROM FEATURES SHEET -------------------------######
 #
 # The following configuration settings are automatically derived from the sample sheet
