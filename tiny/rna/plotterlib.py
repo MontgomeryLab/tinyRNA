@@ -39,7 +39,7 @@ class plotterlib:
         # Create one subplot per plot type to reuse between calls
         fig_args = {
             'class_pie_barh': {'figsize': (8, 4), 'nrows': 1, 'ncols': 2, 'tight_layout': True},
-            'len_dist_bar': {'figsize': (6, 4)},
+            'len_dist_bar': {'figsize': (7, 4)},
             'scatter_simple': {'figsize': (8, 8)}
         }
 
