@@ -6,12 +6,6 @@ class: CommandLineTool
 baseCommand: tiny-plot
 
 inputs:
-  raw_counts:
-    type: File
-    inputBinding:
-      prefix: -rc
-    doc: "Raw, non-normalized feature counts from Counter"
-
   norm_counts:
     type: File
     inputBinding:
