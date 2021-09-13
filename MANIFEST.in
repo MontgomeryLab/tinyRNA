@@ -1,0 +1,3 @@
+include README.md
+include templates/*
+recursive-include cwl/*
