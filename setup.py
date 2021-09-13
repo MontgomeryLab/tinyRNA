@@ -14,7 +14,8 @@ AUTHOR = 'Kristen Brown, Alex Tate'
 REQUIRES_PYTHON = '>=3.7.0'
 VERSION = '0.1'
 
-# Required packages
+# Required packages are installed via Conda's environment.yml
+# See PreFlight below...
 REQUIRED = []
 
 
@@ -36,9 +37,6 @@ setuptools.setup(
     cmdclass={'install': PreFlight},
     packages=setuptools.find_packages(exclude=['tests/*']),
     include_package_data=True,
-    package_data={'tinyrna': ['cwl/tools/*.cwl',
-                             'cwl/workflows/*.cwl', 
-                             'templates/*']},
     zip_safe=False,
     entry_points={
         'console_scripts': [

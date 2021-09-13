@@ -238,6 +238,7 @@ steps:
     out: [ norm_counts, comparisons, pca_plots ]
 
   dge-subdir:
+    run: organize-outputs.cwl
     in:
       dge_name: dir_name_dge
       dge_norm: dge/norm_counts
@@ -257,6 +258,7 @@ steps:
     out: [plots]
 
   plotter-subdir:
+    run: organize-outputs.cwl
     in:
       plotter_name: dir_name_plotter
       plotter_plots: plotter/plots
