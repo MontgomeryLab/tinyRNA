@@ -154,35 +154,7 @@ class plotterlib:
 
         return fig
 
-    def scatter_range(self, df: pd.DataFrame) -> (int, int):
-        """Find an appropriate range for x,y limits of a scatter plot.
-
-        Args:
-            df: A dataframe being plotted
-
-        Returns:
-            lim_min: The minimum value to set axis limits
-            lim_max: The maximum value to set axis limits
-        """
-
-        if np.min(df) == -np.inf:
-            df_min = 0
-        else:
-            df_min = np.min(df)
-
-        if np.max(df) == np.inf:
-            df_max = np.max(df[~(df == np.inf)])
-        else:
-            df_max = np.max(df)
-
-        intv = (df_max - df_min) / 12
-
-        lim_min = df_min - intv
-        lim_max = df_max + intv
-
-        return lim_min, lim_max
-
-    def scatter_simple(self, count_x: pd.DataFrame, count_y: pd.DataFrame, log_norm=False, lim=None, **kwargs) -> plt.Axes:
+    def scatter_simple(self, count_x: pd.Series, count_y: pd.Series, log_norm=False, **kwargs) -> plt.Axes:
         """Creates a simple scatter plot of counts.
 
         Args:
@@ -198,42 +170,42 @@ class plotterlib:
         # Retrieve axis and styles for this plot type
         fig, ax = self.reuse_subplot("scatter_simple")
 
+        # Avoid recalculating limits with each scatter group
+        # Must call set_scatter_lims() after all groups plotted
+        ax.autoscale(False)
+
         # log2 normalize data if requested
         if log_norm:
-            count_x = count_x.apply(np.log2)
-            count_y = count_y.apply(np.log2)
-            # Shouldn't this be done for the entire plotted dataset and not for the initial omitted subset?
-            sscat_lims = lim if lim is not None else self.scatter_range(pd.concat([count_x, count_y]))
-            if not np.isnan(sscat_lims).any():
-                ax.set_xlim(sscat_lims)
-                ax.set_ylim(sscat_lims)
-            ax.scatter(count_x, count_y, **kwargs)
+            # Set log2 scale
+            ax.set_xscale('log', base=2)
+            ax.set_yscale('log', base=2)
 
-            oldticks = ax.get_xticks()
-            newticks = np.empty([len(oldticks)-1, 8])
+            # Set up axis ticks and labels
+            for axis in [ax.xaxis, ax.yaxis]:
+                axis.set_major_locator(tix.LogLocator(base=2))
+                axis.set_major_formatter(tix.LogFormatter(base=2))
 
-            for i in range(1,len(oldticks)-1):
-                newticks[i,:] = np.arange(2**oldticks[i-1], 2**oldticks[i], (2**oldticks[i] - 2**oldticks[i-1])/8)
+            ax.scatter(count_x, count_y, edgecolor='none', **kwargs)
 
-            newticks = np.sort(newticks[2:,:].flatten())
-
-            # These lines have been added to address the FixedLocator warning
-            ax.xaxis.set_major_locator(tix.FixedLocator(oldticks))
-            ax.yaxis.set_major_locator(tix.FixedLocator(oldticks))
-
-            ax.set_xticks(np.log2(newticks), minor=True)
-            ax.set_xticklabels(np.round(2**oldticks).astype(int))
-            ax.set_yticks(np.log2(newticks), minor=True)
-            ax.set_yticklabels(np.round(2**oldticks).astype(int))
+            # Draw y = x, x +/- 1 lines (log2 scale) using point pairs for the 3 lines
+            for p1,p2 in [((1, 2), (2, 4)), ((1, 1), (2, 2)), ((1, 0.5), (2, 1))]:
+                ax.axline(p1, p2, color='#CCCCCC', label='_nolegend_')
         else:
-            ax.scatter(count_x, count_y, **kwargs)
-            sscat_lims = self.scatter_range(pd.concat([count_x, count_y]))
-            ax.set_xlim(sscat_lims)
-            ax.set_ylim(sscat_lims)
+            # Set linear scale
+            ax.set_xscale('linear')
+            ax.set_yscale('linear')
 
-        ax.axline([0, 1], [1, 2], color='#CCCCCC', label='_nolegend_')
-        ax.axline([0, 0], [1, 1], color='#CCCCCC', label='_nolegend_')
-        ax.axline([0,-1], [1, 0], color='#CCCCCC', label='_nolegend_')
+            # Set up axis ticks and labels
+            for axis in [ax.xaxis, ax.yaxis]:
+                axis.set_major_locator(tix.MaxNLocator(6))
+                axis.set_major_formatter(tix.ScalarFormatter())
+
+            ax.scatter(count_x, count_y, **kwargs)
+
+            # Draw y = x, x +/- 1 lines using point pairs for the 3 lines
+            for p1,p2 in [((0, 1), (1, 2)), ((0, 0), (1, 1)), ((0,-1), (1, 0))]:
+                ax.axline(p1, p2, color='#CCCCCC', label='_nolegend_')
+
         return ax
 
     def scatter_grouped(self, count_x: pd.DataFrame, count_y: pd.DataFrame, *args, log_norm=False, labels=None, **kwargs):
@@ -251,37 +223,63 @@ class plotterlib:
         """
 
         # Subset counts not in *args (for example, points with p-val above threshold)
-        count_x_base = count_x.drop(list(itertools.chain(*args)))
-        count_y_base = count_y.drop(list(itertools.chain(*args)))
-
-        if log_norm:
-            count_x = count_x.apply(np.log2).replace(-np.inf, 0)
-            count_y = count_y.apply(np.log2).replace(-np.inf, 0)
+        count_x_base = count_x.drop(itertools.chain(*args))
+        count_y_base = count_y.drop(itertools.chain(*args))
 
         if labels is None:
             labels = list(range(len(args)))
 
         colors = iter(kwargs.get('colors', plt.rcParams['axes.prop_cycle'].by_key()['color']))
-        ax_lim = self.scatter_range(pd.concat([count_x, count_y]))
         argsit = iter(args)
 
-        if any([len(base_axis) == 0 for base_axis in [count_x_base, count_y_base]]):
+        if any([len(outgroup) == 0 for outgroup in [count_x_base, count_y_base]]):
+            # There is no outgroup, plot the first group with scatter_simple() to set scale and lines
             group = next(argsit)
             gscat = self.scatter_simple(count_x.loc[group], count_y.loc[group],
-                log_norm=log_norm, color=next(colors), edgecolors='none', lim=ax_lim, **kwargs)
+                                        log_norm=log_norm, color=next(colors), **kwargs)
         else:
-            # Create a base plot using counts not in *args
-            gscat = self.scatter_simple(count_x_base,count_y_base,
-                log_norm=log_norm, color='#B3B3B3', edgecolors='none', lim=ax_lim, **kwargs)
+            # Plot the outgroup in light grey (these are counts not in *args)
+            gscat = self.scatter_simple(count_x_base,count_y_base, log_norm=log_norm, color='#B3B3B3', **kwargs)
 
-        # Add points for each *args
+        # Add each group to plot with a different color
         for group in argsit:
-            gscat.scatter(count_x.loc[group], count_y.loc[group],
-                          color=next(colors), edgecolors='none', **kwargs)
+            gscat.scatter(count_x.loc[group], count_y.loc[group], color=next(colors), edgecolor='none', **kwargs)
 
+        self.set_scatter_lims(gscat)
         gscat.legend(labels=labels)
-
         return gscat
+
+    def set_scatter_lims(self, ax: plt.Axes):
+        """Scatter plot will be centered about diagonal, without lower left tick label
+
+        Args:
+            ax: A scatter plot Axes object
+        """
+
+        # Let autoscale do most of the work
+        ax.autoscale(True)
+
+        # Center about diagonal
+        lim = (ax.get_xlim(), ax.get_ylim())
+        ax_min = min(axis[0] for axis in lim)  # lower limit
+        ax_max = max(axis[1] for axis in lim)  # upper limit
+        ax.set_xlim(left=ax_min, right=ax_max)
+        ax.set_ylim(bottom=ax_min, top=ax_max)
+
+        # Hide tick label in lower left corner
+        for axis in [ax.xaxis, ax.yaxis]:
+            for i, tickloc in enumerate(axis.get_majorticklocs()):
+                # Want to set the first tick label (within view lims) invisible
+                if tickloc >= ax_min:
+                    # Visibility can only be set from the [X,Y]Tick object
+                    axis.get_major_ticks()[i].label1.set_visible(False)
+                    break
+
+        ## NOTE TO FUTURE DEVELOPERS
+        # You may have encountered a pairwise comparison which differs in view limits between
+        # scatter_by_dge and scatter_by_dge_class. This is going to be a painful problem to solve
+        # due to the amount of explicit and implicit redundancy in mpl (also: keep an eye on those
+        # @property decorators...). You'll want to start at _AxesBase.autoscale_view(). Good luck.
 
     def reuse_subplot(self, plot_type: str) -> (plt.Figure, Union[plt.Axes, np.ndarray]):
         """Retrieves the reusable subplot for this plot type

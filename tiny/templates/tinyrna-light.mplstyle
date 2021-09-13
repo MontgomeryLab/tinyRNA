@@ -7,7 +7,7 @@ figure.facecolor: white
 figure.edgecolor: 0.50
 
 #### Scatter Styles ####
-scatter.marker: .
+scatter.marker: o
 
 #### Tick styles ####
 xtick.color: 333333
@@ -41,8 +41,8 @@ axes.labelcolor: 333333
 axes.labelpad: 4.0
 axes.axisbelow: True
 axes.autolimit_mode: round_numbers
-axes.xmargin: 0.5
-axes.ymargin: 0.5
+axes.xmargin: 0.1
+axes.ymargin: 0.1
 
 #### Legend ####
 legend.fontsize: 16
@@ -67,7 +67,7 @@ font.size: 10
 
 #### Line style ####
 lines.linewidth: 1.0
-lines.markersize: 5.5
+lines.markersize: 3.25
 lines.markeredgewidth: 0
 
 #### Color cycle Default ####
