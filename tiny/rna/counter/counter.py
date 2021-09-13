@@ -2,7 +2,6 @@ import multiprocessing as mp
 import traceback
 import argparse
 import sys
-import csv
 import os
 
 from collections import defaultdict
@@ -12,6 +11,7 @@ from tiny.rna.counter.features import Features, FeatureCounter
 from tiny.rna.counter.hts_parsing import SelectionRules, FeatureSources
 from tiny.rna.counter.statistics import SummaryStats
 from tiny.rna.util import report_execution_time, from_here
+from tiny.rna.configuration import CSVReader
 
 # Global variables for multiprocessing
 feature_counter: FeatureCounter
@@ -70,17 +70,12 @@ def load_samples(samples_csv: str) -> list:
 
     inputs = list()
 
-    with open(os.path.expanduser(samples_csv), 'r', encoding='utf-8-sig') as f:
-        fieldnames = ("File", "Group", "Replicate")
-        csv_reader = csv.DictReader(f, fieldnames=fieldnames, delimiter=',')
+    for row in CSVReader(samples_csv, "Samples Sheet").rows():
+        library_name = f"{row['Group']}_rep_{row['Replicate']}"
+        library_file_name = get_library_filename(row['File'], samples_csv)
+        record = {"Name": library_name, "File": library_file_name}
 
-        next(csv_reader)  # Skip header line
-        for row in csv_reader:
-            library_name = f"{row['Group']}_rep_{row['Replicate']}"
-            library_file_name = get_library_filename(row['File'], samples_csv)
-            record = {"Name": library_name, "File": library_file_name}
-
-            if record not in inputs: inputs.append(record)
+        if record not in inputs: inputs.append(record)
 
     return inputs
 
@@ -98,23 +93,18 @@ def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
 
     rules, gff_files = list(), defaultdict(list)
 
-    with open(os.path.expanduser(features_csv), 'r', encoding='utf-8-sig') as f:
-        fieldnames = ("Name", "Key", "Value", "Hierarchy", "Strand", "nt5end", "Length", "Strict", "Source")
-        csv_reader = csv.DictReader(f, fieldnames=fieldnames, delimiter=',')
+    for row in CSVReader(features_csv, "Features Sheet").rows():
+        rule = {col: row[col] for col in ["Strand", "Hierarchy", "nt5end", "Length", "Strict"]}
+        rule['nt5end'] = rule['nt5end'].upper().translate({ord('U'): 'T'})  # Convert RNA base to cDNA base
+        rule['Identity'] = (row['Key'], row['Value'])                       # Create identity tuple
+        rule['Hierarchy'] = int(rule['Hierarchy'])                          # Convert hierarchy to number
+        rule['Strict'] = rule['Strict'] == 'Full'                           # Convert strict intersection to boolean
 
-        next(csv_reader)  # Skip header line
-        for row in csv_reader:
-            rule = {col: row[col] for col in ["Strand", "Hierarchy", "nt5end", "Length", "Strict"]}
-            rule['nt5end'] = rule['nt5end'].upper().translate({ord('U'): 'T'})  # Convert RNA base to cDNA base
-            rule['Identity'] = (row['Key'], row['Value'])                       # Create identity tuple
-            rule['Hierarchy'] = int(rule['Hierarchy'])                          # Convert hierarchy to number
-            rule['Strict'] = rule['Strict'] == 'Full'                           # Convert strict intersection to boolean
+        gff = os.path.basename(row['Source']) if is_pipeline else from_here(features_csv, row['Source'])
 
-            gff = os.path.basename(row['Source']) if is_pipeline else from_here(features_csv, row['Source'])
-
-            # Duplicate Name Attributes and rule entries are not allowed
-            if row['Name'] not in ["ID", *gff_files[gff]]: gff_files[gff].append(row['Name'])
-            if rule not in rules: rules.append(rule)
+        # Duplicate Name Attributes and rule entries are not allowed
+        if row['Name'] not in ["ID", *gff_files[gff]]: gff_files[gff].append(row['Name'])
+        if rule not in rules: rules.append(rule)
 
     return rules, gff_files
 
