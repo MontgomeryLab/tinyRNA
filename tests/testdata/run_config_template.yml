@@ -212,8 +212,8 @@ shared_memory: False
 ######-------------------------------------------------------------------------------######
 
 
-##-- If True: save intermediate table for each library with all alignment information --##
-intermed_file: False
+##-- If True: all features will be represented in the counts table, regardless --##
+counter_all_features: False
 
 ##-- If True: produce diagnostic logs to indicate what was eliminated and why --##
 counter_diags: False
