@@ -76,11 +76,11 @@ inputs:
   # counter inputs
   samples_csv: File
   features_csv: File
-  intermed_file: boolean?
   gff_files: File[]?
   aligned_seqs: File[]?
   is_pipeline: boolean?
   counter_diags: boolean?
+  counter_all_features: boolean?
 
   # deseq inputs
   control_condition: string?
@@ -201,16 +201,16 @@ steps:
   counter:
     run: ../tools/tiny-count.cwl
     in:
-      aligned_seqs: counter-prep/aln_seqs
-      gff_files: gff_files
       samples_csv: samples_csv
       config_csv: features_csv
+      aligned_seqs: counter-prep/aln_seqs
+      gff_files: gff_files
       out_prefix: run_name
-      intermed_file: intermed_file
-      fastp_logs: counter-prep/json_report_file
-      collapsed_fa: counter-prep/uniq_seqs
+      all_features: counter_all_features
       is_pipeline: {default: true}
       diagnostics: counter_diags
+      fastp_logs: counter-prep/json_report_file
+      collapsed_fa: counter-prep/uniq_seqs
     out: [feature_counts, other_counts, alignment_stats, summary_stats, intermed_out_files, alignment_diags, selection_diags]
 
   dge:
