@@ -7,7 +7,6 @@ from typing import List, Tuple, Set, Dict, Iterator
 import tiny.rna.counter.hts_parsing as parser
 from .matching import Wildcard, StrandMatch, NumericalMatch, NtMatch
 from .statistics import LibraryStats
-from ..util import report_execution_time
 
 # Type aliases for human readability
 Hit = Tuple[int, int, str]
@@ -243,7 +242,6 @@ class FeatureSelector:
                 pass
 
     @classmethod
-    @report_execution_time("Determining output table index")
     def get_all_identity_matches(cls) -> Set[str]:
         """Returns all features which match an identity rule in the rules table"""
 
