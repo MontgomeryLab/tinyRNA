@@ -121,6 +121,7 @@ class SummaryStats:
             self.selection_diags = {}
 
     def write_report_files(self, counts_idx: set, alias: dict) -> None:
+        self.print_warnings()
         if self.report_diags:
             Diagnostics.write_summary(self.out_prefix, self.aln_diags, self.selection_diags)
 

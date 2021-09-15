@@ -4,7 +4,6 @@ cwlVersion: v1.0
 class: CommandLineTool
 
 requirements:
-  - class: InlineJavascriptRequirement
   - class: InitialWorkDirRequirement
     listing: [
       $(inputs.gff_files),
@@ -20,38 +19,32 @@ inputs:
     type: File
     inputBinding:
       prefix: -i
-      position: 0
 
   config_csv:
     type: File
     inputBinding:
       prefix: -c
-      position: 1
 
   out_prefix:
     type: string
     inputBinding:
-      position: 2
       prefix: -o
 
-  intermed_file:
+  # Optional inputs
+
+  all_features:
     type: boolean?
     inputBinding:
-      position: 3
-      prefix: -t
+      prefix: -a
 
   is_pipeline:
     type: boolean?
-    default: false
     inputBinding:
-      position: 4
       prefix: -p
 
   diagnostics:
     type: boolean?
-    default: false
     inputBinding:
-      position: 5
       prefix: -d
 
   # The following optional inputs are for staging InitialWorkingDir files for pipeline execution

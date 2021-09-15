@@ -31,6 +31,9 @@ def get_args():
                         help='output prefix to use for file names')
 
     # Optional arguments
+    arg_parser.add_argument('-a', '--all-features', action='store_true',
+                        help='Represent all features in output counts table, '
+                             'regardless of counts or identity rules.')
     arg_parser.add_argument('-p', '--is-pipeline', action='store_true',
                         help='Indicates that counter was invoked from the tinyrna pipeline '
                              'and that input files should be sources as such.')
@@ -162,11 +165,11 @@ def main():
         # Assign and count features using multiprocessing and merge results
         merged_counts = map_and_reduce(libraries)
 
-        # Print any warnings that have accumulated
-        merged_counts.print_warnings()
+        # Determine which features should be represented in the counts table
+        display_indexes = Features.attributes.keys() if args.all_features else \
+                          FeatureSelector.get_all_identity_matches()
 
         # Write final outputs
-        display_indexes = FeatureSelector.get_all_identity_matches()
         merged_counts.write_report_files(display_indexes, Features.aliases)
     except:
         traceback.print_exception(*sys.exc_info())
