@@ -213,29 +213,7 @@ steps:
       diagnostics: counter_diags
     out: [feature_counts, other_counts, alignment_stats, summary_stats, intermed_out_files, alignment_diags, selection_diags]
 
-  dge:
-    run: ../tools/tiny-deseq.cwl
-    in:
-      input_file: counter/feature_counts
-      outfile_prefix: run_name
-      control: control_condition
-      plots: dge_pca_plots
-      drop_zero: dge_drop_zero
-    out: [ norm_counts, comparisons, pca_plots ]
-
-  plotter:
-    run: ../tools/tiny-plot.cwl
-    in:
-      raw_counts: counter/feature_counts
-      norm_counts: dge/norm_counts
-      dge_tables: dge/comparisons
-      len_dist: counter/other_counts
-      style_sheet: plot_style_sheet
-      out_prefix: run_name
-      plot_requests: plot_requests
-    out: [ plots ]
-
-  post-counter-subdirs:
+  counter-subdir:
     run: organize-outputs.cwl
     in:
       counter_name: dir_name_counter
@@ -247,15 +225,44 @@ steps:
       counter_aln_diag: counter/alignment_diags
       counter_selection_diag: counter/selection_diags
       features_csv: features_csv
+    out: [counter_dir]
 
+  dge:
+    run: ../tools/tiny-deseq.cwl
+    in:
+      input_file: counter/feature_counts
+      outfile_prefix: run_name
+      control: control_condition
+      plots: dge_pca_plots
+      drop_zero: dge_drop_zero
+    out: [ norm_counts, comparisons, pca_plots ]
+
+  dge-subdir:
+    run: organize-outputs.cwl
+    in:
       dge_name: dir_name_dge
       dge_norm: dge/norm_counts
       dge_comparisons: dge/comparisons
       dge_pca: dge/pca_plots
+    out: [dge_dir]
 
+  plotter:
+    run: ../tools/tiny-plot.cwl
+    in:
+      norm_counts: dge/norm_counts
+      dge_tables: dge/comparisons
+      len_dist: counter/other_counts
+      style_sheet: plot_style_sheet
+      out_prefix: run_name
+      plot_requests: plot_requests
+    out: [plots]
+
+  plotter-subdir:
+    run: organize-outputs.cwl
+    in:
       plotter_name: dir_name_plotter
       plotter_plots: plotter/plots
-    out: [ counter_dir, dge_dir, plotter_dir ]
+    out: [plotter_dir]
 
 outputs:
 
@@ -278,13 +285,13 @@ outputs:
 
   counter_out_dir:
     type: Directory?
-    outputSource: post-counter-subdirs/counter_dir
+    outputSource: counter-subdir/counter_dir
 
   dge_out_dir:
     type: Directory?
-    outputSource: post-counter-subdirs/dge_dir
+    outputSource: dge-subdir/dge_dir
 
   plotter_dir:
     type: Directory?
-    outputSource: post-counter-subdirs/plotter_dir
+    outputSource: plotter-subdir/plotter_dir
 

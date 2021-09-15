@@ -28,7 +28,7 @@ def from_here(config_file, input_file):
     return input_file
 
 
-def prefix_filename(args, ext='.csv'):
+def make_filename(args, ext='.csv'):
     return '_'.join([str(chnk) for chnk in args if chnk is not None]) + ext
 
 

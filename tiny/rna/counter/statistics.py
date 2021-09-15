@@ -7,7 +7,7 @@ from typing import Tuple, Optional
 from collections import Counter, defaultdict
 
 from .hts_parsing import Alignment
-from ..util import prefix_filename
+from ..util import make_filename
 
 
 class LibraryStats:
@@ -308,7 +308,7 @@ class SummaryStats:
         out_df = SummaryStats.sort_cols_and_round(df, axis=sort_axis)
         out_df.index.name = idx_name
 
-        file_name = prefix_filename([prefix, postfix])
+        file_name = make_filename([prefix, postfix])
         out_df.to_csv(file_name)
 
     @staticmethod
@@ -345,7 +345,7 @@ class Diagnostics:
     def write_intermediate_file(self, library_name: str) -> None:
         """Write all recorded alignment info for this library to its corresponding alignment table."""
 
-        outfile = prefix_filename([self.out_prefix, library_name, 'aln_table'], ext='.txt')
+        outfile = make_filename([self.out_prefix, library_name, 'aln_table'], ext='.txt')
         with open(outfile, 'w') as imf:
             imf.writelines(
                 # sequence, cor_counts, strand, start, end, feat1a/feat1b;feat2;...
@@ -385,6 +385,6 @@ class Diagnostics:
                 for stat in sorted(selection_summary[lib][feat_class].keys()):
                     out.append("\t\t%s: %d" % (stat, selection_summary[lib][feat_class][stat]))
 
-        selection_summary_filename = prefix_filename([out_prefix, 'selection_diags'], ext='.txt')
+        selection_summary_filename = make_filename([out_prefix, 'selection_diags'], ext='.txt')
         with open(selection_summary_filename, 'w') as f:
             f.write('\n'.join(out))
