@@ -12,13 +12,6 @@ from tiny.rna.util import report_execution_time
 _re_attr_main = re.compile(r"\s*([^\s=]+)[\s=]+(.*)")
 _re_attr_empty = re.compile(r"^\s*$")
 
-# Type aliases for human readability
-Features = HTSeq.GenomicArrayOfSets  # interval -> set of associated features
-Attributes = Dict[str, list]  # feature -> feature attributes
-FeatureSources = Dict[str, list]
-SelectionRules = List[dict]
-Alias = dict
-
 
 class Alignment:
     """The data structure in which parsed SAM alignments are stored.
@@ -158,7 +151,8 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
 
 
 @report_execution_time("GFF parsing")
-def build_reference_tables(gff_files: FeatureSources, rules: SelectionRules) -> Tuple[Features, Attributes, Alias, Dict]:
+def build_reference_tables(gff_files: Dict[str, list], rules: List[dict]) \
+        -> Tuple['HTSeq.GenomicArrayOfSets', Dict[str, list], dict, dict]:
     """A GFF parser which builds feature, attribute, and alias tables, with intelligent appends
 
     Features may be defined by multiple GFF files. If multiple files offer different attributes for

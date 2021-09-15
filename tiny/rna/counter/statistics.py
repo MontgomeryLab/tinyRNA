@@ -3,7 +3,7 @@ import json
 import sys
 import os
 
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Iterable
 from collections import Counter, defaultdict
 
 from .hts_parsing import Alignment
@@ -33,7 +33,6 @@ class LibraryStats:
 
         self.feat_counts = Counter()
         self.chrom_misses = Counter()
-        self.identity_roster = set()
         self.nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
         self.library_stats = {stat: 0 for stat in LibraryStats.summary_categories}
 
@@ -65,10 +64,8 @@ class LibraryStats:
             self.library_stats['Total Unassigned Reads'] += bundle.corr_count
         if assigned_count == 1:
             self.library_stats['Reads Assigned to Single Feature'] += bundle.corr_count
-            # print(f"Single: {assignments}")
         if assigned_count > 1:
             self.library_stats['Reads Assigned to Multiple Features'] += bundle.corr_count
-            # print(f"Multi: {assignments}")
         if assigned_count > 0:
             self.library_stats['Total Assigned Reads'] += bundle.corr_count
 
@@ -104,9 +101,6 @@ class SummaryStats:
     summary_categories = ["Total Reads", "Retained Reads", "Unique Sequences",
                           "Mapped Sequences", "Mapped Reads", "Aligned Reads"]
 
-    aln_diag_categories = ['Eliminated counts', 'No feature counts',
-                           'Uncounted alignments (+)', 'Uncounted alignments (-)']
-
     def __init__(self, feature_attributes: dict, out_prefix: str, report_diags: bool):
         self.feature_attributes = feature_attributes
         self.out_prefix = out_prefix
@@ -119,21 +113,21 @@ class SummaryStats:
         self.feat_counts_df = pd.DataFrame(index=feature_attributes.keys())
         self.lib_stats_df = pd.DataFrame(index=LibraryStats.summary_categories)
         self.chrom_misses = Counter()
-        self.identity_roster = set()
         self.nt_len_mat = {}
         self.warnings = []
 
         if report_diags:
-            self.aln_diags = pd.DataFrame(columns=SummaryStats.aln_diag_categories)
+            self.aln_diags = pd.DataFrame(columns=Diagnostics.aln_diag_categories)
             self.selection_diags = {}
 
-    def write_report_files(self, alias: dict, prefix=None) -> None:
-        if prefix is None: prefix = self.out_prefix
-        if self.report_diags: Diagnostics.write_summary(prefix, self.aln_diags, self.selection_diags)
-        self.write_alignment_statistics(prefix)
-        self.write_pipeline_statistics(prefix)
-        self.write_feat_counts(alias, prefix)
-        self.write_nt_len_mat(prefix)
+    def write_report_files(self, counts_idx: set, alias: dict) -> None:
+        if self.report_diags:
+            Diagnostics.write_summary(self.out_prefix, self.aln_diags, self.selection_diags)
+
+        self.write_feat_counts(counts_idx, alias, self.out_prefix)
+        self.write_alignment_statistics(self.out_prefix)
+        self.write_pipeline_statistics(self.out_prefix)
+        self.write_nt_len_mat(self.out_prefix)
 
     def write_alignment_statistics(self, prefix: str) -> None:
         # Sort columns by title and round all counts to 2 decimal places
@@ -144,8 +138,11 @@ class SummaryStats:
             # Sort columns by title and round all counts to 2 decimal places
             self.df_to_csv(self.pipeline_stats_df, "Summary Statistics", prefix, "summary_stats")
 
-    def write_feat_counts(self, alias: dict, prefix: str) -> None:
+    def write_feat_counts(self, display_index: Iterable, alias: dict, prefix: str) -> None:
         """Writes selected features and their associated counts to {prefix}_out_feature_counts.csv
+
+        Only the features in display_index will be listed in the output table, regardless of count, even
+        if the features had no associated alignments.
 
         If a features.csv rule defined a Name Attribute other than "ID", then the associated features will
         be aliased to their corresponding Name Attribute value and displayed in the Feature Name column, and
@@ -163,7 +160,7 @@ class SummaryStats:
         """
 
         # Subset the counts table to only show features that were matched on identity (regardless of count)
-        summary = self.feat_counts_df.loc[self.identity_roster]
+        summary = self.feat_counts_df.loc[display_index]
         # Sort columns by title and round all counts to 2 decimal places
         summary = self.sort_cols_and_round(summary)
         # Add Feature Name column, which is the feature alias (default is Feature ID if no alias exists)
@@ -190,7 +187,6 @@ class SummaryStats:
         self.feat_counts_df[other.library["Name"]] = self.feat_counts_df.index.map(other.feat_counts)
         self.lib_stats_df[other.library["Name"]] = self.lib_stats_df.index.map(other.library_stats)
         self.nt_len_mat[other.library["Name"]] = other.nt_len_mat
-        self.identity_roster.update(other.identity_roster)
         self.chrom_misses.update(other.chrom_misses)
 
         if self.report_diags: self.add_diags(other)
@@ -318,11 +314,15 @@ class SummaryStats:
 
 
 class Diagnostics:
+
+    aln_diag_categories = ['Eliminated counts', 'No feature counts',
+                           'Uncounted alignments (+)', 'Uncounted alignments (-)']
+
     complement = bytes.maketrans(b'ACGTacgt', b'TGCAtgca')
 
     def __init__(self, out_prefix: str):
         self.out_prefix = out_prefix
-        self.alignment_diags = {stat: 0 for stat in SummaryStats.aln_diag_categories}
+        self.alignment_diags = {stat: 0 for stat in Diagnostics.aln_diag_categories}
         self.selection_diags = defaultdict(Counter)
         self.alignments = []
 
