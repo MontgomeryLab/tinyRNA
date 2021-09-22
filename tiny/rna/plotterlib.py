@@ -10,6 +10,7 @@ import pandas as pd
 import numpy as np
 import itertools
 import locale
+import math
 import os
 
 # cwltool appears to unset all environment variables including those related to locale
@@ -28,13 +29,17 @@ from typing import Union
 
 class plotterlib:
 
-    def __init__(self, user_style_sheet):
+    def __init__(self, user_style_sheet, debug=True):
 
         # Set global plot style once
         plt.style.use(user_style_sheet)
 
         # Improves performance (sacrifices interactivity)
-        mpl.use("PDF")
+        if debug:
+            mpl.use('TkAgg')
+            mpl.rcParams['figure.dpi'] = 100
+        else:
+            mpl.use('PDF')
 
         # Create one subplot per plot type to reuse between calls
         fig_args = {
@@ -169,10 +174,11 @@ class plotterlib:
 
         # Retrieve axis and styles for this plot type
         fig, ax = self.reuse_subplot("scatter_simple")
+        ax: plt.Axes
 
         # Avoid recalculating limits with each scatter group
         # Must call set_scatter_lims() after all groups plotted
-        ax.autoscale(False)
+        # ax.autoscale(False)
 
         # log2 normalize data if requested
         if log_norm:
@@ -182,8 +188,8 @@ class plotterlib:
 
             # Set up axis ticks and labels
             for axis in [ax.xaxis, ax.yaxis]:
-                axis.set_major_locator(tix.LogLocator(base=2))
                 axis.set_major_formatter(tix.LogFormatter(base=2))
+                axis.set_minor_formatter(tix.NullFormatter())
 
             ax.scatter(count_x, count_y, edgecolor='none', **kwargs)
 
@@ -260,19 +266,22 @@ class plotterlib:
         ax.autoscale(True)
 
         # Center about diagonal
-        lim = (ax.get_xlim(), ax.get_ylim())
-        ax_min = min(axis[0] for axis in lim)  # lower limit
-        ax_max = max(axis[1] for axis in lim)  # upper limit
+        lim = ax.viewLim.bounds
+        ax_min, ax_max = min(lim), max(lim)
         ax.set_xlim(left=ax_min, right=ax_max)
         ax.set_ylim(bottom=ax_min, top=ax_max)
 
-        # Hide tick label in lower left corner
+        # Hide ticks near origin and set minor tick parameters
         for axis in [ax.xaxis, ax.yaxis]:
-            for i, tickloc in enumerate(axis.get_majorticklocs()):
-                # Want to set the first tick label (within view lims) invisible
-                if tickloc >= ax_min:
-                    # Visibility can only be set from the [X,Y]Tick object
-                    axis.get_major_ticks()[i].label1.set_visible(False)
+            # numticks can now be set with final view limits
+            # Setting subs here to save compute time on axes autoscale
+            axis.get_minor_locator().set_params(
+                numticks=self.calc_numticks(axis),
+                subs=np.log2(np.linspace(2 ** 2, 2 ** 4, 10))[:-1])
+            for tick in axis.get_major_ticks():
+                # Find first tick within min view limit and hide it
+                if tick.get_loc() >= ax_min:
+                    tick.set_visible(False)
                     break
 
         ## NOTE TO FUTURE DEVELOPERS
@@ -280,6 +289,15 @@ class plotterlib:
         # scatter_by_dge and scatter_by_dge_class. This is going to be a painful problem to solve
         # due to the amount of explicit and implicit redundancy in mpl (also: keep an eye on those
         # @property decorators...). You'll want to start at _AxesBase.autoscale_view(). Good luck.
+
+    @staticmethod
+    def calc_numticks(axis: mpl.axis.XAxis):
+        vmin, vmax = axis.get_view_interval()
+        log_vmin = math.log(vmin) / math.log(2)
+        log_vmax = math.log(vmax) / math.log(2)
+
+        numdec = math.floor(log_vmax) - math.ceil(log_vmin)
+        return numdec + 2  # Want: [ (numdec + 1) // nticks + 1 ] == 1
 
     def reuse_subplot(self, plot_type: str) -> (plt.Figure, Union[plt.Axes, np.ndarray]):
         """Retrieves the reusable subplot for this plot type
