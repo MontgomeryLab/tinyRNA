@@ -14,7 +14,7 @@ dependencies:
   - pip:
       - htseq
       - psutil
-      - cwltool==3.1.20210426140515  # Previous versions fail to find output files with special characters
+      - cwltool==3.1.20211001174446
       - . # This allows pip to handle the installation of tinyRNA via setup.py
 
       # Toil and its dependencies. Current release breaks cwltool.
