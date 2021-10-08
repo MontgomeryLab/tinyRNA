@@ -4,7 +4,7 @@ import sys
 import re
 import os
 
-from collections import Counter
+from collections import Counter, defaultdict
 from typing import Tuple, List, Dict
 from tiny.rna.util import report_execution_time
 
@@ -171,19 +171,28 @@ def build_reference_tables(gff_files: Dict[str, list], rules: List[dict]) \
     attrs_of_interest = list(np.unique(["Class"] + [attr['Identity'][0] for attr in rules]))
 
     feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
-    attrs, alias, intervals = {}, {}, {}
+    attrs, alias, intervals = {}, {}, defaultdict(list)
 
-    def check_namespace(feature_id, row_iv, file):
-        # Rename feature_id if it has already been defined for another interval
-        while feature_id in intervals and row_iv != intervals[feature_id]:
-            feature_id = f"{feature_id} ({os.path.basename(file)})"
+    def check_ancestors(feature_id, row):
+        feature_id = row.attr.get("Parent", (feature_id,))[0]
+
+        # Climb generational tree to find root parent
+        while any(attr for attr in attrs.get(feature_id, []) if len(attr) and attr[0] == 'Parent'):
+            feature_id = attrs[feature_id]['Parent'][0]
+
         return feature_id
 
-    def add_feature(feature_id, row_iv):
-        feats[row_iv] += feature_id
-        intervals[feature_id] = row_iv
+    def add_feature_iv(feature_id, row):
+        feats[row.iv] += feature_id
+        if row.iv not in intervals[feature_id]:
+            intervals[feature_id].append(row.iv)
+
         # Copy only the attributes of interest
-        return [(interest, row.attr[interest]) for interest in attrs_of_interest]
+        interests = [(interest, row.attr[interest]) for interest in attrs_of_interest]
+        if "Parent" in row.attr:
+            interests.append(('Parent', tuple(row.attr['Parent'])))
+
+        return interests
 
     def add_alias(feature_id, row_attr):
         curr_alias = alias.get(feature_id, ())
@@ -218,10 +227,10 @@ def build_reference_tables(gff_files: Dict[str, list], rules: List[dict]) \
 
             try:
                 feature_id = row.attr["ID"][0]
-                # Ensure one interval per feat ID, else rename feat ID
-                feature_id = check_namespace(feature_id, row.iv, file)
+                # Climb ancestral tree to find root feature ID
+                feature_id = check_ancestors(feature_id, row)
                 # Add feature_id <-> feature_interval records
-                row_attrs = add_feature(feature_id, row.iv)
+                row_attrs = add_feature_iv(feature_id, row)
                 # Append alias to feat if unique
                 add_alias(feature_id, row.attr)
             except KeyError as ke:
