@@ -12,7 +12,7 @@ dependencies:
   - nodejs==10.13.0
   - conda-forge::cwltool==3.1.20211001174446
   - conda-forge::psutil==5.8.0
-  - htseq==0.13.5
   - pip
   - pip:
-      - . # Install tinyRNA via setup.py
+    - htseq==0.13.5
+    - . # Install tinyRNA via setup.py
