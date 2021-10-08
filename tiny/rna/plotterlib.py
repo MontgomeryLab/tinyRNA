@@ -29,16 +29,16 @@ from typing import Union
 
 class plotterlib:
 
-    def __init__(self, user_style_sheet, debug=True):
+    def __init__(self, user_style_sheet, debug=False):
 
         # Set global plot style once
         plt.style.use(user_style_sheet)
 
-        # Improves performance (sacrifices interactivity)
         if debug:
             mpl.use('TkAgg')
-            mpl.rcParams['figure.dpi'] = 100
+            mpl.rcParams['savefig.dpi'] = 100
         else:
+            # Slightly better performance
             mpl.use('PDF')
 
         # Create one subplot per plot type to reuse between calls
@@ -52,6 +52,9 @@ class plotterlib:
         for plot in fig_args:
             fig, ax = plt.subplots(**fig_args[plot])
             self.subplots[plot] = {'fig': fig, 'ax': ax}
+
+        self.sample_lims = {}
+        self.axis_cache = {}
 
     def len_dist_bar(self, size_df: pd.DataFrame, **kwargs) -> plt.Axes:
         """Creates a stacked barplot of 5' end nucleotides by read length
@@ -176,18 +179,16 @@ class plotterlib:
         fig, ax = self.reuse_subplot("scatter_simple")
         ax: plt.Axes
 
-        # Avoid recalculating limits with each scatter group
-        # Must call set_scatter_lims() after all groups plotted
-        # ax.autoscale(False)
-
         # log2 normalize data if requested
         if log_norm:
             # Set log2 scale
             ax.set_xscale('log', base=2)
             ax.set_yscale('log', base=2)
 
-            # Set up axis ticks and labels
+            # Unset default locators and formatters
             for axis in [ax.xaxis, ax.yaxis]:
+                axis.set_major_locator(tix.NullLocator())
+                axis.set_minor_locator(tix.NullLocator())
                 axis.set_major_formatter(tix.LogFormatter(base=2))
                 axis.set_minor_formatter(tix.NullFormatter())
 
@@ -265,25 +266,48 @@ class plotterlib:
         # Let autoscale do most of the work
         ax.autoscale(True)
 
-        # Center about diagonal
+        # Get maximum and minimum limits of all axes
         lim = ax.viewLim.bounds
         ax_min, ax_max = min(lim), max(lim)
+        tick_locs = [2 ** x for x in range(math.floor(np.log2(ax_min)), math.ceil(np.log2(ax_max)))]
+        min_tick, max_tick = tick_locs[0], tick_locs[-1]
+
+        ax.xaxis.set_major_locator(tix.FixedLocator(tick_locs))
+        ax.yaxis.set_major_locator(tix.FixedLocator(tick_locs))
+
+        # Square up limits to center about diagonal
         ax.set_xlim(left=ax_min, right=ax_max)
         ax.set_ylim(bottom=ax_min, top=ax_max)
 
-        # Hide ticks near origin and set minor tick parameters
-        for axis in [ax.xaxis, ax.yaxis]:
-            # numticks can now be set with final view limits
-            # Setting subs here to save compute time on axes autoscale
-            axis.get_minor_locator().set_params(
-                numticks=self.calc_numticks(axis),
-                subs=np.log2(np.linspace(2 ** 2, 2 ** 4, 10))[:-1])
-            for tick in axis.get_major_ticks():
-                # Find first tick within min view limit and hide it
-                if tick.get_loc() >= ax_min:
-                    tick.set_visible(False)
-                    break
+        every_nth_label = 3
 
+        # Hide ticks near origin and set minor tick parameters
+        for axis, spine in [(ax.xaxis, ax.spines.bottom), (ax.yaxis, ax.spines.left)]:
+            major_ticks = axis.get_major_ticks()
+            major_ticks[0].set_visible(False)
+            for i, tick in enumerate(major_ticks):
+                if i % every_nth_label != 0:
+                    tick.label1.set_visible(False)
+
+            axis.set_minor_locator(tix.LogLocator(
+                base=2.0,
+                numticks=self.get_min_LogLocator_numticks(axis),
+                subs=np.log2(np.linspace(2 ** 2, 2 ** 4, 10))[:-1]))
+
+            # THUNDEROUS PRAYER HANDS, FREE US FROM OUR EARTHLY BONDS [[[thunder]]]
+            ax.figure.canvas.draw()
+
+            for tick in major_ticks:
+                line = tick.tick1line
+                if line._xy is None or line._xy.max() < min_tick or line._xy.max() > max_tick:
+                    line.set_visible(False)
+
+            for tick in axis.get_minor_ticks():
+                line = tick.tick1line
+                if line._xy is None or line._xy.max() < 0.25 or line._xy.max() > max_tick:
+                    line.set_visible(False)
+
+            pass
         ## NOTE TO FUTURE DEVELOPERS
         # You may have encountered a pairwise comparison which differs in view limits between
         # scatter_by_dge and scatter_by_dge_class. This is going to be a painful problem to solve
@@ -291,7 +315,7 @@ class plotterlib:
         # @property decorators...). You'll want to start at _AxesBase.autoscale_view(). Good luck.
 
     @staticmethod
-    def calc_numticks(axis: mpl.axis.XAxis):
+    def get_min_LogLocator_numticks(axis: plt.Axes):
         vmin, vmax = axis.get_view_interval()
         log_vmin = math.log(vmin) / math.log(2)
         log_vmax = math.log(vmax) / math.log(2)

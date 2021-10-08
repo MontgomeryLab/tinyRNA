@@ -21,8 +21,6 @@ from tiny.rna.configuration import timestamp_format
 from tiny.rna.plotterlib import plotterlib as lib
 from tiny.rna.util import report_execution_time, make_filename
 
-RASTER = False
-
 
 def get_args():
     """Get input arguments from the user/command line."""
@@ -60,12 +58,8 @@ def get_args():
                                 'with significantly different (padj<0.05) genes highlighted.\n'
                              'sample_avg_scatter_by_dge_class: A scatter plot comparing all sample groups,'
                                 'with classes and significantly different genes highlighted')
-    args = parser.parse_args()
 
-    global RASTER
-    RASTER = not args.vector_scatter
-
-    return args
+    return parser.parse_args()
 
 
 def get_pairs(samples):
@@ -218,7 +212,7 @@ def load_dge_tables(comparisons: list) -> pd.DataFrame:
     return de_table
 
 
-def scatter_samples(count_df, dges, output_prefix, classes=None, show_unknown=False, pval=0.05):
+def scatter_dges(count_df, dges, output_prefix, classes=None, show_unknown=False, pval=0.05):
     """Creates PDFs of all pairwise comparison scatter plots from a count table.
     Can highlight classes and/or differentially expressed genes as different colors.
 
@@ -401,8 +395,9 @@ def main():
     validate_inputs(args)
     inputs = setup(args)
 
-    global aqplt
+    global aqplt, RASTER
     aqplt = lib(args.style_sheet)
+    RASTER = not args.vector_scatter
 
     # Assemble work units for multiprocessing pool
     itinerary = []
@@ -410,17 +405,25 @@ def main():
     # generate plots requested
     for plot in args.plots:
         if plot == 'len_dist':
-            itinerary.append((len_dist_plots, (args.len_dist, args.out_prefix), {}))
+            func = len_dist_plots
+            arg, kwd = (args.len_dist, args.out_prefix), {}
         elif plot == 'class_charts':
-            itinerary.append((class_plots, (inputs["class_counts"], args.out_prefix), {}))
+            func = class_plots
+            arg, kwd = (inputs["class_counts"], args.out_prefix), {}
         elif plot == 'replicate_scatter':
-            itinerary.append((scatter_replicates, (inputs["norm_count_df"], args.out_prefix, inputs["sample_rep_dict"]), {}))
+            func = scatter_replicates
+            arg, kwd = (inputs["norm_count_df"], args.out_prefix, inputs["sample_rep_dict"]), {}
         elif plot == 'sample_avg_scatter_by_dge':
-            itinerary.append((scatter_samples, (inputs["norm_count_avg_df"], inputs["de_table"], args.out_prefix), {}))
+            func = scatter_dges
+            arg, kwd = (inputs["norm_count_avg_df"], inputs["de_table"], args.out_prefix), {}
         elif plot == 'sample_avg_scatter_by_dge_class':
-            itinerary.append((scatter_samples, (inputs["norm_count_avg_df"], inputs["de_table"], args.out_prefix), {"classes": inputs["feat_classes"]}))
+            func = scatter_dges
+            arg, kwd = (inputs["norm_count_avg_df"], inputs["de_table"], args.out_prefix), {"classes": inputs["feat_classes"]}
         else:
             print('Plot type %s not recognized, please check the -p/--plot arguments' % plot)
+            continue
+
+        itinerary.append((func, arg, kwd))
 
     if len(itinerary) > 1:
         with mp.Pool(len(itinerary)) as pool:
