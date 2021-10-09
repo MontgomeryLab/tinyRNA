@@ -41,7 +41,7 @@ if (length(args) > 7){
   stop(gettextf("Too many arguments given. %d arguments were parsed.
   Was there an unquoted space in your arguments?\n\n%s", length(args), usage))
 } else if (length(args) < 4){
-  stop("Not enough arguments given. Only parsed %d arguments.\n\n%s", length(args), usage)
+  stop(gettextf("Not enough arguments given. Only parsed %d arguments.\n\n%s", length(args), usage))
 }
 
 ## Assign arg variables
