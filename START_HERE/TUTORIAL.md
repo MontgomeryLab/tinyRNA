@@ -41,7 +41,7 @@ Here's what you'll find:
 ## First run
 All of the above files are mapped out in `run_config.yml` and the tree of configuration files that it references. Since we already have a working configuration let's run an end-to-end analysis on our sample data using the command:
 ```
-tinyrna run --config run_config.yml
+tiny run --config run_config.yml
 ```
 Did you receive "command not found"? Make sure that you activate the tinyrna environment before using it.
 ```
