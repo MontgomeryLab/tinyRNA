@@ -23,6 +23,7 @@ if curr_locale[0] is None:
 import matplotlib as mpl
 import matplotlib.ticker as tix
 import matplotlib.pyplot as plt
+from matplotlib.scale import LogTransform
 
 from typing import Union
 
@@ -187,8 +188,8 @@ class plotterlib:
 
             # Unset default locators and formatters
             for axis in [ax.xaxis, ax.yaxis]:
-                axis.set_major_locator(tix.NullLocator())
-                axis.set_minor_locator(tix.NullLocator())
+                # axis.set_major_locator(tix.NullLocator())
+                # axis.set_minor_locator(tix.NullLocator())
                 axis.set_major_formatter(tix.LogFormatter(base=2))
                 axis.set_minor_formatter(tix.NullFormatter())
 
@@ -215,7 +216,7 @@ class plotterlib:
 
         return ax
 
-    def scatter_grouped(self, count_x: pd.DataFrame, count_y: pd.DataFrame, *args, log_norm=False, labels=None, **kwargs):
+    def scatter_grouped(self, count_x: pd.DataFrame, count_y: pd.DataFrame, view_lims, *args, log_norm=False, labels=None, **kwargs):
         """Creates a scatter plot with different groups highlighted.
 
         Args:
@@ -252,37 +253,64 @@ class plotterlib:
         for group in argsit:
             gscat.scatter(count_x.loc[group], count_y.loc[group], color=next(colors), edgecolor='none', **kwargs)
 
-        self.set_scatter_lims(gscat)
+        self.set_square_scatter_view_lims(gscat, view_lims)
+        self.set_scatter_ticks(gscat)
         gscat.legend(labels=labels)
         return gscat
 
-    def set_scatter_lims(self, ax: plt.Axes):
-        """Scatter plot will be centered about diagonal, without lower left tick label
+    @staticmethod
+    def get_scatter_view_lims(counts_df: pd.DataFrame):
+        """Calculates scatter view limits for the counts dataframe"""
 
-        Args:
-            ax: A scatter plot Axes object
-        """
+        x0 = counts_df.min(axis='columns').where(lambda x: x != 0).dropna().min()
+        x1 = np.max(counts_df).max()
+        minpos = 1e-300
 
-        # Let autoscale do most of the work
-        ax.autoscale(True)
+        if not np.isfinite([x0,x1]).all() or not isinstance(x0, np.float) or x1 <= 0:
+            print("The provided dataset contains invalid values.")
+            return (minpos, minpos)
 
-        # Get maximum and minimum limits of all axes
-        lim = ax.viewLim.bounds
-        ax_min, ax_max = min(lim), max(lim)
-        tick_locs = [2 ** x for x in range(math.floor(np.log2(ax_min)), math.ceil(np.log2(ax_max)))]
-        min_tick, max_tick = tick_locs[0], tick_locs[-1]
+        x0, x1 = (minpos if x0 <= 0 else x0,
+                  minpos if x1 <= 0 else x1)
 
-        ax.xaxis.set_major_locator(tix.FixedLocator(tick_locs))
-        ax.yaxis.set_major_locator(tix.FixedLocator(tick_locs))
+        transform = LogTransform(base=2)
+        inverse_trans = transform.inverted()
+
+        x0t, x1t = transform.transform([x0, x1])
+        delta = (x1t - x0t) * mpl.rcParams.get('axes.xmargin')
+        if not np.isfinite(delta): delta = 0
+
+        return inverse_trans.transform([x0t - delta, x1t + delta])
+
+    @staticmethod
+    def set_square_scatter_view_lims(ax: plt.Axes, min_max=None):
+        """Scatter plot will be centered about diagonal"""
+
+        if min_max is not None:
+            ax_min, ax_max = min_max
+        else:
+            lim = ax.viewLim.bounds
+            ax_min, ax_max = min(lim), max(lim)
 
         # Square up limits to center about diagonal
         ax.set_xlim(left=ax_min, right=ax_max)
         ax.set_ylim(bottom=ax_min, top=ax_max)
 
+    def set_scatter_ticks(self, ax: plt.Axes):
+        """Creates major and minor ticks for a square scatter plot"""
+
+        # Get maximum and minimum limits of all axes
+        lim = ax.viewLim.bounds
+        ax_min, ax_max = min(lim), max(lim)
+        tick_locs = [2 ** x for x in range(math.floor(np.log2(ax_min)), math.ceil(np.log2(ax_max)))]
+
+        ax.xaxis.set_major_locator(tix.FixedLocator(tick_locs))
+        ax.yaxis.set_major_locator(tix.FixedLocator(tick_locs))
+
         every_nth_label = 3
 
         # Hide ticks near origin and set minor tick parameters
-        for axis, spine in [(ax.xaxis, ax.spines.bottom), (ax.yaxis, ax.spines.left)]:
+        for axis, spine in [(ax.xaxis, ax.spines["bottom"]), (ax.yaxis, ax.spines["left"])]:
             major_ticks = axis.get_major_ticks()
             major_ticks[0].set_visible(False)
             for i, tick in enumerate(major_ticks):
@@ -296,6 +324,7 @@ class plotterlib:
 
             # THUNDEROUS PRAYER HANDS, FREE US FROM OUR EARTHLY BONDS [[[thunder]]]
             ax.figure.canvas.draw()
+            min_tick, max_tick = tick_locs[0], tick_locs[-1]
 
             for tick in major_ticks:
                 line = tick.tick1line
@@ -308,14 +337,25 @@ class plotterlib:
                     line.set_visible(False)
 
             pass
-        ## NOTE TO FUTURE DEVELOPERS
-        # You may have encountered a pairwise comparison which differs in view limits between
-        # scatter_by_dge and scatter_by_dge_class. This is going to be a painful problem to solve
-        # due to the amount of explicit and implicit redundancy in mpl (also: keep an eye on those
-        # @property decorators...). You'll want to start at _AxesBase.autoscale_view(). Good luck.
+        print(axis.get_view_interval())
+
+    print()
+
 
     @staticmethod
-    def get_min_LogLocator_numticks(axis: plt.Axes):
+    def get_min_LogLocator_numticks(axis: plt.Axes) -> int:
+        """Calculates the minimum # ticks for the view limits to force tick display
+
+        Matplotlib's LogLocator will not locate ticks if its `numticks` parameter
+        is below threshold for the view interval. Providing a `numticks` value below
+        threshold results in minor ticks not being drawn.
+
+        Args:
+            axis: an x or y axis
+
+        Returns: minimum `numticks` parameter value
+        """
+
         vmin, vmax = axis.get_view_interval()
         log_vmin = math.log(vmin) / math.log(2)
         log_vmax = math.log(vmax) / math.log(2)
