@@ -5,18 +5,15 @@ import sys
 import os
 
 from collections import defaultdict
-from typing import Tuple
+from typing import Tuple, List, Dict
 
-from tiny.rna.counter.features import Features, FeatureCounter
-from tiny.rna.counter.hts_parsing import SelectionRules, FeatureSources
+from tiny.rna.counter.features import Features, FeatureCounter, FeatureSelector
 from tiny.rna.counter.statistics import SummaryStats
 from tiny.rna.util import report_execution_time, from_here
 from tiny.rna.configuration import CSVReader
 
 # Global variables for multiprocessing
 feature_counter: FeatureCounter
-is_pipeline = False
-run_diags = False
 
 
 def get_args():
@@ -34,6 +31,9 @@ def get_args():
                         help='output prefix to use for file names')
 
     # Optional arguments
+    arg_parser.add_argument('-a', '--all-features', action='store_true',
+                        help='Represent all features in output counts table, '
+                             'regardless of counts or identity rules.')
     arg_parser.add_argument('-p', '--is-pipeline', action='store_true',
                         help='Indicates that counter was invoked from the tinyrna pipeline '
                              'and that input files should be sources as such.')
@@ -41,15 +41,27 @@ def get_args():
                         help='Produce diagnostic information about uncounted/eliminated '
                              'selection elements.')
 
-    parsed_args = arg_parser.parse_args()
-
-    global is_pipeline, run_diags
-    is_pipeline = parsed_args.is_pipeline
-    run_diags = parsed_args.diagnostics
     return arg_parser.parse_args()
 
 
-def load_samples(samples_csv: str) -> list:
+def load_samples(samples_csv: str, is_pipeline: bool) -> List[Dict[str, str]]:
+    """Parses the Samples Sheet to determine library names and alignment files for counting
+
+    Sample files may have a .fastq(.gz) extension (i.e. when Counter is called as part of a
+    pipeline run) or a .sam extension (i.e. when Counter is called as a standalone tool).
+
+    Args:
+        samples_csv: a csv file which defines sample group, replicate, and file location
+        is_pipeline: helps locate sample SAM files. If true, files are assumed to reside
+            in the working directory. If false, files are assumed to reside in the same
+            directory as their source FASTQ files with '_aligned_seqs.sam' appended
+            (i.e. /dir/sample1.fastq -> /dir/sample1_aligned_seqs.sam).
+
+    Returns:
+        inputs: a list of dictionaries for each library, where each dictionary defines the
+        library name and the location of its SAM file for counting.
+    """
+
     def get_library_filename(csv_row_file: str, samples_csv: str) -> str:
         """The input samples.csv may contain either fastq or sam files"""
 
@@ -80,14 +92,18 @@ def load_samples(samples_csv: str) -> list:
     return inputs
 
 
-def load_config(features_csv: str) -> Tuple[SelectionRules, FeatureSources]:
-    """Parses features.csv to provide inputs to FeatureSelector and build_reference_tables
+def load_config(features_csv: str, is_pipeline: bool) -> Tuple[List[dict], Dict[str, list]]:
+    """Parses the Features Sheet to provide inputs to FeatureSelector and build_reference_tables
 
     Args:
         features_csv: a csv file which defines feature sources and selection rules
+        is_pipeline: helps locate GFF files defined in the Features Sheet. If true,
+            GFF files are assumed to reside in the working directory.
 
     Returns:
-        rules: a list of dictionaries, each representing a parsed row from input
+        rules: a list of dictionaries, each representing a parsed row from input.
+            Note that these are just rule definitions which FeatureSelector will
+            further digest to produce its rules table.
         gff_files: a dict of GFF files and associated Name Attribute preferences
     """
 
@@ -137,10 +153,10 @@ def main():
 
     try:
         # Determine SAM inputs and their associated library names
-        libraries = load_samples(args.input_csv)
+        libraries = load_samples(args.input_csv, args.is_pipeline)
 
         # Load selection rules and feature sources from config
-        selection_rules, gff_file_set = load_config(args.config)
+        selection_rules, gff_file_set = load_config(args.config, args.is_pipeline)
 
         # global for multiprocessing
         global feature_counter
@@ -149,11 +165,12 @@ def main():
         # Assign and count features using multiprocessing and merge results
         merged_counts = map_and_reduce(libraries)
 
-        # Print any warnings that have accumulated
-        merged_counts.print_warnings()
+        # Determine which features should be represented in the counts table
+        display_indexes = Features.attributes.keys() if args.all_features else \
+                          FeatureSelector.get_all_identity_matches()
 
         # Write final outputs
-        merged_counts.write_report_files(feature_counter.alias, args.out_prefix)
+        merged_counts.write_report_files(display_indexes, Features.aliases)
     except:
         traceback.print_exception(*sys.exc_info())
         print("\n\nCounter encountered an error. Don't worry! You don't have to start over.\n"

@@ -2,16 +2,14 @@ import itertools
 import HTSeq
 
 from collections import defaultdict
-from typing import List, Tuple, Set
+from typing import List, Tuple, Set, Dict, Iterator
 
 import tiny.rna.counter.hts_parsing as parser
-from .selectors import Wildcard, StrandMatch, NumericalMatch, NtMatch
+from .matching import Wildcard, StrandMatch, NumericalMatch, NtMatch
 from .statistics import LibraryStats
 
 # Type aliases for human readability
-IntervalFeatures = Tuple[int, int, Set[str]]  # A set of features associated with an interval
-AssignedFeatures = set
-N_Candidates = int
+Hit = Tuple[int, int, str]
 
 BOTH_STRANDS = ('+', '-')
 
@@ -23,12 +21,15 @@ class Features:
     chrom_vectors: HTSeq.ChromVector
     attributes: dict
     intervals: dict
+    aliases: dict
+
     _instance = None  # Singleton
 
-    def __init__(self, features: HTSeq.GenomicArrayOfSets, attributes: dict, intervals: dict):
+    def __init__(self, features: HTSeq.GenomicArrayOfSets, attributes: dict, aliases: dict, intervals: dict):
         if Features._instance is None:
             Features.chrom_vectors = features.chrom_vectors  # For interval -> feature ID lookups
             Features.attributes = attributes                 # For feature ID -> GFF column 9 attribute lookups
+            Features.aliases = aliases                       # For feature ID -> preferred feature name lookups
             Features.intervals = intervals                   # For feature ID -> interval lookups
             Features._instance = self
 
@@ -36,20 +37,18 @@ class Features:
 class FeatureCounter:
     out_prefix: str
     run_diags: bool
-    alias: dict
 
     def __init__(self, gff_file_set, selection_rules, run_diags, out_prefix):
         reference_tables = parser.build_reference_tables(gff_file_set, selection_rules)
-        Features(reference_tables[0], reference_tables[1], reference_tables[3])
+        Features(*reference_tables)
 
-        FeatureCounter.alias = reference_tables[2]
         FeatureCounter.out_prefix = out_prefix
         FeatureCounter.run_diags = run_diags
 
         self.stats = LibraryStats(out_prefix, report_diags=run_diags)
         self.selector = FeatureSelector(selection_rules, self.stats, diags=run_diags)
 
-    def assign_features(self, alignment: 'parser.Alignment') -> Tuple[AssignedFeatures, N_Candidates]:
+    def assign_features(self, alignment: 'parser.Alignment') -> Tuple[set, int]:
         """Determines features associated with the interval then performs rule-based feature selection"""
 
         feat_matches, assignment = list(), set()
@@ -114,7 +113,7 @@ class FeatureSelector:
     Hits are tuples for performance reasons, and are of the format:
         (hierarchy, rule, feature_id)
 
-    If more than one hit remains following first round selection, a second round of selection
+    If more than one Hit remains following first round selection, a second round of selection
     is performed against sequence attributes: strand, 5' end nucleotide, and length. Rules for
     5' end nucleotides support lists (e.g. C,G,U) and wildcards (e.g. "all"). Rules for length
     support lists, wildcards, and ranges (i.e. 20-27) which may be intermixed in the same rule.
@@ -122,15 +121,17 @@ class FeatureSelector:
     by the alignment interval.
     """
 
-    def __init__(self, rules: List[dict], libstats: 'LibraryStats', diags=False):
-        self.rules_table = self.build_selectors(rules)
-        self.inv_ident = self.build_inverted_identities(self.rules_table)
+    rules_table = dict()
+    inv_ident = dict()
 
-        self.phase1_candidates = libstats.identity_roster
+    def __init__(self, rules: List[dict], libstats: 'LibraryStats', diags=False):
+        FeatureSelector.rules_table = self.build_selectors(rules)
+        FeatureSelector.inv_ident = self.build_inverted_identities(FeatureSelector.rules_table)
+
         self.report_eliminations = diags
         if diags: self.elim_stats = libstats.diags.selection_diags
 
-    def choose(self, feat_list: List[IntervalFeatures], alignment: 'parser.Alignment') -> set:
+    def choose(self, feat_list: List[Tuple[int, int, Set[str]]], alignment: 'parser.Alignment') -> Set[str]:
         # Perform hierarchy-based first round of selection for identities
         finalists = self.choose_identities(feat_list, alignment.iv)
         if not finalists: return set()
@@ -147,7 +148,7 @@ class FeatureSelector:
                 if selector == "Strand":
                     feat_strand = Features.intervals[hit[FEAT]].strand
                     read = (read[0], feat_strand)
-                if read not in self.rules_table[hit[RULE]][selector]:
+                if read not in FeatureSelector.rules_table[hit[RULE]][selector]:
                     eliminated.add(hit)
                     if self.report_eliminations:
                         feat_class = Features.attributes[hit[FEAT]][0][1][0]
@@ -162,19 +163,19 @@ class FeatureSelector:
         return {choice[FEAT] for choice in finalists}
 
     @staticmethod
-    def is_perfect_iv_match(feat_start, feat_end, aln_iv):
-        # Only accept perfect interval matches for rules requiring such
+    def is_perfect_iv_match(feat_start, feat_end, aln_iv) -> bool:
+        # Returns true if the alignment interval is fully enclosed by the feature interval
         return feat_start <= aln_iv.start and feat_end >= aln_iv.end
 
-    def choose_identities(self, feats_list: List[IntervalFeatures], aln_iv: 'HTSeq.GenomicInterval'):
+    def choose_identities(self, feats_list: List[Tuple[int, int, Set[str]]], aln_iv: 'HTSeq.GenomicInterval') -> Set[Hit]:
         """Performs the initial selection on the basis of identity rules: attribute (key, value)
 
         Feature candidates are supplied to this function via feats_list. This is a list
-        of tuples, each representing features associated with an in interval which
+        of tuples, each representing features associated with an interval which
         overlapped the alignment interval. The interval in this tuple may be a partial
         (incomplete) overlap with the alignment.
 
-        The list of IntervalFeatures takes the following form:
+        The feats_list takes the following form:
             [(iv_A_start, iv_A_end, {features, associated, with, iv_A, ... }),
              (iv_B_start, iv_B_end, {features, associated, with, iv_B, ... }), ... ]
             Where iv_A and iv_B overlap aln_iv by at least 1 base
@@ -186,35 +187,26 @@ class FeatureSelector:
                 assign features.
 
         Returns:
-
+            identity_hits: a set of Hits for features which matched an identity rule,
+            after performing elimination by hierarchy.
         """
 
         finalists, identity_hits = set(), list()
-        start, end, features = 0, 1, 2  # IntervalFeatures tuple indexes
 
         for iv_feats in feats_list:
             # Check for perfect interval match only once per IntervalFeatures
-            perfect_iv_match = self.is_perfect_iv_match(iv_feats[start], iv_feats[end], aln_iv)
-            for feat in iv_feats[features]:
+            perfect_iv_match = self.is_perfect_iv_match(iv_feats[0], iv_feats[1], aln_iv)
+            for feat in iv_feats[2]:
                 for attrib in Features.attributes[feat]:
-                    # If multiple values are associated with the attribute key, create their key/value products
-                    for feat_ident in itertools.product([attrib[0]], attrib[1]):
-                        try:
-                            # Check if rules are defined for this feature identity
-                            for rule in self.inv_ident[feat_ident]:
-                                if not perfect_iv_match and self.rules_table[rule]['Strict']:
-                                    continue
-                                identity_hits.append((self.rules_table[rule]['Hierarchy'], rule, feat))
-                        except KeyError:
-                            pass
+                    for rule in self.get_identity_matches(attrib):
+                        if not perfect_iv_match and FeatureSelector.rules_table[rule]['Strict']:
+                            continue
+                        identity_hits.append((FeatureSelector.rules_table[rule]['Hierarchy'], rule, feat))
         # -> identity_hits: [(hierarchy, rule, feature), ...]
 
-        self.phase1_candidates.update(hit[FEAT] for hit in identity_hits)
-
-        # Only one feature matched only one rule
+        # Perform hierarchy-based elimination
         if len(identity_hits) == 1:
             finalists.add(identity_hits[0])
-        # Perform any possible hierarchy-based eliminations
         elif len(identity_hits) > 1:
             uniq_ranks = {hit[RANK] for hit in identity_hits}
 
@@ -226,6 +218,45 @@ class FeatureSelector:
                 finalists.update(hit for hit in identity_hits if hit[RANK] == min_rank)
 
         return finalists
+
+    @classmethod
+    def get_identity_matches(cls, attribute) -> Iterator[int]:
+        """Returns indexes of rules associated with a feature attribute record
+
+        An attribute record is of the form ('key', ('value1', 'value2', ...)) where
+        one or more values may be associated with the key. If there are multiple values,
+        key-value products are formed, i.e. ('key', 'value1'), ('key', 'value2'), ...,
+        for lookup in the inverted identities table. In this way multiple identities may
+        be produced from a single attribute record. If any identity product matches a
+        rule in the inverted identities table, the indexes of the associated selection
+        rules are returned
+        """
+
+        # First iterator is a string wrapped in in iterable to prevent iteration of its characters
+        for feat_ident in itertools.product([attribute[0]], attribute[1]):
+            try:
+                # Check if rules are defined for this feature identity
+                for identity_rule in cls.inv_ident[feat_ident]:
+                    yield identity_rule
+            except KeyError:
+                pass
+
+    @classmethod
+    def get_all_identity_matches(cls) -> Set[str]:
+        """Returns all features which match an identity rule in the rules table"""
+
+        matches = set()
+        for feat, feat_attrs in Features.attributes.items():
+            for attr in feat_attrs:
+                ident_matches = cls.get_identity_matches(attr)
+                try:
+                    next(ident_matches)
+                    matches.add(feat)
+                except StopIteration:
+                    # No rules defined for this identity
+                    pass
+
+        return matches
 
     @staticmethod
     def build_selectors(rules_table) -> List[dict]:
@@ -253,7 +284,7 @@ class FeatureSelector:
         return rules_table
 
     @staticmethod
-    def build_inverted_identities(rules_table) -> dict:
+    def build_inverted_identities(rules_table) -> Dict[Tuple[str, str], List[int]]:
         """Builds inverted identity rules for fast matching in phase 1 selection
 
         The resulting dictionary has (Attrib Key, Attrib Val) as key, [associated rule indexes] as val
@@ -265,7 +296,7 @@ class FeatureSelector:
 
         return dict(inverted_identities)
 
-    @classmethod
-    def get_hit_indexes(cls):
+    @staticmethod
+    def get_hit_indexes() -> Tuple[int, int, int]:
         """Hits are stored as tuples for performance. This returns a human friendly index map for the tuple."""
         return RANK, RULE, FEAT

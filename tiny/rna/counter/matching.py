@@ -46,7 +46,7 @@ class NumericalMatch(frozenset):
     """For evaluating sequence length against a list and/or range of desired values
 
     FeatureSelector will determine a match by checking the frozenset
-    superclass's __contains__() function. Tuples are more lightweight for a small range of possible values.
+    superclass's __contains__() function. Frozensets have marginally faster lookup for wider ranges of values.
     """
 
     def __new__(cls, lengths):

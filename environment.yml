@@ -7,17 +7,15 @@ dependencies:
   - pandas==1.2.1
   - matplotlib==3.4.3
   - fastp==0.22.0
-  - bowtie>=1.2.3
+  - bowtie==1.2.3
   - tbb==2020.3  # Bowtie dependency, temporary fix. v2021.x breaks bowtie, is not properly pinned to v2020 in bioconda
-  - nodejs>=10.13.0
-  - pip
+  - nodejs==10.13.0
+  - conda-forge::cwltool==3.1.20211001174446
+  - conda-forge::psutil==5.8.0
+  - conda-forge::mscorefonts==0.0.1
+  - setuptools==52.0.0
+  - pip==21.2.4
   - pip:
-      - htseq
-      - psutil
-      - cwltool==3.1.20210426140515  # Previous versions fail to find output files with special characters
-      - . # This allows pip to handle the installation of tinyRNA via setup.py
-
-      # Toil and its dependencies. Current release breaks cwltool.
-      # - "toil[cwl]"
-      # - boto
-      # - boto3
+    - --use-feature=in-tree-build
+    - htseq==0.13.5
+    - . # Install tinyRNA via setup.py
