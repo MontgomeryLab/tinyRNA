@@ -316,9 +316,8 @@ def get_class_counts(counts_df: pd.DataFrame) -> pd.DataFrame:
 
 def validate_inputs(args: argparse.Namespace) -> None:
     """Determines if the necessary input files have been provided for the requested plots
-    This is necessary because we allow users to run the tool without specifying all
-    possible input files, so that a user may supply only the inputs necessary for the
-    plot types they've requested.
+    This is necessary because we allow users to run the tool with only the files necessary
+    for the plot types they've requested, rather than all possible inputs.
 
     Args:
         args: Command line arguments parsed by argparse
