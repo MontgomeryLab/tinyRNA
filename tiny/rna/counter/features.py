@@ -38,9 +38,9 @@ class FeatureCounter:
     out_prefix: str
     run_diags: bool
 
-    def __init__(self, gff_file_set, selection_rules, run_diags, out_prefix):
-        reference_tables = parser.build_reference_tables(gff_file_set, selection_rules)
-        Features(*reference_tables)
+    def __init__(self, gff_file_set, selection_rules, run_diags, out_prefix, rt_prefs):
+        reference_tables = parser.ReferenceTables(gff_file_set, selection_rules, **rt_prefs)
+        Features(*reference_tables.get())
 
         FeatureCounter.out_prefix = out_prefix
         FeatureCounter.run_diags = run_diags
@@ -146,7 +146,7 @@ class FeatureSelector:
         for selector, read in read_aln_attrs.items():
             for hit in finalists:
                 if selector == "Strand":
-                    feat_strand = Features.intervals[hit[FEAT]].strand
+                    feat_strand = Features.intervals[hit[FEAT]][0].strand
                     read = (read[0], feat_strand)
                 if read not in FeatureSelector.rules_table[hit[RULE]][selector]:
                     eliminated.add(hit)

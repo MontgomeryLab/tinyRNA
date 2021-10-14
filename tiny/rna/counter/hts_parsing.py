@@ -150,9 +150,7 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
         return attribute_dict
 
 
-@report_execution_time("GFF parsing")
-def build_reference_tables(gff_files: Dict[str, list], rules: List[dict]) \
-        -> Tuple['HTSeq.GenomicArrayOfSets', Dict[str, list], dict, dict]:
+class ReferenceTables:
     """A GFF parser which builds feature, attribute, and alias tables, with intelligent appends
 
     Features may be defined by multiple GFF files. If multiple files offer different attributes for
@@ -164,79 +162,140 @@ def build_reference_tables(gff_files: Dict[str, list], rules: List[dict]) \
     the basis of their source GFF file.
     """
 
-    # Patch the GFF attribute parser to support comma separated attribute value lists
-    setattr(HTSeq.features, 'parse_GFF_attribute_string', parse_GFF_attribute_string)
+    source_filter = []
+    type_filter = []
 
-    # Obtain an ordered list of unique attributes of interest from selection rules
-    attrs_of_interest = list(np.unique(["Class"] + [attr['Identity'][0] for attr in rules]))
+    def __init__(self, gff_files: Dict[str, list], rules: List[dict], **kwargs):
+        self.gff_files = gff_files
+        self.feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+        self.attrs, self.alias, self.intervals = {}, {}, defaultdict(list)
 
-    feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
-    attrs, alias, intervals = {}, {}, defaultdict(list)
+        # Obtain an ordered list of unique attributes of interest from selection rules
+        self.attrs_of_interest = list(np.unique(["Class"] + [rule['Identity'][0] for rule in rules]))
 
-    def check_ancestors(feature_id, row):
-        feature_id = row.attr.get("Parent", (feature_id,))[0]
+        # Patch the GFF attribute parser to support comma separated attribute value lists
+        setattr(HTSeq.features, 'parse_GFF_attribute_string', parse_GFF_attribute_string)
 
-        # Climb generational tree to find root parent
-        while any(attr for attr in attrs.get(feature_id, []) if len(attr) and attr[0] == 'Parent'):
-            feature_id = attrs[feature_id]['Parent'][0]
+        self.set_filters(**kwargs)
 
-        return feature_id
+    @report_execution_time("GFF parsing")
+    def get(self) -> Tuple['HTSeq.GenomicArrayOfSets', Dict[str, list], dict, dict]:
+        """Initiates GFF parsing and returns the resulting reference tables"""
 
-    def add_feature_iv(feature_id, row):
-        feats[row.iv] += feature_id
-        if row.iv not in intervals[feature_id]:
-            intervals[feature_id].append(row.iv)
+        for file, alias_keys in self.gff_files.items():
+            gff = HTSeq.GFF_Reader(file)
+            for row in gff:
+                if row.iv.strand == ".":
+                    raise ValueError(f"Feature {row.name} in {file} has no strand information.")
+                if not self.filter_match(row):
+                    continue
 
+                try:
+                    feature_id = row.attr["ID"][0]
+                    # Add feature_id <-> feature_interval records
+                    root_id = self.add_feature_iv(feature_id, row)
+                    # Append alias to feat if unique
+                    self.add_alias(alias_keys, root_id, row.attr)
+                    # Select attributes of interest from row
+                    row_attrs = self.get_interesting_attrs(feature_id, row.attr)
+                except KeyError as ke:
+                    raise ValueError(f"Feature {row.name} does not contain a {ke} attribute in {file}")
+
+                # Add feature_id -> feature_attributes record
+                self.incorporate_attributes(root_id, row_attrs)
+
+        return self.feats, self.attrs, self.alias, self.intervals
+
+    @classmethod
+    def filter_match(cls, row):
+        select = True
+        if len(cls.source_filter):
+            select &= row.source in cls.source_filter
+        if len(cls.type_filter):
+            select &= row.type in cls.type_filter
+        return select
+
+    def get_root_feature(self, feature_id: str, feature_attrs: List[Tuple[str, tuple]]) -> str:
+        """Returns the ID of the feature's root parent if one exists. Otherwise the original ID is returned."""
+
+        if "Parent" not in feature_attrs:
+            return feature_id
+
+        try:
+            feature_id = self.get_parent(feature_attrs)
+            # Keep checking parent of parents until the root parent is found
+            while any(attr for attr in self.attrs[feature_id] if attr[0] == 'Parent'):
+                feature_id = self.get_parent(self.attrs[feature_id])
+
+            return feature_id
+        except KeyError as ke:
+            raise ValueError(f"Feature ID {ke} is referenced as a parent before being defined. Please "
+                            "ensure that it occurs before children in your GFF file.")
+
+    def add_feature_iv(self, feature_id: str, row) -> str:
+        """Adds the new feature and its intervals to reference tables, then returns its attributes of interest"""
+
+        root_id = self.get_root_feature(feature_id, row.attr)
+
+        self.feats[row.iv] += root_id
+        if row.iv not in self.intervals[root_id]:
+            self.intervals[root_id].append(row.iv)
+
+        return root_id
+
+    def add_alias(self, alias_keys, root_id, row_attr):
+        """"""
+
+        curr_alias = self.alias.get(root_id, ())
+        for key in alias_keys:
+            # Append to feature's aliases if it does not already contain
+            if row_attr[key] not in curr_alias:
+                # Add feature_id -> feature_alias_tuple record
+                curr_alias += row_attr[key]
+        self.alias[root_id] = curr_alias
+
+    def get_interesting_attrs(self, local_id, row_attrs):
         # Copy only the attributes of interest
-        interests = [(interest, row.attr[interest]) for interest in attrs_of_interest]
-        if "Parent" in row.attr:
-            interests.append(('Parent', tuple(row.attr['Parent'])))
+        interests = [(interest, row_attrs[interest]) for interest in self.attrs_of_interest]
+        if "Parent" in row_attrs:
+            self.attrs[local_id] = interests + [('Parent', tuple(row_attrs['Parent']))]
 
         return interests
 
-    def add_alias(feature_id, row_attr):
-        curr_alias = alias.get(feature_id, ())
-        for pref_id in preferred_ids:
-            # Append to feature's aliases if it does not already contain
-            if row_attr[pref_id] not in curr_alias:
-                # Add feature_id -> feature_alias_tuple record
-                curr_alias += row_attr[pref_id]
-        alias[feature_id] = curr_alias
-
-    def incorporate_attributes(feature_id, row_attrs):
-        if feature_id in attrs and row_attrs != attrs[feature_id]:
+    def incorporate_attributes(self, root_id, row_attrs):
+        if root_id in self.attrs and row_attrs != self.attrs[root_id]:
             # If an attribute record already exists for this feature, and this row provides new attributes,
             #  append the new attribute values to the existing values
-            cur_attrs = attrs[feature_id]
+            cur_attrs = self.attrs[root_id]
             new_attrs = []
             for cur, new in zip(cur_attrs, row_attrs):
                 attr_key = cur[0]
                 updated_vals = set(cur[1] + new[1])
                 new_attrs.append((attr_key, tuple(updated_vals)))
 
-            attrs[feature_id] = new_attrs
+            self.attrs[root_id] = new_attrs
         else:
-            attrs[feature_id] = row_attrs
+            self.attrs[root_id] = row_attrs
 
-    # BEGIN main routine
-    for file, preferred_ids in gff_files.items():
-        gff = HTSeq.GFF_Reader(file)
-        for row in gff:
-            if row.iv.strand == ".":
-                raise ValueError(f"Feature {row.name} in {file} has no strand information.")
+    @staticmethod
+    def get_parent(feature_attrs):
+        parent = []
 
-            try:
-                feature_id = row.attr["ID"][0]
-                # Climb ancestral tree to find root feature ID
-                feature_id = check_ancestors(feature_id, row)
-                # Add feature_id <-> feature_interval records
-                row_attrs = add_feature_iv(feature_id, row)
-                # Append alias to feat if unique
-                add_alias(feature_id, row.attr)
-            except KeyError as ke:
-                raise ValueError(f"Feature {row.name} does not contain a {ke} attribute in {file}")
+        # For GFF row attrs
+        if type(feature_attrs) is dict:
+            parent = feature_attrs["Parent"]
+        # For processed attrs (ancestor lookup)
+        elif type(feature_attrs) is list:
+            for attr in feature_attrs:
+                if attr[0] == "Parent":
+                    parent = attr[1]
 
-            # Add feature_id -> feature_attributes record
-            incorporate_attributes(feature_id, row_attrs)
+        if len(parent) > 1:
+            raise ValueError(f"{feature_attrs['ID']} defines multiple parents which is unsupported at this time.")
 
-    return feats, attrs, alias, intervals
+        return parent[0]
+
+    @classmethod
+    def set_filters(cls, **kwargs):
+        for pref, val in kwargs:
+            setattr(cls, pref, val)
