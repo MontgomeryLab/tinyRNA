@@ -4,7 +4,7 @@ channels:
 dependencies:
   - python>=3.7
   - numpy==1.19.2
-  - pandas==1.2.1
+  - pandas==1.2.4
   - conda-forge::matplotlib==3.4.3
   - fastp==0.22.0
   - bowtie==1.2.3
