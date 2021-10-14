@@ -15,10 +15,10 @@ import os
 
 # cwltool appears to unset all environment variables including those related to locale
 # This leads to warnings from plt's FontConfig manager, but only for pipeline/cwl runs
-# curr_locale = locale.getlocale()
-# if curr_locale[0] is None:
-#     # Default locale otherwise unset
-#     os.environ['LC_CTYPE'] = 'en_US.UTF-8'
+curr_locale = locale.getlocale()
+if curr_locale[0] is None:
+    # Default locale otherwise unset
+    os.environ['LC_CTYPE'] = 'en_US.UTF-8'
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
