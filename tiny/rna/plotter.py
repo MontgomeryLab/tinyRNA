@@ -166,20 +166,21 @@ def get_sample_averages(df: pd.DataFrame, samples:dict) -> pd.DataFrame:
     return new_df
 
 
-def scatter_replicates(count_df: pd.DataFrame, output_prefix: str, samples: dict, viewLims: Tuple[float, float]):
-    """Creates PDFs of all pairwise comparison scatter plots from a count table.
+def scatter_replicates(count_df: pd.DataFrame, output_prefix: str, samples: dict, view_lims: Tuple[float, float] = None):
+    """Creates pairwise scatter plots comparing replicates' counts and saves the plot as a PDF
     
     Args:
         count_df: A dataframe of counts per feature
         output_prefix: A string to use as a prefix for saving files
-        samples: A dictionary containing sample names and their associated "sample_rep_N" replicates
+        samples: A dictionary containing sample names and their associated "sample_rep_N" replicate names
+        view_lims: Optional plot view limits as tuple(min, max)
     """
 
     for samp, reps in samples.items():
         for pair in get_pairs(reps):
             rscat = aqplt.scatter_simple(count_df.loc[:,pair[0]], count_df.loc[:,pair[1]],
                                          color='#B3B3B3', alpha=0.5, log_norm=True, rasterized=RASTER)
-            aqplt.set_square_scatter_view_lims(rscat, viewLims)
+            aqplt.set_square_scatter_view_lims(rscat, view_lims)
             aqplt.set_scatter_ticks(rscat)
             rscat.set_title(samp)
             rep1, rep2 = pair[0].split('_rep_')[1], pair[1].split('_rep_')[1]
@@ -222,7 +223,7 @@ def scatter_dges(count_df, dges, output_prefix, viewLims, classes=None, show_unk
         dges: A dataframe of differential gene table output to highlight
         output_prefix: A string to use as a prefix for saving files
         classes: A dataframe containing class(es) per feature
-        show_unknown: Boolean indicating if "unknown" classes should be highlighted
+        show_unknown: If true, class "unknown" will be included if highlighting by classes
     """
 
     if classes is not None:
@@ -316,7 +317,8 @@ def get_class_counts(counts_df: pd.DataFrame) -> pd.DataFrame:
 def validate_inputs(args: argparse.Namespace) -> None:
     """Determines if the necessary input files have been provided for the requested plots
     This is necessary because we allow users to run the tool without specifying all
-    possible input files.
+    possible input files, so that a user may supply only the inputs necessary for the
+    plot types they've requested.
 
     Args:
         args: Command line arguments parsed by argparse
@@ -365,8 +367,10 @@ def setup(args: argparse.Namespace) -> dict:
         'len_dist': [],
         'class_charts': ["norm_count_df", "class_counts"],
         'replicate_scatter': ["norm_count_df", "sample_rep_dict", "norm_view_lims"],
-        'sample_avg_scatter_by_dge': ["norm_count_df", "sample_rep_dict", "norm_count_avg_df", "de_table", "avg_view_lims"],
-        'sample_avg_scatter_by_dge_class': ["norm_count_df", "sample_rep_dict", "norm_count_avg_df", "feat_classes", "de_table", "avg_view_lims"],
+        'sample_avg_scatter_by_dge':
+            ["norm_count_df", "sample_rep_dict", "norm_count_avg_df", "de_table", "avg_view_lims"],
+        'sample_avg_scatter_by_dge_class':
+            ["norm_count_df", "sample_rep_dict", "norm_count_avg_df", "feat_classes", "de_table", "avg_view_lims"],
     }
 
     relevant_vars: Dict[str, Union[pd.DataFrame, pd.Series, dict, None]] = {}

@@ -15,48 +15,39 @@ import os
 
 # cwltool appears to unset all environment variables including those related to locale
 # This leads to warnings from plt's FontConfig manager, but only for pipeline/cwl runs
-curr_locale = locale.getlocale()
-if curr_locale[0] is None:
-    # Default locale otherwise unset
-    os.environ['LC_CTYPE'] = 'en_US.UTF-8'
+# curr_locale = locale.getlocale()
+# if curr_locale[0] is None:
+#     # Default locale otherwise unset
+#     os.environ['LC_CTYPE'] = 'en_US.UTF-8'
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.ticker as tix
-import matplotlib.patches as mpatches
+from matplotlib.patches import Rectangle
 from matplotlib.transforms import Bbox
 from matplotlib.scale import LogTransform
 
-from typing import Union
+from typing import Union, Tuple, List, Optional
 
 
 class plotterlib:
 
     def __init__(self, user_style_sheet, debug=False):
 
+        if debug:
+            mpl.use("TkAgg", force=True)
+            mpl.rcParams['savefig.dpi'] = 100
+            import matplotlib.pyplot as plt
+            plt.show(block=False)
+        else:
+            mpl.use("PDF", force=True)
+            import matplotlib.pyplot as plt
+
         # Set global plot style once
         plt.style.use(user_style_sheet)
 
-        # Create one subplot per plot type to reuse between calls
-        fig_args = {
-            'class_pie_barh': {'figsize': (8, 4), 'nrows': 1, 'ncols': 2, 'tight_layout': True},
-            'len_dist_bar': {'figsize': (7, 4)},
-            'scatter_simple': {'figsize': (8, 8)}
-        }
-
-        self.subplots = {}
-        for plot in fig_args:
-            fig, ax = plt.subplots(**fig_args[plot])
-            self.subplots[plot] = {'fig': fig, 'ax': ax}
-
-        if debug:
-            plt.switch_backend("TkAgg")
-            plt.show(block=False)
-            mpl.rcParams['savefig.dpi'] = 100
-        else:
-            plt.switch_backend("PDF")
-
-        self.dge_scatter_axis_cache = {}
+        self.subplots = self.init_subplots()
+        self.dge_scatter_tick_cache = {}
 
     def len_dist_bar(self, size_df: pd.DataFrame, **kwargs) -> plt.Axes:
         """Creates a stacked barplot of 5' end nucleotides by read length
@@ -170,7 +161,7 @@ class plotterlib:
         Args:
             count_x: A pandas dataframe/series of counts per feature (X axis)
             count_y: A pandas dataframe/series of counts per feature (Y axis)
-            log_norm: Apply log2 normalization to the data
+            log_norm: Plot on log scale rather than linear scale
             kwargs: Additional keyword arguments to pass to pyplot.Axes.scatter()
 
         Returns:
@@ -178,7 +169,7 @@ class plotterlib:
         """
 
         # Retrieve axis and styles for this plot type
-        fig, ax = self.reuse_subplot("scatter_simple")
+        fig, ax = self.reuse_subplot("scatter")
         ax: plt.Axes
 
         # log2 normalize data if requested
@@ -187,10 +178,8 @@ class plotterlib:
             ax.set_xscale('log', base=2)
             ax.set_yscale('log', base=2)
 
-            # Unset default locators and formatters
+            # Unset default formatters
             for axis in [ax.xaxis, ax.yaxis]:
-                # axis.set_major_locator(tix.NullLocator())
-                # axis.set_minor_locator(tix.NullLocator())
                 axis.set_major_formatter(tix.LogFormatter(base=2))
                 axis.set_minor_formatter(tix.NullFormatter())
 
@@ -217,12 +206,14 @@ class plotterlib:
 
         return ax
 
-    def scatter_grouped(self, count_x: pd.DataFrame, count_y: pd.DataFrame, view_lims, *args, log_norm=False, labels=None, **kwargs):
+    def scatter_grouped(self, count_x: pd.DataFrame, count_y: pd.DataFrame,
+                        view_lims: Tuple[float, float] = None, *args, log_norm=False, labels=None, **kwargs):
         """Creates a scatter plot with different groups highlighted.
 
         Args:
             count_x: A pandas dataframe/series of counts per feature (X axis)
             count_y: A pandas dataframe/series of counts per feature (Y axis)
+            view_lims: Optional plot view limits as tuple(min, max)
             args: A list of features to highlight, can pass multiple lists
             log_norm: whether or not the data should be log-normalized
             kwargs: Additional arguments to pass to pyplot.Axes.scatter()
@@ -260,14 +251,14 @@ class plotterlib:
         return gscat
 
     @staticmethod
-    def get_scatter_view_lims(counts_df: pd.DataFrame):
+    def get_scatter_view_lims(counts_df: pd.DataFrame) -> Tuple[float, float]:
         """Calculates scatter view limits for the counts dataframe"""
 
         x0 = counts_df.min(axis='columns').where(lambda x: x != 0).dropna().min()
         x1 = np.max(counts_df).max()
         minpos = 1e-300
 
-        if not np.isfinite([x0,x1]).all() or not isinstance(x0, np.float) or x1 <= 0:
+        if not np.isfinite([x0, x1]).all() or not isinstance(x0, np.float) or x1 <= 0:
             print("The provided dataset contains invalid values.")
             return (minpos, minpos)
 
@@ -285,7 +276,7 @@ class plotterlib:
 
     @staticmethod
     def set_square_scatter_view_lims(ax: plt.Axes, min_max=None):
-        """Scatter plot will be centered about diagonal"""
+        """Adjusts the scatter plot to display the same interval on both axes"""
 
         if min_max is not None:
             ax_min, ax_max = min_max
@@ -297,61 +288,86 @@ class plotterlib:
         ax.set_xlim(left=ax_min, right=ax_max)
         ax.set_ylim(bottom=ax_min, top=ax_max)
 
+    @staticmethod
+    def get_min_LogLocator_numticks(axis: plt.Axes) -> int:
+        """Calculates an axis' threshold numticks value for LogLocator to calculate (display) minor ticks
+
+        Matplotlib's LogLocator will not locate ticks if its `numticks` parameter
+        is below threshold for the view interval. Providing a `numticks` value below
+        threshold results in minor ticks not being drawn.
+
+        Args:
+            axis: an x or y axis
+
+        Returns: minimum `numticks` parameter value
+        """
+
+        vmin, vmax = axis.get_view_interval()
+        log_vmin = math.log(vmin) / math.log(2)
+        log_vmax = math.log(vmax) / math.log(2)
+
+        numdec = math.floor(log_vmax) - math.ceil(log_vmin)
+        return numdec + 2  # Want: [ (numdec + 1) // nticks + 1 ] == 1
+
+    @staticmethod
+    def get_fixed_majorticklocs(view_lims: Tuple[float, float, float, float]) -> Tuple[List[int], float, float]:
+        """Produces a list of locations for major ticks for the given view limit"""
+
+        ax_min, ax_max = min(view_lims), max(view_lims)
+        floor, ceil, log2 = math.floor, math.ceil, np.log2
+        locs = [2 ** x for x in range(floor(log2(ax_min)), ceil(log2(ax_max)))]
+        return locs, ax_min, ax_max
+
     def set_scatter_ticks(self, ax: plt.Axes):
-        """Creates major and minor ticks for a square scatter plot"""
+        """Intelligently creates major and minor ticks for a square scatter plot while avoiding crowding"""
 
         # Get tick locations corresponding to the current view limits
-        lim = ax.viewLim.bounds
-        ax_min, ax_max = min(lim), max(lim)
-        floor, ceil, log2 = math.floor, math.ceil, np.log2
-        tick_locs = [2 ** x for x in range(floor(log2(ax_min)), ceil(log2(ax_max)))]
+        major_locs, ax_min, ax_max = self.get_fixed_majorticklocs(ax.viewLim.bounds)
 
-        ax.xaxis.set_major_locator(tix.FixedLocator(tick_locs))
-        ax.yaxis.set_major_locator(tix.FixedLocator(tick_locs))
+        ax.xaxis.set_major_locator(tix.FixedLocator(major_locs))
+        ax.yaxis.set_major_locator(tix.FixedLocator(major_locs))
 
-        # Reuse cached axi if there have been previous runs
-        if len(self.dge_scatter_axis_cache):
-            self.restore_cached_axi(ax)
+        if len(self.dge_scatter_tick_cache):
+            self.restore_ticks(ax, "both")
             return
 
-        every_nth_label = 3
-        last_tick = 0
-
-        # Hide all labels except every nth, create minor ticks, and set axis tick bounds
         for axis in [ax.xaxis, ax.yaxis]:
-            major_ticks = axis.get_major_ticks()
-            major_ticks[0].set_visible(False)
-            for i, tick in enumerate(major_ticks):
-                if i % every_nth_label != 0:
-                    tick.label1.set_visible(False)
-                else:
-                    last_tick = i
+            # Only display every nth major tick label
+            ticks_displayed, last_idx = self.every_nth_label(axis, 3)
 
             axis.set_minor_locator(tix.LogLocator(
                 base=2.0,
                 numticks=self.get_min_LogLocator_numticks(axis),
                 subs=np.log2(np.linspace(2 ** 2, 2 ** 4, 10))[:-1]))
 
-            self.set_tick_bounds(axis, min_tick=0.25, max_tick=tick_locs[last_tick])
-            self.cache_axis(axis, axis.__name__)
+            self.set_tick_bounds(axis, min_tick=2 ** (np.log2(ax_min)+1), max_tick=major_locs[last_idx])
+            self.cache_ticks(axis, axis.__name__)
 
-    def cache_axis(self, axis: mpl.axis.Axis, name: str):
-        """Cache major and minor tick objects, which contain expensive data"""
+    def every_nth_label(self, axis: mpl.axis.Axis, n: int) -> Tuple[List[mpl.axis.Tick], int]:
+        """Hides all tick labels except every nth and mitigates crowding on lower and upper axis"""
 
-        self.dge_scatter_axis_cache[f"{name}_minor_loc"] = axis.minor.locator
-        self.dge_scatter_axis_cache[f"{name}_major_loc"] = axis.major.locator
-        self.dge_scatter_axis_cache[f"{name}_major_tix"] = axis.majorTicks
-        self.dge_scatter_axis_cache[f"{name}_minor_tix"] = axis.minorTicks
+        major_ticks = axis.get_major_ticks()
+        ticks_displayed = []
+        last_idx = 0
 
-    def restore_cached_axi(self, ax: plt.Axes):
-        """Restore tick objects from previous render"""
+        for i, tick in enumerate(major_ticks):
+            if i % n != 0:
+                tick.label1.set_visible(False)
+            else:
+                ticks_displayed.append(tick)
+                last_idx = i
 
-        for axis in [ax.xaxis, ax.yaxis]:
-            name = axis.__name__
-            axis.major.locator = self.dge_scatter_axis_cache[f'{name}_major_loc']
-            axis.minor.locator = self.dge_scatter_axis_cache[f'{name}_minor_loc']
-            axis.majorTicks = self.dge_scatter_axis_cache[f'{name}_major_tix']
-            axis.minorTicks = self.dge_scatter_axis_cache[f'{name}_minor_tix']
+        # Hide tick labels in the lower left corner, regardless
+        major_ticks[0].set_visible(False)
+
+        # If the last tick label on the x-axis will extend past the plot space,
+        # then hide it and its corresponding tick on the y-axis
+        if axis.__name__ is "xaxis" and axis.get_tick_space() == len(ticks_displayed):
+            major_ticks[last_idx].label1.set_visible(False)
+            yaxis = axis.axes.yaxis
+            yaxis.get_major_ticks()[last_idx].label1.set_visible(False)
+
+        return ticks_displayed, last_idx
 
     def set_tick_bounds(self, axis: mpl.axis.Axis, min_tick: float, max_tick: float):
         """Hide major and minor ticks that lie outside of the bounds defined
@@ -372,15 +388,34 @@ class plotterlib:
             if loc < min_tick or loc > max_tick:
                 axis.minorTicks[i].set_visible(False)
 
+    def cache_ticks(self, axis: mpl.axis.Axis, name: str):
+        """Cache major and minor tick objects, which contain expensive data"""
+
+        for type in ["major", "minor"]:
+            self.dge_scatter_tick_cache[f"{name}_{type}_loc"] = getattr(axis, type).locator
+            self.dge_scatter_tick_cache[f"{name}_{type}_tix"] = getattr(axis, f"{type}Ticks")
+
+    def restore_ticks(self, ax: plt.Axes, axis: str):
+        """Restore tick objects from previous render"""
+
+        axes = [ax.xaxis, ax.yaxis] if axis is "both" else [getattr(ax, axis)]
+        for axis in axes:
+            name = axis.__name__
+            for type in ["major", "minor"]:
+                getattr(axis, type).locator = self.dge_scatter_tick_cache[f'{name}_{type}_loc']
+                setattr(axis, f"{type}Ticks", self.dge_scatter_tick_cache[f'{name}_{type}_tix'])
+
     def cache_rendered_axis(self, ax: plt.Axes, axis: str):
         """Caches the current axis as rendered (spine, ticks, and labels) as raw 2D rgb data
 
         Note: this is a bitmap copy so artist information will be lost when the cached copy
         is restored. Regardless of backend one selects, they will all ultimately use the same
         pdf backend to .savefig(). Rerendering the entire canvas, including expensive minor
-        ticks, is therefore unavoidable.
+        ticks, is therefore unavoidable. For now it makes more sense to reuse locators and
+        their associated major and minor tick objects.
         """
 
+        assert "agg" in mpl.get_backend().lower(), "Render caching requires an Agg backend."
         canvas = ax.figure.canvas
         rr = canvas.renderer
         canvas.draw()
@@ -388,53 +423,33 @@ class plotterlib:
         if axis in ['x', 'both']:
             box = ax.spines['bottom'].get_tightbbox(rr)
             box = Bbox.from_bounds(x0=0, y0=0, width=ax.figure.bbox.width, height=box.y1)
-            self.dge_scatter_axis_cache['x'] = (box, canvas.copy_from_bbox(box))
+            self.dge_scatter_tick_cache['x'] = (box, canvas.copy_from_bbox(box))
         if axis in ['y', 'both']:
             box = ax.spines['left'].get_tightbbox(rr)
             box = Bbox.from_bounds(x0=0, y0=0, width=box.x1, height=ax.figure.bbox.height)
-            self.dge_scatter_axis_cache['y'] = (box, canvas.copy_from_bbox(box))
+            self.dge_scatter_tick_cache['y'] = (box, canvas.copy_from_bbox(box))
 
-    def restore_axis_render(self, ax: plt.Axes, axis: str):
+    def restore_rendered_axis(self, ax: plt.Axes, axis: str):
         """Restores the cached 2D rgb region from a previous plot render"""
 
-        canvas = ax.figure.canvas
+        assert "agg" in mpl.get_backend().lower(), "Render caching requires an Agg backend."
 
+        canvas = ax.figure.canvas
         if axis in ['x', 'both']:
-            box, rendered_axis = self.dge_scatter_axis_cache['x']
+            box, rendered_axis = self.dge_scatter_tick_cache['x']
             canvas.restore_region(rendered_axis)
             canvas.blit(box)
         if axis in ['y', 'both']:
-            box, rendered_axis = self.dge_scatter_axis_cache['y']
+            box, rendered_axis = self.dge_scatter_tick_cache['y']
             canvas.restore_region(rendered_axis)
             canvas.blit(box)
-
-    @staticmethod
-    def get_min_LogLocator_numticks(axis: plt.Axes) -> int:
-        """Calculates the threshold numticks value for LogLocator to calculate (display) minor ticks
-
-        Matplotlib's LogLocator will not locate ticks if its `numticks` parameter
-        is below threshold for the view interval. Providing a `numticks` value below
-        threshold results in minor ticks not being drawn.
-
-        Args:
-            axis: an x or y axis
-
-        Returns: minimum `numticks` parameter value
-        """
-
-        vmin, vmax = axis.get_view_interval()
-        log_vmin = math.log(vmin) / math.log(2)
-        log_vmax = math.log(vmax) / math.log(2)
-
-        numdec = math.floor(log_vmax) - math.ceil(log_vmin)
-        return numdec + 2  # Want: [ (numdec + 1) // nticks + 1 ] == 1
 
     def box_the_artist(self, artist):  # FIGHT!
         ax = artist.axes
         box = self.get_artist_bbox(artist)
         self.draw_bbox_rectangle(ax, box)
 
-    def get_artist_bbox(self, artist: plt.Artist) -> Bbox:
+    def get_artist_bbox(self, artist: plt.Artist) -> Optional[Bbox]:
         """Attempts to obtain the rectangular coordinates from an artist"""
 
         ax = artist.axes
@@ -456,11 +471,27 @@ class plotterlib:
 
     @staticmethod
     def draw_bbox_rectangle(ax: plt.Axes, box: Bbox):
-        """Draws a green rectangle with the specified Bbox coordinates"""
+        """Draws a green rectangle around the specified Bbox"""
 
-        rect = mpatches.Rectangle(xy=(box.x0, box.y0), width=box.width, height=box.height,
+        rect = Rectangle(xy=(box.x0, box.y0), width=box.width, height=box.height,
                                   transform=ax.get_transform(), clip_on=False, color="green", fill=False)
         ax.add_patch(rect)
+
+    def init_subplots(self):
+        """Create one subplot per plot type to reuse between calls"""
+
+        fig_args = {
+            'class_pie_barh': {'figsize': (8, 4), 'nrows': 1, 'ncols': 2, 'tight_layout': True},
+            'len_dist_bar': {'figsize': (7, 4)},
+            'scatter': {'figsize': (8, 8)}
+        }
+
+        subplots = {}
+        for plot in fig_args:
+            fig, ax = plt.subplots(**fig_args[plot])
+            subplots[plot] = {'fig': fig, 'ax': ax}
+
+        return subplots
 
     def reuse_subplot(self, plot_type: str) -> (plt.Figure, Union[plt.Axes, np.ndarray]):
         """Retrieves the reusable subplot for this plot type
@@ -475,7 +506,10 @@ class plotterlib:
 
         fig, ax = self.subplots[plot_type].values() # Each plot type has a dedicated figure and axis
         if type(ax) == np.ndarray:
-            for subax in ax: subax.clear()  # Remove previous plot data
+            # Figure for class_charts has 2 subaxes
+            for subax in ax: subax.clear()
         else:
-            ax.clear()
+            # Clear only the points for scatter plots
+            if len(ax.collections): ax.collections.clear()
+            else: ax.clear()
         return fig, ax
