@@ -490,7 +490,7 @@ class plotterlib:
         fig_args = {
             'class_pie_barh': {'figsize': (8, 4), 'nrows': 1, 'ncols': 2},
             'len_dist_bar': {'figsize': (7, 4)},
-            'scatter': {'figsize': (8, 8)}
+            'scatter': {'figsize': (8, 8), 'tight_layout': False}
         }
 
         subplots = {}
