@@ -358,7 +358,7 @@ class plotterlib:
                 last_idx = i
 
         # Hide tick labels in the lower left corner, regardless
-        major_ticks[0].set_visible(False)
+        major_ticks[0].label1.set_visible(False)
 
         # If the last tick label on the x-axis will extend past the plot space,
         # then hide it and its corresponding tick on the y-axis
@@ -381,7 +381,9 @@ class plotterlib:
         axis.get_major_ticks()
         for i, loc in enumerate(axis.get_majorticklocs()):
             if loc < min_tick or loc > max_tick:
-                axis.majorTicks[i].set_visible(False)
+                axis.majorTicks[i].label1.set_visible(False)
+                axis.majorTicks[i].tick1line.set_visible(False)
+                axis.majorTicks[i].gridline.set_visible(True)
 
         axis.get_minor_ticks()
         for i, loc in enumerate(axis.get_minorticklocs()):
