@@ -23,6 +23,7 @@ if curr_locale[0] is None:
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.ticker as tix
+import matplotlib.axis
 from matplotlib.patches import Rectangle
 from matplotlib.transforms import Bbox
 from matplotlib.scale import LogTransform
@@ -37,16 +38,16 @@ class plotterlib:
         if debug:
             mpl.use("TkAgg", force=True)
             mpl.rcParams['savefig.dpi'] = 100
-            import matplotlib.pyplot as plt
-            plt.show(block=False)
         else:
             mpl.use("PDF", force=True)
-            import matplotlib.pyplot as plt
+
+        # Must occur after mpl.use()
+        import matplotlib.pyplot as plt
 
         # Set global plot style once
         plt.style.use(user_style_sheet)
 
-        self.subplots = self.init_subplots()
+        self.subplots = self.init_subplots(debug)
         self.dge_scatter_tick_cache = {}
 
     def len_dist_bar(self, size_df: pd.DataFrame, **kwargs) -> plt.Axes:
@@ -180,7 +181,7 @@ class plotterlib:
 
             # Unset default formatters
             for axis in [ax.xaxis, ax.yaxis]:
-                axis.set_major_formatter(tix.LogFormatter(base=2))
+                axis.set_major_formatter(tix.LogFormatterExponent(base=2))
                 axis.set_minor_formatter(tix.NullFormatter())
 
             ax.scatter(count_x, count_y, edgecolor='none', **kwargs)
@@ -318,7 +319,7 @@ class plotterlib:
         locs = [2 ** x for x in range(floor(log2(ax_min)), ceil(log2(ax_max)))]
         return locs, ax_min, ax_max
 
-    def set_scatter_ticks(self, ax: plt.Axes):
+    def set_scatter_ticks(self, ax: plt.Axes, minor_ticks=False):
         """Intelligently creates major and minor ticks for a square scatter plot while avoiding crowding"""
 
         # Get tick locations corresponding to the current view limits
@@ -335,16 +336,19 @@ class plotterlib:
             # Only display every nth major tick label
             ticks_displayed, last_idx = self.every_nth_label(axis, 3)
 
-            axis.set_minor_locator(tix.LogLocator(
-                base=2.0,
-                numticks=self.get_min_LogLocator_numticks(axis),
-                subs=np.log2(np.linspace(2 ** 2, 2 ** 4, 10))[:-1]))
+            if minor_ticks:
+                axis.set_minor_locator(tix.LogLocator(
+                    base=2.0,
+                    numticks=self.get_min_LogLocator_numticks(axis),
+                    subs=np.log2(np.linspace(2 ** 2, 2 ** 4, 10))[:-1]))
 
-            self.set_tick_bounds(axis, min_tick=2 ** (np.log2(ax_min)+1), max_tick=major_locs[last_idx])
+            min_tick = 2 ** (np.log2(ax_min)+1)
+            max_tick = major_locs[last_idx]
+            self.set_tick_bounds(axis, min_tick=min_tick, max_tick=max_tick, minor=minor_ticks)
             self.cache_ticks(axis, axis.__name__)
 
     def every_nth_label(self, axis: mpl.axis.Axis, n: int) -> Tuple[List[mpl.axis.Tick], int]:
-        """Hides all tick labels except every nth and mitigates crowding on lower and upper axis"""
+        """Major ticks: hides all labels except every nth and mitigates crowding on lower and upper axis"""
 
         major_ticks = axis.get_major_ticks()
         ticks_displayed = []
@@ -369,7 +373,7 @@ class plotterlib:
 
         return ticks_displayed, last_idx
 
-    def set_tick_bounds(self, axis: mpl.axis.Axis, min_tick: float, max_tick: float):
+    def set_tick_bounds(self, axis: mpl.axis.Axis, min_tick: float, max_tick: float, minor=False):
         """Hide major and minor ticks that lie outside of the bounds defined
 
         For both major ticks and minor ticks, we need to first call their getters
@@ -385,10 +389,11 @@ class plotterlib:
                 axis.majorTicks[i].tick1line.set_visible(False)
                 axis.majorTicks[i].gridline.set_visible(True)
 
-        axis.get_minor_ticks()
-        for i, loc in enumerate(axis.get_minorticklocs()):
-            if loc < min_tick or loc > max_tick:
-                axis.minorTicks[i].set_visible(False)
+        if minor:
+            axis.get_minor_ticks()
+            for i, loc in enumerate(axis.get_minorticklocs()):
+                if loc < min_tick or loc > max_tick:
+                    axis.minorTicks[i].set_visible(False)
 
     def cache_ticks(self, axis: mpl.axis.Axis, name: str):
         """Cache major and minor tick objects, which contain expensive data"""
@@ -479,11 +484,11 @@ class plotterlib:
                                   transform=ax.get_transform(), clip_on=False, color="green", fill=False)
         ax.add_patch(rect)
 
-    def init_subplots(self):
+    def init_subplots(self, debug):
         """Create one subplot per plot type to reuse between calls"""
 
         fig_args = {
-            'class_pie_barh': {'figsize': (8, 4), 'nrows': 1, 'ncols': 2, 'tight_layout': True},
+            'class_pie_barh': {'figsize': (8, 4), 'nrows': 1, 'ncols': 2},
             'len_dist_bar': {'figsize': (7, 4)},
             'scatter': {'figsize': (8, 8)}
         }
@@ -493,6 +498,7 @@ class plotterlib:
             fig, ax = plt.subplots(**fig_args[plot])
             subplots[plot] = {'fig': fig, 'ax': ax}
 
+        if debug: plt.show(block=False)
         return subplots
 
     def reuse_subplot(self, plot_type: str) -> (plt.Figure, Union[plt.Axes, np.ndarray]):
