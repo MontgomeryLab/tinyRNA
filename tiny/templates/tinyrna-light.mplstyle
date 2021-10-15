@@ -1,7 +1,7 @@
 # Matplotlib style sheet for Small RNA plots
 
 #### Figure basics ####
-figure.dpi: 300
+savefig.dpi: 300
 figure.autolayout: true
 figure.facecolor: white
 figure.edgecolor: 0.50
@@ -41,8 +41,8 @@ axes.labelcolor: 333333
 axes.labelpad: 4.0
 axes.axisbelow: True
 axes.autolimit_mode: round_numbers
-axes.xmargin: 0.1
-axes.ymargin: 0.1
+axes.xmargin: 0.04
+axes.ymargin: 0.04
 
 #### Legend ####
 legend.fontsize: 16

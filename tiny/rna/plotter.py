@@ -13,15 +13,13 @@ import os.path
 import re
 
 from collections import defaultdict
-from typing import Optional, Dict, Union
+from typing import Optional, Dict, Union, Tuple
 from pkg_resources import resource_filename
 from urllib import parse
 
 from tiny.rna.configuration import timestamp_format
 from tiny.rna.plotterlib import plotterlib as lib
 from tiny.rna.util import report_execution_time, make_filename
-
-RASTER = False
 
 
 def get_args():
@@ -60,12 +58,8 @@ def get_args():
                                 'with significantly different (padj<0.05) genes highlighted.\n'
                              'sample_avg_scatter_by_dge_class: A scatter plot comparing all sample groups,'
                                 'with classes and significantly different genes highlighted')
-    args = parser.parse_args()
 
-    global RASTER
-    RASTER = not args.vector_scatter
-
-    return args
+    return parser.parse_args()
 
 
 def get_pairs(samples):
@@ -172,20 +166,22 @@ def get_sample_averages(df: pd.DataFrame, samples:dict) -> pd.DataFrame:
     return new_df
 
 
-def scatter_replicates(count_df: pd.DataFrame, output_prefix: str, samples: dict):
-    """Creates PDFs of all pairwise comparison scatter plots from a count table.
+def scatter_replicates(count_df: pd.DataFrame, output_prefix: str, samples: dict, view_lims: Tuple[float, float] = None):
+    """Creates pairwise scatter plots comparing replicates' counts and saves the plot as a PDF
     
     Args:
         count_df: A dataframe of counts per feature
         output_prefix: A string to use as a prefix for saving files
-        samples: A dictionary containing sample names and their associated "sample_rep_N" replicates
+        samples: A dictionary containing sample names and their associated "sample_rep_N" replicate names
+        view_lims: Optional plot view limits as tuple(min, max)
     """
 
     for samp, reps in samples.items():
         for pair in get_pairs(reps):
             rscat = aqplt.scatter_simple(count_df.loc[:,pair[0]], count_df.loc[:,pair[1]],
                                          color='#B3B3B3', alpha=0.5, log_norm=True, rasterized=RASTER)
-            aqplt.set_scatter_lims(rscat)
+            aqplt.set_square_scatter_view_lims(rscat, view_lims)
+            aqplt.set_scatter_ticks(rscat)
             rscat.set_title(samp)
             rep1, rep2 = pair[0].split('_rep_')[1], pair[1].split('_rep_')[1]
             rscat.set_xlabel('Replicate ' + rep1)
@@ -218,7 +214,7 @@ def load_dge_tables(comparisons: list) -> pd.DataFrame:
     return de_table
 
 
-def scatter_samples(count_df, dges, output_prefix, classes=None, show_unknown=False, pval=0.05):
+def scatter_dges(count_df, dges, output_prefix, viewLims, classes=None, show_unknown=False, pval=0.05):
     """Creates PDFs of all pairwise comparison scatter plots from a count table.
     Can highlight classes and/or differentially expressed genes as different colors.
 
@@ -227,15 +223,15 @@ def scatter_samples(count_df, dges, output_prefix, classes=None, show_unknown=Fa
         dges: A dataframe of differential gene table output to highlight
         output_prefix: A string to use as a prefix for saving files
         classes: A dataframe containing class(es) per feature
-        show_unknown: Boolean indicating if "unknown" classes should be highlighted
+        show_unknown: If true, class "unknown" will be included if highlighting by classes
     """
 
     if classes is not None:
         uniq_classes = list(pd.unique(classes))
-        
+
         if not show_unknown and 'unknown' in uniq_classes:
             uniq_classes.remove('unknown')
-        
+
         for pair in dges:
             p1, p2 = pair.split("_vs_")
             dge_list = list(dges.index[dges[pair] < pval])
@@ -246,21 +242,21 @@ def scatter_samples(count_df, dges, output_prefix, classes=None, show_unknown=Fa
                 grp_args.append(list(class_dges.index[class_dges == cls]))
 
             labels = ['p ≥ %.2f' % pval] + uniq_classes
-            sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2],
-                                          *grp_args, log_norm=True, labels=labels, rasterized=RASTER)
+            sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2], viewLims, *grp_args,
+                                          log_norm=True, labels=labels, rasterized=RASTER)
             sscat.set_title('%s vs %s' % (p1, p2))
             sscat.set_xlabel(p1)
             sscat.set_ylabel(p2)
             pdf_name = make_filename([output_prefix, pair, 'scatter_by_dge_class'], ext='.pdf')
             sscat.figure.savefig(pdf_name)
-    
+
     else:
         for pair in dges:
             grp_args = list(dges.index[dges[pair] < pval])
             p1, p2 = pair.split("_vs_")
 
             labels = ['p ≥ %.2f' % pval, 'p < %.2f' % pval]
-            sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2], grp_args,
+            sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2], viewLims, grp_args,
                                           log_norm=True, labels=labels, alpha=0.5, rasterized=RASTER)
             sscat.set_title('%s vs %s' % (p1, p2))
             sscat.set_xlabel(p1)
@@ -320,8 +316,8 @@ def get_class_counts(counts_df: pd.DataFrame) -> pd.DataFrame:
 
 def validate_inputs(args: argparse.Namespace) -> None:
     """Determines if the necessary input files have been provided for the requested plots
-    This is necessary because we allow users to run the tool without specifying all
-    possible input files.
+    This is necessary because we allow users to run the tool with only the files necessary
+    for the plot types they've requested, rather than all possible inputs.
 
     Args:
         args: Command line arguments parsed by argparse
@@ -369,9 +365,11 @@ def setup(args: argparse.Namespace) -> dict:
     required_inputs = {
         'len_dist': [],
         'class_charts': ["norm_count_df", "class_counts"],
-        'replicate_scatter': ["norm_count_df", "sample_rep_dict"],
-        'sample_avg_scatter_by_dge': ["norm_count_df", "sample_rep_dict", "norm_count_avg_df", "de_table"],
-        'sample_avg_scatter_by_dge_class': ["norm_count_df", "sample_rep_dict", "norm_count_avg_df", "feat_classes", "de_table"],
+        'replicate_scatter': ["norm_count_df", "sample_rep_dict", "norm_view_lims"],
+        'sample_avg_scatter_by_dge':
+            ["norm_count_df", "sample_rep_dict", "norm_count_avg_df", "de_table", "avg_view_lims"],
+        'sample_avg_scatter_by_dge_class':
+            ["norm_count_df", "sample_rep_dict", "norm_count_avg_df", "feat_classes", "de_table", "avg_view_lims"],
     }
 
     relevant_vars: Dict[str, Union[pd.DataFrame, pd.Series, dict, None]] = {}
@@ -381,7 +379,9 @@ def setup(args: argparse.Namespace) -> dict:
         'sample_rep_dict': lambda: get_sample_rep_dict(relevant_vars["norm_count_df"]),
         'norm_count_avg_df': lambda: get_sample_averages(relevant_vars["norm_count_df"], relevant_vars["sample_rep_dict"]),
         'feat_classes': lambda: get_flat_classes(relevant_vars["norm_count_df"]),
-        'class_counts': lambda: get_class_counts(relevant_vars["norm_count_df"])
+        'class_counts': lambda: get_class_counts(relevant_vars["norm_count_df"]),
+        'avg_view_lims': lambda: aqplt.get_scatter_view_lims(relevant_vars["norm_count_avg_df"]),
+        'norm_view_lims': lambda: aqplt.get_scatter_view_lims(relevant_vars["norm_count_df"].select_dtypes(['number']))
     }
 
     for plot in args.plots:
@@ -399,10 +399,11 @@ def main():
     """
     args = get_args()
     validate_inputs(args)
-    inputs = setup(args)
 
-    global aqplt
+    global aqplt, RASTER
     aqplt = lib(args.style_sheet)
+    RASTER = not args.vector_scatter
+    inputs = setup(args)
 
     # Assemble work units for multiprocessing pool
     itinerary = []
@@ -410,17 +411,28 @@ def main():
     # generate plots requested
     for plot in args.plots:
         if plot == 'len_dist':
-            itinerary.append((len_dist_plots, (args.len_dist, args.out_prefix), {}))
+            func = len_dist_plots
+            arg, kwd = (args.len_dist, args.out_prefix), {}
         elif plot == 'class_charts':
-            itinerary.append((class_plots, (inputs["class_counts"], args.out_prefix), {}))
+            func = class_plots
+            arg, kwd = (inputs["class_counts"], args.out_prefix), {}
         elif plot == 'replicate_scatter':
-            itinerary.append((scatter_replicates, (inputs["norm_count_df"], args.out_prefix, inputs["sample_rep_dict"]), {}))
+            func = scatter_replicates
+            arg = (inputs["norm_count_df"], args.out_prefix, inputs["sample_rep_dict"], inputs["norm_view_lims"])
+            kwd = {}
         elif plot == 'sample_avg_scatter_by_dge':
-            itinerary.append((scatter_samples, (inputs["norm_count_avg_df"], inputs["de_table"], args.out_prefix), {}))
+            func = scatter_dges
+            arg = (inputs["norm_count_avg_df"], inputs["de_table"], args.out_prefix, inputs["avg_view_lims"])
+            kwd = {}
         elif plot == 'sample_avg_scatter_by_dge_class':
-            itinerary.append((scatter_samples, (inputs["norm_count_avg_df"], inputs["de_table"], args.out_prefix), {"classes": inputs["feat_classes"]}))
+            func = scatter_dges
+            arg = (inputs["norm_count_avg_df"], inputs["de_table"], args.out_prefix, inputs["avg_view_lims"])
+            kwd = {"classes": inputs["feat_classes"]}
         else:
             print('Plot type %s not recognized, please check the -p/--plot arguments' % plot)
+            continue
+
+        itinerary.append((func, arg, kwd))
 
     if len(itinerary) > 1:
         with mp.Pool(len(itinerary)) as pool:
