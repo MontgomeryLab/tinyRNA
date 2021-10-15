@@ -184,8 +184,8 @@ def scatter_replicates(count_df: pd.DataFrame, output_prefix: str, samples: dict
             aqplt.set_scatter_ticks(rscat)
             rscat.set_title(samp)
             rep1, rep2 = pair[0].split('_rep_')[1], pair[1].split('_rep_')[1]
-            rscat.set_xlabel('Replicate ' + rep1)
-            rscat.set_ylabel('Replicate ' + rep2)
+            rscat.set_xlabel('Log$_{2}$ normalized reads in replicate ' + rep1)
+            rscat.set_ylabel('Log$_{2}$ normalized reads in replicate ' + rep2)
             pdf_name = make_filename([output_prefix, samp, 'replicates', rep1, rep2, 'scatter'], ext='.pdf')
             rscat.figure.savefig(pdf_name)
 
@@ -245,8 +245,8 @@ def scatter_dges(count_df, dges, output_prefix, viewLims, classes=None, show_unk
             sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2], viewLims, *grp_args,
                                           log_norm=True, labels=labels, rasterized=RASTER)
             sscat.set_title('%s vs %s' % (p1, p2))
-            sscat.set_xlabel(p1)
-            sscat.set_ylabel(p2)
+            sscat.set_xlabel("Log$_{2}$ normalized reads in " + p1)
+            sscat.set_ylabel("Log$_{2}$ normalized reads in " + p2)
             pdf_name = make_filename([output_prefix, pair, 'scatter_by_dge_class'], ext='.pdf')
             sscat.figure.savefig(pdf_name)
 
@@ -259,8 +259,8 @@ def scatter_dges(count_df, dges, output_prefix, viewLims, classes=None, show_unk
             sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2], viewLims, grp_args,
                                           log_norm=True, labels=labels, alpha=0.5, rasterized=RASTER)
             sscat.set_title('%s vs %s' % (p1, p2))
-            sscat.set_xlabel(p1)
-            sscat.set_ylabel(p2)
+            sscat.set_xlabel("Log$_{2}$ normalized reads in " + p1)
+            sscat.set_ylabel("Log$_{2}$ normalized reads in " + p2)
             pdf_name = make_filename([output_prefix, pair, 'scatter_by_dge'], ext='.pdf')
             sscat.figure.savefig(pdf_name)
 
