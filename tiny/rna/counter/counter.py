@@ -166,7 +166,7 @@ def main():
 
         # global for multiprocessing
         global feature_counter
-        rtprefs = {pref: getattr(args, pref) for pref in ["source_filter", "type_filter"]}
+        rtprefs = {pref: getattr(args, pref, []) for pref in ["source_filter", "type_filter"]}
         feature_counter = FeatureCounter(gff_file_set, selection_rules, args.diagnostics, args.out_prefix, rtprefs)
 
         # Assign and count features using multiprocessing and merge results

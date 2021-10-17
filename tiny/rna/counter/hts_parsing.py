@@ -2,7 +2,6 @@ import numpy as np
 import HTSeq
 import sys
 import re
-import os
 
 from collections import Counter, defaultdict
 from typing import Tuple, List, Dict, Union
