@@ -133,7 +133,7 @@ class MyTestCase(unittest.TestCase):
         self.assertEqual(steps, [{"Gene:WBGene00023193"}])
         self.assertEqual(attrs, {
             'Gene:WBGene00023193': [('Class', ("unknown", "additional_class")), ('biotype', ("snoRNA",))]})
-        self.assertEqual(alias, {'Gene:WBGene00023193': ('Y74C9A.6',)})
+        self.assertEqual(alias, {'Gene:WBGene00023193': ['Y74C9A.6']})
 
     """Does ReferenceTables.get() raise ValueError when a Name Attribute refers to a missing attribute?"""
 
@@ -142,7 +142,8 @@ class MyTestCase(unittest.TestCase):
         feature_source = {self.short_gff_file: [bad]}
         selection_rules = []
 
-        expected_err = f"Feature Gene:WBGene00023193 does not contain a '{bad}' attribute in {self.short_gff_file}"
+        expected_err = f"Feature Gene:WBGene00023193 does not contain a '{bad}' attribute." + '\n'
+        expected_err += f"Error occurred on line 1 of {self.short_gff_file}"
 
         with self.assertRaisesRegex(ValueError, expected_err):
             ReferenceTables(feature_source, selection_rules).get()
@@ -154,7 +155,8 @@ class MyTestCase(unittest.TestCase):
         feature_source = {self.short_gff_file: ["ID"]}
         selection_rules = [{'Identity': (bad, "BAD_attribute_value")}]
 
-        expected_err = f"Feature Gene:WBGene00023193 does not contain a '{bad}' attribute in {self.short_gff_file}"
+        expected_err = f"Feature Gene:WBGene00023193 does not contain a '{bad}' attribute." + '\n'
+        expected_err += f"Error occurred on line 1 of {self.short_gff_file}"
 
         with self.assertRaisesRegex(ValueError, expected_err):
             ReferenceTables(feature_source, selection_rules).get()
@@ -168,7 +170,7 @@ class MyTestCase(unittest.TestCase):
         selection_rules = []
 
         # Notice: screening for "ID" name attribute happens earlier in counter.load_config()
-        expected_alias = {"Gene:WBGene00023193": ("Gene:WBGene00023193", "unknown", "additional_class")}
+        expected_alias = {"Gene:WBGene00023193": ["Gene:WBGene00023193", "unknown", "additional_class"]}
         _, _, alias, _ = ReferenceTables(feature_source, selection_rules).get()
 
         self.assertDictEqual(alias, expected_alias)
@@ -249,7 +251,7 @@ class MyTestCase(unittest.TestCase):
         self.assertEqual(attrs['Parent2'], [('Class', ('NA',)), ('Name', ('Child2Name', 'Parent2Name'))])
         self.assertEqual(attrs['Sibling'], [('Class', ('Class1', 'Class2', 'Class3')), ('Name', ('Sibling1', 'Sibling2', 'Sibling3'))])
 
-    """Does ReferenceTables.get() properly handle attributes for discontinuous features?"""
+    """Does ReferenceTables.get() properly build a GenomicArrayOfSets for discontinuous features?"""
 
     def test_ref_tables_discontinuous_features(self):
         feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
@@ -268,11 +270,85 @@ class MyTestCase(unittest.TestCase):
                     (99, 120, {'Sibling'}),
                     (120, 139, set()),
                     (139, 150, {'Sibling'}),
-                    (150, 9223372036854775807, set())]
+                    (150, sys.maxsize, set())]
 
         for act, exp in zip(feats.chrom_vectors["I"]["-"].array.get_steps(), expected):
             self.assertEqual(act, exp)
 
+    """Does ReferenceTables.get() properly handle source filters for discontinuous features?"""
+
+    def test_ref_tables_source_filter(self):
+
+        feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
+        selection_rules = self.rules_template
+
+        rt = ReferenceTables(feature_source, selection_rules, source_filter=["Source2Name"])
+        feats, attrs, alias, intervals = rt.get()
+
+        exp_alias = {'Child2': ['Child2Name']}
+        exp_attrs = {'Child2': [('Class', ('NA',)), ('Name', ('Child2Name',))]}
+        exp_feats = [(0, 39, set()), (39, 50, {'Child2'}), (50, sys.maxsize, set())]
+        exp_intervals = {'Child2': [HTSeq.GenomicInterval('I', 39, 50, '-')]}
+        exp_filtered = {"GrandParent", "ParentWithGrandparent", "Parent2", "Child1", "Sibling"}
+        exp_parents = {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'}
+
+        self.assertEqual(alias, exp_alias)
+        self.assertEqual(attrs, exp_attrs)
+        self.assertEqual(intervals, exp_intervals)
+        self.assertEqual(rt.parents, exp_parents)
+        self.assertEqual(rt.filtered, exp_filtered)
+        self.assertEqual(list(feats.chrom_vectors['I']['-'].array.get_steps()), exp_feats)
+        self.clear_filters()
+
+    """Does ReferenceTables.get() properly handle type filters for discontinuous features?"""
+
+    def test_ref_tables_type_filter(self):
+
+        feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
+        selection_rules = self.rules_template
+
+        rt = ReferenceTables(feature_source, selection_rules, type_filter=["CDS"])
+        feats, attrs, alias, intervals = rt.get()
+
+        exp_alias = {'Child1': ['SharedName']}
+        exp_attrs = {'Child1': [('Class', ('NA',)), ('Name', ('SharedName',))]}
+        exp_feats = [(0, 29, set()), (29, 40, {'Child1'}), (40, sys.maxsize, set())]
+        exp_intervals = {'Child1': [HTSeq.GenomicInterval('I', 29, 40, '-')]}
+        exp_filtered = {"GrandParent", "ParentWithGrandparent", "Parent2", "Child2", "Sibling"}
+        exp_parents = {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'}
+
+        self.assertEqual(alias, exp_alias)
+        self.assertEqual(attrs, exp_attrs)
+        self.assertEqual(intervals, exp_intervals)
+        self.assertEqual(rt.parents, exp_parents)
+        self.assertEqual(rt.filtered, exp_filtered)
+        self.assertEqual(list(feats.chrom_vectors['I']['-'].array.get_steps()), exp_feats)
+        self.clear_filters()
+
+    """Does ReferenceTables.get() properly handle both source and type filters for discontinuous features?"""
+
+    def test_ref_tables_both_filter(self):
+
+        feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
+        selection_rules = self.rules_template
+
+        rt = ReferenceTables(feature_source, selection_rules, source_filter=["SourceName"], type_filter=["gene"])
+        feats, attrs, alias, intervals = rt.get()
+
+        self.assertEqual(rt.filtered, {'Child1', 'Child2'})
+        self.assertEqual(rt.parents, {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'})
+        self.assertEqual(list(attrs.keys()), ['GrandParent', 'Parent2', 'Sibling'])
+        self.assertEqual(list(intervals.keys()), ['GrandParent', 'Parent2', 'Sibling'])
+        self.assertEqual(list(alias.keys()), ['GrandParent', 'Parent2', 'Sibling'])
+        self.assertEqual(len(list(feats.chrom_vectors['I']['-'].array.get_steps())), 8)
+        self.clear_filters()
+
+    def clear_filters(self):
+        """Since the filters in ReferenceTables are class attributes, they must be cleared.
+        Otherwise they will interfere with subsequent tests."""
+
+        ReferenceTables.source_filter = []
+        ReferenceTables.type_filter = []
 
 if __name__ == '__main__':
     unittest.main()
