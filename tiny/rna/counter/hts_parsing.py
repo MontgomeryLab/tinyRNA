@@ -154,12 +154,20 @@ class ReferenceTables:
     """A GFF parser which builds feature, attribute, and alias tables, with intelligent appends
 
     Features may be defined by multiple GFF files. If multiple files offer different attributes for
-    the same feature, the unique among those attributes are appended to the record. If multiple aliases
-    (or Name Attributes, per the Features Sheet) are defined for a feature, the unique among those
-    names are appended. Each GFF file defined in the Features Sheet is parsed only once regardless of
-    the number of Name Attributes associated with it. Each feature ID may be defined for only one
-    interval; if multiple interval definitions are supplied, then these feature IDs are renamed on
-    the basis of their source GFF file.
+    the same feature, the unique among those attribute keys and values are merged with the record.
+    If multiple aliases (or Name Attributes, per the Features Sheet) are defined for a feature, the
+    unique among those names are appended. Each GFF file defined in the Features Sheet is parsed only
+    once regardless of the number of Name Attributes associated with it.
+
+    Features which define a Parent or share an ID attribute are treated as discontinuous features.
+    In these cases the root ancestor feature receives merged attributes, intervals, and aliases.
+    Children of the root ancestor are otherwise not stored in the reference tables.
+
+    Source and type filters allow the user to define acceptable values for columns 2 and 3 of the
+    GFF, respectively. These filters are inclusive (only rows with matching values are parsed),
+    and behave as a logical AND if both are defined. Empty filter lists allow all matches.
+    Feature lineage is preserved even for filtered features; for these cases, the root ancestor
+    is considered to be the highest unfiltered feature in the lineage.
     """
 
     source_filter = []
@@ -184,26 +192,31 @@ class ReferenceTables:
 
         for file, alias_keys in self.gff_files.items():
             gff = HTSeq.GFF_Reader(file)
-            for row in gff:
-                if row.iv.strand == ".":
-                    raise ValueError(f"Feature {row.name} in {file} has no strand information.")
-                if not self.filter_match(row):
-                    self.exclude_row(row)
-                    continue
+            try:
+                for row in gff:
+                    if row.iv.strand == ".":
+                        raise ValueError(f"Feature {row.name} in {file} has no strand information.")
+                    if not self.filter_match(row):
+                        self.exclude_row(row)
+                        continue
 
-                try:
-                    feature_id = row.attr["ID"][0]
-                    # Add feature_id <-> feature_interval records
-                    root_id = self.add_feature_iv(feature_id, row)
-                    # Append alias to root feature if it is unique
-                    self.add_alias(alias_keys, root_id, row.attr)
-                    # Select attributes of interest from row
-                    row_attrs = self.get_interesting_attrs(row.attr)
-                except KeyError as ke:
-                    raise ValueError(f"Feature does not contain a {ke} attribute in {file}")
+                    try:
+                        feature_id = row.attr["ID"][0]
+                        # Add feature_id <-> feature_interval records
+                        root_id = self.add_feature_iv(feature_id, row)
+                        # Append alias to root feature if it is unique
+                        self.add_alias(alias_keys, root_id, row.attr)
+                        # Select attributes of interest from row
+                        row_attrs = self.get_interesting_attrs(row.attr)
+                    except KeyError as ke:
+                        raise ValueError(f"Feature {row.name} does not contain a {ke} attribute.")
 
-                # Add feature_id -> feature_attributes record
-                self.incorporate_attributes(root_id, row_attrs)
+                    # Add feature_id -> feature_attributes record
+                    self.incorporate_attributes(root_id, row_attrs)
+            except Exception as e:
+                # Append to error message while preserving exception provenance and traceback
+                e.args = (e.args[0] + "\nError occurred on line %d of %s" % (gff.line_no, file),)
+                raise e.with_traceback(sys.exc_info()[2]) from e
 
         return self.feats, self.attrs, dict(self.alias), dict(self.intervals)
 
@@ -255,11 +268,9 @@ class ReferenceTables:
         return [(interest, row_attrs[interest]) for interest in self.attrs_of_interest]
 
     def incorporate_attributes(self, root_id, row_attrs):
-        """Add unique keys to root feature's attributes, unique values to preexisting keys"""
+        """Add unique keys and values to root feature's attributes"""
 
         if root_id in self.attrs and row_attrs != self.attrs[root_id]:
-            # If an attribute record already exists for this feature, and this row provides new attributes,
-            #  append the new attribute values to the existing values
             cur_attrs = self.attrs[root_id]
             new_attrs = []
             for cur, new in zip(cur_attrs, row_attrs):
@@ -291,7 +302,13 @@ class ReferenceTables:
         return parent
 
     def exclude_row(self, row):
-        """The current row was filtered, but still we need to account for it and its parent if needed"""
+        """The current row was filtered, but we still need to account for it and its parent
+
+        We don't want to add filtered features to the attributes table because we later call
+        get_keys() on the table to obtain a list of all features considered for counting.
+        We still need to keep track of parents for situations where an ancestral tree has
+        a gap due to filtering; in this case we still want to merge descendents with the
+        highest considered feature in the tree."""
 
         feature_id = row.attr['ID'][0]
         self.filtered.add(feature_id)
@@ -300,12 +317,17 @@ class ReferenceTables:
 
     @classmethod
     def _set_filters(cls, **kwargs):
-        for pref, val in kwargs.items():
-            if val is not None:
-                setattr(cls, pref, val)
+        """Assigns inclusive filter values"""
+
+        for filt in ["source_filter", "type_filter"]:
+            setattr(cls, filt, kwargs.get(filt, []))
 
     @classmethod
     def filter_match(cls, row):
+        """Checks if the GFF row passes the inclusive filter(s)
+
+        If both filters are defined then the must both evaluate to true for a match"""
+
         select = True
         if len(cls.source_filter):
             select &= row.source in cls.source_filter

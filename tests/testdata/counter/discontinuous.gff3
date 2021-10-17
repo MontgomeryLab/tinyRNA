@@ -1,8 +1,8 @@
 I	SourceName	gene	1	10	.	-	.	ID=GrandParent;Class=NA;Name=SharedName
 I	SourceName	gene	10	20	.	-	.	ID=ParentWithGrandparent;Parent=GrandParent;Class=NA;Name=SharedName
 I	SourceName	gene	20	30	.	-	.	ID=Parent2;Class=NA;Name=Parent2Name
-I	SourceName	gene	30	40	.	-	.	ID=Child1;Parent=ParentWithGrandparent;Class=NA;Name=SharedName
-I	SourceName	gene	40	50	.	-	.	ID=Child2;Parent=Parent2;Class=NA;Name=Child2Name;UniqueAttr=child2
+I	SourceName	CDS	30	40	.	-	.	ID=Child1;Parent=ParentWithGrandparent;Class=NA;Name=SharedName
+I	Source2Name	gene	40	50	.	-	.	ID=Child2;Parent=Parent2;Class=NA;Name=Child2Name;UniqueAttr=child2
 I	SourceName	gene	100	110	.	-	.	ID=Sibling;Class=Class1;Name=Sibling1;UniqueAttr=FirstSibling
 I	SourceName	gene	111	120	.	-	.	ID=Sibling;Class=Class2;Name=Sibling2
 I	SourceName	gene	140	150	.	-	.	ID=Sibling;Class=Class3;Name=Sibling3

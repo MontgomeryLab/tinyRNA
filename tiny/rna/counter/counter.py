@@ -7,7 +7,6 @@ import os
 from collections import defaultdict
 from typing import Tuple, List, Dict
 
-from rna.counter.hts_parsing import ReferenceTables
 from tiny.rna.counter.features import Features, FeatureCounter, FeatureSelector
 from tiny.rna.counter.statistics import SummaryStats
 from tiny.rna.util import report_execution_time, from_here
@@ -35,7 +34,7 @@ def get_args():
     arg_parser.add_argument('-sf', '--source-filter', metavar='SOURCE', nargs='*',
                         help='Only produce counts for features whose '
                              'GFF column 2 matches the source(s) listed')
-    arg_parser.add_argument('-tf', '--type-filter', metavar='SOURCE', nargs='*',
+    arg_parser.add_argument('-tf', '--type-filter', metavar='TYPE', nargs='*',
                         help='Only produce counts for features whose '
                              'GFF column 3 matches the type(s) listed')
     arg_parser.add_argument('-a', '--all-features', action='store_true',
