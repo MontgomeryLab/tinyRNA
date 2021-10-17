@@ -36,7 +36,7 @@
 - [License](#license)
 
 
-tinyRNA (Automated QUantitative Analysis of Transcript eXpression) is a set of tools to simplify the analysis of next-generation sequencing data. The goal of this specific repository is to provide an entire workflow for processing small RNA sequencing data with options for advanced hierarchical feature selection.
+tinyRNA is a set of tools to simplify the analysis of next-generation sequencing data. The goal of this specific repository is to provide an entire workflow for processing small RNA sequencing data with options for advanced hierarchical feature selection.
 
 The current workflow is as follows:
 
@@ -84,7 +84,7 @@ conda deactivate
 ## Usage
 If you'd like to jump right in and start using tinyRNA, see our [tutorial](./START_HERE/TUTORIAL.md).
 
-You can execute the workflow in its entirety for a full end-to-end analysis pipeline, or you can execute individual steps on their own. In most cases you will use the `tinyrna` command for pipeline level operations, including running the pipeline.
+You can execute the workflow in its entirety for a full end-to-end analysis pipeline, or you can execute individual steps on their own. In most cases you will use the command `tiny` for pipeline level operations, including running the pipeline.
 
 ### Configuration Files
 The pipeline requires that you specify your input library files (Samples Sheet - `samples.csv`), your selection rules for feature counting (Features Sheet - `features.csv`), the paths to your configuration files and other file inputs (Paths - `paths.yml`), and your preferences for the overall pipeline configuration (Run Config - `run_config.yml`).
@@ -93,7 +93,7 @@ The pipeline requires that you specify your input library files (Samples Sheet -
 
 You can obtain template copies of these files with the command (they're also available in the `START_HERE` directory):
 ```
-tinyrna get-template
+tiny get-template
 ```
 :warning: You may use either relative or absolute paths in your configuration files. **Relative paths will be evaluated relative to the file in which they are defined.** This means that you can store your configuration files each in a different location, allowing for flexibility in your project organization. To avoid confusion, we recommend using absolute paths.:warning:
 
@@ -138,7 +138,7 @@ Running the pipeline requires the following files:
   3. A reference genome file in FASTA format (be sure that chromosome identifiers are identical between your reference annotations and genome sequence files).
   4. Optional: Bowtie indexes (must be small indexes (.ebwt)). By default, bowtie indexes will be created when the pipeline is run for the first time).
 
-<sup>*</sup> `tinyrna-count` accepts SAM files in your Samples Sheet only when invoked as an individual step. Because genome alignments are done after collapsing reads, the pipeline does not currently support SAM files from other sources.
+<sup>*</sup> `tiny-count` accepts SAM files in your Samples Sheet only when invoked as an individual step. Because genome alignments are done after collapsing reads, the pipeline does not currently support SAM files from other sources.
 
 ### Running the End-to-End Analysis
 In most cases you will use this toolset as an end-to-end pipeline. This will run a full, standard small RNA sequencing data analysis according to your configuration file. Before starting, you will need the following:
@@ -154,7 +154,7 @@ In most cases you will use this toolset as an end-to-end pipeline. This will run
 To run an end-to-end analysis, be sure that you're working within the conda tinyrna environment (instructions above) in your terminal and optionally set your working directory that contains the Run Config file. Than, simply enter the following code into your terminal (if you are not working in the directory containing `run_config.yml`, provide the path before the name of the file - `path/to/run_config.yml`:
 
 ```
-tinyrna run --config run_config.yml
+tiny run --config run_config.yml
 ```
 
 ### Running Individual Steps
@@ -163,7 +163,7 @@ The process for running individual steps differs depending on whether the step i
 The following steps are Python components. Their corresponding commands may be invoked at the command line:
 ##### Create Workflow
 ```
-tinyrna-config -i CONFIG
+tiny-config -i CONFIG
 
   required arguments:
     -i CONFIG, --input-file CONFIG
@@ -171,7 +171,7 @@ tinyrna-config -i CONFIG
 ```
 ##### Collapser
 ```
-tinyrna-collapse [-h] -i FASTQFILE -o OUTPREFIX [-t THRESHOLD] [-c]
+tiny-collapse [-h] -i FASTQFILE -o OUTPREFIX [-t THRESHOLD] [-c]
 
   optional arguments:
     -h, --help            show this help message and exit
@@ -191,7 +191,7 @@ tinyrna-collapse [-h] -i FASTQFILE -o OUTPREFIX [-t THRESHOLD] [-c]
 ```
 ##### Counter
 ```
-tinyrna-count [-h] -i SAMPLES -c CONFIGFILE -o OUTPUTPREFIX [-t] [-p]
+tiny-count [-h] -i SAMPLES -c CONFIGFILE -o OUTPUTPREFIX [-t] [-p]
 
   optional arguments:
     -h, --help            show this help message and exit
@@ -211,7 +211,7 @@ tinyrna-count [-h] -i SAMPLES -c CONFIGFILE -o OUTPUTPREFIX [-t] [-p]
 ```
 ##### fastp, bowtie-build, and bowtie
 These are CWL wrapped third party tools.
-1. Copy the workflow CWL folder to your current working directory with the command `tinyrna setup-cwl --config none`
+1. Copy the workflow CWL folder to your current working directory with the command `tiny setup-cwl --config none`
 2. Within `./CWL/tools` find the file for the step you wish to run. Navigate to this folder in terminal (or copy your target .cwl file to a more convenient location)
 3. Run `cwltool --make-template step-file.cwl > step-config.YML`. This will produce a `YML` configuration file specific to this step. Optional arguments will be indicated as such; if you do not wish to set a value for an optional argument, best practice is to remove it from the file
 4. Fill in your preferences and inputs in this step configuration file and save it
@@ -222,12 +222,12 @@ These are CWL wrapped third party tools.
 We have used CWL to define the workflow for scalability and interoperability. The default runner, or interpreter, utilized by tinyRNA is `cwltool`. You may use a different CWL runner if you would like, and in order to do so you will need the workflow CWL and your **processed** Run Config file. The following will copy these files to your current working directory:
 
 ```
-tinyrna setup-cwl --config <path/to/Run_Config.yml>
+tiny setup-cwl --config <path/to/Run_Config.yml>
 ```
 
 If you don't have a Run Config file or do not wish to obtain a processed copy, you may instead use "None" or "none" in the `--config` argument:
 ```
-tinyrna setup-cwl --config none
+tiny setup-cwl --config none
 ```
 
 ## Outputs

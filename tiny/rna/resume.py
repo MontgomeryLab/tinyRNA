@@ -162,7 +162,6 @@ class ResumePlotterConfig(ResumeConfig):
         steps = ["plotter"]
 
         inputs = {
-            'raw_counts': {'var': "resume_raw", 'type': "File"},
             'norm_counts': {'var': "resume_norm", 'type': "File"},
             'dge_tables': {'var': "resume_dge", 'type': "File[]"},
             'len_dist': {'var': "resume_len_dist", 'type': "File[]"}

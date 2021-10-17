@@ -7,10 +7,11 @@ from setuptools.command.install import install
 
 # Package metadata
 NAME = 'tinyrna'
-DESCRIPTION = 'Automated Quantitative Analysis of Transcript Expression'
+DESCRIPTION = 'Comprehensive analysis of small RNA high-throughput sequencing data'
 URL = 'https://github.com/MontgomeryLab/tinyrna/'
 EMAIL = 'ajtate@colostate.edu'
 AUTHOR = 'Kristen Brown, Alex Tate'
+PLATFORM = 'Unix'
 REQUIRES_PYTHON = '>=3.7.0'
 VERSION = '0.1'
 
@@ -35,24 +36,22 @@ setuptools.setup(
     author_email=EMAIL,
     description=DESCRIPTION,
     cmdclass={'install': PreFlight},
-    packages=setuptools.find_packages(exclude=['tests/*']),
     include_package_data=True,
+    packages=['tiny'],
     zip_safe=False,
     entry_points={
         'console_scripts': [
             'tiny = tiny.entry:main',
-            'tiny-config = tiny.rna.Configuration:Configuration.main',
+            'tiny-config = tiny.rna.configuration:Configuration.main',
             'tiny-collapse = tiny.rna.collapser:main',
             'tiny-count = tiny.rna.counter.counter:main',
             'tiny-plot = tiny.rna.plotter:main'
         ]
     },
     scripts=['tiny/rna/tiny-deseq.r'],
-    python_requires=REQUIRES_PYTHON,
-    install_requires=REQUIRED,
     classifiers=[
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
-        'Operating System :: OS Independent',
+        'Operating System :: Unix',
     ],
 )
