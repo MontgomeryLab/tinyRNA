@@ -212,8 +212,15 @@ shared_memory: False
 ######-------------------------------------------------------------------------------######
 
 
-##-- If True: all features will be represented in the counts table, regardless --##
+##-- If True: show all parsed features in the counts csv, regardless of count/identity --##
 counter_all_features: False
+
+##-- Only parse GFF lines that match these values on column 2. [] is wildcard --##
+counter_source_filter: []
+
+##-- Only parse GFF lines that match these values on column 3. [] is wildcard --##
+##-- If source AND type filters are given, a line must match both to be included --##
+counter_type_filter: []
 
 ##-- If True: produce diagnostic logs to indicate what was eliminated and why --##
 counter_diags: False

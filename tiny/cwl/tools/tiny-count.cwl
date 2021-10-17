@@ -32,6 +32,16 @@ inputs:
 
   # Optional inputs
 
+  source_filter:
+    type: string[]?
+    inputBinding:
+      prefix: -sf
+
+  type_filter:
+    type: string[]?
+    inputBinding:
+      prefix: -tf
+
   all_features:
     type: boolean?
     inputBinding:
