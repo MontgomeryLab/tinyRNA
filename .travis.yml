@@ -18,4 +18,5 @@ script:
   - python -m unittest tests.unit_tests_entry
   - python -m unittest tests.unit_tests_collapser
   - python -m unittest tests.unit_tests_counter
+  - python -m unittest tests.unit_tests_features
   - python -m unittest tests.unit_tests_hts_parsing

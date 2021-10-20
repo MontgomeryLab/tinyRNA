@@ -81,6 +81,8 @@ inputs:
   is_pipeline: boolean?
   counter_diags: boolean?
   counter_all_features: boolean?
+  counter_type_filter: string[]?
+  counter_source_filter: string[]?
 
   # deseq inputs
   control_condition: string?
@@ -207,6 +209,8 @@ steps:
       gff_files: gff_files
       out_prefix: run_name
       all_features: counter_all_features
+      source_filter: counter_source_filter
+      type_filter: counter_type_filter
       is_pipeline: {default: true}
       diagnostics: counter_diags
       fastp_logs: counter-prep/json_report_file
