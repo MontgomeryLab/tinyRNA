@@ -31,10 +31,10 @@ def get_args():
                         help='output prefix to use for file names')
 
     # Optional arguments
-    arg_parser.add_argument('-sf', '--source-filter', metavar='SOURCE', nargs='*',
+    arg_parser.add_argument('-sf', '--source-filter', metavar='SOURCE', nargs='*', default=[],
                         help='Only produce counts for features whose '
                              'GFF column 2 matches the source(s) listed')
-    arg_parser.add_argument('-tf', '--type-filter', metavar='TYPE', nargs='*',
+    arg_parser.add_argument('-tf', '--type-filter', metavar='TYPE', nargs='*', default=[],
                         help='Only produce counts for features whose '
                              'GFF column 3 matches the type(s) listed')
     arg_parser.add_argument('-a', '--all-features', action='store_true',
