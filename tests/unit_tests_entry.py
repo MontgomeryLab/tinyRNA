@@ -24,19 +24,15 @@ test covers both environments.
 class test_entry(unittest.TestCase):
     @classmethod
     def setUpClass(self):
-        # Change CWD to test folder if test was invoked from project root (ex: by Travis)
-        if os.path.basename(os.getcwd()) == 'tiny':
-            os.chdir(f".{os.sep}tests")
-
-        # For pre-install tests
-        self.cwl_path = '../tiny/cwl'
-        self.templates_path = '../tiny/templates'
-
         # For post-install tests
         if os.environ.get('GITHUB_ACTIONS', None) != 'true':
             print("Tests are being run locally, refreshing installation...")
             os.system("pip install -e ../ > /dev/null")
             print("Done.")
+
+        # For pre-install tests
+        self.cwl_path = '../tiny/cwl'
+        self.templates_path = '../tiny/templates'
 
         # For both pre and post install
         self.config_file = './testdata/run_config_template.yml'
@@ -58,14 +54,13 @@ class test_entry(unittest.TestCase):
         }
 
     """
-    Testing that get-template copies the correct files 
-    to the current directory.
+    Testing that get-template copies the correct files to the current directory.
     """
 
     def test_get_template(self):
         test_functions = [
             helpers.LambdaCapture(lambda: entry.get_template(self.templates_path)),  # The pre-install invocation
-            helpers.ShellCapture("tiny get-template")                                   # The post-install command
+            helpers.ShellCapture("tiny get-template")                                # The post-install command
         ]
         template_files = ['run_config_template.yml', 'samples.csv', 'features.csv',
                           'paths.yml', 'tinyrna-light.mplstyle']
@@ -81,14 +76,13 @@ class test_entry(unittest.TestCase):
                     test()
 
                 # Check that exactly 5 files were produced by the command
-                self.assertEqual(
-                    dir_entry_ct() - dir_before_count, len(template_files),
-                    f"Abnormal number of template files. Function: {test_context}")
+                self.assertEqual(dir_entry_ct() - dir_before_count, len(template_files),
+                    f"Abnormal number of template files. Function: {test_context.__class__.__name__}")
 
                 # Check that each expected file was produced
                 for file in template_files:
-                    self.assertTrue(os.path.isfile(file),
-                                    f"An expected template file wasn't copied: {file}, function: {test_context}")
+                    self.assertTrue(os.path.isfile(file), f"An expected template file wasn't copied: {file}, function: "
+                                                          f"{test_context.__class__.__name__}")
                     os.remove(file)
             finally:
                 # Remove the local template files if necessary, even if an exception was thrown above
@@ -96,8 +90,7 @@ class test_entry(unittest.TestCase):
                     if os.path.isfile(file): os.remove(file)
 
     """
-    Testing that setup-cwl with a None/none config file 
-    copies workflow files without mentioning a config file
+    Testing that setup-cwl with a None/none config file copies workflow files without mentioning a config file
     """
 
     def test_setup_cwl_noconfig(self):
@@ -114,22 +107,21 @@ class test_entry(unittest.TestCase):
                         test()
 
                         # Check that the function did not mention the configuration file
-                        self.assertNotIn(
-                            "configuration", test.get_stdout(),
-                            f"Setup mentioned configfile when {no_config} was provided, function: {test_context}")
+                        self.assertNotIn("configuration", test.get_stdout(),
+                            f"Setup mentioned configfile when {no_config} was provided, function: "
+                            f"{test_context.__class__.__name__}")
 
                         # Check (by name and directory structure) that the expected files/folders were produced
-                        self.assertEqual(helpers.get_dir_tree('./cwl'),
-                                         self.expected_cwl_dir_tree,
-                                         f"The expected local cwl directory tree was not found, function: {test_context}")
+                        self.assertEqual(helpers.get_dir_tree('./cwl'), self.expected_cwl_dir_tree,
+                                         f"The expected local cwl directory tree was not found, function: "
+                                         f"{test_context.__class__.__name__}")
                 finally:
                     # Remove the copied workflow files even if an exception was thrown above
                     if os.path.isdir('./cwl'): shutil.rmtree('./cwl')
 
     """
-    Testing that setup-cwl WITH config file mentions the location of the 
-    processed input configfile, then copies workflow files. Correctness
-    of processed config file will be checked in the setup_config tests.
+    Testing that setup-cwl WITH config file mentions the location of the processed input configfile, 
+    then copies workflow files. Correctness of processed config file will be checked in the setup_config tests.
     """
 
     def test_setup_cwl_withconfig(self):
@@ -153,17 +145,19 @@ class test_entry(unittest.TestCase):
                 config_file_basename = os.path.basename(self.config_file)
                 self.assertEqual(config_file_message,
                                  r'The processed configuration file is located at: processed_' + config_file_basename,
-                                 f"Setup failed to mention the location of the processed config file. Function: {test_context}")
+                                 f"Setup failed to mention the location of the processed config file. Function: "
+                                 f"{test_context.__class__.__name__}")
 
                 # Check that the processed configuration file exists
                 config_file_location = config_file_message.split(": ")[1]
                 self.assertTrue(os.path.isfile(config_file_location),
-                                f"The processed config file does not exist: {config_file_location}. Function: {test_context}")
+                                f"The processed config file does not exist: {config_file_location}. Function: "
+                                f"{test_context.__class__.__name__}")
+
                 os.remove(config_file_location)
 
                 # Check (by name and directory structure) that the expected files/folders were produced
-                self.assertDictEqual(helpers.get_dir_tree('./cwl'),
-                                 self.expected_cwl_dir_tree)
+                self.assertDictEqual(helpers.get_dir_tree('./cwl'), self.expected_cwl_dir_tree)
             finally:
                 # Remove the copied workflow files even if an exception was thrown above
                 if os.path.isdir('./cwl'): shutil.rmtree('./cwl')
@@ -202,7 +196,8 @@ class test_entry(unittest.TestCase):
                             break
 
                     self.assertIn('node', sub_names,
-                                  f"The cwltool subprocess does not appear to have started. Function: {test_context}")
+                                  f"The cwltool subprocess does not appear to have started. Function: "
+                                  f"{test_context.__class__.__name__}")
             finally:
                 run_dirs = glob("./testdata/entry_test_*_run_directory")
                 for dir in run_dirs:
