@@ -28,10 +28,10 @@ jobs:
           environment-file: environment.yml
           auto-activate-base: false
       - name: Run tests
+        shell: bash -l {0}
         run: |
           python -m unittest tests.unit_tests_entry
           python -m unittest tests.unit_tests_collapser
           python -m unittest tests.unit_tests_counter
           python -m unittest tests.unit_tests_features
           python -m unittest tests.unit_tests_hts_parsing
-
