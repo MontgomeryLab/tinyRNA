@@ -24,6 +24,9 @@ jobs:
         uses: conda-incubator/setup-miniconda@v2.1.1
         with:
           auto-update-conda: true
+          activate-environment: tinyrna
+          environment-file: environment.yml
+          auto-activate-base: false
       - name: Run tests
         run: |
           python -m unittest tests.unit_tests_entry
