@@ -3,8 +3,6 @@
 
 *This repository is being actively developed and tested, and is thus incomplete and only recommended for testing until a release is made. Feedback, suggestions, and bug reports are welcome under the [issues tab](https://github.com/MontgomeryLab/tinyrna/issues). Thank you!*
 
-[![Build Status](https://travis-ci.com/MontgomeryLab/tinyrna.svg?branch=master)](https://travis-ci.com/MontgomeryLab/tinyrna)
-
 - [Getting Started](#getting-started)
   - [Prerequisites & Installation](#prerequisites--installation)
     - [1. Install conda](#1-install-conda)
@@ -41,8 +39,6 @@ tinyRNA is a set of tools to simplify the analysis of next-generation sequencing
 The current workflow is as follows:
 
 ![tinyRNA basic pipeline](images/tinyrna-workflow_current.png)
-
-Steps outlined in orange are Python scripts we've created for this task, optional steps are teal, and purple steps are part of the end-to-end standard workflow. Outputs are shown in green.
 
 ## Getting Started
 
