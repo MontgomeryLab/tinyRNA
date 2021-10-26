@@ -15,16 +15,21 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-      - name: Set up Python 3.7
+      - name: Setup Python 3.7
         uses: actions/setup-python@v2
         with:
           python-version: 3.7
-      - name: Setup Miniconda
+      - name: Setup Conda Environment
         uses: conda-incubator/setup-miniconda@v2.1.1
         with:
           python-version: ${{ matrix.python-version }}
           activate-environment: tinyrna
           auto-update-conda: true
-      - run: |
-          conda-info
+      - name: Run tests
+        run: |
+          python -m unittest tests.unit_tests_entry
+          python -m unittest tests.unit_tests_collapser
+          python -m unittest tests.unit_tests_counter
+          python -m unittest tests.unit_tests_features
+          python -m unittest tests.unit_tests_hts_parsing
 
