@@ -33,7 +33,10 @@ class test_entry(unittest.TestCase):
         self.templates_path = '../tiny/templates'
 
         # For post-install tests
-        os.system("pip install -e ../ > /dev/null")
+        if os.environ.get('GITHUB_ACTIONS', None) != 'true':
+            print("Tests are being run locally, refreshing installation...")
+            os.system("pip install -e ../ > /dev/null")
+            print("Done.")
 
         # For both pre and post install
         self.config_file = './testdata/run_config_template.yml'
