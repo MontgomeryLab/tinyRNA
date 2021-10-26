@@ -11,27 +11,26 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ "ubuntu-latest", "macos-latest" ]
+        os: [ "ubuntu-latest" ]
         python-version: [ "3.7" ]
 
     steps:
-      - uses: actions/checkout@v2
-      - name: Setup Python 3.7
-        uses: actions/setup-python@v2
-        with:
-          python-version: ${{ matrix.python-version }}
+      - name: Checkout branch
+        uses: actions/checkout@v2
       - name: Setup Conda environment
         uses: conda-incubator/setup-miniconda@v2.1.1
         with:
+          python-version: ${{ matrix.python-version }}
           auto-update-conda: true
           activate-environment: tinyrna
           environment-file: environment.yml
           auto-activate-base: false
       - name: Run tests
         shell: bash -l {0}
+        working-directory: ./tests
         run: |
-          python -m unittest tests.unit_tests_entry
           python -m unittest tests.unit_tests_collapser
+          python -m unittest tests.unit_tests_entry
           python -m unittest tests.unit_tests_counter
           python -m unittest tests.unit_tests_features
           python -m unittest tests.unit_tests_hts_parsing
