@@ -10,7 +10,7 @@ from glob import glob
 import psutil
 
 import tiny.entry as entry
-import tests.unit_test_helpers as helpers
+import unit_test_helpers as helpers
 
 """
 

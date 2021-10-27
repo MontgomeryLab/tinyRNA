@@ -3,7 +3,7 @@ import json
 import sys
 import os
 
-from tests.unit_test_helpers import read, reset_mocks, ShellCapture, reassemble_gz_w
+from unit_test_helpers import read, reset_mocks, ShellCapture, reassemble_gz_w
 from unittest.mock import patch, MagicMock, call, mock_open, Mock
 from collections import OrderedDict
 from io import StringIO

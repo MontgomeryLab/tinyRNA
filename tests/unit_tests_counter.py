@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch, mock_open
 from collections import defaultdict
 
-import tests.unit_test_helpers as helpers
+import unit_test_helpers as helpers
 import tiny.rna.counter.counter as counter
 from tiny.rna.util import from_here
 
