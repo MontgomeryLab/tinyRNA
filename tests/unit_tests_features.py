@@ -1,6 +1,6 @@
 import HTSeq
 import unittest
-import tests.unit_test_helpers as helpers
+import unit_test_helpers as helpers
 
 from unittest.mock import patch, call
 from tiny.rna.counter.hts_parsing import Alignment, read_SAM
