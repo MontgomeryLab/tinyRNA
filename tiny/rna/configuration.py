@@ -209,7 +209,7 @@ class Configuration(ConfigBase):
 
             self.append_to('out_fq', sample_basename + '_cleaned.fastq')
             self.append_to('outfile', sample_basename + '_aligned_seqs.sam')
-            self.append_to('logfile', sample_basename + '_alignment_log.log')
+            self.append_to('logfile', sample_basename + '_console_output.log')
             self.append_to('un', sample_basename + '_unaligned_seqs.fa')
             self.append_to('json', sample_basename + '_qc.json')
             self.append_to('html', sample_basename + '_qc.html')
