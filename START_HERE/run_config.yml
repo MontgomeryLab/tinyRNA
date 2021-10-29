@@ -314,17 +314,13 @@ ebwt: ~
 #
 ######-------------------------------------------------------------------------------######
 
+sample_basenames: [ ]
+
 ##-- Utilized by Fastp --##
 # input fastq files
 in_fq: [ ]
-# output, cleaned fastq files
-out_fq: [ ]
 # output reports
 report_title: [ ]
-# html report filenames
-html: [ ]
-# json report filenames
-json: [ ]
 
 ##-- Utilized by Collapser --##
 # prefix to be used for output file (files, if non-zero threshold)

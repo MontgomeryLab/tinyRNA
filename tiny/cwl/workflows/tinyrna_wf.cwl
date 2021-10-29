@@ -13,6 +13,7 @@ inputs:
   # multi input
   threads: int?
   run_name: string
+  sample_basenames: string[]
 
   # bowtie build
   run_bowtie_build: boolean
@@ -24,7 +25,6 @@ inputs:
 
   # fastp inputs
   in_fq: File[]
-  out_fq: string[]
   fp_phred64: boolean?
   compression: int?
   dont_overwrite: boolean?
@@ -41,8 +41,6 @@ inputs:
   length_limit: int?
   overrepresentation_analysis: boolean?
   overrepresentation_sampling: int?
-  json: string[]
-  html: string[]
   report_title: string[]
 
   # collapser inputs
@@ -116,16 +114,16 @@ steps:
       noref: noref
       ftabchars: ftabchars
       threads: threads
-    out: [index_files]
+    out: [index_files, console_output]
 
   counter-prep:
     run: per-library.cwl
-    scatter: [in_fq, out_fq, json, html, report_title, uniq_seq_prefix, outfile, logfile, un]
+    scatter: [in_fq, sample_basename, report_title, uniq_seq_prefix, outfile, logfile, un]
     scatterMethod: dotproduct
     in:
+      sample_basename: sample_basenames
       # fastp
       in_fq: in_fq
-      out_fq: out_fq
       fp_phred64: fp_phred64
       compression: compression
       dont_overwrite: dont_overwrite
@@ -142,8 +140,6 @@ steps:
       length_limit: length_limit
       overrepresentation_analysis: overrepresentation_analysis
       overrepresentation_sampling: overrepresentation_sampling
-      json: json
-      html: html
       report_title: report_title
 
       # Collapser
@@ -176,19 +172,21 @@ steps:
       threads: threads
       shared_memory: shared_memory
       seed: seed
-    out: [fastq_clean, html_report_file, json_report_file, uniq_seqs, uniq_seqs_low, aln_seqs, unal_seqs, bowtie_log]
+    out: [fastq_clean, html_report_file, json_report_file, fastp_console, uniq_seqs, uniq_seqs_low, aln_seqs, unal_seqs, bowtie_log]
     
   counter-prep-subdirs:
     run: organize-outputs.cwl
     in:
       bt_build_name: dir_name_bt_build
       bt_build_indexes: bt_build_optional/index_files
+      bt_build_console: bt_build_optional/console_output
       run_bowtie_build: run_bowtie_build
 
       fastp_name: dir_name_fastp
       fastp_cleaned_fastq: counter-prep/fastq_clean
       fastp_html_report: counter-prep/html_report_file
       fastp_json_report: counter-prep/json_report_file
+      fastp_console: counter-prep/fastp_console
 
       collapser_name: dir_name_collapser
       collapser_uniq: counter-prep/uniq_seqs

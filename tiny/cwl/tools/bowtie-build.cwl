@@ -4,6 +4,8 @@ cwlVersion: v1.0
 class: CommandLineTool
 
 baseCommand: bowtie-build
+stdout: console_output.log
+stderr: console_output.log
 
 inputs:
 
@@ -82,3 +84,6 @@ outputs:
     type: File[]
     outputBinding:
       glob: $(inputs.ebwt_base).*.ebwt
+
+  console_output:
+    type: stdout

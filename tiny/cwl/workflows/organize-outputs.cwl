@@ -19,11 +19,13 @@ inputs:
   bt_build_name: string?
   run_bowtie_build: boolean?
   bt_build_indexes: File[]?
+  bt_build_console: File?
 
   fastp_name: string?
   fastp_cleaned_fastq: File[]?
   fastp_html_report: File[]?
   fastp_json_report: File[]?
+  fastp_console: File[]?
 
   collapser_name: string?
   collapser_uniq: File[]?
@@ -65,12 +67,12 @@ steps:
     in:
       run_bowtie_build: {source: run_bowtie_build, default: false}
       dir_files:
-        source: [bt_build_indexes]
+        source: [bt_build_indexes, bt_build_console]
+        linkMerge: merge_flattened
+        pickValue: all_non_null
         valueFrom: ${if (self.length == 1){return [self];} else {return self;}}
-        default: []
       dir_name:
         source: [bt_build_name]
-        # valueFrom: ${return self}  # No purpose except appeasing the CWL validator's lack of `when` awareness *eye roll*
     out: [ subdir ]
 
   organize_fastp:
@@ -78,7 +80,7 @@ steps:
     when: $(inputs.dir_name != null)
     in:
       dir_files:
-        source: [ fastp_cleaned_fastq, fastp_html_report, fastp_json_report ]
+        source: [ fastp_cleaned_fastq, fastp_html_report, fastp_json_report, fastp_console ]
         linkMerge: merge_flattened
         pickValue: all_non_null
         valueFrom: ${if (self.length == 1){return [self];} else {return self}}
