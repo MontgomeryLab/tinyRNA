@@ -40,10 +40,10 @@ threads: 4
 verbosity: normal
 
 ##-- (EXPERIMENTAL) If True: process each sample library in parallel --##
-run_parallel: False
+run_parallel: false
 
 ##-- (EXPERIMENTAL) If True: execute the pipeline using native cwltool Python --##
-run_native: False
+run_native: false
 
 ######------------------------- BOWTIE INDEX BUILD OPTIONS --------------------------######
 #
@@ -317,31 +317,18 @@ ebwt: ~
 #
 ######-------------------------------------------------------------------------------######
 
+##-- Utilized by Fastp, Collapser, and Bowtie --##
+sample_basenames: [ ]
+
 ##-- Utilized by Fastp --##
 # input fastq files
 in_fq: [ ]
-# output, cleaned fastq files
-out_fq: [ ]
 # output reports
-report_title: [ ]
-# html report filenames
-html: [ ]
-# json report filenames
-json: [ ]
-
-##-- Utilized by Collapser --##
-# prefix to be used for output file (files, if non-zero threshold)
-uniq_seq_prefix: [ ]
+fastp_report_titles: [ ]
 
 ###-- Utilized by Bowtie --###
 # bowtie index files
 bt_index_files: [ ]
-# output alignment file names
-outfile: [ ]
-# logfile names
-logfile: [ ]
-# unaligned read file names
-un: [ ]
 
 ##-- Utilized by Deseq --##
 # The control for comparison. If unspecified, all comparisons are made

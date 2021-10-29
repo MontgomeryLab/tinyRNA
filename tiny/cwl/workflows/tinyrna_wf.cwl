@@ -13,6 +13,7 @@ inputs:
   # multi input
   threads: int?
   run_name: string
+  sample_basenames: string[]
 
   # bowtie build
   run_bowtie_build: boolean
@@ -24,7 +25,6 @@ inputs:
 
   # fastp inputs
   in_fq: File[]
-  out_fq: string[]
   fp_phred64: boolean?
   compression: int?
   dont_overwrite: boolean?
@@ -41,20 +41,15 @@ inputs:
   length_limit: int?
   overrepresentation_analysis: boolean?
   overrepresentation_sampling: int?
-  json: string[]
-  html: string[]
-  report_title: string[]
+  fastp_report_titles: string[]
 
   # collapser inputs
-  uniq_seq_prefix: string[]
   threshold: int?
   compress: boolean?
 
   # bowtie inputs
   bt_index_files: File[]
   ebwt: string
-  outfile: string[]
-  logfile: string[]
   fastq: boolean?
   fasta: boolean?
   trim5: int?
@@ -68,7 +63,6 @@ inputs:
   k_aln: int?
   all_aln: boolean?
   no_unal: boolean?
-  un: string[]
   sam: boolean?
   seed: int?
   shared_memory: boolean?
@@ -117,16 +111,16 @@ steps:
       noref: noref
       ftabchars: ftabchars
       threads: threads
-    out: [index_files]
+    out: [index_files, console_output]
 
   counter-prep:
     run: per-library.cwl
-    scatter: [in_fq, out_fq, json, html, report_title, uniq_seq_prefix, outfile, logfile, un]
+    scatter: [in_fq, sample_basename, fastp_report_title]
     scatterMethod: dotproduct
     in:
+      sample_basename: sample_basenames
       # fastp
       in_fq: in_fq
-      out_fq: out_fq
       fp_phred64: fp_phred64
       compression: compression
       dont_overwrite: dont_overwrite
@@ -143,12 +137,9 @@ steps:
       length_limit: length_limit
       overrepresentation_analysis: overrepresentation_analysis
       overrepresentation_sampling: overrepresentation_sampling
-      json: json
-      html: html
-      report_title: report_title
+      fastp_report_title: fastp_report_titles
 
       # Collapser
-      uniq_seq_prefix: uniq_seq_prefix
       threshold: threshold
       compress: compress
 
@@ -156,10 +147,8 @@ steps:
       bt_index_files:
         source: [bt_build_optional/index_files, bt_index_files]
         pickValue: first_non_null
-        default: []  # To appease the workflow validator
+        default: bt_index_files  # To appease the workflow validator
       ebwt: ebwt
-      outfile: outfile
-      logfile: logfile
       fastq: fastq
       fasta: fasta
       trim5: trim5
@@ -172,33 +161,36 @@ steps:
       k_aln: k_aln
       all_aln: all_aln
       no_unal: no_unal
-      un: un
       sam: sam
       threads: threads
       shared_memory: shared_memory
       seed: seed
-    out: [fastq_clean, html_report_file, json_report_file, uniq_seqs, uniq_seqs_low, aln_seqs, unal_seqs, bowtie_log]
+    out: [fastq_clean, html_report_file, json_report_file, fastp_console, uniq_seqs, uniq_seqs_low, collapser_console,
+          aln_seqs, unal_seqs, bowtie_console]
     
   counter-prep-subdirs:
     run: organize-outputs.cwl
     in:
       bt_build_name: dir_name_bt_build
       bt_build_indexes: bt_build_optional/index_files
+      bt_build_console: bt_build_optional/console_output
       run_bowtie_build: run_bowtie_build
 
       fastp_name: dir_name_fastp
       fastp_cleaned_fastq: counter-prep/fastq_clean
       fastp_html_report: counter-prep/html_report_file
       fastp_json_report: counter-prep/json_report_file
+      fastp_console: counter-prep/fastp_console
 
       collapser_name: dir_name_collapser
       collapser_uniq: counter-prep/uniq_seqs
       collapser_low: counter-prep/uniq_seqs_low
+      collapser_console: counter-prep/collapser_console
 
       bowtie_name: dir_name_bowtie
       bowtie_sam: counter-prep/aln_seqs
-      bowtie_log: counter-prep/bowtie_log
       bowtie_unal: counter-prep/unal_seqs
+      bowtie_console: counter-prep/bowtie_console
     out: [ bt_build_dir, fastp_dir, collapser_dir, bowtie_dir ]
 
   counter:
@@ -217,7 +209,7 @@ steps:
       diagnostics: counter_diags
       fastp_logs: counter-prep/json_report_file
       collapsed_fa: counter-prep/uniq_seqs
-    out: [feature_counts, other_counts, alignment_stats, summary_stats,
+    out: [feature_counts, other_counts, alignment_stats, summary_stats, console_output,
           intermed_out_files, alignment_diags, selection_diags]
 
   counter-subdir:
@@ -231,6 +223,7 @@ steps:
       counter_intermed: counter/intermed_out_files
       counter_aln_diag: counter/alignment_diags
       counter_selection_diag: counter/selection_diags
+      counter_console: counter/console_output
       features_csv: features_csv
     out: [counter_dir]
 
@@ -242,7 +235,7 @@ steps:
       control: control_condition
       plots: dge_pca_plots
       drop_zero: dge_drop_zero
-    out: [ norm_counts, comparisons, pca_plots ]
+    out: [ norm_counts, comparisons, pca_plots, console_output ]
 
   dge-subdir:
     run: organize-outputs.cwl
@@ -251,6 +244,7 @@ steps:
       dge_norm: dge/norm_counts
       dge_comparisons: dge/comparisons
       dge_pca: dge/pca_plots
+      dge_console: dge/console_output
     out: [dge_dir]
 
   plotter:
@@ -262,13 +256,14 @@ steps:
       style_sheet: plot_style_sheet
       out_prefix: run_name
       plot_requests: plot_requests
-    out: [plots]
+    out: [plots, console_output]
 
   plotter-subdir:
     run: organize-outputs.cwl
     in:
       plotter_name: dir_name_plotter
       plotter_plots: plotter/plots
+      plotter_console: plotter/console_output
     out: [plotter_dir]
 
 outputs:

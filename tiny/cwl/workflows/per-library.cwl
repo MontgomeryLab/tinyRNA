@@ -3,13 +3,17 @@
 cwlVersion: v1.0
 class: Workflow
 
+requirements:
+ - class: StepInputExpressionRequirement
+ - class: InlineJavascriptRequirement
+
 inputs:
   # multi input
   threads: int?
+  sample_basename: string # unscatter
 
   # fastp inputs
   in_fq: File # unscatter
-  out_fq: string  # unscatter
   fp_phred64: boolean?
   compression: int?
   dont_overwrite: boolean?
@@ -26,20 +30,15 @@ inputs:
   length_limit: int?
   overrepresentation_analysis: boolean?
   overrepresentation_sampling: int?
-  json: string # unscatter
-  html: string # unscatter
-  report_title: string # unscatter
+  fastp_report_title: string # unscatter
 
   # collapser inputs
-  uniq_seq_prefix: string # unscatter
   threshold: int?
   compress: boolean?
 
   # bowtie inputs
   bt_index_files: File[]
   ebwt: string
-  logfile: string # unscatter
-  outfile: string # unscatter
   fastq: boolean?
   fasta: boolean?
   trim5: int?
@@ -53,7 +52,6 @@ inputs:
   k_aln: int?
   all_aln: boolean?
   no_unal: boolean?
-  un: string # unscatter
   sam: boolean?
   seed: int?
   shared_memory: boolean?
@@ -64,7 +62,10 @@ steps:
     in:
       thread: threads
       in1: in_fq
-      out1: out_fq
+      sample_basename: sample_basename
+      out1: {valueFrom: $(inputs.sample_basename + "_cleaned.fastq")}
+      json: {valueFrom: $(inputs.sample_basename + "_qc.json")}
+      html: {valueFrom: $(inputs.sample_basename + "_qc.html")}
       phred64: fp_phred64
       compression: compression
       dont_overwrite: dont_overwrite
@@ -81,28 +82,28 @@ steps:
       length_limit: length_limit
       overrepresentation_analysis: overrepresentation_analysis
       overrepresentation_sampling: overrepresentation_sampling
-      json: json
-      html: html
-      report_title: report_title
-    out: [fastq1, report_json, report_html]
+      report_title: fastp_report_title
+    out: [fastq1, report_json, report_html, console_output]
 
   collapse:
     run: ../tools/tiny-collapse.cwl
     in:
       input_file: fastp/fastq1
-      out_prefix: uniq_seq_prefix
+      sample_basename: sample_basename
+      out_prefix: { valueFrom: $(inputs.sample_basename) }
       threshold: threshold
       compress: compress
-    out: [collapsed_fa, low_counts_fa]
+    out: [collapsed_fa, low_counts_fa, console_output]
 
   bowtie:
     run: ../tools/bowtie.cwl
     in:
+      reads: collapse/collapsed_fa
+      sample_basename: sample_basename
       bt_index_files: bt_index_files
       ebwt: ebwt
-      reads: collapse/collapsed_fa
-      outfile: outfile
-      logfile: logfile
+      outfile: {valueFrom: $(inputs.sample_basename + "_aligned_seqs.sam")}
+      logfile: {valueFrom: $(inputs.sample_basename + "_console_output.log")}
       fastq: fastq
       fasta: fasta
       trim5: trim5
@@ -115,12 +116,12 @@ steps:
       k_aln: k_aln
       all_aln: all_aln
       no_unal: no_unal
-      un: un
+      un: {valueFrom: $(inputs.sample_basename + "_unaligned_seqs.fa")}
       sam: sam
       threads: threads
       shared_memory: shared_memory
       seed: seed
-    out: [sam_out, unal_seqs, bowtie_log]
+    out: [sam_out, unal_seqs, console_output]
 
 outputs:
 
@@ -136,17 +137,25 @@ outputs:
     type: File # unscatter
     outputSource: fastp/report_json
 
+  fastp_console:
+    type: File # unscatter
+    outputSource: fastp/console_output
+
   uniq_seqs:
     type: File # unscatter
     outputSource: collapse/collapsed_fa
+
+  collapser_console:
+    type: File # unscatter
+    outputSource: collapse/console_output
 
   aln_seqs:
     type: File # unscatter
     outputSource: bowtie/sam_out
 
-  bowtie_log:
+  bowtie_console:
     type: File # unscatter
-    outputSource: bowtie/bowtie_log
+    outputSource: bowtie/console_output
 
   # Optional outputs
   unal_seqs:

@@ -11,6 +11,8 @@ requirements:
  - class: InlineJavascriptRequirement
 
 baseCommand: fastp
+stdout: $(inputs.in1.basename + "_console_output.log")
+stderr: $(inputs.in1.basename + "_console_output.log")
 
 inputs:
   # File I/O options
@@ -229,3 +231,6 @@ outputs:
     type: File
     outputBinding:
       glob: $(inputs.html)
+
+  console_output:
+    type: stdout
