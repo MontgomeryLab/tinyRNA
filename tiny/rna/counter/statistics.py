@@ -26,7 +26,7 @@ class LibraryStats:
                           'Reads Assigned to Multiple Features', 'Sequences Assigned to Multiple Features',
                           'Total Unassigned Reads', 'Total Unassigned Sequences']
 
-    def __init__(self, out_prefix: str = None, report_diags: bool = False):
+    def __init__(self, out_prefix: str = None, report_diags: bool = False, no_normalize = False, **kwargs):
         self.library = {'Name': 'Unassigned', 'File': 'Unassigned'}
         self.out_prefix = out_prefix
         self.diags = Diagnostics(out_prefix) if report_diags else None
@@ -36,8 +36,15 @@ class LibraryStats:
         self.nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
         self.library_stats = {stat: 0 for stat in LibraryStats.summary_categories}
 
+        if no_normalize:
+            setattr(self, "norm_by_genomic_hits", lambda x, _: x)
+            setattr(self, "norm_by_feature_hits", lambda x, _: x.corr_count)
+
     def assign_library(self, library: dict):
         self.library = library
+
+    def norm_by_genomic_hits(self, read_count, loci_count):
+        return read_count / loci_count
 
     def count_bundle(self, aln_bundle: iter) -> Bundle:
         """Called for each multiple-alignment bundle before it is processed"""
@@ -47,13 +54,16 @@ class LibraryStats:
 
         # Calculate counts for multi-mapping
         read_counts = int(bundle_read.name.split('=')[1])
-        corr_counts = read_counts / loci_counts
+        corr_counts = self.norm_by_genomic_hits(read_counts, loci_counts)
 
         # Fill in 5p nt/length matrix
         sequence = bundle_read.seq
         self.nt_len_mat[bundle_read.nt5][len(sequence)] += read_counts
 
         return self.Bundle(loci_counts, read_counts, corr_counts)
+
+    def norm_by_feature_hits(self, bundle, assigned_count):
+        return bundle.corr_count / assigned_count
 
     def count_bundle_alignments(self, bundle: Bundle, aln: Alignment, assignments: set, n_candidates: int) -> None:
         """Called for each alignment for each read"""
@@ -69,7 +79,7 @@ class LibraryStats:
         if assigned_count > 0:
             self.library_stats['Total Assigned Reads'] += bundle.corr_count
 
-            feature_corrected_count = bundle.corr_count / assigned_count
+            feature_corrected_count = self.norm_by_feature_hits(bundle, assigned_count)
             bundle.feat_count += len(assignments)
             bundle.assignments |= assignments
 

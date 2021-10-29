@@ -38,15 +38,15 @@ class FeatureCounter:
     out_prefix: str
     run_diags: bool
 
-    def __init__(self, gff_file_set, selection_rules, run_diags, out_prefix, rt_prefs):
-        reference_tables = parser.ReferenceTables(gff_file_set, selection_rules, **rt_prefs)
+    def __init__(self, gff_file_set, selection_rules, **prefs):
+        reference_tables = parser.ReferenceTables(gff_file_set, selection_rules, **prefs)
         Features(*reference_tables.get())
 
-        FeatureCounter.out_prefix = out_prefix
-        FeatureCounter.run_diags = run_diags
+        FeatureCounter.out_prefix = prefs['out_prefix']
+        FeatureCounter.run_diags = prefs['report_diags']
 
-        self.stats = LibraryStats(out_prefix, report_diags=run_diags)
-        self.selector = FeatureSelector(selection_rules, self.stats, diags=run_diags)
+        self.stats = LibraryStats(**prefs)
+        self.selector = FeatureSelector(selection_rules, self.stats, **prefs)
 
     def assign_features(self, alignment: 'parser.Alignment') -> Tuple[set, int]:
         """Determines features associated with the interval then performs rule-based feature selection"""
@@ -124,12 +124,12 @@ class FeatureSelector:
     rules_table = dict()
     inv_ident = dict()
 
-    def __init__(self, rules: List[dict], libstats: 'LibraryStats', diags=False):
+    def __init__(self, rules: List[dict], libstats: 'LibraryStats', report_diags=False, **kwargs):
         FeatureSelector.rules_table = self.build_selectors(rules)
         FeatureSelector.inv_ident = self.build_inverted_identities(FeatureSelector.rules_table)
 
-        self.report_eliminations = diags
-        if diags: self.elim_stats = libstats.diags.selection_diags
+        self.report_eliminations = report_diags
+        if report_diags: self.elim_stats = libstats.diags.selection_diags
 
     def choose(self, feat_list: List[Tuple[int, int, Set[str]]], alignment: 'parser.Alignment') -> Set[str]:
         # Perform hierarchy-based first round of selection for identities
