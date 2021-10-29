@@ -40,10 +40,10 @@ threads: 4
 verbosity: normal
 
 ##-- (EXPERIMENTAL) If True: process each sample library in parallel --##
-run_parallel: True
+run_parallel: false
 
 ##-- (EXPERIMENTAL) If True: execute the pipeline using native cwltool Python --##
-run_native: False
+run_native: false
 
 ######------------------------- BOWTIE INDEX BUILD OPTIONS --------------------------######
 #
