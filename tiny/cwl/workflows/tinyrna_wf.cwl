@@ -80,6 +80,7 @@ inputs:
   aligned_seqs: File[]?
   is_pipeline: boolean?
   counter_diags: boolean?
+  counter_no_normalize: boolean?
   counter_all_features: boolean?
   counter_type_filter: string[]?
   counter_source_filter: string[]?
@@ -210,12 +211,14 @@ steps:
       out_prefix: run_name
       all_features: counter_all_features
       source_filter: counter_source_filter
+      no_normalize: counter_no_normalize
       type_filter: counter_type_filter
       is_pipeline: {default: true}
       diagnostics: counter_diags
       fastp_logs: counter-prep/json_report_file
       collapsed_fa: counter-prep/uniq_seqs
-    out: [feature_counts, other_counts, alignment_stats, summary_stats, intermed_out_files, alignment_diags, selection_diags]
+    out: [feature_counts, other_counts, alignment_stats, summary_stats,
+          intermed_out_files, alignment_diags, selection_diags]
 
   counter-subdir:
     run: organize-outputs.cwl
