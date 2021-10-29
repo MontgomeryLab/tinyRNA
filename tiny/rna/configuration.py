@@ -202,15 +202,14 @@ class Configuration(ConfigBase):
         for row in csv_reader.rows():
             if not os.path.splitext(row['File'])[1] in [".fastq", ".gz"]:
                 raise ValueError("Files in samples.csv must have a .fastq(.gz) extension:\n%s" % (row['File'],))
+
             fastq_file = self.from_here(row['File'], origin=sample_sheet_dir)
             sample_basename = self.prefix(os.path.basename(fastq_file))
+
             group_name = row['Group']
             rep_number = row['Replicate']
 
             self.append_to('sample_basenames', sample_basename)
-            self.append_to('outfile', sample_basename + '_aligned_seqs.sam')
-            self.append_to('logfile', sample_basename + '_console_output.log')
-            self.append_to('un', sample_basename + '_unaligned_seqs.fa')
             self.append_to('report_title', f"{group_name}_rep_{rep_number}")
             if row['Control'].lower() == 'true':
                 self['control_condition'] = group_name
@@ -238,7 +237,7 @@ class Configuration(ConfigBase):
         """Per-library settings lists to be populated by entries from samples_csv"""
 
         self.set_default_dict({per_file_setting_key: [] for per_file_setting_key in
-            ['un', 'in_fq', 'sample_basenames', 'uniq_seq_prefix', 'gff_files', 'outfile', 'logfile', 'report_title']
+            ['in_fq', 'sample_basenames', 'gff_files', 'report_title']
         })
             
     def setup_pipeline(self):

@@ -8,8 +8,8 @@ requirements:
    listing: $(inputs.bt_index_files)
 
 baseCommand: bowtie
-stdout: $(inputs.logfile)
-stderr: $(inputs.logfile)
+stdout: $(inputs.reads.basename + "_console_output.log")
+stderr: $(inputs.reads.basename + "_console_output.log")
 
 # Only inputs relevant to the srna pipeline are listed
 inputs:
@@ -197,5 +197,5 @@ outputs:
     outputBinding:
       glob: $(inputs.un)
 
-  bowtie_log:
+  console_output:
     type: stdout

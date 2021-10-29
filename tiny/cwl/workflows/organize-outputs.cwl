@@ -39,8 +39,8 @@ inputs:
 
   bowtie_name: string?
   bowtie_sam: File[]?
-  bowtie_log: File[]?
   bowtie_unal: File[]?
+  bowtie_console: File[]?
 
   counter_name: string?
   features_csv: File?
@@ -57,9 +57,11 @@ inputs:
   dge_norm: File?
   dge_pca: File[]?
   dge_comparisons: File[]?
+  dge_console: File?
 
   plotter_name: string?
   plotter_plots: File[]?
+  plotter_console: File?
 
 steps:
 
@@ -106,7 +108,7 @@ steps:
     when: $(inputs.dir_name != null)
     in:
       dir_files:
-        source: [ bowtie_sam, bowtie_unal, bowtie_log ]
+        source: [ bowtie_sam, bowtie_unal, bowtie_console ]
         linkMerge: merge_flattened
         pickValue: all_non_null
         valueFrom: ${if (self.length == 1){return [self];} else {return self}}
@@ -131,7 +133,7 @@ steps:
     when: $(inputs.dir_name != null)
     in:
       dir_files:
-        source: [ dge_norm, dge_comparisons, dge_pca ]
+        source: [ dge_norm, dge_comparisons, dge_pca, dge_console ]
         linkMerge: merge_flattened
         pickValue: all_non_null
         valueFrom: ${if (self.length == 1){return [self];} else {return self}}
@@ -143,7 +145,7 @@ steps:
     when: $(inputs.dir_name != null)
     in:
       dir_files:
-        source: [ plotter_plots ]
+        source: [ plotter_plots, plotter_console ]
         linkMerge: merge_flattened
         pickValue: all_non_null
         valueFrom: ${if (self.length == 1){return [self];} else {return self}}

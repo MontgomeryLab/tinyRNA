@@ -40,7 +40,7 @@ threads: 4
 verbosity: normal
 
 ##-- (EXPERIMENTAL) If True: process each sample library in parallel --##
-run_parallel: False
+run_parallel: True
 
 ##-- (EXPERIMENTAL) If True: execute the pipeline using native cwltool Python --##
 run_native: False
@@ -325,12 +325,6 @@ report_title: [ ]
 ###-- Utilized by Bowtie --###
 # bowtie index files
 bt_index_files: [ ]
-# output alignment file names
-outfile: [ ]
-# logfile names
-logfile: [ ]
-# unaligned read file names
-un: [ ]
 
 ##-- Utilized by Deseq --##
 # The control for comparison. If unspecified, all comparisons are made

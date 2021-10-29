@@ -50,8 +50,6 @@ inputs:
   # bowtie inputs
   bt_index_files: File[]
   ebwt: string
-  outfile: string[]
-  logfile: string[]
   fastq: boolean?
   fasta: boolean?
   trim5: int?
@@ -65,7 +63,6 @@ inputs:
   k_aln: int?
   all_aln: boolean?
   no_unal: boolean?
-  un: string[]
   sam: boolean?
   seed: int?
   shared_memory: boolean?
@@ -117,7 +114,7 @@ steps:
 
   counter-prep:
     run: per-library.cwl
-    scatter: [in_fq, sample_basename, report_title, outfile, logfile, un]
+    scatter: [in_fq, sample_basename, report_title]
     scatterMethod: dotproduct
     in:
       sample_basename: sample_basenames
@@ -151,8 +148,6 @@ steps:
         pickValue: first_non_null
         default: []  # To appease the workflow validator
       ebwt: ebwt
-      outfile: outfile
-      logfile: logfile
       fastq: fastq
       fasta: fasta
       trim5: trim5
@@ -165,13 +160,12 @@ steps:
       k_aln: k_aln
       all_aln: all_aln
       no_unal: no_unal
-      un: un
       sam: sam
       threads: threads
       shared_memory: shared_memory
       seed: seed
     out: [fastq_clean, html_report_file, json_report_file, fastp_console, uniq_seqs, uniq_seqs_low, collapser_console,
-          aln_seqs, unal_seqs, bowtie_log]
+          aln_seqs, unal_seqs, bowtie_console]
     
   counter-prep-subdirs:
     run: organize-outputs.cwl
@@ -194,8 +188,8 @@ steps:
 
       bowtie_name: dir_name_bowtie
       bowtie_sam: counter-prep/aln_seqs
-      bowtie_log: counter-prep/bowtie_log
       bowtie_unal: counter-prep/unal_seqs
+      bowtie_console: counter-prep/bowtie_console
     out: [ bt_build_dir, fastp_dir, collapser_dir, bowtie_dir ]
 
   counter:
@@ -239,7 +233,7 @@ steps:
       control: control_condition
       plots: dge_pca_plots
       drop_zero: dge_drop_zero
-    out: [ norm_counts, comparisons, pca_plots ]
+    out: [ norm_counts, comparisons, pca_plots, console_output ]
 
   dge-subdir:
     run: organize-outputs.cwl
@@ -248,6 +242,7 @@ steps:
       dge_norm: dge/norm_counts
       dge_comparisons: dge/comparisons
       dge_pca: dge/pca_plots
+      dge_console: dge/console_output
     out: [dge_dir]
 
   plotter:
@@ -259,13 +254,14 @@ steps:
       style_sheet: plot_style_sheet
       out_prefix: run_name
       plot_requests: plot_requests
-    out: [plots]
+    out: [plots, console_output]
 
   plotter-subdir:
     run: organize-outputs.cwl
     in:
       plotter_name: dir_name_plotter
       plotter_plots: plotter/plots
+      plotter_console: plotter/console_output
     out: [plotter_dir]
 
 outputs:
