@@ -207,13 +207,10 @@ class Configuration(ConfigBase):
             group_name = row['Group']
             rep_number = row['Replicate']
 
-            self.append_to('out_fq', sample_basename + '_cleaned.fastq')
+            self.append_to('sample_basenames', sample_basename)
             self.append_to('outfile', sample_basename + '_aligned_seqs.sam')
             self.append_to('logfile', sample_basename + '_console_output.log')
             self.append_to('un', sample_basename + '_unaligned_seqs.fa')
-            self.append_to('json', sample_basename + '_qc.json')
-            self.append_to('html', sample_basename + '_qc.html')
-            self.append_to('uniq_seq_prefix', sample_basename)
             self.append_to('report_title', f"{group_name}_rep_{rep_number}")
             if row['Control'].lower() == 'true':
                 self['control_condition'] = group_name
@@ -241,7 +238,7 @@ class Configuration(ConfigBase):
         """Per-library settings lists to be populated by entries from samples_csv"""
 
         self.set_default_dict({per_file_setting_key: [] for per_file_setting_key in
-            ['un', 'in_fq', 'out_fq', 'uniq_seq_prefix', 'gff_files', 'outfile', 'logfile', 'report_title', 'json', 'html']
+            ['un', 'in_fq', 'sample_basenames', 'uniq_seq_prefix', 'gff_files', 'outfile', 'logfile', 'report_title']
         })
             
     def setup_pipeline(self):

@@ -322,10 +322,6 @@ in_fq: [ ]
 # output reports
 report_title: [ ]
 
-##-- Utilized by Collapser --##
-# prefix to be used for output file (files, if non-zero threshold)
-uniq_seq_prefix: [ ]
-
 ###-- Utilized by Bowtie --###
 # bowtie index files
 bt_index_files: [ ]

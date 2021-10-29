@@ -29,6 +29,7 @@ inputs:
 
   collapser_name: string?
   collapser_uniq: File[]?
+  collapser_console: File[]?
   collapser_low:
     # Optional scatter output is an odd feller
     type:
@@ -50,6 +51,7 @@ inputs:
   counter_intermed: File[]?
   counter_aln_diag: File?
   counter_selection_diag: File?
+  counter_console: File?
 
   dge_name: string?
   dge_norm: File?
@@ -92,7 +94,7 @@ steps:
     when: $(inputs.dir_name != null)
     in:
       dir_files:
-        source: [ collapser_uniq, collapser_low ]
+        source: [ collapser_uniq, collapser_low, collapser_console ]
         linkMerge: merge_flattened
         pickValue: all_non_null
         valueFrom: ${if (self.length == 1){return [self];} else {return self}}
@@ -117,7 +119,7 @@ steps:
     in:
       dir_files:
         source: [ counter_features, counter_other, counter_alignment_stats, counter_summary_stats,
-                  counter_intermed, counter_aln_diag, counter_selection_diag, features_csv ]
+                  counter_intermed, counter_aln_diag, counter_selection_diag, features_csv, counter_console ]
         linkMerge: merge_flattened
         pickValue: all_non_null
         valueFrom: ${if (self.length == 1){return [self];} else {return self}}

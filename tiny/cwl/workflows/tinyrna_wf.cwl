@@ -44,7 +44,6 @@ inputs:
   report_title: string[]
 
   # collapser inputs
-  uniq_seq_prefix: string[]
   threshold: int?
   compress: boolean?
 
@@ -118,7 +117,7 @@ steps:
 
   counter-prep:
     run: per-library.cwl
-    scatter: [in_fq, sample_basename, report_title, uniq_seq_prefix, outfile, logfile, un]
+    scatter: [in_fq, sample_basename, report_title, outfile, logfile, un]
     scatterMethod: dotproduct
     in:
       sample_basename: sample_basenames
@@ -143,7 +142,6 @@ steps:
       report_title: report_title
 
       # Collapser
-      uniq_seq_prefix: uniq_seq_prefix
       threshold: threshold
       compress: compress
 
@@ -172,7 +170,8 @@ steps:
       threads: threads
       shared_memory: shared_memory
       seed: seed
-    out: [fastq_clean, html_report_file, json_report_file, fastp_console, uniq_seqs, uniq_seqs_low, aln_seqs, unal_seqs, bowtie_log]
+    out: [fastq_clean, html_report_file, json_report_file, fastp_console, uniq_seqs, uniq_seqs_low, collapser_console,
+          aln_seqs, unal_seqs, bowtie_log]
     
   counter-prep-subdirs:
     run: organize-outputs.cwl
@@ -191,6 +190,7 @@ steps:
       collapser_name: dir_name_collapser
       collapser_uniq: counter-prep/uniq_seqs
       collapser_low: counter-prep/uniq_seqs_low
+      collapser_console: counter-prep/collapser_console
 
       bowtie_name: dir_name_bowtie
       bowtie_sam: counter-prep/aln_seqs
@@ -213,7 +213,8 @@ steps:
       diagnostics: counter_diags
       fastp_logs: counter-prep/json_report_file
       collapsed_fa: counter-prep/uniq_seqs
-    out: [feature_counts, other_counts, alignment_stats, summary_stats, intermed_out_files, alignment_diags, selection_diags]
+    out: [feature_counts, other_counts, alignment_stats, summary_stats, intermed_out_files,
+          alignment_diags, selection_diags, console_output]
 
   counter-subdir:
     run: organize-outputs.cwl
@@ -226,6 +227,7 @@ steps:
       counter_intermed: counter/intermed_out_files
       counter_aln_diag: counter/alignment_diags
       counter_selection_diag: counter/selection_diags
+      counter_console: counter/console_output
       features_csv: features_csv
     out: [counter_dir]
 

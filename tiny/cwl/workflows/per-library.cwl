@@ -33,7 +33,6 @@ inputs:
   report_title: string # unscatter
 
   # collapser inputs
-  uniq_seq_prefix: string # unscatter
   threshold: int?
   compress: boolean?
 
@@ -93,10 +92,11 @@ steps:
     run: ../tools/tiny-collapse.cwl
     in:
       input_file: fastp/fastq1
-      out_prefix: uniq_seq_prefix
+      sample_basename: sample_basename
+      out_prefix: { valueFrom: $(inputs.sample_basename) }
       threshold: threshold
       compress: compress
-    out: [collapsed_fa, low_counts_fa]
+    out: [collapsed_fa, low_counts_fa, console_output]
 
   bowtie:
     run: ../tools/bowtie.cwl
@@ -146,6 +146,10 @@ outputs:
   uniq_seqs:
     type: File # unscatter
     outputSource: collapse/collapsed_fa
+
+  collapser_console:
+    type: File # unscatter
+    outputSource: collapse/console_output
 
   aln_seqs:
     type: File # unscatter

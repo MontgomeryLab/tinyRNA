@@ -4,6 +4,8 @@ cwlVersion: v1.0
 class: CommandLineTool
 
 baseCommand: tiny-collapse
+stdout: $(inputs.input_file.basename + "_console_output.log")
+stderr: $(inputs.input_file.basename + "_console_output.log")
 
 inputs:
   # Fastq files
@@ -52,3 +54,6 @@ outputs:
     type: File?
     outputBinding:
       glob: $(inputs.out_prefix)_collapsed_lowcounts.fa*
+
+  console_output:
+      type: stdout
