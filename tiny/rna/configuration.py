@@ -210,7 +210,7 @@ class Configuration(ConfigBase):
             rep_number = row['Replicate']
 
             self.append_to('sample_basenames', sample_basename)
-            self.append_to('report_title', f"{group_name}_rep_{rep_number}")
+            self.append_to('fastp_report_titles', f"{group_name}_rep_{rep_number}")
             if row['Control'].lower() == 'true':
                 self['control_condition'] = group_name
 
@@ -237,7 +237,7 @@ class Configuration(ConfigBase):
         """Per-library settings lists to be populated by entries from samples_csv"""
 
         self.set_default_dict({per_file_setting_key: [] for per_file_setting_key in
-            ['in_fq', 'sample_basenames', 'gff_files', 'report_title']
+            ['in_fq', 'sample_basenames', 'gff_files', 'fastp_report_titles']
         })
             
     def setup_pipeline(self):

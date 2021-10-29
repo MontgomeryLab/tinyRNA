@@ -314,13 +314,14 @@ ebwt: ~
 #
 ######-------------------------------------------------------------------------------######
 
+##-- Utilized by Fastp, Collapser, and Bowtie --##
 sample_basenames: [ ]
 
 ##-- Utilized by Fastp --##
 # input fastq files
 in_fq: [ ]
 # output reports
-report_title: [ ]
+fastp_report_titles: [ ]
 
 ###-- Utilized by Bowtie --###
 # bowtie index files

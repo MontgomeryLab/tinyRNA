@@ -30,7 +30,7 @@ inputs:
   length_limit: int?
   overrepresentation_analysis: boolean?
   overrepresentation_sampling: int?
-  report_title: string # unscatter
+  fastp_report_title: string # unscatter
 
   # collapser inputs
   threshold: int?
@@ -82,7 +82,7 @@ steps:
       length_limit: length_limit
       overrepresentation_analysis: overrepresentation_analysis
       overrepresentation_sampling: overrepresentation_sampling
-      report_title: report_title
+      report_title: fastp_report_title
     out: [fastq1, report_json, report_html, console_output]
 
   collapse:

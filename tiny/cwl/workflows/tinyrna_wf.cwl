@@ -41,7 +41,7 @@ inputs:
   length_limit: int?
   overrepresentation_analysis: boolean?
   overrepresentation_sampling: int?
-  report_title: string[]
+  fastp_report_titles: string[]
 
   # collapser inputs
   threshold: int?
@@ -114,7 +114,7 @@ steps:
 
   counter-prep:
     run: per-library.cwl
-    scatter: [in_fq, sample_basename, report_title]
+    scatter: [in_fq, sample_basename, fastp_report_title]
     scatterMethod: dotproduct
     in:
       sample_basename: sample_basenames
@@ -136,7 +136,7 @@ steps:
       length_limit: length_limit
       overrepresentation_analysis: overrepresentation_analysis
       overrepresentation_sampling: overrepresentation_sampling
-      report_title: report_title
+      fastp_report_title: fastp_report_titles
 
       # Collapser
       threshold: threshold
@@ -146,7 +146,7 @@ steps:
       bt_index_files:
         source: [bt_build_optional/index_files, bt_index_files]
         pickValue: first_non_null
-        default: []  # To appease the workflow validator
+        default: bt_index_files  # To appease the workflow validator
       ebwt: ebwt
       fastq: fastq
       fasta: fasta
