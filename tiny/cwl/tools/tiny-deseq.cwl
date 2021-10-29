@@ -4,6 +4,8 @@ cwlVersion: v1.0
 class: CommandLineTool
 
 baseCommand: tiny-deseq.r
+stdout: console_output.log
+stderr: console_output.log
 
 inputs:
   input_file:
@@ -51,3 +53,6 @@ outputs:
     type: File[]?
     outputBinding:
       glob: $(inputs.outfile_prefix)_pca_plot.pdf
+
+  console_output:
+    type: stdout

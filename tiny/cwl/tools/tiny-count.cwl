@@ -13,6 +13,8 @@ requirements:
     ]
 
 baseCommand: tiny-count
+stdout: console_output.log
+stderr: console_output.log
 
 inputs:
   samples_csv:
@@ -110,3 +112,6 @@ outputs:
     type: File?
     outputBinding:
       glob: $(inputs.out_prefix)_selection_diags.txt
+
+  console_output:
+    type: stdout

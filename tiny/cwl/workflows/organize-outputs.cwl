@@ -19,14 +19,17 @@ inputs:
   bt_build_name: string?
   run_bowtie_build: boolean?
   bt_build_indexes: File[]?
+  bt_build_console: File?
 
   fastp_name: string?
   fastp_cleaned_fastq: File[]?
   fastp_html_report: File[]?
   fastp_json_report: File[]?
+  fastp_console: File[]?
 
   collapser_name: string?
   collapser_uniq: File[]?
+  collapser_console: File[]?
   collapser_low:
     # Optional scatter output is an odd feller
     type:
@@ -36,8 +39,8 @@ inputs:
 
   bowtie_name: string?
   bowtie_sam: File[]?
-  bowtie_log: File[]?
   bowtie_unal: File[]?
+  bowtie_console: File[]?
 
   counter_name: string?
   features_csv: File?
@@ -48,14 +51,17 @@ inputs:
   counter_intermed: File[]?
   counter_aln_diag: File?
   counter_selection_diag: File?
+  counter_console: File?
 
   dge_name: string?
   dge_norm: File?
   dge_pca: File[]?
   dge_comparisons: File[]?
+  dge_console: File?
 
   plotter_name: string?
   plotter_plots: File[]?
+  plotter_console: File?
 
 steps:
 
@@ -65,12 +71,12 @@ steps:
     in:
       run_bowtie_build: {source: run_bowtie_build, default: false}
       dir_files:
-        source: [bt_build_indexes]
+        source: [bt_build_indexes, bt_build_console]
+        linkMerge: merge_flattened
+        pickValue: all_non_null
         valueFrom: ${if (self.length == 1){return [self];} else {return self;}}
-        default: []
       dir_name:
         source: [bt_build_name]
-        # valueFrom: ${return self}  # No purpose except appeasing the CWL validator's lack of `when` awareness *eye roll*
     out: [ subdir ]
 
   organize_fastp:
@@ -78,7 +84,7 @@ steps:
     when: $(inputs.dir_name != null)
     in:
       dir_files:
-        source: [ fastp_cleaned_fastq, fastp_html_report, fastp_json_report ]
+        source: [ fastp_cleaned_fastq, fastp_html_report, fastp_json_report, fastp_console ]
         linkMerge: merge_flattened
         pickValue: all_non_null
         valueFrom: ${if (self.length == 1){return [self];} else {return self}}
@@ -90,7 +96,7 @@ steps:
     when: $(inputs.dir_name != null)
     in:
       dir_files:
-        source: [ collapser_uniq, collapser_low ]
+        source: [ collapser_uniq, collapser_low, collapser_console ]
         linkMerge: merge_flattened
         pickValue: all_non_null
         valueFrom: ${if (self.length == 1){return [self];} else {return self}}
@@ -102,7 +108,7 @@ steps:
     when: $(inputs.dir_name != null)
     in:
       dir_files:
-        source: [ bowtie_sam, bowtie_unal, bowtie_log ]
+        source: [ bowtie_sam, bowtie_unal, bowtie_console ]
         linkMerge: merge_flattened
         pickValue: all_non_null
         valueFrom: ${if (self.length == 1){return [self];} else {return self}}
@@ -115,7 +121,7 @@ steps:
     in:
       dir_files:
         source: [ counter_features, counter_other, counter_alignment_stats, counter_summary_stats,
-                  counter_intermed, counter_aln_diag, counter_selection_diag, features_csv ]
+                  counter_intermed, counter_aln_diag, counter_selection_diag, features_csv, counter_console ]
         linkMerge: merge_flattened
         pickValue: all_non_null
         valueFrom: ${if (self.length == 1){return [self];} else {return self}}
@@ -127,7 +133,7 @@ steps:
     when: $(inputs.dir_name != null)
     in:
       dir_files:
-        source: [ dge_norm, dge_comparisons, dge_pca ]
+        source: [ dge_norm, dge_comparisons, dge_pca, dge_console ]
         linkMerge: merge_flattened
         pickValue: all_non_null
         valueFrom: ${if (self.length == 1){return [self];} else {return self}}
@@ -139,7 +145,7 @@ steps:
     when: $(inputs.dir_name != null)
     in:
       dir_files:
-        source: [ plotter_plots ]
+        source: [ plotter_plots, plotter_console ]
         linkMerge: merge_flattened
         pickValue: all_non_null
         valueFrom: ${if (self.length == 1){return [self];} else {return self}}

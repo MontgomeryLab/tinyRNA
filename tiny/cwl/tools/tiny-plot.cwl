@@ -4,6 +4,8 @@ cwlVersion: v1.0
 class: CommandLineTool
 
 baseCommand: tiny-plot
+stdout: console_output.log
+stderr: console_output.log
 
 inputs:
   norm_counts:
@@ -48,3 +50,5 @@ outputs:
     outputBinding:
       glob: "*.pdf"
 
+  console_output:
+    type: stdout

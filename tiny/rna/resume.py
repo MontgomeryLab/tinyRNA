@@ -149,10 +149,13 @@ class ResumeCounterConfig(ResumeConfig):
             except FileNotFoundError as e:
                 sys.exit("The following pipeline output could not be found:\n%s" % (e.filename,))
 
-        self['resume_sams'] = [cwl_file_resume(self['dir_name_bowtie'], sam) for sam in self['outfile']]
-        self['resume_fastp_logs'] = [cwl_file_resume(self['dir_name_fastp'], log) for log in self['json']]
-        self['resume_collapsed_fas'] = [cwl_file_resume(self['dir_name_collapser'], prefix + "_collapsed.fa")
-                                        for prefix in self['uniq_seq_prefix']]
+        resume_file_lists = ['resume_sams', 'resume_fastp_logs', 'resume_collapsed_fas']
+        self.set_default_dict({key: [] for key in resume_file_lists})
+
+        for sample in self['sample_basenames']:
+            self['resume_sams'].append(cwl_file_resume(self['dir_name_bowtie'], sample + '_aligned_seqs.sam'))
+            self['resume_fastp_logs'].append(cwl_file_resume(self['dir_name_fastp'], sample + '_qc.json'))
+            self['resume_collapsed_fas'].append(cwl_file_resume(self['dir_name_collapser'], sample + '_collapsed.fa'))
 
 
 class ResumePlotterConfig(ResumeConfig):
