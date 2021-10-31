@@ -133,8 +133,20 @@ if (has_control){
     unique(names(sampleConditions[sampleConditions != r_safe_control_name]))
   ))
 } else {
-  # Comparison is all possible combinations of conditions
+  # Comparison is all combinations of conditions interleaved with the reverse comparisons
   all_comparisons <- t(combn(unique(names(sampleConditions)), 2))
+  # comparisons <- rbind(comparisons, comparisons[, ncol(comparisons):1])
+  # interleave_rows <- order(sequence(rep(nrow(comparisons) / 2, 2)))
+  # all_comparisons <- comparisons[interleave_rows, ]
+}
+
+write_dge_table <- function (dge_df, cond1, cond2){
+  write.csv(dge_df,
+    paste(out_pref,
+          "cond1", cond1,
+          "cond2", cond2,
+          "deseq_table.csv", sep="_")
+  )
 }
 
 ## Perform condition comparisons
@@ -144,13 +156,16 @@ for (i in seq_len(nrow(all_comparisons))){
   deseq_res <- DESeq2::results(deseq_run, c("condition", comparison[2], comparison[1]))
   result_df <- df_with_classes(deseq_res[order(deseq_res$padj),])
 
-  write.csv(
-    result_df,
-    paste(out_pref,
-          # Resolve original condition names for use in output filename
-          "cond1", sampleConditions[[comparison[1]]],
-          "cond2", sampleConditions[[comparison[2]]],
-          "deseq_table.csv", sep="_")
-  )
+  # Resolve original condition names for use in output filename
+  cond1 <- sampleConditions[[comparison[1]]]
+  cond2 <- sampleConditions[[comparison[2]]]
+  write_dge_table(result_df, cond1, cond2)
+
+  if (!has_control){
+    # Save DGE table for reverse comparison
+    flip_sign <- c("log2FoldChange", "stat")
+    result_df <- result_df[flip_sign] * -1
+    write_dge_table(result_df, cond2, cond1)
+  }
 }
 
