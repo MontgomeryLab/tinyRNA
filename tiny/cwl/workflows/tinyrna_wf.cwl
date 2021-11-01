@@ -81,7 +81,7 @@ inputs:
 
   # deseq inputs
   control_condition: string?
-  dge_pca_plots: boolean?
+  dge_pca_plot: boolean?
   dge_drop_zero: boolean?
 
   # plotter options
@@ -233,9 +233,9 @@ steps:
       input_file: counter/feature_counts
       outfile_prefix: run_name
       control: control_condition
-      plots: dge_pca_plots
+      pca: dge_pca_plot
       drop_zero: dge_drop_zero
-    out: [ norm_counts, comparisons, pca_plots, console_output ]
+    out: [ norm_counts, comparisons, pca_plot, console_output ]
 
   dge-subdir:
     run: organize-outputs.cwl
@@ -243,7 +243,6 @@ steps:
       dge_name: dir_name_dge
       dge_norm: dge/norm_counts
       dge_comparisons: dge/comparisons
-      dge_pca: dge/pca_plots
       dge_console: dge/console_output
     out: [dge_dir]
 
@@ -264,6 +263,7 @@ steps:
       plotter_name: dir_name_plotter
       plotter_plots: plotter/plots
       plotter_console: plotter/console_output
+      dge_pca: dge/pca_plot
     out: [plotter_dir]
 
 outputs:

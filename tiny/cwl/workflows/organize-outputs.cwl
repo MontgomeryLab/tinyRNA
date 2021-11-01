@@ -55,7 +55,7 @@ inputs:
 
   dge_name: string?
   dge_norm: File?
-  dge_pca: File[]?
+  dge_pca: File?
   dge_comparisons: File[]?
   dge_console: File?
 
@@ -133,7 +133,7 @@ steps:
     when: $(inputs.dir_name != null)
     in:
       dir_files:
-        source: [ dge_norm, dge_comparisons, dge_pca, dge_console ]
+        source: [ dge_norm, dge_comparisons, dge_console ]
         linkMerge: merge_flattened
         pickValue: all_non_null
         valueFrom: ${if (self.length == 1){return [self];} else {return self}}
@@ -145,7 +145,7 @@ steps:
     when: $(inputs.dir_name != null)
     in:
       dir_files:
-        source: [ plotter_plots, plotter_console ]
+        source: [ plotter_plots, plotter_console, dge_pca ]
         linkMerge: merge_flattened
         pickValue: all_non_null
         valueFrom: ${if (self.length == 1){return [self];} else {return self}}

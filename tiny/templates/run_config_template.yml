@@ -236,8 +236,8 @@ counter_diags: False
 ######-------------------------------------------------------------------------------######
 
 
-##-- If True: produce principal component analysis plots for each sample comparison --##
-dge_pca_plots: True
+##-- If True: produce a principal component analysis plot from the input dataset --##
+dge_pca_plot: True
 
 ##-- If True: before analysis, drop features which have a zero count across all samples --##
 dge_drop_zero: False
