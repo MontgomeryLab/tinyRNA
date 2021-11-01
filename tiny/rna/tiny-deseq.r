@@ -37,7 +37,7 @@ df_with_classes <- function(classless_df){
 }
 
 ## Throw an error if an unexpected number of arguments is provided
-if (length(args) > 7){
+if (length(args) > 8){
   stop(gettextf("Too many arguments given. %d arguments were parsed.
   Was there an unquoted space in your arguments?\n\n%s", length(args), usage))
 } else if (length(args) < 4){
