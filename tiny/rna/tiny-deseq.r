@@ -115,8 +115,14 @@ deseq_run <- DESeq2::DESeq(deseq_ds)
 
 ## Produce PCA plot if requested
 if (plot_pca){
-  plt <- DESeq2::plotPCA(DESeq2::vst(deseq_ds)) + ggplot2::theme(aspect.ratio = 1)
-  ggsave(paste(out_pref, "pca_plot.pdf", sep="_"))
+  vst_res <- tryCatch(
+    DESeq2::vst(deseq_ds),
+    error=function(e) {
+      return(DESeq2::varianceStabilizingTransformation(deseq_ds))
+  })
+
+  plt <- DESeq2::plotPCA(vst_res) + ggplot2::theme(aspect.ratio = 1)
+  ggplot2::ggsave(paste(out_pref, "pca_plot.pdf", sep="_"))
 }
 
 ## Get normalized counts and write them to CSV with original sample names in header
