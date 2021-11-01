@@ -37,7 +37,7 @@ df_with_classes <- function(classless_df){
 }
 
 ## Throw an error if an unexpected number of arguments is provided
-if (length(args) > 7){
+if (length(args) > 8){
   stop(gettextf("Too many arguments given. %d arguments were parsed.
   Was there an unquoted space in your arguments?\n\n%s", length(args), usage))
 } else if (length(args) < 4){
@@ -99,7 +99,7 @@ if (has_control && !(control_grp %in% sampleConditions)){
 
 ## Now that inputs have been validated and read, load libraries
 library(DESeq2)
-library(lattice)
+library(ggplot2)
 library(utils)
 
 ## Create the deseqdataset
@@ -115,9 +115,14 @@ deseq_run <- DESeq2::DESeq(deseq_ds)
 
 ## Produce PCA plot if requested
 if (plot_pca){
-    plt <- plotPCA(DESeq2::rlog(deseq_ds))
-    trellis.device(device="pdf", file=paste(out_pref, "pca_plot.pdf", sep="_"))
-    print(plt)
+  vst_res <- tryCatch(
+    DESeq2::vst(deseq_ds),
+    error=function(e) {
+      return(DESeq2::varianceStabilizingTransformation(deseq_ds))
+  })
+
+  plt <- DESeq2::plotPCA(vst_res) + ggplot2::theme(aspect.ratio = 1)
+  ggplot2::ggsave(paste(out_pref, "pca_plot.pdf", sep="_"))
 }
 
 ## Get normalized counts and write them to CSV with original sample names in header
@@ -133,8 +138,17 @@ if (has_control){
     unique(names(sampleConditions[sampleConditions != r_safe_control_name]))
   ))
 } else {
-  # Comparison is all possible combinations of conditions
+  # Comparison is all combinations of conditions
   all_comparisons <- t(combn(unique(names(sampleConditions)), 2))
+}
+
+write_dge_table <- function (dge_df, cond1, cond2){
+  write.csv(dge_df,
+    paste(out_pref,
+          "cond1", cond1,
+          "cond2", cond2,
+          "deseq_table.csv", sep="_")
+  )
 }
 
 ## Perform condition comparisons
@@ -144,13 +158,16 @@ for (i in seq_len(nrow(all_comparisons))){
   deseq_res <- DESeq2::results(deseq_run, c("condition", comparison[2], comparison[1]))
   result_df <- df_with_classes(deseq_res[order(deseq_res$padj),])
 
-  write.csv(
-    result_df,
-    paste(out_pref,
-          # Resolve original condition names for use in output filename
-          "cond1", sampleConditions[[comparison[1]]],
-          "cond2", sampleConditions[[comparison[2]]],
-          "deseq_table.csv", sep="_")
-  )
+  # Resolve original condition names for use in output filename
+  cond1 <- sampleConditions[[comparison[1]]]
+  cond2 <- sampleConditions[[comparison[2]]]
+  write_dge_table(result_df, cond1, cond2)
+
+  if (!has_control){
+    # Save DGE table for reverse comparison
+    flip_sign <- c("log2FoldChange", "stat")
+    result_df <- result_df[flip_sign] * -1
+    write_dge_table(result_df, cond2, cond1)
+  }
 }
 
