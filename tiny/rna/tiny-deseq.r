@@ -99,7 +99,7 @@ if (has_control && !(control_grp %in% sampleConditions)){
 
 ## Now that inputs have been validated and read, load libraries
 library(DESeq2)
-library(lattice)
+library(ggplot2)
 library(utils)
 
 ## Create the deseqdataset
@@ -115,9 +115,8 @@ deseq_run <- DESeq2::DESeq(deseq_ds)
 
 ## Produce PCA plot if requested
 if (plot_pca){
-    plt <- plotPCA(DESeq2::rlog(deseq_ds))
-    trellis.device(device="pdf", file=paste(out_pref, "pca_plot.pdf", sep="_"))
-    print(plt)
+  plt <- DESeq2::plotPCA(DESeq2::vst(deseq_ds)) + ggplot2::theme(aspect.ratio = 1)
+  ggsave(paste(out_pref, "pca_plot.pdf", sep="_"))
 }
 
 ## Get normalized counts and write them to CSV with original sample names in header
@@ -133,11 +132,8 @@ if (has_control){
     unique(names(sampleConditions[sampleConditions != r_safe_control_name]))
   ))
 } else {
-  # Comparison is all combinations of conditions interleaved with the reverse comparisons
+  # Comparison is all combinations of conditions
   all_comparisons <- t(combn(unique(names(sampleConditions)), 2))
-  # comparisons <- rbind(comparisons, comparisons[, ncol(comparisons):1])
-  # interleave_rows <- order(sequence(rep(nrow(comparisons) / 2, 2)))
-  # all_comparisons <- comparisons[interleave_rows, ]
 }
 
 write_dge_table <- function (dge_df, cond1, cond2){
