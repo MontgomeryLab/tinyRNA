@@ -5,7 +5,7 @@ class: CommandLineTool
 
 baseCommand: tiny-deseq.r
 stdout: console_output.log
-stderr: console_output.log
+#stderr: console_output.log
 
 inputs:
   input_file:
@@ -26,11 +26,11 @@ inputs:
       prefix: --control
     doc: If specified, comparisons will only be made against the control condition
 
-  plots:
+  pca:
     type: boolean?
     inputBinding:
       prefix: --pca
-    doc: Produce PCA plots for each library comparison
+    doc: Produce a PCA plot from the input dataset
 
   drop_zero:
     type: boolean?
@@ -49,8 +49,8 @@ outputs:
     outputBinding:
       glob: $(inputs.outfile_prefix)_*_*_deseq_table.csv
 
-  pca_plots:
-    type: File[]?
+  pca_plot:
+    type: File?
     outputBinding:
       glob: $(inputs.outfile_prefix)_pca_plot.pdf
 
