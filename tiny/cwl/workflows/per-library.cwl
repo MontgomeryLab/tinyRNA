@@ -36,26 +36,6 @@ inputs:
   threshold: int?
   compress: boolean?
 
-  # bowtie inputs
-  bt_index_files: File[]
-  ebwt: string
-  fastq: boolean?
-  fasta: boolean?
-  trim5: int?
-  trim3: int?
-  bt_phred64: boolean?
-  solexa: boolean?
-  solexa13: boolean?
-  end_to_end: int?
-  nofw: boolean?
-  norc: boolean?
-  k_aln: int?
-  all_aln: boolean?
-  no_unal: boolean?
-  sam: boolean?
-  seed: int?
-  shared_memory: boolean?
-
 steps:
   fastp:
     run: ../tools/fastp.cwl
@@ -95,34 +75,6 @@ steps:
       compress: compress
     out: [collapsed_fa, low_counts_fa, console_output]
 
-  bowtie:
-    run: ../tools/bowtie.cwl
-    in:
-      reads: collapse/collapsed_fa
-      sample_basename: sample_basename
-      bt_index_files: bt_index_files
-      ebwt: ebwt
-      outfile: {valueFrom: $(inputs.sample_basename + "_aligned_seqs.sam")}
-      logfile: {valueFrom: $(inputs.sample_basename + "_console_output.log")}
-      fastq: fastq
-      fasta: fasta
-      trim5: trim5
-      trim3: trim3
-      phred64: bt_phred64
-      solexa: solexa
-      solexa13: solexa13
-      end_to_end: end_to_end
-      nofw: nofw
-      k_aln: k_aln
-      all_aln: all_aln
-      no_unal: no_unal
-      un: {valueFrom: $(inputs.sample_basename + "_unaligned_seqs.fa")}
-      sam: sam
-      threads: threads
-      shared_memory: shared_memory
-      seed: seed
-    out: [sam_out, unal_seqs, console_output]
-
 outputs:
 
   fastq_clean:
@@ -149,19 +101,7 @@ outputs:
     type: File # unscatter
     outputSource: collapse/console_output
 
-  aln_seqs:
-    type: File # unscatter
-    outputSource: bowtie/sam_out
-
-  bowtie_console:
-    type: File # unscatter
-    outputSource: bowtie/console_output
-
   # Optional outputs
-  unal_seqs:
-    type: File?
-    outputSource: bowtie/unal_seqs
-
   uniq_seqs_low:
     type: File? # unscatter
     outputSource: collapse/low_counts_fa

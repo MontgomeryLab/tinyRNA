@@ -7,6 +7,8 @@ requirements:
   - class: ScatterFeatureRequirement
   - class: SubworkflowFeatureRequirement
   - class: MultipleInputFeatureRequirement
+  - class: StepInputExpressionRequirement
+  - class: InlineJavascriptRequirement
 
 inputs:
 
@@ -114,7 +116,7 @@ steps:
       threads: threads
     out: [index_files, console_output]
 
-  counter-prep:
+  preprocessing:
     run: per-library.cwl
     scatter: [in_fq, sample_basename, fastp_report_title]
     scatterMethod: dotproduct
@@ -143,33 +145,9 @@ steps:
       # Collapser
       threshold: threshold
       compress: compress
-
-      # Bowtie
-      bt_index_files:
-        source: [bt_build_optional/index_files, bt_index_files]
-        pickValue: first_non_null
-        default: bt_index_files  # To appease the workflow validator
-      ebwt: ebwt
-      fastq: fastq
-      fasta: fasta
-      trim5: trim5
-      trim3: trim3
-      bt_phred64: bt_phred64
-      solexa: solexa
-      solexa13: solexa13
-      end_to_end: end_to_end
-      nofw: nofw
-      k_aln: k_aln
-      all_aln: all_aln
-      no_unal: no_unal
-      sam: sam
-      threads: threads
-      shared_memory: shared_memory
-      seed: seed
-    out: [fastq_clean, html_report_file, json_report_file, fastp_console, uniq_seqs, uniq_seqs_low, collapser_console,
-          aln_seqs, unal_seqs, bowtie_console]
+    out: [fastq_clean, html_report_file, json_report_file, fastp_console, uniq_seqs, uniq_seqs_low, collapser_console]
     
-  counter-prep-subdirs:
+  preprocessing-subdirs:
     run: organize-outputs.cwl
     in:
       bt_build_name: dir_name_bt_build
@@ -178,28 +156,65 @@ steps:
       run_bowtie_build: run_bowtie_build
 
       fastp_name: dir_name_fastp
-      fastp_cleaned_fastq: counter-prep/fastq_clean
-      fastp_html_report: counter-prep/html_report_file
-      fastp_json_report: counter-prep/json_report_file
-      fastp_console: counter-prep/fastp_console
+      fastp_cleaned_fastq: preprocessing/fastq_clean
+      fastp_html_report: preprocessing/html_report_file
+      fastp_json_report: preprocessing/json_report_file
+      fastp_console: preprocessing/fastp_console
 
       collapser_name: dir_name_collapser
-      collapser_uniq: counter-prep/uniq_seqs
-      collapser_low: counter-prep/uniq_seqs_low
-      collapser_console: counter-prep/collapser_console
+      collapser_uniq: preprocessing/uniq_seqs
+      collapser_low: preprocessing/uniq_seqs_low
+      collapser_console: preprocessing/collapser_console
+    out: [ bt_build_dir, fastp_dir, collapser_dir ]
 
+  bowtie:
+    run: ../tools/bowtie.cwl
+    scatter: [ reads, sample_basename ]
+    scatterMethod: dotproduct
+    in:
+      reads: preprocessing/uniq_seqs
+      sample_basename: sample_basenames
+      bt_index_files:
+        source: [ bt_build_optional/index_files, bt_index_files ]
+        pickValue: first_non_null
+        default: bt_index_files  # To appease the workflow validator
+      ebwt: ebwt
+      outfile: { valueFrom: $(inputs.sample_basename + "_aligned_seqs.sam") }
+      logfile: { valueFrom: $(inputs.sample_basename + "_console_output.log") }
+      fastq: fastq
+      fasta: fasta
+      trim5: trim5
+      trim3: trim3
+      phred64: bt_phred64
+      solexa: solexa
+      solexa13: solexa13
+      end_to_end: end_to_end
+      nofw: nofw
+      k_aln: k_aln
+      all_aln: all_aln
+      no_unal: no_unal
+      un: { valueFrom: $(inputs.sample_basename + "_unaligned_seqs.fa") }
+      sam: sam
+      threads: threads
+      shared_memory: shared_memory
+      seed: seed
+    out: [ sam_out, unal_seqs, console_output ]
+
+  bowtie-subdir:
+    run: organize-outputs.cwl
+    in:
       bowtie_name: dir_name_bowtie
-      bowtie_sam: counter-prep/aln_seqs
-      bowtie_unal: counter-prep/unal_seqs
-      bowtie_console: counter-prep/bowtie_console
-    out: [ bt_build_dir, fastp_dir, collapser_dir, bowtie_dir ]
+      bowtie_sam: bowtie/sam_out
+      bowtie_unal: bowtie/unal_seqs
+      bowtie_console: bowtie/console_output
+    out: [ bowtie_dir ]
 
   counter:
     run: ../tools/tiny-count.cwl
     in:
       samples_csv: samples_csv
       config_csv: features_csv
-      aligned_seqs: counter-prep/aln_seqs
+      aligned_seqs: bowtie/sam_out
       gff_files: gff_files
       out_prefix: run_name
       all_features: counter_all_features
@@ -208,10 +223,10 @@ steps:
       type_filter: counter_type_filter
       is_pipeline: {default: true}
       diagnostics: counter_diags
-      fastp_logs: counter-prep/json_report_file
-      collapsed_fa: counter-prep/uniq_seqs
-    out: [feature_counts, other_counts, alignment_stats, summary_stats, console_output,
-          intermed_out_files, alignment_diags, selection_diags]
+      fastp_logs: preprocessing/json_report_file
+      collapsed_fa: preprocessing/uniq_seqs
+    out: [ feature_counts, other_counts, alignment_stats, summary_stats, console_output,
+           intermed_out_files, alignment_diags, selection_diags ]
 
   counter-subdir:
     run: organize-outputs.cwl
@@ -273,19 +288,19 @@ outputs:
   # Subdirectory outputs
   bt_build_out_dir:
     type: Directory?
-    outputSource: counter-prep-subdirs/bt_build_dir
+    outputSource: preprocessing-subdirs/bt_build_dir
 
   fastp_out_dir:
     type: Directory?
-    outputSource: counter-prep-subdirs/fastp_dir
+    outputSource: preprocessing-subdirs/fastp_dir
 
   collapser_out_dir:
     type: Directory?
-    outputSource: counter-prep-subdirs/collapser_dir
+    outputSource: preprocessing-subdirs/collapser_dir
 
   bowtie_out_dir:
     type: Directory?
-    outputSource: counter-prep-subdirs/bowtie_dir
+    outputSource: bowtie-subdir/bowtie_dir
 
   counter_out_dir:
     type: Directory?
