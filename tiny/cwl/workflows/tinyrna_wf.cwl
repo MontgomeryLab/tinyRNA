@@ -86,6 +86,7 @@ inputs:
   # plotter options
   plot_requests: string[]
   plot_style_sheet: File?
+  plot_pval: float?
 
   # output directory names
   dir_name_bt_build: string
@@ -250,6 +251,7 @@ steps:
       norm_counts: dge/norm_counts
       dge_tables: dge/comparisons
       len_dist: counter/other_counts
+      dge_pval: plot_pval
       style_sheet: plot_style_sheet
       out_prefix: run_name
       plot_requests: plot_requests
