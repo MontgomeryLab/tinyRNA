@@ -26,6 +26,12 @@ inputs:
       prefix: -len
     doc: "5' end nucleotide vs. length matrices from Counter"
 
+  dge_pval:
+    type: float?
+    inputBinding:
+      prefix: -pv
+    doc: "The p-value to use for DGE scatter plots (default: 0.05)"
+
   style_sheet:
     type: File?
     inputBinding:

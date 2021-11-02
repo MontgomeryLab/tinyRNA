@@ -265,8 +265,11 @@ plot_requests:
   - 'sample_avg_scatter_by_dge'
   - 'sample_avg_scatter_by_dge_class'
 
-##-- You may supply your own matplotlib style sheet to override defaults here --##
+##-- You can supply your own matplotlib style sheet to override defaults here --##
 plot_style_sheet: ~
+
+##-- You can set a custom p-value to use in DGE scatter plots. Default: 0.05 --##
+plot_pval: ~
 
 ##-- If True: scatter plot points will be vectorized. If False, only points are raster --##
 plot_vector_points: False

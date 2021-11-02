@@ -20,7 +20,7 @@ if curr_locale[0] is None:
     # Default locale otherwise unset
     os.environ['LC_CTYPE'] = 'en_US.UTF-8'
 
-import matplotlib as mpl
+import matplotlib as mpl; mpl.use("PDF")
 import matplotlib.pyplot as plt
 import matplotlib.ticker as tix
 import matplotlib.axis
@@ -38,11 +38,6 @@ class plotterlib:
         if debug:
             mpl.use("TkAgg", force=True)
             mpl.rcParams['savefig.dpi'] = 100
-        else:
-            mpl.use("PDF", force=True)
-
-        # Must occur after mpl.use()
-        import matplotlib.pyplot as plt
 
         # Set global plot style once
         plt.style.use(user_style_sheet)

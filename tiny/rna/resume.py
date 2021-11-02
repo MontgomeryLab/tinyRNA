@@ -189,5 +189,10 @@ class ResumePlotterConfig(ResumeConfig):
             self['resume_norm'] = self.cwl_file(glob(dge + "/*_norm_counts.csv")[0])
             self['resume_len_dist'] = list(map(self.cwl_file, glob(counter + "/*_nt_len_dist.csv")))
             self['resume_dge'] = list(map(self.cwl_file, glob(dge + "/*_deseq_table.csv")))
-        except (FileNotFoundError, IndexError) as e:
+        except FileNotFoundError as e:
             sys.exit("The following pipeline output could not be found:\n%s" % (e.filename,))
+        except IndexError:
+            msg = "Expected outputs for feature counts or norm counts could not be found. "
+            if counter is None or not os.path.isdir(counter): msg += f"The directory {counter} was not found. "
+            if dge is None or not os.path.isfile(dge): msg += f"The directory {dge} was not found. "
+            sys.exit(msg)

@@ -42,6 +42,8 @@ def get_args():
     # Outputs options
     parser.add_argument('-o', '--out-prefix', metavar='OUTPREFIX',
                         help='Optional prefix to use for output PDF files.')
+    parser.add_argument('-pv', '--p-value', metavar='VAL', default=0.05, type=float,
+                        help='Optional p-value to use in DGE scatter plots.')
     parser.add_argument('-s', '--style-sheet', metavar='MPLSTYLE',
                         default=resource_filename('tiny', 'templates/tinyrna-light.mplstyle'),
                         help='Optional matplotlib style sheet to use for plots.')
@@ -241,7 +243,7 @@ def scatter_dges(count_df, dges, output_prefix, viewLims, classes=None, show_unk
             for cls in uniq_classes:
                 grp_args.append(list(class_dges.index[class_dges == cls]))
 
-            labels = ['p ≥ %.2f' % pval] + uniq_classes
+            labels = ['p ≥ %g' % pval] + uniq_classes
             sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2], viewLims, *grp_args,
                                           log_norm=True, labels=labels, rasterized=RASTER)
             sscat.set_title('%s vs %s' % (p1, p2))
@@ -255,7 +257,7 @@ def scatter_dges(count_df, dges, output_prefix, viewLims, classes=None, show_unk
             grp_args = list(dges.index[dges[pair] < pval])
             p1, p2 = pair.split("_vs_")
 
-            labels = ['p ≥ %.2f' % pval, 'p < %.2f' % pval]
+            labels = ['p ≥ %g' % pval, 'p < %g' % pval]
             sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2], viewLims, grp_args,
                                           log_norm=True, labels=labels, alpha=0.5, rasterized=RASTER)
             sscat.set_title('%s vs %s' % (p1, p2))
@@ -423,11 +425,11 @@ def main():
         elif plot == 'sample_avg_scatter_by_dge':
             func = scatter_dges
             arg = (inputs["norm_count_avg_df"], inputs["de_table"], args.out_prefix, inputs["avg_view_lims"])
-            kwd = {}
+            kwd = {"pval": args.p_value}
         elif plot == 'sample_avg_scatter_by_dge_class':
             func = scatter_dges
             arg = (inputs["norm_count_avg_df"], inputs["de_table"], args.out_prefix, inputs["avg_view_lims"])
-            kwd = {"classes": inputs["feat_classes"]}
+            kwd = {"classes": inputs["feat_classes"], "pval": args.p_value}
         else:
             print('Plot type %s not recognized, please check the -p/--plot arguments' % plot)
             continue
