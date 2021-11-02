@@ -44,6 +44,11 @@ inputs:
     inputBinding:
       prefix: -tf
 
+  no_normalize:
+    type: boolean?
+    inputBinding:
+      prefix: -nn
+
   all_features:
     type: boolean?
     inputBinding:

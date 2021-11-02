@@ -37,13 +37,16 @@ def get_args():
     arg_parser.add_argument('-tf', '--type-filter', metavar='TYPE', nargs='*', default=[],
                         help='Only produce counts for features whose '
                              'GFF column 3 matches the type(s) listed')
+    arg_parser.add_argument('-nn', '--no-normalize', action='store_true',
+                        help='Do not normalize counts by genomic hits '
+                             'and (selected) overlapping feature counts.')
     arg_parser.add_argument('-a', '--all-features', action='store_true',
                         help='Represent all features in output counts table, '
                              'regardless of counts or identity rules.')
     arg_parser.add_argument('-p', '--is-pipeline', action='store_true',
                         help='Indicates that counter was invoked from the tinyrna pipeline '
                              'and that input files should be sources as such.')
-    arg_parser.add_argument('-d', '--diagnostics', action='store_true',
+    arg_parser.add_argument('-d', '--report-diags', action='store_true',
                         help='Produce diagnostic information about uncounted/eliminated '
                              'selection elements.')
 
@@ -166,8 +169,7 @@ def main():
 
         # global for multiprocessing
         global feature_counter
-        rtprefs = {pref: getattr(args, pref, []) for pref in ["source_filter", "type_filter"]}
-        feature_counter = FeatureCounter(gff_file_set, selection_rules, args.diagnostics, args.out_prefix, rtprefs)
+        feature_counter = FeatureCounter(gff_file_set, selection_rules, **vars(args))
 
         # Assign and count features using multiprocessing and merge results
         merged_counts = map_and_reduce(libraries)

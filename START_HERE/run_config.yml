@@ -215,6 +215,9 @@ shared_memory: False
 ##-- If True: show all parsed features in the counts csv, regardless of count/identity --##
 counter_all_features: False
 
+##-- If True: counts won't be normalized by genomic hits and (selected) feature count --##
+counter_no_normalize: False
+
 ##-- Only parse GFF lines that match these values on column 2. [] is wildcard --##
 counter_source_filter: []
 

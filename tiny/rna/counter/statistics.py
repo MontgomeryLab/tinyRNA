@@ -26,7 +26,7 @@ class LibraryStats:
                           'Reads Assigned to Multiple Features', 'Sequences Assigned to Multiple Features',
                           'Total Unassigned Reads', 'Total Unassigned Sequences']
 
-    def __init__(self, out_prefix: str = None, report_diags: bool = False):
+    def __init__(self, out_prefix: str = None, report_diags: bool = False, no_normalize = False, **kwargs):
         self.library = {'Name': 'Unassigned', 'File': 'Unassigned'}
         self.out_prefix = out_prefix
         self.diags = Diagnostics(out_prefix) if report_diags else None
@@ -35,6 +35,8 @@ class LibraryStats:
         self.chrom_misses = Counter()
         self.nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
         self.library_stats = {stat: 0 for stat in LibraryStats.summary_categories}
+
+        if no_normalize: setattr(self, "normalize_count_by", self.no_norm)
 
     def assign_library(self, library: dict):
         self.library = library
@@ -47,7 +49,7 @@ class LibraryStats:
 
         # Calculate counts for multi-mapping
         read_counts = int(bundle_read.name.split('=')[1])
-        corr_counts = read_counts / loci_counts
+        corr_counts = self.normalize_count_by(read_counts, loci_counts)
 
         # Fill in 5p nt/length matrix
         sequence = bundle_read.seq
@@ -55,21 +57,28 @@ class LibraryStats:
 
         return self.Bundle(loci_counts, read_counts, corr_counts)
 
+    def normalize_count_by(self, count, n_recipients):
+        return count / n_recipients
+
+    def no_norm(self, count, _):
+        return count
+
     def count_bundle_alignments(self, bundle: Bundle, aln: Alignment, assignments: set, n_candidates: int) -> None:
         """Called for each alignment for each read"""
 
         assigned_count = len(assignments)
+        corr_count = bundle.corr_count
 
         if assigned_count == 0:
-            self.library_stats['Total Unassigned Reads'] += bundle.corr_count
+            self.library_stats['Total Unassigned Reads'] += corr_count
         if assigned_count == 1:
-            self.library_stats['Reads Assigned to Single Feature'] += bundle.corr_count
+            self.library_stats['Reads Assigned to Single Feature'] += corr_count
         if assigned_count > 1:
-            self.library_stats['Reads Assigned to Multiple Features'] += bundle.corr_count
+            self.library_stats['Reads Assigned to Multiple Features'] += corr_count
         if assigned_count > 0:
-            self.library_stats['Total Assigned Reads'] += bundle.corr_count
+            self.library_stats['Total Assigned Reads'] += corr_count
 
-            feature_corrected_count = bundle.corr_count / assigned_count
+            feature_corrected_count = self.normalize_count_by(corr_count, assigned_count)
             bundle.feat_count += len(assignments)
             bundle.assignments |= assignments
 
