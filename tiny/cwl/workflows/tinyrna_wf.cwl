@@ -102,20 +102,6 @@ inputs:
 
 steps:
 
-  bt_build_optional:
-    run: ../tools/bowtie-build.cwl
-    when: $(inputs.run_bowtie_build)
-    in:
-      run_bowtie_build: run_bowtie_build
-      ref_in: reference_genome_files
-      ebwt_base: ebwt
-      offrate: offrate
-      ntoa: ntoa
-      noref: noref
-      ftabchars: ftabchars
-      threads: threads
-    out: [index_files, console_output]
-
   preprocessing:
     run: per-library.cwl
     scatter: [in_fq, sample_basename, fastp_report_title]
@@ -150,22 +136,15 @@ steps:
   preprocessing-subdirs:
     run: organize-outputs.cwl
     in:
-      bt_build_name: dir_name_bt_build
-      bt_build_indexes: bt_build_optional/index_files
-      bt_build_console: bt_build_optional/console_output
       run_bowtie_build: run_bowtie_build
-
-      fastp_name: dir_name_fastp
-      fastp_cleaned_fastq: preprocessing/fastq_clean
-      fastp_html_report: preprocessing/html_report_file
-      fastp_json_report: preprocessing/json_report_file
-      fastp_console: preprocessing/fastp_console
-
-      collapser_name: dir_name_collapser
-      collapser_uniq: preprocessing/uniq_seqs
-      collapser_low: preprocessing/uniq_seqs_low
-      collapser_console: preprocessing/collapser_console
-    out: [ bt_build_dir, fastp_dir, collapser_dir ]
+      ref_in: reference_genome_files
+      ebwt_base: ebwt
+      offrate: offrate
+      ntoa: ntoa
+      noref: noref
+      ftabchars: ftabchars
+      threads: threads
+    out: [ index_files, console_output ]
 
   bowtie:
     run: ../tools/bowtie.cwl
