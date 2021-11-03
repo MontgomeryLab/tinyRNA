@@ -57,8 +57,7 @@ def get_args():
         "run": "Processes the provided config file and executes the workflow it specifies.",
         "replot": "Resume pipeline at the Plotter step using the PROCESSED run config provided",
         "recount": "Resume pipeline at the Counter step using the PROCESSED run config provided",
-        "setup-cwl": 'Processes the provided config file and copies workflow files to the current directory',
-        "setup-nextflow": "This subcommand is not yet implemented"
+        "setup-cwl": 'Processes the provided config file and copies workflow files to the current directory'
     }
 
     # Subcommands that require a configuration file argument
@@ -105,9 +104,6 @@ def run(tinyrna_cwl_path: str, config_file: str) -> None:
         # Execute the CWL runner via native Python
         return_code = run_native(config_object, workflow, run_directory, verbosity=loudness)
     else:
-        if config_object['run_parallel']:
-            print("WARNING: parallel execution with cwltool is an experimental feature")
-
         # Use the cwltool CWL runner via command line
         return_code = run_cwltool_subprocess(
             cwl_conf_file, workflow,
@@ -320,18 +316,6 @@ def setup_cwl(tinyrna_cwl_path: str, config_file: str) -> None:
     print("The workflow and files are under: cwl/tools/ and cwl/workflows/")
 
 
-def setup_nextflow(config_file: str) -> None:
-    """This function is not yet implemented
-
-    Args:
-        config_file: The YML run configuration file to be converted for use with Nextflow
-
-    """
-
-    print("Creating nextflow workflow...")
-    print("This command is currently not implemented.")
-
-
 def main():
     """The main routine that determines what type of run to do.
 
@@ -356,8 +340,7 @@ def main():
         "replot": lambda: resume(cwl_path, args.config, "Plotter"),
         "recount": lambda: resume(cwl_path, args.config, "Counter"),
         "setup-cwl": lambda: setup_cwl(cwl_path, args.config),
-        "get-template": lambda: get_template(templates_path),
-        "setup-nextflow": lambda: setup_nextflow(args.config)
+        "get-template": lambda: get_template(templates_path)
     }
 
     command_map[args.command]()
