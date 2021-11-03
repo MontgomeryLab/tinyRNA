@@ -154,6 +154,9 @@ class ResumePlotterConfig(ResumeConfig):
         # Build resume config from the previously-processed Run Config
         super().__init__(processed_config, workflow, steps, inputs)
 
+        # Remove the PCA plot input since dge is not a step in this resume workflow
+        self.workflow['steps']['organize_plotter']['in']['dir_files']['source'].remove('dge/pca_plot')
+
     def _rebuild_entry_inputs(self):
         """Set the new path inputs for the Plotter step
 
