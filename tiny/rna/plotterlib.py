@@ -146,7 +146,7 @@ class plotterlib:
         self.class_barh(class_s, ax=ax[1], legend=None, title=None, ylabel=None, **kwargs)
 
         # finalize & save figure
-        fig.suptitle("Proportion of classes of small RNAs", fontsize=22)
+        fig.suptitle("Proportion of small RNAs by class", fontsize=22)
         fig.subplots_adjust(top=0.85)
 
         return fig
