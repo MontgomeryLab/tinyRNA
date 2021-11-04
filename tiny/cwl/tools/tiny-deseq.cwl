@@ -5,7 +5,7 @@ class: CommandLineTool
 
 baseCommand: tiny-deseq.r
 stdout: console_output.log
-#stderr: console_output.log
+stderr: console_output.log
 
 inputs:
   input_file:
