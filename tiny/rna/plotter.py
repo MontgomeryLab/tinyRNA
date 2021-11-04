@@ -15,7 +15,6 @@ import re
 from collections import defaultdict
 from typing import Optional, Dict, Union, Tuple
 from pkg_resources import resource_filename
-from urllib import parse
 
 from tiny.rna.configuration import timestamp_format
 from tiny.rna.plotterlib import plotterlib as lib
@@ -206,9 +205,8 @@ def load_dge_tables(comparisons: list) -> pd.DataFrame:
     de_table = pd.DataFrame()
 
     for dgefile in comparisons:
-        # Bugfix for cwltool until the arbitrary url encoding of output filenames is fixed
-        name_split = parse.unquote(os.path.basename(dgefile)).split('_')
         # Negative indexes are used since prefixes are allowed to contain underscores
+        name_split = os.path.basename(dgefile).split('_')
         comparison_name = name_split[-5] + "_vs_" + name_split[-3]
 
         de_table[comparison_name] = pd.read_csv(dgefile, index_col=0)['padj']

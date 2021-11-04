@@ -244,10 +244,7 @@ class Configuration(ConfigBase):
         """Overall settings for the whole pipeline"""
 
         self.dt = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        self.set_default_dict({
-            'run_date': self.dt.split('_')[0],
-            'run_time': self.dt.split('_')[1]
-        })
+        self['run_date'], self['run_time'] = self.dt.split('_')
 
         default_run_name = '_'.join(x for x in [self['user'], "tinyrna"] if x)
         self['run_name'] = self.get('run_name', default=default_run_name) + "_" + self.dt
@@ -324,7 +321,7 @@ class CSVReader(csv.DictReader):
     """
 
     tinyrna_sheet_fields = {
-        "Features Sheet": ("Name", "Key", "Value", "Hierarchy", "Strand", "nt5end", "Length", "Strict", "Source"),
+        "Features Sheet": ("Key", "Value", "Name", "Hierarchy", "Strand", "nt5end", "Length", "Strict", "Source"),
         "Samples Sheet": ("File", "Group", "Replicate", "Control")
     }
 

@@ -19,14 +19,14 @@
 #
 ######-------------------------------------------------------------------------------######
 
-user: FirstTimer
-run_date: '2021-06-13'
-run_time: 11-15-28
+user: NewUser
+run_date: ~
+run_time: ~
 paths_config: ./paths.yml
 
 ##-- The label for final outputs --##
 ##-- If none provided, the default of user_tinyrna will be used --##
-run_name: my_first_run
+run_name: tinyrna
 
 ##-- If True: run bowtie-build before analyzing libraries --##
 ##-- NOTE: this option may be ignored depending on your Paths file. See Paths file. --##

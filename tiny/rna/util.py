@@ -11,7 +11,10 @@ def report_execution_time(step_name: str):
             start = time.time()
             return_val = func(*args, **kwargs)
             end = time.time()
-            print("%s took %.2f seconds" % (step_name, end - start))
+            hrs, rem = divmod(end - start, 3600)
+            min, sec = divmod(rem, 60)
+            units = [(hrs, '%dh'), (min, '%dm'), (sec, '%.2fs')]
+            print(f"{step_name} took {' '.join([u % q for q, u in units if q > 0])}")
             return return_val
         return wrapper
     return timer
