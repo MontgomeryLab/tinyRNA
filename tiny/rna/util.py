@@ -14,7 +14,7 @@ def report_execution_time(step_name: str):
             hrs, rem = divmod(end - start, 3600)
             min, sec = divmod(rem, 60)
             units = [(hrs, '%dh'), (min, '%dm'), (sec, '%.2fs')]
-            print(' '.join([u % q for q, u in units if q > 0]))
+            print(f"{step_name} took {' '.join([u % q for q, u in units if q > 0])}")
             return return_val
         return wrapper
     return timer
