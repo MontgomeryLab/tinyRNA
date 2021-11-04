@@ -34,11 +34,11 @@ class ResumeConfig(ConfigBase, ABC):
 
         self.dt = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         self.entry_inputs = entry_inputs
-        self.steps = steps
+        self.steps = steps + [f"organize_{s}" for s in steps]
 
         self._create_truncated_workflow()
         self._rebuild_entry_inputs()
-        self._add_timestamps()
+        self._add_timestamps(steps)
 
     def check_dir_requirements(self):
         """Ensure that user has invoked this command from within the target run directory"""
@@ -73,8 +73,10 @@ class ResumeConfig(ConfigBase, ABC):
             if step not in self.steps:
                 del wf_steps[step]
 
-        # Remove all WorkflowOutputParameters in preparation for the new
-        wf_outputs.clear()
+        # Remove all unassociated WorkflowOutputParameters
+        for step in list(wf_outputs.keys()):
+            if step[:step.rindex("_out_dir")] not in self.steps:
+                del wf_outputs[step]
 
         # Setup new inputs at the workflow level and entry step
         for param, new_input in self.entry_inputs.items():
@@ -83,32 +85,11 @@ class ResumeConfig(ConfigBase, ABC):
             # Update WorkflowStepInputs (entry step)
             wf_steps[self.steps[0]]['in'][param] = new_input['var']
 
-        # Load the organize-outputs subworkflow so that we may copy relevant steps
-        with open(resource_filename('tiny', 'cwl/workflows/organize-outputs.cwl')) as f:
-            organizer_sub_wf = self.yaml.load(f)
-            self.workflow['requirements'].extend(organizer_sub_wf['requirements'])
-
-        for step in self.steps:
-            # Copy relevant steps from organize-outputs.cwl
-            step_name = f'organize_{step}'
-            context = wf_steps[step_name] = organizer_sub_wf['steps'][step_name]
-            del context['when']
-
-            # Update WorkflowStepInputs
-            context['in']['dir_name'] = f'dir_name_{step}'
-            context['in']['dir_files']['source'] = [f"{step}/{output}" for output in wf_steps[step]['out']]
-
-            # Update WorkflowOutputParameter
-            wf_outputs[f'{step}_out_dir'] = {
-                'type': "Directory",
-                'outputSource': f'{step_name}/subdir'
-            }
-
-    def _add_timestamps(self):
+    def _add_timestamps(self, steps):
         """Differentiates resume-run output subdirs by adding a timestamp to them"""
 
         # Rename output directories with timestamp
-        for subdir in self.steps:
+        for subdir in steps:
             step_dir = "dir_name_" + subdir
             self[step_dir] = self[step_dir] + "_" + self.dt
 
@@ -172,6 +153,9 @@ class ResumePlotterConfig(ResumeConfig):
 
         # Build resume config from the previously-processed Run Config
         super().__init__(processed_config, workflow, steps, inputs)
+
+        # Remove the PCA plot input since dge is not a step in this resume workflow
+        self.workflow['steps']['organize_plotter']['in']['dir_files']['source'].remove('dge/pca_plot')
 
     def _rebuild_entry_inputs(self):
         """Set the new path inputs for the Plotter step

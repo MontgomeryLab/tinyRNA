@@ -7,6 +7,8 @@ requirements:
   - class: ScatterFeatureRequirement
   - class: SubworkflowFeatureRequirement
   - class: MultipleInputFeatureRequirement
+  - class: StepInputExpressionRequirement
+  - class: InlineJavascriptRequirement
 
 inputs:
 
@@ -100,21 +102,7 @@ inputs:
 
 steps:
 
-  bt_build_optional:
-    run: ../tools/bowtie-build.cwl
-    when: $(inputs.run_bowtie_build)
-    in:
-      run_bowtie_build: run_bowtie_build
-      ref_in: reference_genome_files
-      ebwt_base: ebwt
-      offrate: offrate
-      ntoa: ntoa
-      noref: noref
-      ftabchars: ftabchars
-      threads: threads
-    out: [index_files, console_output]
-
-  counter-prep:
+  preprocessing:
     run: per-library.cwl
     scatter: [in_fq, sample_basename, fastp_report_title]
     scatterMethod: dotproduct
@@ -143,18 +131,41 @@ steps:
       # Collapser
       threshold: threshold
       compress: compress
+    out: [fastq_clean, html_report_file, json_report_file, fastp_console, uniq_seqs, uniq_seqs_low, collapser_console]
 
-      # Bowtie
+  bt_build_optional:
+    run: ../tools/bowtie-build.cwl
+    when: $(inputs.run_bowtie_build)
+    in:
+      run_bowtie_build: run_bowtie_build
+      ref_in: reference_genome_files
+      ebwt_base: ebwt
+      offrate: offrate
+      ntoa: ntoa
+      noref: noref
+      ftabchars: ftabchars
+      threads: threads
+    out: [ index_files, console_output ]
+
+  bowtie:
+    run: ../tools/bowtie.cwl
+    scatter: [ reads, sample_basename ]
+    scatterMethod: dotproduct
+    in:
+      reads: preprocessing/uniq_seqs
+      sample_basename: sample_basenames
       bt_index_files:
-        source: [bt_build_optional/index_files, bt_index_files]
+        source: [ bt_build_optional/index_files, bt_index_files ]
         pickValue: first_non_null
         default: bt_index_files  # To appease the workflow validator
       ebwt: ebwt
+      outfile: { valueFrom: $(inputs.sample_basename + "_aligned_seqs.sam") }
+      logfile: { valueFrom: $(inputs.sample_basename + "_console_output.log") }
       fastq: fastq
       fasta: fasta
       trim5: trim5
       trim3: trim3
-      bt_phred64: bt_phred64
+      phred64: bt_phred64
       solexa: solexa
       solexa13: solexa13
       end_to_end: end_to_end
@@ -162,44 +173,19 @@ steps:
       k_aln: k_aln
       all_aln: all_aln
       no_unal: no_unal
+      un: { valueFrom: $(inputs.sample_basename + "_unaligned_seqs.fa") }
       sam: sam
       threads: threads
       shared_memory: shared_memory
       seed: seed
-    out: [fastq_clean, html_report_file, json_report_file, fastp_console, uniq_seqs, uniq_seqs_low, collapser_console,
-          aln_seqs, unal_seqs, bowtie_console]
-    
-  counter-prep-subdirs:
-    run: organize-outputs.cwl
-    in:
-      bt_build_name: dir_name_bt_build
-      bt_build_indexes: bt_build_optional/index_files
-      bt_build_console: bt_build_optional/console_output
-      run_bowtie_build: run_bowtie_build
-
-      fastp_name: dir_name_fastp
-      fastp_cleaned_fastq: counter-prep/fastq_clean
-      fastp_html_report: counter-prep/html_report_file
-      fastp_json_report: counter-prep/json_report_file
-      fastp_console: counter-prep/fastp_console
-
-      collapser_name: dir_name_collapser
-      collapser_uniq: counter-prep/uniq_seqs
-      collapser_low: counter-prep/uniq_seqs_low
-      collapser_console: counter-prep/collapser_console
-
-      bowtie_name: dir_name_bowtie
-      bowtie_sam: counter-prep/aln_seqs
-      bowtie_unal: counter-prep/unal_seqs
-      bowtie_console: counter-prep/bowtie_console
-    out: [ bt_build_dir, fastp_dir, collapser_dir, bowtie_dir ]
+    out: [ sam_out, unal_seqs, console_output ]
 
   counter:
     run: ../tools/tiny-count.cwl
     in:
       samples_csv: samples_csv
       config_csv: features_csv
-      aligned_seqs: counter-prep/aln_seqs
+      aligned_seqs: bowtie/sam_out
       gff_files: gff_files
       out_prefix: run_name
       all_features: counter_all_features
@@ -208,25 +194,10 @@ steps:
       type_filter: counter_type_filter
       is_pipeline: {default: true}
       diagnostics: counter_diags
-      fastp_logs: counter-prep/json_report_file
-      collapsed_fa: counter-prep/uniq_seqs
-    out: [feature_counts, other_counts, alignment_stats, summary_stats, console_output,
-          intermed_out_files, alignment_diags, selection_diags]
-
-  counter-subdir:
-    run: organize-outputs.cwl
-    in:
-      counter_name: dir_name_counter
-      counter_features: counter/feature_counts
-      counter_other: counter/other_counts
-      counter_alignment_stats: counter/alignment_stats
-      counter_summary_stats: counter/summary_stats
-      counter_intermed: counter/intermed_out_files
-      counter_aln_diag: counter/alignment_diags
-      counter_selection_diag: counter/selection_diags
-      counter_console: counter/console_output
-      features_csv: features_csv
-    out: [counter_dir]
+      fastp_logs: preprocessing/json_report_file
+      collapsed_fa: preprocessing/uniq_seqs
+    out: [ feature_counts, other_counts, alignment_stats, summary_stats, console_output,
+           intermed_out_files, alignment_diags, selection_diags ]
 
   dge:
     run: ../tools/tiny-deseq.cwl
@@ -237,15 +208,6 @@ steps:
       pca: dge_pca_plot
       drop_zero: dge_drop_zero
     out: [ norm_counts, comparisons, pca_plot, console_output ]
-
-  dge-subdir:
-    run: organize-outputs.cwl
-    in:
-      dge_name: dir_name_dge
-      dge_norm: dge/norm_counts
-      dge_comparisons: dge/comparisons
-      dge_console: dge/console_output
-    out: [dge_dir]
 
   plotter:
     run: ../tools/tiny-plot.cwl
@@ -259,43 +221,95 @@ steps:
       plot_requests: plot_requests
     out: [plots, console_output]
 
-  plotter-subdir:
-    run: organize-outputs.cwl
+  organize_bt_indexes:
+    run: ../tools/make-subdir.cwl
+    when: $(inputs.run_bowtie_build)
     in:
-      plotter_name: dir_name_plotter
-      plotter_plots: plotter/plots
-      plotter_console: plotter/console_output
-      dge_pca: dge/pca_plot
-    out: [plotter_dir]
+      run_bowtie_build: run_bowtie_build
+      dir_files:
+        source: [ bt_build_optional/index_files, bt_build_optional/console_output ]
+        pickValue: all_non_null
+      dir_name: dir_name_bt_build
+    out: [ subdir ]
+
+  organize_fastp:
+    run: ../tools/make-subdir.cwl
+    in:
+      dir_files:
+        source: [ preprocessing/fastq_clean, preprocessing/html_report_file, preprocessing/json_report_file,
+                  preprocessing/fastp_console ]
+      dir_name: dir_name_fastp
+    out: [ subdir ]
+
+  organize_collapser:
+    run: ../tools/make-subdir.cwl
+    in:
+      dir_files:
+        source: [ preprocessing/uniq_seqs, preprocessing/uniq_seqs_low, preprocessing/collapser_console ]
+      dir_name: dir_name_collapser
+    out: [ subdir ]
+
+  organize_bowtie:
+    run: ../tools/make-subdir.cwl
+    in:
+      dir_files:
+        source: [ bowtie/sam_out, bowtie/unal_seqs, bowtie/console_output ]
+      dir_name: dir_name_bowtie
+    out: [ subdir ]
+
+  organize_counter:
+    run: ../tools/make-subdir.cwl
+    in:
+      dir_files:
+        source: [ counter/feature_counts, counter/other_counts, counter/alignment_stats, counter/summary_stats,
+                  counter/intermed_out_files, counter/alignment_diags, counter/selection_diags, counter/console_output,
+                  features_csv ]
+      dir_name: dir_name_counter
+    out: [ subdir ]
+
+  organize_dge:
+    run: ../tools/make-subdir.cwl
+    in:
+      dir_files:
+        source: [ dge/norm_counts, dge/comparisons, dge/console_output ]
+      dir_name: dir_name_dge
+    out: [ subdir ]
+
+  organize_plotter:
+    run: ../tools/make-subdir.cwl
+    in:
+      dir_files:
+        source: [ plotter/plots, plotter/console_output, dge/pca_plot ]
+      dir_name: dir_name_plotter
+    out: [ subdir ]
 
 outputs:
 
   # Subdirectory outputs
   bt_build_out_dir:
     type: Directory?
-    outputSource: counter-prep-subdirs/bt_build_dir
+    outputSource: organize_bt_indexes/subdir
 
   fastp_out_dir:
-    type: Directory?
-    outputSource: counter-prep-subdirs/fastp_dir
+    type: Directory
+    outputSource: organize_fastp/subdir
 
   collapser_out_dir:
-    type: Directory?
-    outputSource: counter-prep-subdirs/collapser_dir
+    type: Directory
+    outputSource: organize_collapser/subdir
 
   bowtie_out_dir:
-    type: Directory?
-    outputSource: counter-prep-subdirs/bowtie_dir
+    type: Directory
+    outputSource: organize_bowtie/subdir
 
   counter_out_dir:
-    type: Directory?
-    outputSource: counter-subdir/counter_dir
+    type: Directory
+    outputSource: organize_counter/subdir
 
   dge_out_dir:
-    type: Directory?
-    outputSource: dge-subdir/dge_dir
+    type: Directory
+    outputSource: organize_dge/subdir
 
-  plotter_dir:
-    type: Directory?
-    outputSource: plotter-subdir/plotter_dir
-
+  plotter_out_dir:
+    type: Directory
+    outputSource: organize_plotter/subdir
