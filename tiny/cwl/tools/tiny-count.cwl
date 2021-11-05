@@ -14,7 +14,6 @@ requirements:
 
 baseCommand: tiny-count
 stdout: console_output.log
-stderr: console_output.log
 
 inputs:
   samples_csv:
