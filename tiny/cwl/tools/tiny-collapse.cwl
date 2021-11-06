@@ -5,7 +5,6 @@ class: CommandLineTool
 
 baseCommand: tiny-collapse
 stdout: $(inputs.input_file.basename + "_console_output.log")
-stderr: $(inputs.input_file.basename + "_console_output.log")
 
 inputs:
   # Fastq files
