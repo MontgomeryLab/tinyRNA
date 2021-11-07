@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 env_name="test2"
+deseq2_version="1.34.0"
 
 # Get the current shell
 shell="$(basename "$SHELL")"
@@ -152,22 +153,31 @@ if ! pip --use-feature=in-tree-build install htseq==0.13.5 . > "pip_install.log"
 fi
 success "pip dependencies installed"
 
-# Install DESeq2 from Bioconductor
-status "Installing DESeq2 from Bioconductor (this will take a while)..."
-Rscript -e 'install.packages("BiocManager", repos="https://cloud.r-project.org")' > "deseq2_install.log" 2>&1
-Rscript -e 'BiocManager::install("DESeq2")' >> "deseq2_install.log" 2>&1
+# Check if Deseq2 is up to date (NOTE: $Version is an R directive, not a shell variable, hence single quotes)
+if ! Rscript -e 'packageDescription("DESeq2")$Version' | grep -q $deseq2_version; then
+  # Install DESeq2 from Bioconductor
+  status "Installing DESeq2 from Bioconductor (this may take over 20 minutes)..."
+  Rscript -e "install.packages(\"BiocManager\", version=\"$deseq2_version\", repos=\"https://cloud.r-project.org\")" > "deseq2_install.log" 2>&1
+  Rscript -e "BiocManager::install(\"DESeq2\", version=\"$deseq2_version\")" >> "deseq2_install.log" 2>&1
 
-# Check if DESeq2 installation was successful
-if grep -q "Successfully installed DESeq2" "deseq2_install.log"; then
-  success "DESeq2 installation was successful"
-  rm "deseq2_install.log"
+  # Check if DESeq2 installation was successful
+  if grep -q "Successfully installed DESeq2" "deseq2_install.log"; then
+    success "DESeq2 installation was successful"
+    rm "deseq2_install.log"
+  else
+    fail "DESeq2 installation failed"
+    echo "See deseq2_install.log for more information"
+    exit 1
+  fi
 else
-  fail "DESeq2 installation failed"
-  echo "See deseq2_install.log for more information"
-  exit 1
+  success "DESeq2 $deseq2_version is already installed"
 fi
 
+success "Setup complete"
 echo
 echo
-success "All done!"
-success "To activate the environment, run: conda activate $env_name"
+echo
+success "To activate the environment, run:"
+echo
+echo "  conda activate $env_name"
+echo
