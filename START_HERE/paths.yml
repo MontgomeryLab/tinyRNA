@@ -39,3 +39,13 @@ ebwt: ./bowtie_indexes/chr1
 ##-- One file per line, with "- " at the beginning (think: bulleted list) --##
 reference_genome_files:
 - ./reference_data/chr1.fa
+
+######---------------------------------- PLOTTER ------------------------------------######
+#
+# You can override the styles used by plotter by providing your own .mplstyle sheet
+# Run "tiny get-template" in your terminal to get a copy of the current style sheet
+#
+######-------------------------------------------------------------------------------######
+
+##-- Optional: provide the path to your own mplstyle sheet --##
+plot_style_sheet:
