@@ -79,7 +79,7 @@ function setup_environment() {
 }
 
 # Check if Conda is installed
-if grep -q "conda init" ~/."${shell}"rc; then
+if grep -q "conda init" ~/."${shell}"rc 2> /dev/null; then
   success "Conda is already installed for ${shell}"
 else
   status "Downloading Miniconda..."
@@ -100,6 +100,7 @@ else
   # Cleanup
   success "Miniconda installed"
   rm $miniconda_installer
+  echo "auto_activate_base: false" >> ~/.condarc
 fi
 
 # Enable use of Conda through this script
