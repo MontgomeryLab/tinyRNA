@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-env_name="test2"
+env_name="tinyrna"
 deseq2_version="1.34.0"
 
 # Get the current shell
@@ -154,7 +154,7 @@ fi
 success "pip dependencies installed"
 
 # Check if Deseq2 is up to date (NOTE: $Version is an R directive, not a shell variable, hence single quotes)
-if ! Rscript -e 'packageDescription("DESeq2")$Version' | grep -q $deseq2_version; then
+if ! Rscript -e 'packageDescription("DESeq2")$Version' 2>&1 | grep -q $deseq2_version; then
   # Install DESeq2 from Bioconductor
   status "Installing DESeq2 from Bioconductor (this may take over 20 minutes)..."
   Rscript -e "install.packages(\"BiocManager\", version=\"$deseq2_version\", repos=\"https://cloud.r-project.org\")" > "deseq2_install.log" 2>&1
