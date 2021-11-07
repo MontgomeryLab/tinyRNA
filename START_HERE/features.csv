@@ -1,7 +1,7 @@
 Select for...,with value...,Alias by...,Hierarchy,Strand (sense/antisense/both),5' End Nucleotide,Length,Match,Feature Source
-Class,CSR,ID,1,antisense,G,30,Partial,./reference_data/c_elegans.PRJNA13758.WS279.chr1.gff3
-Class,WAGO,Alias,1,antisense,all,16-35,Partial,./reference_data/c_elegans.PRJNA13758.WS279.chr1.gff3
-Class,miRNA,ID,7,sense,"C,G,U",all,Full,./reference_data/c_elegans.PRJNA13758.WS279.chr1.gff3
-biotype,transposon,ID,5,both,G,"25,26",Full,./reference_data/c_elegans.PRJNA13758.WS279.chr1.gff3
-Class,unknown,ID,2,both,all,all,Partial,./reference_data/c_elegans.PRJNA13758.WS279.chr1.gff3
-Class,unknown,ID,2,both,U,20,Partial,./reference_data/c_elegans.PRJNA13758.WS279.chr1.gff3
+Class,CSR,ID,1,antisense,G,30,Partial,./reference_data/c_elegans_WS279_chr1.gff3
+Class,WAGO,Alias,1,antisense,all,16-35,Partial,./reference_data/c_elegans_WS279_chr1.gff3
+Class,miRNA,ID,7,sense,"C,G,U",all,Full,./reference_data/c_elegans_WS279_chr1.gff3
+biotype,transposon,ID,5,both,G,"25,26",Full,./reference_data/c_elegans_WS279_chr1.gff3
+Class,unknown,ID,2,both,all,all,Partial,./reference_data/c_elegans_WS279_chr1.gff3
+Class,unknown,ID,2,both,U,20,Partial,./reference_data/c_elegans_WS279_chr1.gff3

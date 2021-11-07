@@ -265,9 +265,6 @@ plot_requests:
   - 'sample_avg_scatter_by_dge'
   - 'sample_avg_scatter_by_dge_class'
 
-##-- You can supply your own matplotlib style sheet to override defaults here --##
-plot_style_sheet: ~
-
 ##-- You can set a custom p-value to use in DGE scatter plots. Default: 0.05 --##
 plot_pval: ~
 
@@ -311,6 +308,7 @@ run_directory: ~
 features_csv: { }
 samples_csv: { }
 reference_genome_files: [ ]
+plot_style_sheet: ~
 ebwt: ~
 
 

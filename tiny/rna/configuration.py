@@ -184,6 +184,7 @@ class Configuration(ConfigBase):
             return self.cwl_file(path_to_input)
 
         self['ebwt'] = self.paths['ebwt']
+        self['plot_style_sheet'] = self.paths['plot_style_sheet']
         self['run_directory'] = self.paths.from_here(self.paths['run_directory'])
 
         # Configurations that need to be converted from string to a CWL File object
