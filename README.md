@@ -3,11 +3,7 @@
 
 *This repository is being actively developed and tested, and is thus incomplete and only recommended for testing until a release is made. Feedback, suggestions, and bug reports are welcome under the [issues tab](https://github.com/MontgomeryLab/tinyrna/issues). Thank you!*
 
-- [Getting Started](#getting-started)
-  - [Prerequisites & Installation](#prerequisites--installation)
-    - [1. Install conda](#1-install-conda)
-    - [2. Install R & DESeq2](#2-install-r--deseq2)
-    - [3. Install tinyRNA](#3-install-tinyrna)
+- [Installation](#installation)
 - [Usage](#usage)
   - [Configuration Files](#configuration-files)
     - [Run Config](#run-config)
@@ -20,8 +16,11 @@
       - [Create Workflow](#create-workflow)
       - [Collapser](#collapser)
       - [Counter](#counter)
+      - [Deseq](#deseq)
+      - [Plotter](#plotter)
       - [fastp, bowtie-build, and bowtie](#fastp-bowtie-build-and-bowtie)
   - [Using a Different Workflow Runner](#using-a-different-workflow-runner)
+  - [Feature Selection in Counter](#feature-selection-in-counter)
 - [Outputs](#outputs)
   - [Data Pre-Processing](#data-pre-processing)
   - [Counts and Pipeline Statistics](#counts-and-pipeline-statistics)
@@ -40,42 +39,25 @@ The current workflow is as follows:
 
 ![tinyRNA basic pipeline](images/tinyrna-workflow_current.png)
 
-## Getting Started
+## Installation
 
-### Prerequisites & Installation
+A setup script has been provided for easy installation of the tinyRNA environment and its dependencies. The project and its dependencies will be installed in a conda environment called `tinyrna`.
 
-A conda environment file has been provided for easy installation of the tinyRNA environment and its dependencies.
-
-#### 1. Install conda
-To install `conda` you can download and follow instructions for either:
-- [Anaconda](https://www.anaconda.com/distribution/), which includes many packages, a few of our dependencies, and additional tools that you may find useful in the context of data science, or
-- [Miniconda3](https://docs.conda.io/en/latest/miniconda.html), which contains only conda and its dependencies, so that its installation requires significantly less time and disk space.
-
-See the [conda user guide](https://docs.conda.io/projects/conda/en/latest/user-guide/install/download.html#anaconda-or-miniconda) if you need additional help choosing.
-
-#### 2. Install R & DESeq2
-Rather than installing R via conda, we recommend you install it yourself first from [CRAN](https://www.r-project.org/), then install DESeq2 following [instructions](https://bioconductor.org/packages/release/bioc/html/DESeq2.html) in Bioconductor.
-
-#### 3a. XQuartz (mac only)
-DESeq2 is quiet about it, but if you're on a mac you'll also need to download and install [XQuartz](https://www.xquartz.org/).
-
-#### 3. Install tinyRNA
-
-To install tinyRNA and its remaining dependencies:
 ```
 # Clone the repository into a local directory
-git clone https://github.com/MontgomeryLab/tinyrna.git
-cd tinyrna
+ git clone https://github.com/MontgomeryLab/tinyrna.git
+ cd tinyrna
 
 # Install the tinyrna environment and dependencies
-conda env create -f environment.yml
+ ./setup.sh
 
-# Activate (or reactivate) the tinyrna environment
-conda activate tinyrna
+# Activate the tinyrna environment
+ conda activate tinyrna
 
 # When you are done running tinyRNA, you can deactivate the conda environment
-conda deactivate
+ conda deactivate
 ```
+
 
 ## Usage
 If you'd like to jump right in and start using tinyRNA, see our [tutorial](./START_HERE/TUTORIAL.md).
@@ -83,23 +65,27 @@ If you'd like to jump right in and start using tinyRNA, see our [tutorial](./STA
 You can execute the workflow in its entirety for a full end-to-end analysis pipeline, or you can execute individual steps on their own. In most cases you will use the command `tiny` for pipeline level operations, including running the pipeline.
 
 ### Configuration Files
-The pipeline requires that you specify your input library files (Samples Sheet - `samples.csv`), your selection rules for feature counting (Features Sheet - `features.csv`), the paths to your configuration files and other file inputs (Paths - `paths.yml`), and your preferences for the overall pipeline configuration (Run Config - `run_config.yml`).
+The pipeline requires that you identify:
+- Your samples via the *Samples Sheet*
+- Your selection preferences for feature counting via the *Features Sheet*
+- The location of your config files and other file inputs via the *Paths Sheet*
+- Your preferences for the pipeline and its steps via the *Run Config*
 
-![tinyRNA basic pipeline](images/config-files.png)
+<img src="images/config-files.png" width="50%" alt="[Configuration File Diagram]">
 
-You can obtain template copies of these files with the command (they're also available in the `START_HERE` directory):
+The `START_HERE` directory demonstrates a working configuration using these files. You can also get a copy of them (and other optional template files) with:
 ```
 tiny get-template
 ```
-:warning: You may use either relative or absolute paths in your configuration files. **Relative paths will be evaluated relative to the file in which they are defined.** This means that you can store your configuration files each in a different location, allowing for flexibility in your project organization. To avoid confusion, we recommend using absolute paths.:warning:
+You can use either relative or absolute paths in your configuration files. **Relative paths will be evaluated relative to the file in which they are defined.** This gives you the freedom to organize your project as you see fit.
 
 #### Run Config
 
-The pipeline revolves around a configuration file to make it easy to set up and run. This `YAML` Run Config file (`run_config.yml`) can be edited using a simple text editor (such as BBEDIT for Mac or notepad++ for Windows). Within it you must define the location of your Paths file (`paths.yml`), and you can optionally define your preferences for the pipeline and its individual steps. During the setup phase of pipeline execution, tinyRNA will further process this configuration file based on its contents and the contents of your Paths (`paths.yml`), Samples (`samples.csv`), and Features (`features.csv`) files. The processed configuration is what ultimately determines the behavior of the workflow. A copy will be saved in the final run directory specified in your Paths file providing a configuration record for each run.
+The overall behavior of the pipeline and its steps is determined by the Run Config file (`run_config.yml`). This YAML file can be edited using a simple text editor such as BBEDIT for Mac or Notepad++ for Windows. Within it you must specify the location of your Paths file (`paths.yml`). All other settings are optional. When the pipeline starts up, tinyRNA will process the Run Config based on the contents of it and your other configuration files, and the processed copy will be saved to your run directory. The processed configuration is what ultimately determines the behavior of the workflow. This provides auto-documentation for all of your pipeline runs.
 
 #### Paths File
 
-The locations of pipeline file inputs are defined in the Paths file (`paths.yml`). This `YAML` file includes paths to your Samples and Features Sheets, in addition to your bowtie index prefix (optional) and the final run directory name. The final run directory will contain all pipeline outputs, and is therefore recreated and prepended with the `run_name` and current date and time of each run to keep outputs separate.
+The locations of pipeline file inputs are defined in the Paths file (`paths.yml`). This YAML file includes paths to your Samples and Features Sheets, in addition to your bowtie index prefix (optional) and the final run directory name. The final run directory will contain all pipeline outputs. The directory name is prepended with the `run_name` and current date and time to keep outputs separate.
 
 #### Samples Sheet
 
@@ -109,32 +95,19 @@ To make it simple to specify your fastq files and their locations, along with as
 
 Small RNAs can often be classified by sequence features, such as length, strandedness, and 5' nucleotide. We provide a Features Sheet (`features.csv`) in which you can define selection rules to more accurately capture counts for the small RNAs of interest.  These rules can be defined per GFF3 file (a file containing the coordinates of features of interest) on the basis of any attribute key/value pair (for example, `Class=miRNA`), strand relative to the feature of interest, 5' end nucleotide, and length, with options for full or partial interval matching with the target sequence.
 
-Selection takes place for every feature associated with every alignment of every small RNA sequence. It occurs in two phases:
-1. Against the candidate feature's attribute key/value pairs, as defined in your reference annotation files.
-2. Against the small RNA attributes (strand relative to feature of interest, 5' end nucleotide, and length).
-
-Each rule must be assigned a hierarchy value. A lower value indicates higher selection preference and multiple rules may share the same value. We utilize this value only during the first phase of selection; if multiple features match the attribute key/value pairs defined in your rules, then only the feature(s) with the lowest hierarchy values move to the second selection phase. The remaining features are discarded for the given read alignment. You can use the higher hierarchy values to exclude counts features that are not of interest from features of interest. For example, suppose you have a miRNA locus embedded within a coding gene locus (within an intron for example). By assigning a hierarchy of 1 to miRNA and a hierarchy of 2 to coding genes, all small RNA counts from sequences matching to the miRNA would be excluded from total counts for the coding gene. Reversing the hierarchy such that miRNA had a hierarchy of 2 and coding genes had a hierarchy of 1 would instead exclude reads from sequences matching to the coding gene from total counts for the miRNA. If a hierarchy of 1 was assigned to both miRNAs and coding genes, counts for sequences matching both features would be split between them.
-
-Small RNA reads passing selection will receive a normalized count increment. By default, read counts are normalized twice before being assigned to a feature (these settings can be changed in `run_config.yml`). Counts for each small RNA sequence are divided: 
-1. By the number of loci it aligns to in the genome.
-2. By the number of selected features for each of its alignments.
-
-Final feature counts will be expressed in terms of a particular feature attribute key such as sequence name (often denoted with `ID` in column 9 of the GFF3, e.g. `ID=let-7` ), which must be specified within the `Name Attribute` column of `features.csv`. In many cases, such as the example above, the identifier in the `Name Attribute` column will simply be `ID` and as the GFF3 is scanned, feature identifiers following `ID=` will be used as feature names.
-
 ### User-Provided Input Files
 
 Running the pipeline requires the following files:
-  1. A GFF3 formatted file with with genomic coordinates for your features of interest, such as miRNAs (see ce_WS279_chrI.gff3 in the reference_data folder for an example)
+  1. A GFF3 formatted file with with genomic coordinates for your features of interest, such as miRNAs (see c_elegans_WS279_chr1.gff3 in the reference_data folder for an example)
      - Each feature must have an attributes column (column 9) which defines its `ID` and `Class` (case-sensitive).
        - For example: `chrI	.	miRNA	100	121	.	+	.	ID=miR-1;Class=miRNA`
-     - Each feature's `ID` attribute must be unique.
      - All features must be stranded.
      - Attribute values which contain commas will be parsed as lists.
   2. FASTQ(.gz) <sup>*</sup> formatted files with your small RNA high-throughput sequencing data (files must be demultiplexed).
   3. A reference genome file in FASTA format (be sure that chromosome identifiers are identical between your reference annotations and genome sequence files).
-  4. Optional: Bowtie indexes (must be small indexes (.ebwt)). By default, bowtie indexes will be created when the pipeline is run for the first time).
+  4. Optional: Bowtie indexes (must be small indexes (.ebwt)). Bowtie indexes will be created if the `ebwt` setting is empty in your Paths File.
 
-<sup>*</sup> `tiny-count` accepts SAM files in your Samples Sheet only when invoked as an individual step. Because genome alignments are done after collapsing reads, the pipeline does not currently support SAM files from other sources.
+*`tiny-count` accepts SAM files in your Samples Sheet only when invoked as an individual step. Because genome alignments are done after collapsing reads, the pipeline does not currently support SAM files from other sources.
 
 ### Running the End-to-End Analysis
 In most cases you will use this toolset as an end-to-end pipeline. This will run a full, standard small RNA sequencing data analysis according to your configuration file. Before starting, you will need the following:
@@ -147,7 +120,7 @@ In most cases you will use this toolset as an end-to-end pipeline. This will run
 6. An updated Paths File (`paths.yml`) with the path to the genome sequence.
 7. A Run Config file (`run_config.yml`) located in your working directory or the path to the file. The template provided does not need to be updated if you wish to use the default settings.
 
-To run an end-to-end analysis, be sure that you're working within the conda tinyrna environment (instructions above) in your terminal and optionally set your working directory that contains the Run Config file. Than, simply enter the following code into your terminal (if you are not working in the directory containing `run_config.yml`, provide the path before the name of the file - `path/to/run_config.yml`:
+To run an end-to-end analysis, be sure that you're working within the conda tinyrna environment (instructions above) in your terminal and optionally set your working directory that contains the Run Config file. Then, simply enter the following code into your terminal (if you are not working in the directory containing `run_config.yml`, provide the path before the name of the file - `path/to/run_config.yml`:
 
 ```
 tiny run --config run_config.yml
@@ -205,6 +178,76 @@ tiny-count [-h] -i SAMPLES -c CONFIGFILE -o OUTPUTPREFIX [-t] [-p]
     -o OUTPUTPREFIX, --out-prefix OUTPUTPREFIX
                           output prefix to use for file names
 ```
+##### Deseq
+```
+tiny-deseq.r --input-file COUNTFILE --outfile-prefix PREFIX [--control CONDITION] [--pca] [--drop-zero]
+
+    --input-file <count_file>
+          A text file containing a table of features x samples of the run to
+          process by DESeq2. The [...]feature_counts.csv output of tinyrna-count is expected here.
+              
+    --outfile-prefix <outfile>
+          Name of the output files to write. These will be created:
+              1. Normalized count table of all samples
+              2. Differential gene expression table per comparison
+              3. A PCA plot per comparison, if --pca is also provided.
+
+    --control <control_condition>
+          Opional. If the control condition is specified, comparisons will
+          only be made between the control and experimental conditions.
+
+    --pca
+          Optional. This will produce principle component analysis plots
+          using the DESeq2 library. Output files are PDF format.
+
+    --drop-zero
+          Optional. Prior to performing analysis, this will drop all
+          rows/features which have a zero count in all samples."
+```
+##### Plotter
+```
+tiny-plot [-h] [-nc NORM_COUNTS] [-dge DGE_COMPARISONS [DGE_COMPARISONS ...]]
+               [-len 5P_LEN_DISTS [5P_LEN_DISTS ...]] [-o OUTPREFIX]
+               [-pv VAL] [-s MPLSTYLE] [-v] -p PLOTS [PLOTS ...]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -o OUTPREFIX, --out-prefix OUTPREFIX
+                        Optional prefix to use for output PDF files.
+  -pv VAL, --p-value VAL
+                        Optional p-value to use in DGE scatter plots.
+  -s MPLSTYLE, --style-sheet MPLSTYLE
+                        Optional matplotlib style sheet to use for plots.
+  -v, --vector-scatter  Produce scatter plots with vectorized points (slower).
+                        Note: only the points on scatter plots will be raster
+                        if this option is not provided.
+  -p PLOTS [PLOTS ...], --plots PLOTS [PLOTS ...]
+                        List of plots to create. Options: 
+                        len_dist: A stacked barplot showing size & 5p-nt distribution,
+                        class_charts: A pie and barchart showing proportions of counts 
+                          per class, 
+                        replicate_scatter: A scatter plot comparing replicates for all
+                          count files given,
+                        sample_avg_scatter_by_dge: A scatter plot comparing all sample
+                          groups, with significantly different (padj<0.05) genes 
+                          highlighted.
+                        sample_avg_scatter_by_dge_class: A scatter plot comparing all
+                          sample groups, with classes and significantly different 
+                          genes highlighted
+
+Input files produced by Counter:
+  -len 5P_LEN_DISTS [5P_LEN_DISTS ...], --len-dist 5P_LEN_DISTS [5P_LEN_DISTS ...]
+                        The ...nt_len_dist.csv files, separated by a space.
+
+Input files produced by DGE:
+  -nc NORM_COUNTS, --norm-counts NORM_COUNTS
+                        The ...norm_counts.csv file.
+  -dge DGE_COMPARISONS [DGE_COMPARISONS ...], --dge-tables DGE_COMPARISONS [DGE_COMPARISONS ...]
+                        The ...cond1...cond2...deseq.csv files, separated by a
+                        space.
+
+```
+
 ##### fastp, bowtie-build, and bowtie
 These are CWL wrapped third party tools.
 1. Copy the workflow CWL folder to your current working directory with the command `tiny setup-cwl --config none`
@@ -225,6 +268,20 @@ If you don't have a Run Config file or do not wish to obtain a processed copy, y
 ```
 tiny setup-cwl --config none
 ```
+
+### Feature Selection in Counter
+
+Selection takes place for every feature associated with every alignment of every small RNA sequence. It occurs in two phases:
+1. Against the candidate feature's attribute key/value pairs, as defined in your reference annotation files.
+2. Against the small RNA attributes (strand relative to feature of interest, 5' end nucleotide, and length).
+
+Each rule must be assigned a hierarchy value. A lower value indicates higher selection preference and multiple rules may share the same value. We utilize this value only during the first phase of selection; if multiple features match the attribute key/value pairs defined in your rules, then only the feature(s) with the lowest hierarchy values move to the second selection phase. The remaining features are discarded for the given read alignment. You can use the higher hierarchy values to exclude counts features that are not of interest from features of interest. For example, suppose you have a miRNA locus embedded within a coding gene locus (within an intron for example). By assigning a hierarchy of 1 to miRNA and a hierarchy of 2 to coding genes, all small RNA counts from sequences matching to the miRNA would be excluded from total counts for the coding gene. Reversing the hierarchy such that miRNA had a hierarchy of 2 and coding genes had a hierarchy of 1 would instead exclude reads from sequences matching to the coding gene from total counts for the miRNA. If a hierarchy of 1 was assigned to both miRNAs and coding genes, counts for sequences matching both features would be split between them.
+
+Small RNA reads passing selection will receive a normalized count increment. By default, read counts are normalized twice before being assigned to a feature (these settings can be changed in `run_config.yml`). Counts for each small RNA sequence are divided: 
+1. By the number of loci it aligns to in the genome.
+2. By the number of selected features for each of its alignments.
+
+Final feature counts will be expressed in terms of a particular feature attribute key such as sequence name (often denoted with `ID` in column 9 of the GFF3, e.g. `ID=let-7` ), which must be specified within the `Name Attribute` column of `features.csv`. In many cases, such as the example above, the identifier in the `Name Attribute` column will simply be `ID` and as the GFF3 is scanned, feature identifiers following `ID=` will be used as feature names.
 
 ## Outputs
 
