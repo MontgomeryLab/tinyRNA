@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 env_name="tinyrna"
+bioc_version="3.14"
 deseq2_version="1.34.0"
 
 # Get the current shell
@@ -99,7 +100,6 @@ else
   # Cleanup
   success "Miniconda installed"
   rm $miniconda_installer
-  rm Miniconda_install.log
 fi
 
 # Enable use of Conda through this script
@@ -118,9 +118,9 @@ if conda env list | grep -q "$env_name"; then
     echo
     echo
     status "Updating $env_name environment..."
-    if ! conda update --file $platform_lock_file --name "$env_name" > "env_install.log" 2>&1; then
+    if ! conda update --file $platform_lock_file --name "$env_name" > "env_update.log" 2>&1; then
       fail "Failed to update the environment"
-      echo "Check the env_install.log file for more information."
+      echo "Check the env_update.log file for more information."
       exit 1
     fi
     success "$env_name environment updated"
@@ -157,13 +157,13 @@ success "pip dependencies installed"
 if ! Rscript -e 'packageDescription("DESeq2")$Version' 2>&1 | grep -q $deseq2_version; then
   # Install DESeq2 from Bioconductor
   status "Installing DESeq2 from Bioconductor (this may take over 20 minutes)..."
-  Rscript -e "install.packages(\"BiocManager\", version=\"$deseq2_version\", repos=\"https://cloud.r-project.org\")" > "deseq2_install.log" 2>&1
-  Rscript -e "BiocManager::install(\"DESeq2\", version=\"$deseq2_version\")" >> "deseq2_install.log" 2>&1
+  status 'To check status run "tail -f deseq2_install.log" from another terminal'
+  Rscript -e "install.packages(\"BiocManager\", version=\"$bioc_version\", repos=\"https://cloud.r-project.org\")" > "deseq2_install.log" 2>&1
+  Rscript -e "BiocManager::install(\"DESeq2\", version=\"$bioc_version\")" >> "deseq2_install.log" 2>&1
 
   # Check if DESeq2 installation was successful
-  if grep -q "Successfully installed DESeq2" "deseq2_install.log"; then
+  if grep -q "DONE (DESeq2)" "deseq2_install.log"; then
     success "DESeq2 installation was successful"
-    rm "deseq2_install.log"
   else
     fail "DESeq2 installation failed"
     echo "See deseq2_install.log for more information"
@@ -174,10 +174,7 @@ else
 fi
 
 success "Setup complete"
-echo
-echo
-echo
-success "To activate the environment, run:"
+status "To activate the environment, run:"
 echo
 echo "  conda activate $env_name"
 echo
