@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+env_name="test2"
+
 # Get the current shell
 shell="$(basename "$SHELL")"
 
@@ -10,12 +12,39 @@ function success() {
   printf "${green_on}${check} %s${green_off}\n" "$*"
 }
 
+function status() {
+  blue_on="\033[1;34m"
+  blue_off="\033[0m"
+  printf "${blue_on}%s${blue_off}\n" "$*"
+}
+
 function fail() {
   nope="⃠"
   red_on="\033[1;31m"
   red_off="\033[0m"
   printf "${red_on}${nope} %s${red_off}\n" "$*"
 }
+
+function stop() {
+  kill -TERM -$$
+}
+# Ensures that when user presses Ctrl+C, the script stops
+# rather than proceeding to the next step
+trap 'stop' SIGINT
+
+# check if os is mac or linux
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  success "macOS detected"
+  miniconda_installer="Miniconda3-latest-MacOSX-x86_64.sh"
+  platform_lock_file="conda-osx-64.lock"
+elif [[ "$OSTYPE" == "linux-gnu" ]]; then
+  success "Linux detected"
+  miniconda_installer="Miniconda3-latest-Linux-x86_64.sh"
+  platform_lock_file="conda-linux-64.lock"
+else
+  fail "Unsupported OS"
+  exit 1
+fi
 
 function verify_conda_checksum() {
   installer_file="$1"
@@ -35,177 +64,110 @@ function verify_conda_checksum() {
   fi
 }
 
-function verify_xquartz_checksum() {
-  installer_file="$1"
-
-  # XQuartz doesn't list their checksums so we'll have to check against a hardcoded hash
-  echo "0eb477f3f8f3795738df9a6a8a15e3858fe21fe9d7103b8d13861bb3aa509e3b  $installer_file" | shasum -a 256 -c -
-  if [ $? -eq 0 ]; then
-    success "XQuartz installer checksum verified"
-  else
-    fail "XQuartz checksum verification failed. Something fishy might be happening."
-    rm "$installer_file"
-    exit 1
-  fi
-}
-
-function verify_r_checksum() {
-  installer_file="$1"
-
-  # Get SHA-1 checksum from R website
-  hash_list=$(curl -s https://cran.r-project.org/bin/macosx/ | grep -o '[0-9a-f]\{40\}')
-
-  # See if the downloaded installer has a matching hash
-  if shasum -a 1 "$installer_file" | grep -q "$hash_list"; then
-    success "R installer checksum verified"
-  else
-    fail "R checksum verification failed. Something fishy might be happening."
-    rm "$installer_file"
-    exit 1
-  fi
-}
-
-function prompt_sudo() {
-  if [ "$shell" == "zsh" ]; then
-    sudo -n true 2> /dev/null || (echo "Please enter your password to install Miniconda and XQuartz" && sudo -v)
-  else
-    sudo -v || exit 1
-  fi
-}
-
-# check if os is mac or linux
-if [[ "$OSTYPE" == "darwin"* ]]; then
-  # Mac OSX
-  success "OSX detected"
-
-  # Check if user has root privileges
-  if [[ $EUID -ne 0 ]]; then
-    echo
-    echo "XQuartz and R require root privileges for installation."
-    echo "Would you like to provide your password? This is optional."
-    echo "If you answer no, you'll have to run their installers manually."
-    echo
-
-    if [ "$shell" == "zsh" ]; then
-      read -r -k 1 "Do you want to provide your sudo login? [y/N] "
-    else
-      read -r -n 1 -p "Do you want to provide your sudo login? [Y/n] "
-    fi
-
-    if [[ $REPLY =~ ^[Yy] ]]; then
-      sudo -v
-      download_only=false
-    else
-      download_only=true
-    fi
-
-  # Check if Conda is installed
-  if grep -q "conda init" ~/.${shell}rc; then
-    success "Conda already installed for ${shell}"
-  else
-    echo "Downloading Miniconda..."
-    curl -O -# https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-x86_64.sh
-    if [ -f "Miniconda3-latest-MacOSX-x86_64.sh" ]; then
-      success "Miniconda downloaded"
-      verify_conda_checksum "Miniconda3-latest-MacOSX-x86_64.sh"
-      $SHELL Miniconda3-latest-MacOSX-x86_64.sh
-      if [ $? -eq 1 ]; then
-        fail "Miniconda installation failed"
-        exit 1
-      fi
-    else
-      fail "Miniconda failed to download"
-      exit 1
-    fi
-
-    # Cleanup
-    success "Miniconda installed"
-    rm Miniconda3-latest-MacOSX-x86_64.sh
-    rm miniconda_hashes.rst
-    rm Miniconda_install.log
-  fi
-
-  # Check if XQuartz is installed
-  if [ -x "$(command -v xquartz)" ]; then
-    success "XQuartz is already installed"
-  else
-    echo "Downloading XQuartz..."
-    curl -O -# https://github.com/XQuartz/XQuartz/releases/download/XQuartz-2.8.1/XQuartz-2.8.1.dmg
-    if [ ! -f "XQuartz-2.8.1.dmg" ]; then
-      fail "XQuartz failed to download"
-      exit 1
-    fi
-
-    success "XQuartz downloaded"
-    verify_xquartz_checksum "XQuartz-2.8.1.dmg"
-
-    if ! "$download_only"; then
-        sudo hdiutil attach XQuartz-2.8.1.dmg
-        sudo installer -verbose -pkg /Volumes/XQuartz-2.8.1/XQuartz.pkg -target / 2>&1 "XQuartz_install.log"
-
-        # installer return code is 1 if it fails
-        if [ $? -eq 1 ]; then
-          fail "XQuartz installation failed"
-          echo "See XQuartz_install.log for more information"
-          exit 1
-        fi
-
-        # Cleanup
-        success "XQuartz installation was successful"
-        sudo hdiutil detach /Volumes/XQuartz-2.8.1
-        rm XQuartz-2.8.1.dmg
-        rm XQuartz_install.log
-      fi
-    fi
-  fi
-
-  # Check if R is installed
-  if [ -x "$(command -v R)" ]; then
-    success "R is already installed"
-  else
-    echo "Downloading R..."
-    curl -O -# https://cran.r-project.org/bin/macosx/base/R-4.1.2.pkg
-    if [ ! -f "R-4.1.2.pkg" ]; then
-      fail "R failed to download"
-      exit 1
-    fi
-
-    success "R downloaded"
-    verify_r_checksum "R-4.1.2.pkg"
-
-    if ! "$download_only"; then
-      sudo installer -verbose -pkg R-4.1.2.pkg -target / 2>&1 "R_install.log"
-
-      # installer return code is 1 if it fails
-      if [ $? -eq 1 ]; then
-        fail "R installation failed"
-        echo "See R_install.log for more information"
-        exit 1
-      fi
-
-      # Cleanup
-      success "R installation was successful"
-      rm R-4.1.2.pkg
-      rm R_install.log
-    fi
-  fi
-
-  # Enable use of Conda through this script
-  eval "$(conda shell."$shell" hook)"
-
-  # Install pip dependencies and our setup.py
-  pip install htseq==0.13.5
-  pip --use-feature=in-tree-build install .
-
+function setup_environment() {
   # Setup tinyRNA environment using our generated lock file
-  conda create -n tinyRNA --file conda-osx-64.lock
+  status "Setting up $env_name environment (this may take a while)..."
+  if ! conda create --file $platform_lock_file --name $env_name  > "env_install.log" 2>&1; then
+    fail "$env_name environment setup failed"
+    echo "Check the env_install.log file for more information."
+    exit 1
+  else
+    success "$env_name environment setup complete"
+  fi
+}
 
-
-elif [[ "$OSTYPE" == "linux-gnu" ]]; then
-  # linux
-  echo "Linux"
+# Check if Conda is installed
+if grep -q "conda init" ~/."${shell}"rc; then
+  success "Conda is already installed for ${shell}"
 else
-  echo "Your operating system was not recognized"
+  status "Downloading Miniconda..."
+  curl -O -# https://repo.anaconda.com/miniconda/$miniconda_installer
+  if [ -f $miniconda_installer ]; then
+    success "Miniconda downloaded"
+    verify_conda_checksum $miniconda_installer
+    status "Running interactive Miniconda installer..."
+    if ! $SHELL $miniconda_installer; then
+      fail "Miniconda installation failed"
+      exit 1
+    fi
+  else
+    fail "Miniconda failed to download"
+    exit 1
+  fi
 
+  # Cleanup
+  success "Miniconda installed"
+  rm $miniconda_installer
+  rm Miniconda_install.log
 fi
 
+# Enable use of Conda through this script
+eval "$(conda shell."$shell" hook)"
+
+# Check if the conda environment $env_name exists
+if conda env list | grep -q "$env_name"; then
+  echo
+  echo "The Conda environment $env_name already exists."
+  echo "    1) Update environment"
+  echo "    2) Remove and recreate environment"
+  echo
+  read -p "Select an option [1/2]: " -n 1 -r
+
+  if [[ $REPLY =~ ^[1]$ ]]; then
+    echo
+    echo
+    status "Updating $env_name environment..."
+    if ! conda update --file $platform_lock_file --name "$env_name" > "env_install.log" 2>&1; then
+      fail "Failed to update the environment"
+      echo "Check the env_install.log file for more information."
+      exit 1
+    fi
+    success "$env_name environment updated"
+  elif [[ $REPLY =~ ^[2]$ ]]; then
+    echo
+    echo
+    status "Removing $env_name environment..."
+    conda env remove -n "$env_name" -y > /dev/null 2>&1
+    success "Environment removed"
+    setup_environment
+  else
+    echo
+    fail "Invalid option: $REPLY"
+    exit 1
+  fi
+else
+  # Environment doesn't already exist. Create it.
+  setup_environment
+fi
+
+# Activate tinyRNA environment
+conda activate $env_name
+
+# Install pip dependencies and our codebase
+status "Installing pip dependencies..."
+if ! pip --use-feature=in-tree-build install htseq==0.13.5 . > "pip_install.log" 2>&1; then
+  fail "Failed to install pip dependencies"
+  echo "Check the pip_install.log file for more information."
+  exit 1
+fi
+success "pip dependencies installed"
+
+# Install DESeq2 from Bioconductor
+status "Installing DESeq2 from Bioconductor (this will take a while)..."
+Rscript -e 'install.packages("BiocManager", repos="https://cloud.r-project.org")' > "deseq2_install.log" 2>&1
+Rscript -e 'BiocManager::install("DESeq2")' >> "deseq2_install.log" 2>&1
+
+# Check if DESeq2 installation was successful
+if grep -q "Successfully installed DESeq2" "deseq2_install.log"; then
+  success "DESeq2 installation was successful"
+  rm "deseq2_install.log"
+else
+  fail "DESeq2 installation failed"
+  echo "See deseq2_install.log for more information"
+  exit 1
+fi
+
+echo
+echo
+success "All done!"
+success "To activate the environment, run: conda activate $env_name"
