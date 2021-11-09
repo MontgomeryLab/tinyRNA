@@ -4,9 +4,6 @@ env_name="tinyrna"
 bioc_version="3.14"
 tested_bioc_versions="3.1[2-4]"
 
-# Get the current shell
-shell="$(basename "$SHELL")"
-
 function success() {
   check="✓"
   green_on="\033[1;32m"
@@ -77,6 +74,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
   platform_lock_file="conda-r-osx-64.lock"
 elif [[ "$OSTYPE" == "linux-gnu" ]]; then
   success "Linux detected"
+  shell="$(basename "$SHELL")"
   miniconda_installer="Miniconda3-latest-Linux-x86_64.sh"
   platform_lock_file="conda-r-linux-64.lock"
 else
@@ -94,7 +92,7 @@ else
     success "Miniconda downloaded"
     verify_conda_checksum $miniconda_installer
     status "Running interactive Miniconda installer..."
-    if ! $SHELL $miniconda_installer; then
+    if ! $shell $miniconda_installer; then
       fail "Miniconda installation failed"
       exit 1
     fi
