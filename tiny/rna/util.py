@@ -1,4 +1,6 @@
+import argparse
 import functools
+import textwrap
 import time
 import os
 import re
@@ -18,6 +20,18 @@ def report_execution_time(step_name: str):
             return return_val
         return wrapper
     return timer
+
+
+class SmartFormatter(argparse.HelpFormatter):
+    # Properly formats argparse helpstring fields that contain newlines
+    def _split_lines(self, text, width):
+        if text.startswith('R|'):
+            lines = []
+            for line in text[2:].splitlines():
+                fill = textwrap.fill(line, width, subsequent_indent="  ")
+                lines.extend(fill.splitlines())
+            return lines
+        return argparse.HelpFormatter._split_lines(self, text, width)
 
 
 def from_here(config_file, input_file):

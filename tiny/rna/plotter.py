@@ -1,8 +1,8 @@
-""" Plotting script for the sRNA tinyRNA workflow.
+"""This script produces basic static plots for publication as part of the tinyRNA workflow.
 
-This script produces basic static plots for publications as part of the tinyRNA
-workflow. It uses a default style and produces multiple PDFs, but you may provide
-your own styles sheet.
+Input file requirements vary by plot type and you are free to supply only the files necessary
+for your plot selections. If you are sourcing all of your input files from the same run
+directory, you may find it easier to instead run `tiny replot` within that run directory.
 """
 
 import multiprocessing as mp
@@ -18,47 +18,53 @@ from pkg_resources import resource_filename
 
 from tiny.rna.configuration import timestamp_format
 from tiny.rna.plotterlib import plotterlib as lib
-from tiny.rna.util import report_execution_time, make_filename
+from tiny.rna.util import report_execution_time, make_filename, SmartFormatter
 
 
 def get_args():
     """Get input arguments from the user/command line."""
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description=__doc__, add_help=False, formatter_class=SmartFormatter)
+    required_args = parser.add_argument_group("Required arguments")
     counter_files = parser.add_argument_group("Input files produced by Counter")
     diffexp_files = parser.add_argument_group("Input files produced by DGE")
+    optional_args = parser.add_argument_group("Optional arguments")
 
     # Single file inputs
     diffexp_files.add_argument('-nc', '--norm-counts', metavar='NORM_COUNTS',
-                               help='The ...norm_counts.csv file.')
+                               help='The ...norm_counts.csv file produced by tiny-deseq.r')
 
     # Multi-file inputs
-    diffexp_files.add_argument('-dge', '--dge-tables', metavar='DGE_COMPARISONS', nargs='+',
-                               help='The ...cond1...cond2...deseq.csv files, separated by a space.')
-    counter_files.add_argument('-len', '--len-dist', metavar='5P_LEN_DISTS', nargs='+',
-                               help='The ...nt_len_dist.csv files, separated by a space.')
+    diffexp_files.add_argument('-dge', '--dge-tables', metavar='COMPARISON', nargs='+',
+                               help='The ...cond1...cond2...deseq.csv files produced by tiny-deseq.r')
+    counter_files.add_argument('-len', '--len-dist', metavar='5P_LEN', nargs='+',
+                               help='The ...nt_len_dist.csv files produced by tiny-count')
 
     # Outputs options
-    parser.add_argument('-o', '--out-prefix', metavar='OUTPREFIX',
-                        help='Optional prefix to use for output PDF files.')
-    parser.add_argument('-pv', '--p-value', metavar='VAL', default=0.05, type=float,
-                        help='Optional p-value to use in DGE scatter plots.')
-    parser.add_argument('-s', '--style-sheet', metavar='MPLSTYLE',
-                        default=resource_filename('tiny', 'templates/tinyrna-light.mplstyle'),
-                        help='Optional matplotlib style sheet to use for plots.')
-    parser.add_argument('-v', '--vector-scatter', action='store_true',
-                        help='Produce scatter plots with vectorized points (slower).\n'
-                        'Note: only the points on scatter plots will be raster if '
-                        'this option is not provided.')
-    parser.add_argument('-p', '--plots', metavar='PLOTS', required=True, nargs='+',
-                        help='List of plots to create. Options: \n'
-                             'len_dist: A stacked barplot showing size & 5p-nt distribution,\n'
-                             'class_charts: A pie and barchart showing proportions of counts per class,\n'
-                             'replicate_scatter: A scatter plot comparing replicates for all count files given,\n'
-                             'sample_avg_scatter_by_dge: A scatter plot comparing all sample groups,'
-                                'with significantly different (padj<0.05) genes highlighted.\n'
-                             'sample_avg_scatter_by_dge_class: A scatter plot comparing all sample groups,'
-                                'with classes and significantly different genes highlighted')
+    optional_args.add_argument('-h', '--help', action="help", help="show this help message and exit")
+    optional_args.add_argument('-o', '--out-prefix', metavar='PREFIX',
+                               help='Prefix to use for output filenames.')
+    optional_args.add_argument('-pv', '--p-value', metavar='VALUE', default=0.05, type=float,
+                               help='P-value to use in DGE scatter plots.')
+    optional_args.add_argument('-s', '--style-sheet', metavar='MPLSTYLE',
+                               default=resource_filename('tiny', 'templates/tinyrna-light.mplstyle'),
+                               help='Optional matplotlib style sheet to use for plots.')
+    optional_args.add_argument('-v', '--vector-scatter', action='store_true',
+                               help='Produce scatter plots with vectorized points (slower).\n'
+                               'Note: only the points on scatter plots will be raster if '
+                               'this option is not provided.')
+
+    # Required arguments
+    required_args.add_argument('-p', '--plots', metavar='PLOT', required=True, nargs='+',
+                               help="R|List of plots to create. Options: \n"
+                               "• len_dist: A stacked barplot showing size & 5' nucleotide distribution.\n"
+                               "• class_charts: A pie and barchart showing proportions of counts per class.\n"
+                               "• replicate_scatter: A scatter plot comparing replicates for all count files given.\n"
+                               "• sample_avg_scatter_by_dge: A scatter plot comparing all sample groups, with "
+                               "significantly different genes highlighted. P-value can be set using --p-value. "
+                               "Default: 0.05.\n"
+                               "• sample_avg_scatter_by_dge_class: A scatter plot comparing all sample groups, with "
+                               "classes and significantly different genes highlighted.")
 
     return parser.parse_args()
 
