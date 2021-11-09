@@ -2,7 +2,7 @@
 
 env_name="tinyrna"
 bioc_version="3.14"
-deseq2_version="1.34.0"
+tested_bioc_versions="3.1[2-4]"
 
 # Get the current shell
 shell="$(basename "$SHELL")"
@@ -31,28 +31,14 @@ function stop() {
   kill -TERM -$$
 }
 # Ensures that when user presses Ctrl+C, the script stops
-# rather than proceeding to the next step
+# rather than stopping current task and proceeding to the next
 trap 'stop' SIGINT
 
-# check if os is mac or linux
-if [[ "$OSTYPE" == "darwin"* ]]; then
-  success "macOS detected"
-  miniconda_installer="Miniconda3-latest-MacOSX-x86_64.sh"
-  platform_lock_file="conda-osx-64.lock"
-elif [[ "$OSTYPE" == "linux-gnu" ]]; then
-  success "Linux detected"
-  miniconda_installer="Miniconda3-latest-Linux-x86_64.sh"
-  platform_lock_file="conda-linux-64.lock"
-else
-  fail "Unsupported OS"
-  exit 1
-fi
-
 function verify_conda_checksum() {
-  installer_file="$1"
+  local installer_file="$1"
 
   # Download the Miniconda installer hash list and parse out only the sha256 sums
-  hash_list=$(
+  local hash_list=$(
     curl -s https://raw.githubusercontent.com/conda/conda-docs/master/docs/source/miniconda_hashes.rst 2> /dev/null \
     | grep -o '[0-9a-f]\{64\}')
 
@@ -69,18 +55,38 @@ function verify_conda_checksum() {
 function setup_environment() {
   # Setup tinyRNA environment using our generated lock file
   status "Setting up $env_name environment (this may take a while)..."
-  if ! conda create --file $platform_lock_file --name $env_name  > "env_install.log" 2>&1; then
+  conda create --file $platform_lock_file --name $env_name 2>&1 | tee "env_install.log"
+  if ! grep -q "Executing transaction: ...working... done" env_install.log; then
     fail "$env_name environment setup failed"
-    echo "Check the env_install.log file for more information."
+    echo "Console output has been saved to env_install.log."
     exit 1
   else
     success "$env_name environment setup complete"
   fi
 }
 
+################################################################################
+# Main Routine
+################################################################################
+
+# Check if os is mac or linux
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  success "macOS detected"
+  shell=$(basename "$(dscl . -read ~/ UserShell | cut -f 2 -d " ")")
+  miniconda_installer="Miniconda3-latest-MacOSX-x86_64.sh"
+  platform_lock_file="conda-r-osx-64.lock"
+elif [[ "$OSTYPE" == "linux-gnu" ]]; then
+  success "Linux detected"
+  miniconda_installer="Miniconda3-latest-Linux-x86_64.sh"
+  platform_lock_file="conda-r-linux-64.lock"
+else
+  fail "Unsupported OS"
+  exit 1
+fi
+
 # Check if Conda is installed
-if grep -q "conda init" ~/."${shell}"rc 2> /dev/null; then
-  success "Conda is already installed for ${shell}"
+if grep -q "conda init" ~/."$shell"rc ~/."$shell"_profile 2> /dev/null; then
+  success "Conda is already installed for $shell"
 else
   status "Downloading Miniconda..."
   curl -O -# https://repo.anaconda.com/miniconda/$miniconda_installer
@@ -101,6 +107,41 @@ else
   success "Miniconda installed"
   rm $miniconda_installer
   echo "auto_activate_base: false" >> ~/.condarc
+fi
+
+# By default, assume that host environment does not contain an appropriate DESeq2 version
+install_R_deseq2=true
+
+# Check if R is installed
+if [ -x "$(command -v R)" ]; then
+  status "Checking host R environment..."
+  # Check if DESeq2 is installed
+  if Rscript -e "library(DESeq2); print(TRUE)" 2>&1 | tail -n 1 | grep -q TRUE; then
+    # Get installed Bioconductor version
+    host_bioc_vers=$(Rscript -e "library(BiocManager); BiocManager::version()" 2>&1 | tail -n 1 | grep -Eo '[0-9]+\.[0-9]+')
+    # Check to see if host_bioc_version is in our tested range
+    if [[ $host_bioc_vers =~ $tested_bioc_versions ]]; then
+      success "DESeq2 is already installed in the host environment"
+      install_R_deseq2=false
+    else
+      echo
+      echo "tinyRNA has been tested for DESeq2 in Bioconductor v$tested_bioc_versions."
+      echo "The installer found v$host_bioc_vers on the host. tinyRNA can use your copy"
+      echo "or we can install a tested version of DESeq2 and R in the isolated tinyRNA environment. BEWARE: standard installation of DESeq2 takes over 20 minutes."
+      echo
+      read -p "Would you like to use the already installed version? [y/n]: " -n 1 -r
+      echo
+      if [[ $REPLY =~ ^[Yy]$ ]]; then
+        success "The host DESeq2 installation will be used"
+        install_R_deseq2=false
+      fi
+    fi # End of Bioconductor version check
+  fi # End DESeq2 check
+fi # End of R check
+
+if [[ $install_R_deseq2 == false ]]; then
+  # Switch to using non-R lock file
+  platform_lock_file="${platform_lock_file//-r/}"
 fi
 
 # Enable use of Conda through this script
@@ -154,8 +195,7 @@ if ! pip --use-feature=in-tree-build install htseq==0.13.5 . > "pip_install.log"
 fi
 success "pip dependencies installed"
 
-# Check if Deseq2 is up to date (NOTE: $Version is an R directive, not a shell variable, hence single quotes)
-if ! Rscript -e 'packageDescription("DESeq2")$Version' 2>&1 | grep -q $deseq2_version; then
+if [[ $install_R_deseq2 == true ]]; then
   # Install DESeq2 from Bioconductor
   status "Installing DESeq2 from Bioconductor (this may take over 20 minutes)..."
   status 'To check status run "tail -f deseq2_install.log" from another terminal'
@@ -170,8 +210,6 @@ if ! Rscript -e 'packageDescription("DESeq2")$Version' 2>&1 | grep -q $deseq2_ve
     echo "See deseq2_install.log for more information"
     exit 1
   fi
-else
-  success "DESeq2 $deseq2_version is already installed"
 fi
 
 success "Setup complete"
