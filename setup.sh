@@ -123,15 +123,20 @@ if [ -x "$(command -v R)" ]; then
       install_R_deseq2=false
     else
       echo
-      echo "tinyRNA has been tested for DESeq2 in Bioconductor v$tested_bioc_versions."
-      echo "The installer found v$host_bioc_vers on the host. tinyRNA can use your copy"
-      echo "or we can install a tested version of DESeq2 and R in the isolated tinyRNA environment. BEWARE: standard installation of DESeq2 takes over 20 minutes."
+      echo "tinyRNA has been tested with DESeq2 in Bioconductor release $tested_bioc_versions." \
+      "The installer found v$host_bioc_vers on your system. tinyRNA can use your copy or we can" \
+      "install a tested version of DESeq2 and R in the isolated tinyRNA environment." | fold -s
       echo
-      read -p "Would you like to use the already installed version? [y/n]: " -n 1 -r
+      echo "BEWARE: installation of DESeq2 will take over 20 minutes."
+      echo
+      read -p "Would you like tinyRNA to use your copy of DESeq2? [y/n]: " -n 1 -r
       echo
       if [[ $REPLY =~ ^[Yy]$ ]]; then
-        success "The host DESeq2 installation will be used"
+        success "The host's DESeq2 installation will be used"
         install_R_deseq2=false
+      elif [[ $REPLY =~ ^[^YyNn]$ ]]; then
+        fail "Invalid option: $REPLY"
+        exit 1
       fi
     fi # End of Bioconductor version check
   fi # End DESeq2 check
