@@ -285,7 +285,7 @@ class Configuration(ConfigBase):
             self['bt_index_files'] = [self.cwl_file(bt_index_prefix + postfix, verify=(not self['run_bowtie_build']))
                             for postfix in ['.1.ebwt', '.2.ebwt', '.3.ebwt', '.4.ebwt', '.rev.1.ebwt', '.rev.2.ebwt']]
         except FileNotFoundError as e:
-            sys.exit("The following file could not be found from the Bowtie index prefix defined in your Paths Sheet:\n"
+            sys.exit("The following file could not be found from the Bowtie index prefix defined in your Paths File:\n"
                      "%s" % (e.filename,))
 
         # When CWL copies bt_index_filex for the bowtie.cwl InitialWorkDirRequirement, it does not
