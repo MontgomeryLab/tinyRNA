@@ -1,3 +1,9 @@
+"""This submodule assigns feature counts for SAM alignments using a Feature Sheet ruleset.
+
+If you find that you are sourcing all of your input files from a prior run, we recommend
+that you instead run `tiny recount` within that run's directory.
+"""
+
 import multiprocessing as mp
 import traceback
 import argparse
@@ -19,14 +25,14 @@ feature_counter: FeatureCounter
 def get_args():
     """Get input arguments from the user/command line."""
 
-    arg_parser = argparse.ArgumentParser()
+    arg_parser = argparse.ArgumentParser(description=__doc__)
     required_group = arg_parser.add_argument_group("required arguments")
 
     # Required arguments
     required_group.add_argument('-i', '--input-csv', metavar='SAMPLES', required=True,
-                        help='the csv samples file/library list')
+                        help='your Samples Sheet')
     required_group.add_argument('-c', '--config', metavar='CONFIGFILE', required=True,
-                        help='the csv features configuration file')
+                        help='your Features Sheet')
     required_group.add_argument('-o', '--out-prefix', metavar='OUTPUTPREFIX', required=True,
                         help='output prefix to use for file names')
 
@@ -44,8 +50,8 @@ def get_args():
                         help='Represent all features in output counts table, '
                              'regardless of counts or identity rules.')
     arg_parser.add_argument('-p', '--is-pipeline', action='store_true',
-                        help='Indicates that counter was invoked from the tinyrna pipeline '
-                             'and that input files should be sources as such.')
+                        help='Indicates that counter was invoked as part of a pipeline run '
+                             'and that input files should be sourced as such.')
     arg_parser.add_argument('-d', '--report-diags', action='store_true',
                         help='Produce diagnostic information about uncounted/eliminated '
                              'selection elements.')
