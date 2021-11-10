@@ -10,23 +10,21 @@
     - [Paths File](#paths-file)
     - [Samples Sheet](#samples-sheet)
     - [Features Sheet](#features-sheet)
-  - [User-Provided Input Files](#user-provided-input-files)
+  - [User-Provided Input Files](#user-provided-input-file-requirements)
   - [Running the End-to-End Analysis](#running-the-end-to-end-analysis)
   - [Running Individual Steps](#running-individual-steps)
-      - [Create Workflow](#create-workflow)
-      - [Collapser](#collapser)
-      - [Counter](#counter)
-      - [Deseq](#deseq)
-      - [Plotter](#plotter)
-      - [fastp, bowtie-build, and bowtie](#fastp-bowtie-build-and-bowtie)
+
   - [Using a Different Workflow Runner](#using-a-different-workflow-runner)
 - [Outputs](#outputs)
   - [Data Pre-Processing](#data-pre-processing)
+  - [Collapsed FASTA files](#collapsed-fasta-files)
   - [Counts and Pipeline Statistics](#counts-and-pipeline-statistics)
     - [Feature Counts](#feature-counts)
     - [Alignment Statistics](#alignment-statistics)
     - [Summary Statistics](#summary-statistics)
     - [5'nt vs. Length Matrix](#5nt-vs-length-matrix)
+  - [Differential Expression Analysis](#differential-expression-analysis)
+  - [Plots](#plots)
 - [Contributing](#contributing)
 - [Authors](#authors)
 - [License](#license)
@@ -40,7 +38,7 @@ The current workflow is as follows:
 
 ## Installation
 
-A setup script has been provided for easy installation of the tinyRNA environment and its dependencies. The project and its dependencies will be installed in a conda environment called `tinyrna`.
+A setup script has been provided for easy installation of tinyRNA. The project and its dependencies will be installed in a conda environment called `tinyrna`.
 
 ```
 # Clone the repository into a local directory
@@ -95,11 +93,10 @@ To make it simple to specify your fastq files and their locations, along with as
 
 #### Features Sheet
 
-Small RNAs can often be classified by sequence features, such as length, strandedness, and 5' nucleotide. We provide a Features Sheet (`features.csv`) in which you can define selection rules to more accurately capture counts for the small RNAs of interest.  These rules can be defined per GFF3 file (a file containing the coordinates of features of interest) on the basis of any attribute key/value pair (for example, `Class=miRNA`), strand relative to the feature of interest, 5' end nucleotide, and length, with options for full or partial interval matching with the target sequence.
+Small RNAs can often be classified by sequence features, such as length, strandedness, and 5' nucleotide. We provide a Features Sheet (`features.csv`) in which you can define selection rules to more accurately capture counts for the small RNAs of interest.  These rules can be defined per GFF3 file (a file containing the coordinates of features of interest) on the basis of any attribute key/value pair (for example, `Class=miRNA`), strand relative to the feature of interest, 5' end nucleotide, and length, with options for full or partial interval matching with the target sequence. See [Counter](docs/counter.md) for more information.
 
-### User-Provided Input Files
+### User-Provided Input File Requirements
 
-Running the pipeline requires the following files:
   1. A GFF3 formatted file with with genomic coordinates for your features of interest, such as miRNAs (see c_elegans_WS279_chr1.gff3 in the reference_data folder for an example)
      - Each feature must have an attributes column (column 9) which defines its `ID` and `Class` (case-sensitive).
        - For example: `chrI	.	miRNA	100	121	.	+	.	ID=miR-1;Class=miRNA`
@@ -129,9 +126,9 @@ tiny run --config run_config.yml
 ```
 
 ### Running Individual Steps
-The process for running individual steps differs depending on whether the step is an tinyRNA Python component, or a CWL wrapped third party tool.
+The process for running individual steps differs depending on whether the step is a tinyRNA Python component, or a CWL wrapped third party tool.
 
-The following steps are Python components. Their corresponding commands may be invoked at the command line:
+The following steps are Python components that can be run from the command line within the tinyRNA conda environment:
 ##### Create Workflow
 ```
 tiny-config -i CONFIG
@@ -162,25 +159,42 @@ tiny-collapse [-h] -i FASTQFILE -o OUTPREFIX [-t THRESHOLD] [-c]
 ```
 ##### Counter
 ```
-tiny-count [-h] -i SAMPLES -c CONFIGFILE -o OUTPUTPREFIX [-t] [-p]
+tiny-count [-h] -i SAMPLES -c CONFIGFILE -o OUTPUTPREFIX
+                  [-sf [SOURCE [SOURCE ...]]] [-tf [TYPE [TYPE ...]]] [-nn]
+                  [-a] [-p] [-d]
 
-  optional arguments:
-    -h, --help            show this help message and exit
-    -t, --intermed-file   Save the intermediate file containing all alignments
-                          and associated features.
-    -p, --is-pipeline     Indicates that counter was invoked from the tinyrna
-                          pipeline and that input files should be sources as
-                          such.
-  
-  required arguments:
-    -i SAMPLES, --input-csv SAMPLES
-                          the csv samples file/library list
-    -c CONFIGFILE, --config CONFIGFILE
-                          the csv features configuration file
-    -o OUTPUTPREFIX, --out-prefix OUTPUTPREFIX
-                          output prefix to use for file names
+This submodule assigns feature counts for SAM alignments using a Feature Sheet
+ruleset. If you find that you are sourcing all of your input files from a prior
+run, we recommend that you instead run `tiny recount` within that run's
+directory.
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -sf [SOURCE [SOURCE ...]], --source-filter [SOURCE [SOURCE ...]]
+                        Only produce counts for features whose GFF column 2
+                        matches the source(s) listed
+  -tf [TYPE [TYPE ...]], --type-filter [TYPE [TYPE ...]]
+                        Only produce counts for features whose GFF column 3
+                        matches the type(s) listed
+  -nn, --no-normalize   Do not normalize counts by genomic hits and (selected)
+                        overlapping feature counts.
+  -a, --all-features    Represent all features in output counts table,
+                        regardless of counts or identity rules.
+  -p, --is-pipeline     Indicates that counter was invoked as part of a
+                        pipeline run and that input files should be sourced as
+                        such.
+  -d, --report-diags    Produce diagnostic information about
+                        uncounted/eliminated selection elements.
+
+required arguments:
+  -i SAMPLES, --input-csv SAMPLES
+                        your Samples Sheet
+  -c CONFIGFILE, --config CONFIGFILE
+                        your Features Sheet
+  -o OUTPUTPREFIX, --out-prefix OUTPUTPREFIX
+                        output prefix to use for file names
 ```
-##### Deseq
+##### Deseq2
 ```
 tiny-deseq.r --input-file COUNTFILE --outfile-prefix PREFIX [--control CONDITION] [--pca] [--drop-zero]
 
@@ -290,11 +304,14 @@ The files produced by each pipeline step will be included in the final run direc
 
 [fastp](https://github.com/OpenGene/fastp) is used to trim adapters and remove poor quality reads from FASTQ input files. Summary and quality statistics reports are generated for each library. These reports are used to calculate the pipeline summary statistics for total reads and retained reads.
 
+### Collapsed FASTA files
+A "collapsed" FASTA contains unique reads found in fastp's quality filtered FASTQ files. Each header indicates the number of times that sequence occurred in the input. This allows for faster bowtie alignments while preserving counts for downstream analysis.
+
 ### Counts and Pipeline Statistics
-Custom Python scripts are used at the Counter step to generate alignment statistics, pipeline summary statistics, and 5'nt vs. length matrices for each library.
+The counter step produces a variety of outputs
 
 #### Feature Counts
-Custom Python scripts and HTSeq are used to generate a single table of feature counts that includes columns for each library analyzed. A feature's _Feature ID_ and _Feature Class_ are simply the values of its `ID` and `Class` attributes. We have also included a _Feature Name_ column which displays aliases of your choice, as specified in the Features Sheet. In the _Name Attribute_ column of the Features Sheet, you can choose an additional attribute to be included in the _Feature Name_ column of this table. If the _Name Attribute_ in the Features Sheet is set to`ID`, the _Feature Name_ column is left empty.
+Custom Python scripts and HTSeq are used to generate a single table of feature counts that includes columns for each library analyzed. A feature's _Feature ID_ and _Feature Class_ are simply the values of its `ID` and `Class` attributes. We have also included a _Feature Name_ column which displays aliases of your choice, as specified in the _Alias by..._ column of the Features Sheet. If _Alias by..._ is set to`ID`, the _Feature Name_ column is left empty.
 
 For example, if your Features Sheet has a rule which specifies an ID Attribute of `sequence_name` and the GFF entry for this feature has the following attributes column:
 ```
@@ -326,11 +343,23 @@ A single table of summary statistics includes columns for each library and the f
 - Retained Reads (i.e. total reads passing quality filtering)
 - Unique Sequences (i.e. total unique sequences passing quality filtering)
 - Mapped Sequences (i.e. total genome-mapping sequences passing quality filtering)
-- Aligned Reads (i.e. total genome-mapping reads passing quality filtering that were aligned to at least one feature in your Features Sheet)
+- Assigned Reads (i.e. total genome-mapping reads passing quality filtering that were aligned to at least one feature in your Features Sheet)
 
 #### 5'nt vs. Length Matrix
 
-After alignment, a size and 5'nt distribution table is created for each library. The distribution of lengths and 5'nt can be used to assess the overall quality of your libraries. This can also be used for analyzing small RNA distributions in non-model organisms without annotations.
+After alignment, a size and 5' nt distribution table is created for each library. The distribution of lengths and 5' nt can be used to assess the overall quality of your libraries. This can also be used for analyzing small RNA distributions in non-model organisms without annotations.
+
+### Differential Expression Analysis
+DGE is performed using the `DESeq2` R package. It reports differential expression tables for your experiment design, and a table of normalized feature counts. If your control condition is indicated in your Samples Sheet then pairwise comparisons will be  made against the control. If a control condition is not indicated then all possible bidirectional pairwise comparisons are made. 
+
+### Plots
+Simple static plots are generated from the outputs of Counter and Deseq2. These plots are useful for assessing the quality of your experiment design and the quality of your libraries. The available plots are:
+- len_dist: A stacked barplot showing size & 5' nucleotide distribution.
+- class_charts: A pie and barchart showing proportions of counts per class.
+- replicate_scatter: A scatter plot comparing replicates for all count files given.
+- sample_avg_scatter_by_dge: A scatter plot comparing all sample groups, with significantly different genes highlighted.
+- sample_avg_scatter_by_dge_class: A scatter plot comparing all sample groups, with classes and significantly different genes highlighted.
+
 
 ## Contributing
 
