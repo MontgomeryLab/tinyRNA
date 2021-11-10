@@ -28,7 +28,7 @@ class CounterTests(unittest.TestCase):
         # ID, Key, Value, Hierarchy, Strand, nt5, Length, Match, Source
         self.csv_feat_row_dict = {'Name': "Alias", 'Key': "Class", 'Value': "CSR", 'Hierarchy': "1",
                                   'Strand': "antisense", 'nt5': '"C,G,U"', 'Length': "all", 'Match': "Partial",
-                                  'Source': "./testdata/cel_ws279/c_elegans.PRJNA13758.WS279.chr1.gff3"}
+                                  'Source': "./testdata/cel_ws279/c_elegans_WS279_chr1.gff3"}
                                    # nt5 needs to be double quoted since it contains commas
 
         # Identity, Hierarchy, Strand, nt5, Length, Strict

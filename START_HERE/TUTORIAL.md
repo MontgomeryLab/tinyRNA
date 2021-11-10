@@ -4,10 +4,16 @@ This folder (`START_HERE`) contains a working configuration and a sample input d
 
 ## Installation
 
-Installation is pretty easy. You'll install tinyRNA in an isolated environment so that it (and its dependencies) don't interfere with your daily. We've provided an environment file to make things simple. First, you'll need to install `conda` for managing the environment.
+Installation is pretty easy and we're working on ways to make it even easier. You'll install tinyRNA in an isolated environment so that it (and its dependencies) don't interfere with your daily. First, you'll need to install `conda` for managing the environment.
 
 #### 1. Install conda
-To install `conda` with the least time and disk space commitment, you can download and follow instructions for [Miniconda3](https://docs.conda.io/en/latest/miniconda.html), which contains only conda and its dependencies.
+
+If you already have Anaconda or Miniconda, we recommend running `conda update conda` before skipping to step 2.
+
+| Platform | Installer | Installation Instructions |
+| --- | --- | --- |
+| Mac | [Miniconda](https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-x86_64.pkg) | [Mac Installation](https://conda.io/projects/conda/en/latest/user-guide/install/macos.html) |
+| Linux | [Miniconda](https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh) | [Linux installation](https://conda.io/projects/conda/en/latest/user-guide/install/linux.html) |
 
 #### 2. Install R & DESeq2
 Rather than installing R via conda, we recommend you install it yourself first from [CRAN](https://www.r-project.org/), then install DESeq2 following [instructions](https://bioconductor.org/packages/release/bioc/html/DESeq2.html) in Bioconductor. 

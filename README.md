@@ -20,7 +20,6 @@
       - [Plotter](#plotter)
       - [fastp, bowtie-build, and bowtie](#fastp-bowtie-build-and-bowtie)
   - [Using a Different Workflow Runner](#using-a-different-workflow-runner)
-  - [Feature Selection in Counter](#feature-selection-in-counter)
 - [Outputs](#outputs)
   - [Data Pre-Processing](#data-pre-processing)
   - [Counts and Pipeline Statistics](#counts-and-pipeline-statistics)
@@ -58,6 +57,9 @@ A setup script has been provided for easy installation of the tinyRNA environmen
  conda deactivate
 ```
 
+If the installation script runs the Miniconda installer:
+- Press "q" if you find yourself trapped on the license page
+- We recommend answering "yes" to running `conda init`
 
 ## Usage
 If you'd like to jump right in and start using tinyRNA, see our [tutorial](./START_HERE/TUTORIAL.md).
@@ -68,7 +70,7 @@ You can execute the workflow in its entirety for a full end-to-end analysis pipe
 The pipeline requires that you identify:
 - Your samples via the *Samples Sheet*
 - Your selection preferences for feature counting via the *Features Sheet*
-- The location of your config files and other file inputs via the *Paths Sheet*
+- The location of your config files and other file inputs via the *Paths File*
 - Your preferences for the pipeline and its steps via the *Run Config*
 
 <img src="images/config-files.png" width="50%" alt="[Configuration File Diagram]">
@@ -206,45 +208,56 @@ tiny-deseq.r --input-file COUNTFILE --outfile-prefix PREFIX [--control CONDITION
 ```
 ##### Plotter
 ```
-tiny-plot [-h] [-nc NORM_COUNTS] [-dge DGE_COMPARISONS [DGE_COMPARISONS ...]]
-               [-len 5P_LEN_DISTS [5P_LEN_DISTS ...]] [-o OUTPREFIX]
-               [-pv VAL] [-s MPLSTYLE] [-v] -p PLOTS [PLOTS ...]
+tiny-plot [-nc NORM_COUNTS] [-dge COMPARISON [COMPARISON ...]]
+                 [-len 5P_LEN [5P_LEN ...]] [-h] [-o PREFIX] [-pv VALUE]
+                 [-s MPLSTYLE] [-v] -p PLOT [PLOT ...]
 
-optional arguments:
+This script produces basic static plots for publication as part of the tinyRNA
+workflow. Input file requirements vary by plot type and you are free to supply
+only the files necessary for your plot selections. If you are sourcing all of
+your input files from the same run directory, you may find it easier to instead
+run `tiny replot` within that run directory.
+
+Required arguments:
+  -p PLOT [PLOT ...], --plots PLOT [PLOT ...]
+                        List of plots to create. Options:
+                        • len_dist: A stacked barplot showing size & 5'
+                          nucleotide distribution.
+                        • class_charts: A pie and barchart showing proportions
+                          of counts per class.
+                        • replicate_scatter: A scatter plot comparing
+                          replicates for all count files given.
+                        • sample_avg_scatter_by_dge: A scatter plot comparing
+                          all sample groups, with significantly different
+                          genes highlighted. P-value can be set using
+                          --p-value. Default: 0.05.
+                        • sample_avg_scatter_by_dge_class: A scatter plot
+                          comparing all sample groups, with classes and
+                          significantly different genes highlighted.
+
+Input files produced by Counter:
+  -len 5P_LEN [5P_LEN ...], --len-dist 5P_LEN [5P_LEN ...]
+                        The ...nt_len_dist.csv files produced by tiny-count
+
+Input files produced by DGE:
+  -nc NORM_COUNTS, --norm-counts NORM_COUNTS
+                        The ...norm_counts.csv file produced by tiny-deseq.r
+  -dge COMPARISON [COMPARISON ...], --dge-tables COMPARISON [COMPARISON ...]
+                        The ...cond1...cond2...deseq.csv files produced by
+                        tiny-deseq.r
+
+Optional arguments:
   -h, --help            show this help message and exit
-  -o OUTPREFIX, --out-prefix OUTPREFIX
-                        Optional prefix to use for output PDF files.
-  -pv VAL, --p-value VAL
-                        Optional p-value to use in DGE scatter plots.
+  -o PREFIX, --out-prefix PREFIX
+                        Prefix to use for output filenames.
+  -pv VALUE, --p-value VALUE
+                        P-value to use in DGE scatter plots.
   -s MPLSTYLE, --style-sheet MPLSTYLE
                         Optional matplotlib style sheet to use for plots.
   -v, --vector-scatter  Produce scatter plots with vectorized points (slower).
                         Note: only the points on scatter plots will be raster
                         if this option is not provided.
-  -p PLOTS [PLOTS ...], --plots PLOTS [PLOTS ...]
-                        List of plots to create. Options: 
-                        len_dist: A stacked barplot showing size & 5p-nt distribution,
-                        class_charts: A pie and barchart showing proportions of counts 
-                          per class, 
-                        replicate_scatter: A scatter plot comparing replicates for all
-                          count files given,
-                        sample_avg_scatter_by_dge: A scatter plot comparing all sample
-                          groups, with significantly different (padj<0.05) genes 
-                          highlighted.
-                        sample_avg_scatter_by_dge_class: A scatter plot comparing all
-                          sample groups, with classes and significantly different 
-                          genes highlighted
 
-Input files produced by Counter:
-  -len 5P_LEN_DISTS [5P_LEN_DISTS ...], --len-dist 5P_LEN_DISTS [5P_LEN_DISTS ...]
-                        The ...nt_len_dist.csv files, separated by a space.
-
-Input files produced by DGE:
-  -nc NORM_COUNTS, --norm-counts NORM_COUNTS
-                        The ...norm_counts.csv file.
-  -dge DGE_COMPARISONS [DGE_COMPARISONS ...], --dge-tables DGE_COMPARISONS [DGE_COMPARISONS ...]
-                        The ...cond1...cond2...deseq.csv files, separated by a
-                        space.
 
 ```
 
@@ -268,20 +281,6 @@ If you don't have a Run Config file or do not wish to obtain a processed copy, y
 ```
 tiny setup-cwl --config none
 ```
-
-### Feature Selection in Counter
-
-Selection takes place for every feature associated with every alignment of every small RNA sequence. It occurs in two phases:
-1. Against the candidate feature's attribute key/value pairs, as defined in your reference annotation files.
-2. Against the small RNA attributes (strand relative to feature of interest, 5' end nucleotide, and length).
-
-Each rule must be assigned a hierarchy value. A lower value indicates higher selection preference and multiple rules may share the same value. We utilize this value only during the first phase of selection; if multiple features match the attribute key/value pairs defined in your rules, then only the feature(s) with the lowest hierarchy values move to the second selection phase. The remaining features are discarded for the given read alignment. You can use the higher hierarchy values to exclude counts features that are not of interest from features of interest. For example, suppose you have a miRNA locus embedded within a coding gene locus (within an intron for example). By assigning a hierarchy of 1 to miRNA and a hierarchy of 2 to coding genes, all small RNA counts from sequences matching to the miRNA would be excluded from total counts for the coding gene. Reversing the hierarchy such that miRNA had a hierarchy of 2 and coding genes had a hierarchy of 1 would instead exclude reads from sequences matching to the coding gene from total counts for the miRNA. If a hierarchy of 1 was assigned to both miRNAs and coding genes, counts for sequences matching both features would be split between them.
-
-Small RNA reads passing selection will receive a normalized count increment. By default, read counts are normalized twice before being assigned to a feature (these settings can be changed in `run_config.yml`). Counts for each small RNA sequence are divided: 
-1. By the number of loci it aligns to in the genome.
-2. By the number of selected features for each of its alignments.
-
-Final feature counts will be expressed in terms of a particular feature attribute key such as sequence name (often denoted with `ID` in column 9 of the GFF3, e.g. `ID=let-7` ), which must be specified within the `Name Attribute` column of `features.csv`. In many cases, such as the example above, the identifier in the `Name Attribute` column will simply be `ID` and as the GFF3 is scanned, feature identifiers following `ID=` will be used as feature names.
 
 ## Outputs
 

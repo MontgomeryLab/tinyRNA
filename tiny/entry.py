@@ -2,15 +2,10 @@
 """The main entry point for tinyRNA for small RNA data analysis.
 
 This tool provides an end-to-end workflow for analyzing small RNA sequencing
-data from raw fastq files. This entry point also provides options for only
+data. This entry point also provides options for only
 returning template files and workflows that can be used separately.
 
-Subcommands:
-    - get-template
-    - setup-cwl
-    - recount
-    - replot
-    - run
+Subcommands: get-template, setup-cwl, recount, replot, run.
 
 When installed, run, recount and setup-cwl should be invoked with:
     tiny <subcommand> --config <config-file>

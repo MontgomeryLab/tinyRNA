@@ -39,8 +39,8 @@ threads: 4
 ##-- Control the amount of information printed to terminal: debug, normal, quiet --##
 verbosity: normal
 
-##-- (EXPERIMENTAL) If True: process each sample library in parallel --##
-run_parallel: false
+##-- If True: process fastp, collapser, and bowtie in parallel on a per-library basis --##
+run_parallel: true
 
 ##-- (EXPERIMENTAL) If True: execute the pipeline using native cwltool Python --##
 run_native: false
@@ -246,9 +246,8 @@ dge_drop_zero: False
 ######-------------------------------- PLOTTING OPTIONS -----------------------------######
 #
 # We use a custom Python script for creating all plots. The default base style is called
-# 'smrna-light'. If you wish to use another matplotlib stylesheet you may specify that here
-# (i.e. ggplot or seaborn-white). You may also specify color palettes built into matplotlib
-# if you do not wish to use 'smrna-light' defaults.
+# 'smrna-light'. If you wish to use another matplotlib stylesheet you may specify that in
+# the Paths File.
 #
 # We have specified default parameters for small RNA data based on our own "best practices".
 # You may change the parameters here.
