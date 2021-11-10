@@ -13,7 +13,6 @@
   - [User-Provided Input Files](#user-provided-input-file-requirements)
   - [Running the End-to-End Analysis](#running-the-end-to-end-analysis)
   - [Running Individual Steps](#running-individual-steps)
-
   - [Using a Different Workflow Runner](#using-a-different-workflow-runner)
 - [Outputs](#outputs)
   - [Data Pre-Processing](#data-pre-processing)
