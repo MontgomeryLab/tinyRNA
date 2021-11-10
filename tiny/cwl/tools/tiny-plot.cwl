@@ -5,7 +5,6 @@ class: CommandLineTool
 
 baseCommand: tiny-plot
 stdout: console_output.log
-stderr: console_output.log
 
 inputs:
   norm_counts:

@@ -19,12 +19,11 @@ class LibraryStats:
             self.assignments = set()
             self.feat_count = 0
 
-
-    summary_categories = ['Total Assigned Reads', 'Total Assigned Sequences',
+    summary_categories = ['Total Assigned Reads', 'Total Unassigned Reads',
+                          'Total Assigned Sequences', 'Total Unassigned Sequences',
                           'Assigned Single-Mapping Reads', 'Assigned Multi-Mapping Reads',
                           'Reads Assigned to Single Feature', 'Sequences Assigned to Single Feature',
-                          'Reads Assigned to Multiple Features', 'Sequences Assigned to Multiple Features',
-                          'Total Unassigned Reads', 'Total Unassigned Sequences']
+                          'Reads Assigned to Multiple Features', 'Sequences Assigned to Multiple Features']
 
     def __init__(self, out_prefix: str = None, report_diags: bool = False, no_normalize = False, **kwargs):
         self.library = {'Name': 'Unassigned', 'File': 'Unassigned'}
@@ -108,7 +107,7 @@ class LibraryStats:
 class SummaryStats:
 
     summary_categories = ["Total Reads", "Retained Reads", "Unique Sequences",
-                          "Mapped Sequences", "Mapped Reads", "Aligned Reads"]
+                          "Mapped Sequences", "Mapped Reads", "Assigned Reads"]
 
     def __init__(self, feature_attributes: dict, out_prefix: str, report_diags: bool):
         self.feature_attributes = feature_attributes
@@ -212,10 +211,10 @@ class SummaryStats:
                            ["Total Assigned Sequences",
                             "Total Unassigned Sequences"]])
         mapped_reads = sum([other.library_stats[stat] for stat in
-                            ['Assigned Multi-Mapping Reads',
-                             'Assigned Single-Mapping Reads',
+                            ['Reads Assigned to Multiple Features',
+                             'Reads Assigned to Single Feature',
                              'Total Unassigned Reads']])
-        aligned_reads = other.library_stats["Total Assigned Reads"]
+        assigned_reads = other.library_stats["Total Assigned Reads"]
         total_reads, retained_reads = self.get_fastp_stats(other)
         unique_seqs = self.get_collapser_stats(other)
 
@@ -225,7 +224,7 @@ class SummaryStats:
             "Unique Sequences": unique_seqs,
             "Mapped Sequences": mapped_seqs,
             "Mapped Reads": mapped_reads,
-            "Aligned Reads": aligned_reads
+            "Assigned Reads": assigned_reads
         }
 
         self.pipeline_stats_df[other.library["Name"]] = self.pipeline_stats_df.index.map(other_summary)

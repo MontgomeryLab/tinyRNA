@@ -103,7 +103,7 @@ inputs:
 steps:
 
   preprocessing:
-    run: per-library.cwl
+    run: preprocessing.cwl
     scatter: [in_fq, sample_basename, fastp_report_title]
     scatterMethod: dotproduct
     in:
