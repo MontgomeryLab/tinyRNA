@@ -93,7 +93,9 @@ To make it simple to specify your fastq files and their locations, along with as
 
 #### Features Sheet
 
-Small RNAs can often be classified by sequence features, such as length, strandedness, and 5' nucleotide. We provide a Features Sheet (`features.csv`) in which you can define selection rules to more accurately capture counts for the small RNAs of interest.  These rules can be defined per GFF3 file (a file containing the coordinates of features of interest) on the basis of any attribute key/value pair (for example, `Class=miRNA`), strand relative to the feature of interest, 5' end nucleotide, and length, with options for full or partial interval matching with the target sequence. See [Counter](docs/counter.md) for more information.
+Small RNAs can often be classified by sequence characteristics, such as length, strandedness, and 5' nucleotide. We provide a Features Sheet (`features.csv`) in which you can define selection rules to more accurately capture counts for the small RNAs of interest.  Rules apply to features parsed from **all** Feature Sources, with the exception of "Alias by..." which only applies to the Feature Source on the same row. These rules are used to select among overlapping features at each alignment locus. Selection first takes place against feature attributes (GFF3 column 9), and is directed by defining the attribute you want to be considered (Select by...) and the acceptable values for that attribute (with value...). Rules that match features at this stage will undergo hierarchical elimination and pass to the second stage of selection which examines characteristics of the alignment itself: strand relative to the feature of interest, 5' end nucleotide, and length, with options for full or partial interval matching with the target sequence. See [Counter](docs/Counter.md) for more information.
+
+>**Tip**: Don't worry about having duplicate Feature Source entries. Each GFF3 file is parsed only once.
 
 ### User-Provided Input File Requirements
 
