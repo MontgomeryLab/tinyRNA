@@ -1,7 +1,7 @@
 # tinyRNA: comprehensive analysis of small RNA high-throughput sequencing data
 :warning: **Under Development & Testing** :warning:
 
-*This repository is being actively developed and tested, and is thus incomplete and only recommended for testing until a release is made. Feedback, suggestions, and bug reports are welcome under the [issues tab](https://github.com/MontgomeryLab/tinyrna/issues). Thank you!*
+*This repository is being actively developed and tested, and is thus incomplete and only recommended for testing until a release is made. Feedback, suggestions, and bug reports are welcome under the [issues tab](https://github.com/MontgomeryLab/tinyrna/issues). See our [changelog](CHANGELOG.MD) for recent updates. Thank you!*
 
 - [Installation](#installation)
 - [Usage](#usage)
