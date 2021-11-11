@@ -20,4 +20,4 @@ dependencies:
   - pip:
     - --use-feature=in-tree-build
     - htseq==0.13.5
-    - . # Install tinyRNA via setup.py
+    - ../ # Install tinyRNA via setup.py

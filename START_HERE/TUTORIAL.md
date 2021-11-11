@@ -2,6 +2,8 @@
 
 This folder (`START_HERE`) contains a working minimal configuration and a sample input dataset derived from C. elegans chromosome 1 of Wormbase WS279. We've assembled this configuration to make it easy to start using tinyRNA, and to provide a basis for your own project configuration.
 
+Complete reference data for C. elegans WS279 can be found here: https://www.montgomerylab.org/resources.html
+
 ## Installation
 
 See the [README](../README.md#installation) for installation instructions and tips.
@@ -41,7 +43,7 @@ Bowtie indexes were built during this run because paths.yml didn't define an `eb
 
 ## Running Your Data
 Expected runtime: ~15-30 minutes
-1. Edit your GFF or GTF file so that it meets the requirements outlined in [the README](../README.md#user-provided-input-files)
+1. Edit your GFF or GTF file so that it meets the requirements outlined in [the README](../README.md#user-provided-input-file-requirements)
 2. Move your GFF and genome sequence files into the reference_data directory.
 3. Edit features.csv and samples.csv file for your datasets and selection parameters.
 4. Edit paths.yml as follows:
