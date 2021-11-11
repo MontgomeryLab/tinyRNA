@@ -13,11 +13,11 @@ from ..util import make_filename
 class LibraryStats:
     class Bundle:
         def __init__(self, loci_count, read_count, corr_count):
+            self.mapping_type = 'Single' if loci_count == 1 else 'Multi'
             self.loci_count = loci_count
             self.read_count = read_count
             self.corr_count = corr_count
-            self.assignments = set()
-            self.feat_count = 0
+            self.assignments = list()
 
     summary_categories = ['Total Assigned Reads', 'Total Unassigned Reads',
                           'Total Assigned Sequences', 'Total Unassigned Sequences',
@@ -75,13 +75,13 @@ class LibraryStats:
         if assigned_count > 1:
             self.library_stats['Reads Assigned to Multiple Features'] += corr_count
         if assigned_count > 0:
+            self.library_stats[f"Assigned {bundle.mapping_type}-Mapping Reads"] += corr_count
             self.library_stats['Total Assigned Reads'] += corr_count
 
             feature_corrected_count = self.normalize_count_by(corr_count, assigned_count)
-            bundle.feat_count += len(assignments)
-            bundle.assignments |= assignments
 
             for feat in assignments:
+                bundle.assignments.append(feat)
                 self.feat_counts[feat] += feature_corrected_count
 
         if self.diags is not None:
@@ -97,12 +97,8 @@ class LibraryStats:
             self.library_stats['Total Unassigned Sequences'] += 1
         else:
             self.library_stats['Total Assigned Sequences'] += 1
-
             self.library_stats['Sequences Assigned to Single Feature'] += 1 * (assignment_count == 1)
-            self.library_stats['Sequences Assigned to Multiple Features'] += 1 * (bundle.feat_count > 1)
-            self.library_stats['Assigned Single-Mapping Reads'] += bundle.read_count * (bundle.loci_count == 1)
-            self.library_stats['Assigned Multi-Mapping Reads'] += bundle.read_count * (bundle.loci_count > 1)
-
+            self.library_stats['Sequences Assigned to Multiple Features'] += 1 * (assignment_count > 1)
 
 class SummaryStats:
 
