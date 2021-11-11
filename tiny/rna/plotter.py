@@ -220,7 +220,7 @@ def load_dge_tables(comparisons: list) -> pd.DataFrame:
     return de_table
 
 
-def scatter_dges(count_df, dges, output_prefix, viewLims, classes=None, show_unknown=False, pval=0.05):
+def scatter_dges(count_df, dges, output_prefix, viewLims, classes=None, show_unknown=True, pval=0.05):
     """Creates PDFs of all pairwise comparison scatter plots from a count table.
     Can highlight classes and/or differentially expressed genes as different colors.
 

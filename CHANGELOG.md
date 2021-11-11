@@ -8,4 +8,6 @@
 - The outdated and unclear description of the Features Sheet has been corrected
 - Resource link for WS279 added to TUTORIAL.md
 - Conda installation files now reside in their own top-level directory
+- Bugfix: DGE-class scatter plots now show `Class=unknown` groups by default
+- Plot stylesheet changed to match title font size with axes labels
 - CHANGELOG.md created 
