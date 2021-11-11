@@ -71,12 +71,12 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
   success "macOS detected"
   shell=$(basename "$(dscl . -read ~/ UserShell | cut -f 2 -d " ")")
   miniconda_installer="Miniconda3-latest-MacOSX-x86_64.sh"
-  platform_lock_file="conda-r-osx-64.lock"
+  platform_lock_file="./conda/conda-r-osx-64.lock"
 elif [[ "$OSTYPE" == "linux-gnu" ]]; then
   success "Linux detected"
   shell="$(basename "$SHELL")"
   miniconda_installer="Miniconda3-latest-Linux-x86_64.sh"
-  platform_lock_file="conda-r-linux-64.lock"
+  platform_lock_file="./conda/conda-r-linux-64.lock"
 else
   fail "Unsupported OS"
   exit 1
