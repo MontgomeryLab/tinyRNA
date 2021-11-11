@@ -2,6 +2,8 @@
 
 This folder (`START_HERE`) contains a working minimal configuration and a sample input dataset derived from C. elegans chromosome 1 of Wormbase WS279. We've assembled this configuration to make it easy to start using tinyRNA, and to provide a basis for your own project configuration.
 
+Complete reference data for C. elegans WS279 can be found here: https://www.montgomerylab.org/resources.html
+
 ## Installation
 
 See the [README](../README.md#installation) for installation instructions and tips.
