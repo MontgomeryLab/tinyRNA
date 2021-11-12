@@ -24,7 +24,7 @@ class PreFlight(install):
     def run(self):
         if not all([os.getenv(conda_var) for conda_var in ["CONDA_PREFIX", "CONDA_DEFAULT_ENV"]]):
             sys.exit("CRITICAL ERROR: you appear to be installing %s outside of a conda environment.\n"
-                     "Instead, please run: conda env create -f environment.yml" % (NAME,))
+                     "Instead, please run: ./setup.sh" % (NAME,))
         else:
             install.run(self)
 
