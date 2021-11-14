@@ -179,8 +179,13 @@ class ReferenceTables:
         self.attrs, self.parents, self.filtered = {}, {}, set()
         self._set_filters(**kwargs)
 
+        self.all_features = kwargs['all_features']
+        self.attrs_of_interest = defaultdict(set, {"Class": set()})
+        for rule in rules:
+            self.attrs_of_interest[rule['Identity'][0]].add(rule['Identity'][1])
+
         # Obtain an ordered list of unique attributes of interest from selection rules
-        self.attrs_of_interest = list(np.unique(["Class"] + [rule['Identity'][0] for rule in rules]))
+        # self.attrs_of_interest = list(np.unique(["Class"] + [rule['Identity'][0] for rule in rules]))
 
         # Patch the GFF attribute parser to support comma separated attribute value lists
         setattr(HTSeq.features, 'parse_GFF_attribute_string', parse_GFF_attribute_string)
@@ -188,6 +193,8 @@ class ReferenceTables:
     @report_execution_time("GFF parsing")
     def get(self) -> Tuple['HTSeq.GenomicArrayOfSets', Dict[str, list], dict, dict]:
         """Initiates GFF parsing and returns the resulting reference tables"""
+
+        excluded = 0
 
         for file, alias_keys in self.gff_files.items():
             gff = HTSeq.GFF_Reader(file)
@@ -200,13 +207,18 @@ class ReferenceTables:
                         continue
 
                     try:
+                        # Select attributes of interest from row
+                        row_attrs = self.get_interesting_attrs(row.attr)
+                        # Only add features with identity matches if all_features is False
+                        if not any([len(attr[1]) for attr in row_attrs]):
+                            excluded += 1
+                            continue
+                        # Grab feature primary key
                         feature_id = row.attr["ID"][0]
                         # Add feature_id <-> feature_interval records
                         root_id = self.add_feature_iv(feature_id, row)
                         # Append alias to root feature if it is unique
                         self.add_alias(alias_keys, root_id, row.attr)
-                        # Select attributes of interest from row
-                        row_attrs = self.get_interesting_attrs(row.attr)
                     except KeyError as ke:
                         raise ValueError(f"Feature {row.name} does not contain a {ke} attribute.")
 
@@ -217,6 +229,7 @@ class ReferenceTables:
                 e.args = (e.args[0] + "\nError occurred on line %d of %s" % (gff.line_no, file),)
                 raise e.with_traceback(sys.exc_info()[2]) from e
 
+        print(f"{excluded} features excluded due to no identity matches.")
         return self.feats, self.attrs, dict(self.alias), dict(self.intervals)
 
     def get_root_feature(self, feature_id: str, row_attrs: List[Tuple[str, tuple]]) -> str:
@@ -264,7 +277,11 @@ class ReferenceTables:
     def get_interesting_attrs(self, row_attrs) -> List[Tuple[str, tuple]]:
         """Returns only the attributes of interest from the row's attributes"""
 
-        return [(interest, row_attrs[interest]) for interest in self.attrs_of_interest]
+        if not self.all_features:
+            return [(interest, tuple(value for value in row_attrs[interest] if value in self.attrs_of_interest[interest]))
+                    for interest in self.attrs_of_interest]
+        else:
+            return [(interest, row_attrs[interest]) for interest in self.attrs_of_interest]
 
     def incorporate_attributes(self, root_id, row_attrs):
         """Add unique keys and values to root feature's attributes"""
