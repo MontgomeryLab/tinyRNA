@@ -197,8 +197,8 @@ class FeatureSelector:
             # Check for perfect interval match only once per IntervalFeatures
             perfect_iv_match = self.is_perfect_iv_match(iv_feats[0], iv_feats[1], aln_iv)
             for feat in iv_feats[2]:
-                for attrib in Features.attributes[feat]:
-                    for rule in self.get_identity_matches(attrib):
+                for ident in Features.attributes[feat]:
+                    for rule in self.get_identity_matches(ident):
                         if not perfect_iv_match and FeatureSelector.rules_table[rule]['Strict']:
                             continue
                         identity_hits.append((FeatureSelector.rules_table[rule]['Hierarchy'], rule, feat))
@@ -220,7 +220,7 @@ class FeatureSelector:
         return finalists
 
     @classmethod
-    def get_identity_matches(cls, attribute) -> Iterator[int]:
+    def get_identity_matches(cls, ident) -> Iterator[int]:
         """Returns indexes of rules associated with a feature attribute record
 
         An attribute record is of the form ('key', ('value1', 'value2', ...)) where
@@ -232,13 +232,12 @@ class FeatureSelector:
         rules are returned
         """
 
-        for ident_val in attribute[1]:
-            try:
-                # Check if rules are defined for this feature identity
-                for identity_rule in cls.inv_ident[(attribute[0], ident_val)]:
-                    yield identity_rule
-            except KeyError:
-                pass
+        try:
+            # Check if rules are defined for this feature identity
+            for identity_rule in cls.inv_ident[ident]:
+                yield identity_rule
+        except KeyError:
+            pass
 
     @classmethod
     def get_all_identity_matches(cls) -> Set[str]:
