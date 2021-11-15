@@ -232,11 +232,10 @@ class FeatureSelector:
         rules are returned
         """
 
-        # First iterator is a string wrapped in in iterable to prevent iteration of its characters
-        for feat_ident in itertools.product([attribute[0]], attribute[1]):
+        for ident_val in attribute[1]:
             try:
                 # Check if rules are defined for this feature identity
-                for identity_rule in cls.inv_ident[feat_ident]:
+                for identity_rule in cls.inv_ident[(attribute[0], ident_val)]:
                     yield identity_rule
             except KeyError:
                 pass
