@@ -124,12 +124,12 @@ class SummaryStats:
             self.aln_diags = pd.DataFrame(columns=Diagnostics.aln_diag_categories)
             self.selection_diags = {}
 
-    def write_report_files(self, counts_idx: set, alias: dict) -> None:
+    def write_report_files(self, alias: dict) -> None:
         self.print_warnings()
         if self.report_diags:
             Diagnostics.write_summary(self.out_prefix, self.aln_diags, self.selection_diags)
 
-        self.write_feat_counts(counts_idx, alias, self.out_prefix)
+        self.write_feat_counts(alias, self.out_prefix)
         self.write_alignment_statistics(self.out_prefix)
         self.write_pipeline_statistics(self.out_prefix)
         self.write_nt_len_mat(self.out_prefix)
@@ -143,7 +143,7 @@ class SummaryStats:
             # Sort columns by title and round all counts to 2 decimal places
             self.df_to_csv(self.pipeline_stats_df, "Summary Statistics", prefix, "summary_stats")
 
-    def write_feat_counts(self, display_index: Iterable, alias: dict, prefix: str) -> None:
+    def write_feat_counts(self, alias: dict, prefix: str) -> None:
         """Writes selected features and their associated counts to {prefix}_out_feature_counts.csv
 
         Only the features in display_index will be listed in the output table, regardless of count, even
@@ -165,7 +165,7 @@ class SummaryStats:
         """
 
         # Subset the counts table to only show features that were matched on identity (regardless of count)
-        summary = self.feat_counts_df.loc[display_index]
+        summary = self.feat_counts_df.loc[self.feature_attributes.keys()]
         # Sort columns by title and round all counts to 2 decimal places
         summary = self.sort_cols_and_round(summary)
         # Add Feature Name column, which is the feature alias (default is Feature ID if no alias exists)

@@ -180,12 +180,8 @@ def main():
         # Assign and count features using multiprocessing and merge results
         merged_counts = map_and_reduce(libraries)
 
-        # Determine which features should be represented in the counts table
-        display_indexes = Features.attributes.keys() if args.all_features else \
-                          FeatureSelector.get_all_identity_matches()
-
         # Write final outputs
-        merged_counts.write_report_files(display_indexes, Features.aliases)
+        merged_counts.write_report_files(Features.aliases)
     except:
         traceback.print_exception(*sys.exc_info())
         print("\n\nCounter encountered an error. Don't worry! You don't have to start over.\n"
