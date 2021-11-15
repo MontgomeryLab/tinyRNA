@@ -110,10 +110,9 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
     """Parses a GFF attribute string and returns it as a dictionary.
 
     This is a slight modification of the same method found in HTSeq.features.
-    It has been adapted to allow features to have comma separated attribute
-    value lists. For downstream compatibility with membership operations
-    (e.g. (Attribute Key, Attribute Value) rules when matching feature
-    candidates) non-list attribute values are also recorded as tuples.
+    It has been adapted to parse comma separated attribute values as separate values.
+    Values are stored in a set for ease of handling in ReferenceTables and because
+    duplicate values don't make sense in this context.
 
     Per the original HTSeq docstring:
         "If 'extra_return_first_value' is set, a pair is returned: the dictionary
@@ -174,25 +173,22 @@ class ReferenceTables:
 
     def __init__(self, gff_files: Dict[str, list], rules: List[dict], **kwargs):
         self.gff_files = gff_files
-        self.feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
-        self.intervals, self.alias = defaultdict(list), defaultdict(set)
-        self.attrs = defaultdict(lambda: defaultdict(set))
-        self.parents, self.filtered = {}, set()
         self._set_filters(**kwargs)
-
         self.all_features = kwargs['all_features']
         self.attrs_of_interest = defaultdict(set, {"Class": set()})
         for rule in rules:
             self.attrs_of_interest[rule['Identity'][0]].add(rule['Identity'][1])
 
-        # Obtain an ordered list of unique attributes of interest from selection rules
-        # self.attrs_of_interest = list(np.unique(["Class"] + [rule['Identity'][0] for rule in rules]))
+        self.feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+        self.attrs, self.alias = defaultdict(lambda: defaultdict(set)), defaultdict(set)
+        self.parents, self.filtered = {}, set()
+        self.intervals = defaultdict(list)
 
         # Patch the GFF attribute parser to support comma separated attribute value lists
         setattr(HTSeq.features, 'parse_GFF_attribute_string', parse_GFF_attribute_string)
 
     @report_execution_time("GFF parsing")
-    def get(self) -> Tuple['HTSeq.GenomicArrayOfSets', Dict[str, list], dict, dict]:
+    def get(self) -> Tuple['HTSeq.GenomicArrayOfSets', Dict[str, list], Dict[str, tuple], Dict[str, list]]:
         """Initiates GFF parsing and returns the resulting reference tables"""
 
         for file, alias_keys in self.gff_files.items():
@@ -204,40 +200,30 @@ class ReferenceTables:
                     if not self.filter_match(row):
                         self.exclude_row(row)
                         continue
-
                     try:
                         # Grab the primary key for this feature
                         feature_id = next(iter(row.attr["ID"]))
-                        # Select identities of interest from row
-                        row_attrs = self.get_interesting_idents(row.attr)
+                        # Select only identities (key-val pairs) of interest
+                        idents = self.get_interesting_idents(row.attr)
                         # Only add features with identity matches if all_features is False
-                        if not self.all_features and not len(row_attrs):
-                            self.attrs[feature_id] = {}
+                        if not self.all_features and not len(idents):
                             self.exclude_row(row)
                             continue
                         # Add feature_id <-> feature_interval records
                         root_id = self.add_feature_iv(feature_id, row)
                         # Append alias to root feature if it is unique
                         self.add_alias(alias_keys, root_id, row.attr)
+                        # Add feature_id -> feature_attributes record
+                        self.incorporate_attributes(root_id, idents)
                     except KeyError as ke:
                         raise ValueError(f"Feature {row.name} does not contain a {ke} attribute.")
-
-                    # Add feature_id -> feature_attributes record
-                    self.incorporate_attributes(root_id, row_attrs)
             except Exception as e:
                 # Append to error message while preserving exception provenance and traceback
                 e.args = (str(e.args[0]) + "\nError occurred on line %d of %s" % (gff.line_no, file),)
                 raise e.with_traceback(sys.exc_info()[2]) from e
 
-        self.tuplize_iterables()
+        self.finalize_tables()
         return self.feats, self.attrs, self.alias, dict(self.intervals)
-
-    def tuplize_iterables(self):
-        """Internally these iterables are sets for ease, but Counter expects tuples for speed"""
-
-        self.alias = {feat: tuple(sorted(aliases)) for feat, aliases in self.alias.items()}
-        self.attrs = {feat: [(attr, tuple(sorted(vals))) for attr, vals in self.attrs[feat].items()]
-                      for feat in self.attrs}
 
     def get_root_feature(self, feature_id: str, row_attrs: Dict[str, set]) -> str:
         """Returns the ID of the feature's root parent if one exists. Otherwise the original ID is returned."""
@@ -265,6 +251,7 @@ class ReferenceTables:
         root_id = self.get_root_feature(feature_id, row.attr)
 
         self.feats[row.iv] += root_id
+        self.attrs.setdefault(root_id, self.attrs.default_factory())
         if row.iv not in self.intervals[root_id]:
             self.intervals[root_id].append(row.iv)
 
@@ -327,6 +314,15 @@ class ReferenceTables:
             self.parents[feature_id] = self.get_row_parent(feature_id, row.attr)
         if row.iv.chrom not in self.feats.chrom_vectors:
             self.feats.add_chrom(row.iv.chrom)
+
+    def finalize_tables(self):
+        """Internally these iterables are sets for ease, but Counter expects tuples for speed"""
+
+        self.alias = {feat: tuple(sorted(aliases)) for feat, aliases in self.alias.items()}
+        self.attrs = {feat: [(select_for, with_value)
+                             for select_for in self.attrs[feat]
+                             for with_value in self.attrs[feat][select_for]]
+                      for feat in self.attrs}
 
     @classmethod
     def _set_filters(cls, **kwargs):
