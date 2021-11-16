@@ -171,7 +171,7 @@ class SummaryStats:
         # Add Feature Name column, which is the feature alias (default is Feature ID if no alias exists)
         summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(alias.get(feat, [feat]))))
         # Add Classes column for classes associated with the given feature
-        feat_class_map = lambda feat: ', '.join(self.feature_attributes[feat][0][1])
+        feat_class_map = lambda feat: ', '.join([v for k,v in self.feature_attributes[feat] if k == 'Class'])
         summary.insert(1, "Feature Class", summary.index.map(feat_class_map))
         # Sort by index, make index its own column, and rename it to Feature ID
         summary = summary.sort_index().reset_index().rename(columns={"index": "Feature ID"})
