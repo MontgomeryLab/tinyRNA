@@ -82,6 +82,7 @@ inputs:
   counter_source_filter: string[]?
 
   # deseq inputs
+  run_deseq: boolean
   control_condition: string?
   dge_pca_plot: boolean?
   dge_drop_zero: boolean?
@@ -201,7 +202,9 @@ steps:
 
   dge:
     run: ../tools/tiny-deseq.cwl
+    when: $(inputs.run_deseq)
     in:
+      run_deseq: run_deseq
       input_file: counter/feature_counts
       outfile_prefix: run_name
       control: control_condition
@@ -269,9 +272,12 @@ steps:
 
   organize_dge:
     run: ../tools/make-subdir.cwl
+    when: $(inputs.run_deseq)
     in:
+      run_deseq: run_deseq
       dir_files:
         source: [ dge/norm_counts, dge/comparisons, dge/console_output ]
+        pickValue: all_non_null
       dir_name: dir_name_dge
     out: [ subdir ]
 
@@ -280,6 +286,7 @@ steps:
     in:
       dir_files:
         source: [ plotter/plots, plotter/console_output, dge/pca_plot ]
+        pickValue: all_non_null
       dir_name: dir_name_plotter
     out: [ subdir ]
 
@@ -307,7 +314,7 @@ outputs:
     outputSource: organize_counter/subdir
 
   dge_out_dir:
-    type: Directory
+    type: Directory?
     outputSource: organize_dge/subdir
 
   plotter_out_dir:
