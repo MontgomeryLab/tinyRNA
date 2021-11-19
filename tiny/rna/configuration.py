@@ -233,6 +233,9 @@ class Configuration(ConfigBase):
 
         if degrees_of_freedom < 1:
             self['run_deseq'] = False
+            print("Your experiment design has less than one degree of freedom, which is incompatible "
+                  "with DESeq2. The DGE step will be skipped and most plots will not be produced.",
+                  file=sys.stderr)
 
     def process_feature_sheet(self):
         feature_sheet = self.paths.from_here(self['features_csv']['path'])
