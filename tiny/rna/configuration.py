@@ -8,6 +8,7 @@ import os
 import re
 
 from pkg_resources import resource_filename
+from collections import Counter
 from datetime import datetime
 from typing import Union, Any
 
@@ -198,6 +199,7 @@ class Configuration(ConfigBase):
     def process_sample_sheet(self):
         sample_sheet = self.paths.from_here(self['samples_csv']['path'])
         sample_sheet_dir = os.path.dirname(sample_sheet)
+        groups_reps = Counter()
 
         csv_reader = CSVReader(sample_sheet, "Samples Sheet")
         for row in csv_reader.rows():
@@ -209,6 +211,7 @@ class Configuration(ConfigBase):
 
             group_name = row['Group']
             rep_number = row['Replicate']
+            groups_reps[group_name] += 1
 
             self.append_to('sample_basenames', sample_basename)
             self.append_to('fastp_report_titles', f"{group_name}_rep_{rep_number}")
@@ -220,6 +223,16 @@ class Configuration(ConfigBase):
             except FileNotFoundError:
                 line = csv_reader.line_num
                 sys.exit("The fastq file on line %d of your Samples Sheet was not found:\n%s" % (line, fastq_file))
+
+        self.check_deseq_compatibility(groups_reps)
+
+    def check_deseq_compatibility(self, sample_groups):
+        total_samples = sum(sample_groups.values())
+        total_coefficients = len(sample_groups)
+        degrees_of_freedom = total_samples - total_coefficients
+
+        if degrees_of_freedom < 1:
+            self['run_deseq'] = False
 
     def process_feature_sheet(self):
         feature_sheet = self.paths.from_here(self['features_csv']['path'])
