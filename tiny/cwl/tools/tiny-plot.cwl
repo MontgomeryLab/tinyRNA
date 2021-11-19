@@ -8,13 +8,13 @@ stdout: console_output.log
 
 inputs:
   norm_counts:
-    type: File
+    type: File?
     inputBinding:
       prefix: -nc
     doc: "Normalized feature counts from DESeq"
 
   dge_tables:
-    type: File[]
+    type: File[]?
     inputBinding:
       prefix: -dge
     doc: "Sample comparison tables from DESeq"
