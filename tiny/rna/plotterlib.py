@@ -42,7 +42,7 @@ class plotterlib:
         # Set global plot style once
         plt.style.use(user_style_sheet)
 
-        self.subplots = self.init_subplots(debug)
+        self.subplot_cache = {}
         self.dge_scatter_tick_cache = {}
 
     def len_dist_bar(self, size_df: pd.DataFrame, **kwargs) -> plt.Axes:
@@ -77,19 +77,16 @@ class plotterlib:
 
         return sizeb
 
-    def class_pie(self, class_s: pd.Series, **kwargs) -> plt.Axes:
+    def class_pie(self, class_prop: pd.Series, **kwargs) -> plt.Axes:
         """Creates a pie chart of sRNA classes.
 
         Args:
-            class_s: A pandas Series containing counts per class
+            class_prop: A pandas Series with class proportions to plot
             kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
 
         Returns:
             cpie: A pie chart of sRNA classes
         """
-
-        # Convert reads to proportion
-        class_prop = class_s / class_s.sum()
 
         # Create the plot
         cpie = class_prop.plot(kind='pie', normalize=True, **kwargs)
@@ -100,19 +97,16 @@ class plotterlib:
 
         return cpie
 
-    def class_barh(self, class_s: pd.Series, **kwargs) -> plt.Axes:
+    def class_barh(self, class_prop: pd.Series, **kwargs) -> plt.Axes:
         """Creates a horizontal bar chart of sRNA classes.
 
         Args:
-            class_s: A pandas Series containing a single library's counts per class
+            class_prop: A pandas Series with class proportions to plot
             kwargs: Additional keyword arguments to pass to pandas.Series.plot()
 
         Returns:
             cbar: A horizontal bar chart of sRNA classes
         """
-
-        # Convert reads to proportion
-        class_prop = class_s / class_s.sum()
 
         # df.plot(kind=barh) ignores axes.prop_cycle... (ugh)
         colors = kwargs.get('colors', plt.rcParams['axes.prop_cycle'].by_key()['color'])
@@ -127,11 +121,12 @@ class plotterlib:
 
         return cbar
 
-    def class_pie_barh(self, class_s: pd.Series, **kwargs) -> plt.Figure:
+    def class_pie_barh(self, class_s: pd.Series, mapped_total, **kwargs) -> plt.Figure:
         """Creates both a pie & bar chart in the same figure
 
         Args:
             class_s: A pandas Series containing counts per class
+            mapped_total: The total number of reads mapped by bowtie
             kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
 
         Returns:
@@ -139,11 +134,17 @@ class plotterlib:
         """
 
         # Retrieve axis and styles for this plot type
-        fig, ax = self.reuse_subplot("class_pie_barh")
+        fig, ax = self.reuse_subplot("class_chart")
+
+        # Convert reads to proportion
+        class_prop = class_s / mapped_total
+
 
         # Plot pie and barh on separate axes
-        self.class_pie(class_s, ax=ax[0], labels=None, **kwargs)
-        self.class_barh(class_s, ax=ax[1], legend=None, title=None, ylabel=None, **kwargs)
+        self.class_pie(class_prop, ax=ax[0], labels=None, **kwargs)
+        self.class_barh(class_prop, ax=ax[1], legend=None, title=None, ylabel=None, **kwargs)
+        table_df = class_prop.round(2).map('{:,.2%}'.format)
+        ax[2].table(cellText=table_df.to_frame().values, loc='left')
 
         # finalize & save figure
         fig.suptitle("Proportion of small RNAs by class", fontsize=22)
@@ -479,23 +480,6 @@ class plotterlib:
                                   transform=ax.get_transform(), clip_on=False, color="green", fill=False)
         ax.add_patch(rect)
 
-    def init_subplots(self, debug):
-        """Create one subplot per plot type to reuse between calls"""
-
-        fig_args = {
-            'class_pie_barh': {'figsize': (8, 4), 'nrows': 1, 'ncols': 2},
-            'len_dist_bar': {'figsize': (7, 4)},
-            'scatter': {'figsize': (8, 8), 'tight_layout': False}
-        }
-
-        subplots = {}
-        for plot in fig_args:
-            fig, ax = plt.subplots(**fig_args[plot])
-            subplots[plot] = {'fig': fig, 'ax': ax}
-
-        if debug: plt.show(block=False)
-        return subplots
-
     def reuse_subplot(self, plot_type: str) -> (plt.Figure, Union[plt.Axes, np.ndarray]):
         """Retrieves the reusable subplot for this plot type
 
@@ -507,12 +491,45 @@ class plotterlib:
             ax: The subplot's pyplot.Axes, or an array of axes if subplot's nrows or ncols is >1
         """
 
-        fig, ax = self.subplots[plot_type].values() # Each plot type has a dedicated figure and axis
-        if type(ax) == np.ndarray:
-            # Figure for class_charts has 2 subaxes
-            for subax in ax: subax.clear()
+        if plot_type in self.subplot_cache:
+            return self.subplot_cache[plot_type].get()
         else:
-            # Clear only the points for scatter plots
-            if len(ax.collections): ax.collections.clear()
-            else: ax.clear()
-        return fig, ax
+            cache = ClassChartCache() if plot_type == "class_chart" else \
+                    LenDistCache() if plot_type == "len_dist" else \
+                    ScatterCache() if plot_type == "scatter" else None
+            self.subplot_cache[plot_type] = cache
+            return cache.get()
+
+
+class SubplotCache:
+    def __init__(self, figargs):
+        self.fig, self.ax = plt.subplots(**figargs)
+
+
+class ClassChartCache(SubplotCache):
+    def __init__(self):
+        super().__init__({'figsize': (8, 4), 'nrows': 1, 'ncols': 3})
+        self.ax[2].axis('off')
+
+    def get(self):
+        for subax in self.ax: subax.clear()
+        self.ax[2].axis('off')  # Ridiculous that this is necessary
+        return self.fig, self.ax
+
+
+class LenDistCache(SubplotCache):
+    def __init__(self):
+        super().__init__({'figsize': (7, 4)})
+
+    def get(self):
+        self.ax.clear()
+        return self.fig, self.ax
+
+
+class ScatterCache(SubplotCache):
+    def __init__(self):
+        super().__init__({'figsize': (8, 8), 'tight_layout': False})
+
+    def get(self):
+        if len(self.ax.collections): self.ax.collections.clear()
+        return self.fig, self.ax
