@@ -217,6 +217,8 @@ steps:
     in:
       norm_counts: dge/norm_counts
       dge_tables: dge/comparisons
+      raw_counts: counter/feature_counts
+      summ_stats: counter/summary_stats
       len_dist: counter/other_counts
       dge_pval: plot_pval
       style_sheet: plot_style_sheet
