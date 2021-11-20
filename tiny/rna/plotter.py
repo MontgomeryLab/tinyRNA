@@ -31,8 +31,10 @@ def get_args():
     optional_args = parser.add_argument_group("Optional arguments")
 
     # Single file inputs
+    counter_files.add_argument('-rc', '--raw-counts', metavar='RAW_COUNTS',
+                               help='The ...feature_counts.csv file')
     diffexp_files.add_argument('-nc', '--norm-counts', metavar='NORM_COUNTS',
-                               help='The ...norm_counts.csv file produced by tiny-deseq.r')
+                               help='The ...norm_counts.csv file')
 
     # Multi-file inputs
     diffexp_files.add_argument('-dge', '--dge-tables', metavar='COMPARISON', nargs='+',
