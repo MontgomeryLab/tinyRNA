@@ -11,6 +11,7 @@ import numpy as np
 import itertools
 import locale
 import math
+import sys
 import os
 
 # cwltool appears to unset all environment variables including those related to locale
@@ -29,6 +30,7 @@ from matplotlib.transforms import Bbox
 from matplotlib.scale import LogTransform
 
 from typing import Union, Tuple, List, Optional
+from abc import ABC, abstractmethod
 
 
 class plotterlib:
@@ -483,7 +485,7 @@ class plotterlib:
                                   transform=ax.get_transform(), clip_on=False, color="green", fill=False)
         ax.add_patch(rect)
 
-    def reuse_subplot(self, plot_type: str) -> (plt.Figure, Union[plt.Axes, np.ndarray]):
+    def reuse_subplot(self, plot_type: str) -> Tuple[plt.Figure, Union[plt.Axes, List[plt.Axes]]]:
         """Retrieves the reusable subplot for this plot type
 
         Args:
@@ -495,44 +497,45 @@ class plotterlib:
         """
 
         if plot_type in self.subplot_cache:
-            return self.subplot_cache[plot_type].get()
+            cache = self.subplot_cache[plot_type]
         else:
-            cache = ClassChartCache() if plot_type == "class_chart" else \
-                    LenDistCache() if plot_type == "len_dist" else \
-                    ScatterCache() if plot_type == "scatter" else None
-            self.subplot_cache[plot_type] = cache
-            return cache.get()
+            self.subplot_cache[plot_type] = cache = {
+                "class_chart": ClassChartCache,
+                "len_dist": LenDistCache,
+                "scatter": ScatterCache
+            }[plot_type]()
+
+        if self.debug: plt.show(block=False)
+        return cache.get()
 
 
-class SubplotCache:
-    def __init__(self, figargs):
-        self.fig, self.ax = plt.subplots(**figargs)
+class CacheBase(ABC):
+    @abstractmethod
+    def get(self): pass
 
 
-class ClassChartCache(SubplotCache):
+class ClassChartCache(CacheBase):
     def __init__(self):
-        super().__init__({'figsize': (8, 4), 'nrows': 1, 'ncols': 3})
-        self.ax[2].axis('off')
+        self.fig, self.ax = plt.subplots(figsize=(8, 4), nrows=1, ncols=2)
 
-    def get(self):
+    def get(self) -> Tuple[plt.Figure, List[plt.Axes]]:
         for subax in self.ax: subax.clear()
-        self.ax[2].axis('off')  # Ridiculous that this is necessary
         return self.fig, self.ax
 
 
-class LenDistCache(SubplotCache):
+class LenDistCache(CacheBase):
     def __init__(self):
-        super().__init__({'figsize': (7, 4)})
+        self.fig, self.ax = plt.subplots(figsize=(7, 4))
 
-    def get(self):
+    def get(self) -> Tuple[plt.Figure, plt.Axes]:
         self.ax.clear()
         return self.fig, self.ax
 
 
-class ScatterCache(SubplotCache):
+class ScatterCache(CacheBase):
     def __init__(self):
-        super().__init__({'figsize': (8, 8), 'tight_layout': False})
+        self.fig, self.ax = plt.subplots(figsize=(8, 8), tight_layout=False)
 
-    def get(self):
+    def get(self) -> Tuple[plt.Figure, plt.Axes]:
         if len(self.ax.collections): self.ax.collections.clear()
         return self.fig, self.ax
