@@ -106,18 +106,18 @@ def len_dist_plots(files_list: list, out_prefix:str, **kwargs):
         plot.figure.savefig(pdf_name)
 
 
-def class_charts(class_counts: pd.DataFrame, mapped_total: int, out_prefix: str, **kwargs):
+def class_charts(raw_class_counts: pd.DataFrame, mapped_total: int, out_prefix: str, **kwargs):
     """Create a PDF of the proportion of raw assigned counts vs total mapped reads for each class
 
     Args:
-        class_counts: A dataframe containing RAW class counts per library
+        raw_class_counts: A dataframe containing RAW class counts per library
         mapped_total: The total number of reads mapped by bowtie
         out_prefix: The prefix to use when naming output PDF plots
         kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
     """
 
-    for library in class_counts:
-        fig = aqplt.class_pie_barh(class_counts[library], mapped_total, **kwargs)
+    for library in raw_class_counts:
+        fig = aqplt.class_pie_barh(raw_class_counts[library], mapped_total, **kwargs)
 
         # Save the plot
         pdf_name = make_filename([out_prefix, library, 'class_chart'], ext='.pdf')
@@ -314,20 +314,20 @@ def get_flat_classes(counts_df: pd.DataFrame) -> pd.Series:
         .explode()
 
 
-def get_class_counts(counts_df: pd.DataFrame) -> pd.DataFrame:
-    """Calculates class counts from a counts DataFrame
+def get_class_counts(raw_counts_df: pd.DataFrame) -> pd.DataFrame:
+    """Calculates class counts from the Raw Counts DataFrame
 
-    If there are multiple classes associated with a feature, each class will receive
-    the feature's full count without normalizing by the number of associated classes.
+    If there are multiple classes associated with a feature, then that feature's
+    counts are normalized across all associated classes.
 
     Args:
-        counts_df: A DataFrame containing features and their associated classes and counts
+        raw_counts_df: A DataFrame containing features and their associated classes and counts
     Returns:
         class_counts: A DataFrame with an index of classes and count entries, per comparison
     """
 
     # 1. Group by Feature Class. Class "lists" are strings. Normalize their counts by the number of commas.
-    grouped = (counts_df.drop("Feature Name", 1, errors='ignore')
+    grouped = (raw_counts_df.drop("Feature Name", 1, errors='ignore')
                .groupby("Feature Class")
                .apply(lambda grp: grp.sum() / (grp.name.count(',') + 1)))
 
