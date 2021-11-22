@@ -35,6 +35,8 @@ def get_args():
                                help='The ...feature_counts.csv file')
     diffexp_files.add_argument('-nc', '--norm-counts', metavar='NORM_COUNTS',
                                help='The ...norm_counts.csv file')
+    counter_files.add_argument('-ss', '--summary-stats', metavar='STAT',
+                               help='The ...summary_stats.csv file')
 
     # Multi-file inputs
     diffexp_files.add_argument('-dge', '--dge-tables', metavar='COMPARISON', nargs='+',
