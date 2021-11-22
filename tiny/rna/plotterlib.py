@@ -90,7 +90,7 @@ class plotterlib:
 
         # Create the plot
         cpie = class_prop.plot(kind='pie', normalize=True, **kwargs)
-        cpie.legend(loc='best', bbox_to_anchor=(1, 0.5), fontsize=10, labels=class_prop.index)
+        cpie.legend(loc='best', bbox_to_anchor=(1, 1), fontsize=10, labels=class_prop.index)
         cpie.set_aspect("equal")
         cpie.set_ylabel('')
         cpie.set_xlabel('')
@@ -137,14 +137,17 @@ class plotterlib:
         fig, ax = self.reuse_subplot("class_chart")
 
         # Convert reads to proportion
-        class_prop = class_s / mapped_total
-
+        class_prop = (class_s / mapped_total).rename('Proportion')
+        if class_prop.sum() != 1: class_prop['Unassigned'] = 1 - class_prop.sum()
 
         # Plot pie and barh on separate axes
         self.class_pie(class_prop, ax=ax[0], labels=None, **kwargs)
         self.class_barh(class_prop, ax=ax[1], legend=None, title=None, ylabel=None, **kwargs)
-        table_df = class_prop.round(2).map('{:,.2%}'.format)
-        ax[2].table(cellText=table_df.to_frame().values, loc='left')
+
+        # Add a table to the pie chart
+        table_s = class_prop.round(2).map('{:,.2%}'.format).reset_index()
+        table = ax[0].table(cellText=table_s.values, loc='bottom')
+        table.auto_set_column_width(col=[0, 1])
 
         # finalize & save figure
         fig.suptitle("Proportion of small RNAs by class", fontsize=22)
