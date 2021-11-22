@@ -11,6 +11,7 @@ import numpy as np
 import itertools
 import locale
 import math
+import sys
 import os
 
 # cwltool appears to unset all environment variables including those related to locale
@@ -29,20 +30,22 @@ from matplotlib.transforms import Bbox
 from matplotlib.scale import LogTransform
 
 from typing import Union, Tuple, List, Optional
+from abc import ABC, abstractmethod
 
 
 class plotterlib:
 
-    def __init__(self, user_style_sheet, debug=False):
+    def __init__(self, user_style_sheet):
 
-        if debug:
+        self.debug = getattr(sys, 'gettrace', lambda: None)() is not None
+        if self.debug:
             mpl.use("TkAgg", force=True)
             mpl.rcParams['savefig.dpi'] = 100
 
         # Set global plot style once
         plt.style.use(user_style_sheet)
 
-        self.subplots = self.init_subplots(debug)
+        self.subplot_cache = {}
         self.dge_scatter_tick_cache = {}
 
     def len_dist_bar(self, size_df: pd.DataFrame, **kwargs) -> plt.Axes:
@@ -57,7 +60,7 @@ class plotterlib:
         """
 
         # Retrieve axis and styles for this plot type
-        fig, ax = self.reuse_subplot("len_dist_bar")
+        fig, ax = self.reuse_subplot("len_dist")
 
         # Convert reads to proportion
         size_prop = size_df / size_df.sum().sum()
@@ -77,42 +80,36 @@ class plotterlib:
 
         return sizeb
 
-    def class_pie(self, class_s: pd.Series, **kwargs) -> plt.Axes:
+    def class_pie(self, class_prop: pd.Series, **kwargs) -> plt.Axes:
         """Creates a pie chart of sRNA classes.
 
         Args:
-            class_s: A pandas Series containing counts per class
+            class_prop: A pandas Series with class proportions to plot
             kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
 
         Returns:
             cpie: A pie chart of sRNA classes
         """
 
-        # Convert reads to proportion
-        class_prop = class_s / class_s.sum()
-
         # Create the plot
         cpie = class_prop.plot(kind='pie', normalize=True, **kwargs)
-        cpie.legend(loc='best', bbox_to_anchor=(1, 0.5), fontsize=10, labels=class_prop.index)
+        cpie.legend(loc='best', bbox_to_anchor=(1, 1), fontsize=10, labels=class_prop.index)
         cpie.set_aspect("equal")
         cpie.set_ylabel('')
         cpie.set_xlabel('')
 
         return cpie
 
-    def class_barh(self, class_s: pd.Series, **kwargs) -> plt.Axes:
+    def class_barh(self, class_prop: pd.Series, **kwargs) -> plt.Axes:
         """Creates a horizontal bar chart of sRNA classes.
 
         Args:
-            class_s: A pandas Series containing a single library's counts per class
+            class_prop: A pandas Series with class proportions to plot
             kwargs: Additional keyword arguments to pass to pandas.Series.plot()
 
         Returns:
             cbar: A horizontal bar chart of sRNA classes
         """
-
-        # Convert reads to proportion
-        class_prop = class_s / class_s.sum()
 
         # df.plot(kind=barh) ignores axes.prop_cycle... (ugh)
         colors = kwargs.get('colors', plt.rcParams['axes.prop_cycle'].by_key()['color'])
@@ -127,11 +124,12 @@ class plotterlib:
 
         return cbar
 
-    def class_pie_barh(self, class_s: pd.Series, **kwargs) -> plt.Figure:
+    def class_pie_barh(self, class_s: pd.Series, mapped_total, **kwargs) -> plt.Figure:
         """Creates both a pie & bar chart in the same figure
 
         Args:
             class_s: A pandas Series containing counts per class
+            mapped_total: The total number of reads mapped by bowtie
             kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
 
         Returns:
@@ -139,11 +137,20 @@ class plotterlib:
         """
 
         # Retrieve axis and styles for this plot type
-        fig, ax = self.reuse_subplot("class_pie_barh")
+        fig, ax = self.reuse_subplot("class_chart")
+
+        # Convert reads to proportion
+        class_prop = (class_s / mapped_total).rename('Proportion')
+        if class_prop.sum() != 1: class_prop['Unassigned'] = 1 - class_prop.sum()
 
         # Plot pie and barh on separate axes
-        self.class_pie(class_s, ax=ax[0], labels=None, **kwargs)
-        self.class_barh(class_s, ax=ax[1], legend=None, title=None, ylabel=None, **kwargs)
+        self.class_pie(class_prop, ax=ax[0], labels=None, **kwargs)
+        self.class_barh(class_prop, ax=ax[1], legend=None, title=None, ylabel=None, **kwargs)
+
+        # Add a table to the pie chart
+        table_s = class_prop.round(2).map('{:,.2%}'.format).reset_index()
+        table = ax[0].table(cellText=table_s.values, loc='bottom')
+        table.auto_set_column_width(col=[0, 1])
 
         # finalize & save figure
         fig.suptitle("Proportion of small RNAs by class", fontsize=22)
@@ -477,26 +484,10 @@ class plotterlib:
 
         rect = Rectangle(xy=(box.x0, box.y0), width=box.width, height=box.height,
                                   transform=ax.get_transform(), clip_on=False, color="green", fill=False)
+        rect.set_in_layout(False)
         ax.add_patch(rect)
 
-    def init_subplots(self, debug):
-        """Create one subplot per plot type to reuse between calls"""
-
-        fig_args = {
-            'class_pie_barh': {'figsize': (8, 4), 'nrows': 1, 'ncols': 2},
-            'len_dist_bar': {'figsize': (7, 4)},
-            'scatter': {'figsize': (8, 8), 'tight_layout': False}
-        }
-
-        subplots = {}
-        for plot in fig_args:
-            fig, ax = plt.subplots(**fig_args[plot])
-            subplots[plot] = {'fig': fig, 'ax': ax}
-
-        if debug: plt.show(block=False)
-        return subplots
-
-    def reuse_subplot(self, plot_type: str) -> (plt.Figure, Union[plt.Axes, np.ndarray]):
+    def reuse_subplot(self, plot_type: str) -> Tuple[plt.Figure, Union[plt.Axes, List[plt.Axes]]]:
         """Retrieves the reusable subplot for this plot type
 
         Args:
@@ -507,12 +498,46 @@ class plotterlib:
             ax: The subplot's pyplot.Axes, or an array of axes if subplot's nrows or ncols is >1
         """
 
-        fig, ax = self.subplots[plot_type].values() # Each plot type has a dedicated figure and axis
-        if type(ax) == np.ndarray:
-            # Figure for class_charts has 2 subaxes
-            for subax in ax: subax.clear()
+        if plot_type in self.subplot_cache:
+            cache = self.subplot_cache[plot_type]
         else:
-            # Clear only the points for scatter plots
-            if len(ax.collections): ax.collections.clear()
-            else: ax.clear()
-        return fig, ax
+            self.subplot_cache[plot_type] = cache = {
+                "class_chart": ClassChartCache,
+                "len_dist": LenDistCache,
+                "scatter": ScatterCache
+            }[plot_type]()
+
+        if self.debug: plt.show(block=False)
+        return cache.get()
+
+
+class CacheBase(ABC):
+    @abstractmethod
+    def get(self): pass
+
+
+class ClassChartCache(CacheBase):
+    def __init__(self):
+        self.fig, self.ax = plt.subplots(figsize=(8, 4), nrows=1, ncols=2)
+
+    def get(self) -> Tuple[plt.Figure, List[plt.Axes]]:
+        for subax in self.ax: subax.clear()
+        return self.fig, self.ax
+
+
+class LenDistCache(CacheBase):
+    def __init__(self):
+        self.fig, self.ax = plt.subplots(figsize=(7, 4))
+
+    def get(self) -> Tuple[plt.Figure, plt.Axes]:
+        self.ax.clear()
+        return self.fig, self.ax
+
+
+class ScatterCache(CacheBase):
+    def __init__(self):
+        self.fig, self.ax = plt.subplots(figsize=(8, 8), tight_layout=False)
+
+    def get(self) -> Tuple[plt.Figure, plt.Axes]:
+        if len(self.ax.collections): self.ax.collections.clear()
+        return self.fig, self.ax

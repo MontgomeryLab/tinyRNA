@@ -4,12 +4,12 @@ Input file requirements vary by plot type and you are free to supply only the fi
 for your plot selections. If you are sourcing all of your input files from the same run
 directory, you may find it easier to instead run `tiny replot` within that run directory.
 """
-
 import multiprocessing as mp
 import pandas as pd
 import itertools
 import argparse
 import os.path
+import csv
 import re
 
 from collections import defaultdict
@@ -31,14 +31,18 @@ def get_args():
     optional_args = parser.add_argument_group("Optional arguments")
 
     # Single file inputs
+    counter_files.add_argument('-rc', '--raw-counts', metavar='RAW_COUNTS',
+                               help='The ...feature_counts.csv file')
     diffexp_files.add_argument('-nc', '--norm-counts', metavar='NORM_COUNTS',
-                               help='The ...norm_counts.csv file produced by tiny-deseq.r')
+                               help='The ...norm_counts.csv file')
+    counter_files.add_argument('-ss', '--summary-stats', metavar='STAT',
+                               help='The ...summary_stats.csv file')
 
     # Multi-file inputs
     diffexp_files.add_argument('-dge', '--dge-tables', metavar='COMPARISON', nargs='+',
-                               help='The ...cond1...cond2...deseq.csv files produced by tiny-deseq.r')
+                               help='The ...cond1...cond2...deseq.csv files')
     counter_files.add_argument('-len', '--len-dist', metavar='5P_LEN', nargs='+',
-                               help='The ...nt_len_dist.csv files produced by tiny-count')
+                               help='The ...nt_len_dist.csv files')
 
     # Outputs options
     optional_args.add_argument('-h', '--help', action="help", help="show this help message and exit")
@@ -67,20 +71,6 @@ def get_args():
                                "classes and significantly different genes highlighted.")
 
     return parser.parse_args()
-
-
-def get_pairs(samples):
-    """Get pairs of comparisons from a list of samples to compare.
-    
-    Args:
-        samples: A list of samples to compare
-    
-    Returns:
-        pair: An generator of all possible pairs
-    """
-    
-    for pair in itertools.combinations(samples, 2):
-        yield pair
 
 
 def len_dist_plots(files_list: list, out_prefix:str, **kwargs):
@@ -116,22 +106,36 @@ def len_dist_plots(files_list: list, out_prefix:str, **kwargs):
         plot.figure.savefig(pdf_name)
 
 
-def class_plots(class_counts: pd.DataFrame, out_prefix:str, **kwargs):
-    """Create a PDF of the proportion of counts assigned to
-    a feature in a particular class as a pie and bar chart.
+def class_charts(raw_class_counts: pd.DataFrame, mapped_total: int, out_prefix: str, **kwargs):
+    """Create a PDF of the proportion of raw assigned counts vs total mapped reads for each class
 
     Args:
-        class_counts: A dataframe containing class counts per library
+        raw_class_counts: A dataframe containing RAW class counts per library
+        mapped_total: The total number of reads mapped by bowtie
         out_prefix: The prefix to use when naming output PDF plots
         kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
     """
 
-    for library in class_counts:
-        fig = aqplt.class_pie_barh(class_counts[library], **kwargs)
+    for library in raw_class_counts:
+        fig = aqplt.class_pie_barh(raw_class_counts[library], mapped_total, **kwargs)
 
         # Save the plot
         pdf_name = make_filename([out_prefix, library, 'class_chart'], ext='.pdf')
         fig.savefig(pdf_name)
+
+def get_mapped_total(summary_stats_file: str) -> int:
+    """Get the total number of reads mapped by bowtie. Used by class_charts
+
+    Args:
+        summary_stats_file: the summary stats csv produced by Counter
+
+    Returns: total reads mapped by bowtie
+    """
+
+    with open(summary_stats_file, 'r') as f:
+        for row in csv.reader(f):
+            if row[0] == "Mapped Reads":
+                return sum(map(lambda x: int(float(x)), row[1:]))
 
 
 def get_sample_rep_dict(df: pd.DataFrame) -> dict:
@@ -184,7 +188,7 @@ def scatter_replicates(count_df: pd.DataFrame, output_prefix: str, samples: dict
     """
 
     for samp, reps in samples.items():
-        for pair in get_pairs(reps):
+        for pair in itertools.combinations(reps, 2):
             rscat = aqplt.scatter_simple(count_df.loc[:,pair[0]], count_df.loc[:,pair[1]],
                                          color='#B3B3B3', alpha=0.5, log_norm=True, rasterized=RASTER)
             aqplt.set_square_scatter_view_lims(rscat, view_lims)
@@ -271,6 +275,18 @@ def scatter_dges(count_df, dges, output_prefix, viewLims, classes=None, show_unk
             sscat.figure.savefig(pdf_name)
 
 
+def load_raw_counts(raw_counts_file: str) -> Optional[pd.DataFrame]:
+    """Loads a raw_counts CSV as a DataFrame
+    Args:
+        raw_counts_file: The raw counts CSV produced by Counter
+    Returns:
+        The raw counts DataFrame
+    """
+
+    if raw_counts_file is None: return None
+    return pd.read_csv(raw_counts_file, index_col=0)
+
+
 def load_norm_counts(norm_counts_file: str) -> Optional[pd.DataFrame]:
     """Loads a norm_counts CSV as a DataFrame
     Args:
@@ -298,20 +314,22 @@ def get_flat_classes(counts_df: pd.DataFrame) -> pd.Series:
         .explode()
 
 
-def get_class_counts(counts_df: pd.DataFrame) -> pd.DataFrame:
-    """Calculates class counts from a counts DataFrame
+def get_class_counts(raw_counts_df: pd.DataFrame) -> pd.DataFrame:
+    """Calculates class counts from the Raw Counts DataFrame
 
-    If there are multiple classes associated with a feature, each class will receive
-    the feature's full count without normalizing by the number of associated classes.
+    If there are multiple classes associated with a feature, then that feature's
+    counts are normalized across all associated classes.
 
     Args:
-        counts_df: A DataFrame containing features and their associated classes and counts
+        raw_counts_df: A DataFrame containing features and their associated classes and counts
     Returns:
         class_counts: A DataFrame with an index of classes and count entries, per comparison
     """
 
     # 1. Group by Feature Class. Class "lists" are strings. Normalize their counts by the number of commas.
-    grouped = counts_df.groupby("Feature Class").apply(lambda grp: grp.sum() / (grp.name.count(',') + 1))
+    grouped = (raw_counts_df.drop("Feature Name", 1, errors='ignore')
+               .groupby("Feature Class")
+               .apply(lambda grp: grp.sum() / (grp.name.count(',') + 1)))
 
     # 2. Convert class "list" strings to true lists since we no longer need a hashable index
     grouped.index = grouped.index.map(lambda x: [cls.strip() for cls in x.split(',')])
@@ -331,18 +349,20 @@ def validate_inputs(args: argparse.Namespace) -> None:
 
     dependencies_satisfied_for = {
         'len_dist': all([args.len_dist]),
-        'class_charts': all([args.norm_counts]),
+        'class_charts': all([args.raw_counts, args.summary_stats]),
         'replicate_scatter': all([args.norm_counts]),
         'sample_avg_scatter_by_dge': all([args.norm_counts, args.dge_tables]),
         'sample_avg_scatter_by_dge_class': all([args.norm_counts, args.dge_tables]),
     }
 
     nc_file = "normalized count file (-nc/--norm-counts)"
+    rc_file = "raw count file (-rc/--raw-counts)"
+    sc_file = "summary stats file (-sc/--summary-stats)"
     dge_files = "differential expression tables (-dge/--dge-tables)"
 
     error_message = {
         'len_dist': "5' nucleotide/length tables (-len/--len-dist) are required for ",
-        'class_charts': f"A {nc_file} is required for ",
+        'class_charts': f"A {rc_file} and {sc_file} are required for ",
         'replicate_scatter': f"A {nc_file} is required for ",
         'sample_avg_scatter_by_dge': f"A {nc_file} and {dge_files} are required for ",
         'sample_avg_scatter_by_dge_class': f"A {nc_file} and {dge_files} are required for ",
@@ -370,7 +390,7 @@ def setup(args: argparse.Namespace) -> dict:
 
     required_inputs = {
         'len_dist': [],
-        'class_charts': ["norm_count_df", "class_counts"],
+        'class_charts': ["raw_count_df", "class_counts", "mapped_total"],
         'replicate_scatter': ["norm_count_df", "sample_rep_dict", "norm_view_lims"],
         'sample_avg_scatter_by_dge':
             ["norm_count_df", "sample_rep_dict", "norm_count_avg_df", "de_table", "avg_view_lims"],
@@ -380,12 +400,14 @@ def setup(args: argparse.Namespace) -> dict:
 
     relevant_vars: Dict[str, Union[pd.DataFrame, pd.Series, dict, None]] = {}
     input_getters = {
+        'raw_count_df': lambda: load_raw_counts(args.raw_counts),
+        'mapped_total': lambda: get_mapped_total(args.summary_stats),
         'norm_count_df': lambda: load_norm_counts(args.norm_counts),
         'de_table': lambda: load_dge_tables(args.dge_tables),
         'sample_rep_dict': lambda: get_sample_rep_dict(relevant_vars["norm_count_df"]),
         'norm_count_avg_df': lambda: get_sample_averages(relevant_vars["norm_count_df"], relevant_vars["sample_rep_dict"]),
         'feat_classes': lambda: get_flat_classes(relevant_vars["norm_count_df"]),
-        'class_counts': lambda: get_class_counts(relevant_vars["norm_count_df"]),
+        'class_counts': lambda: get_class_counts(relevant_vars["raw_count_df"]),
         'avg_view_lims': lambda: aqplt.get_scatter_view_lims(relevant_vars["norm_count_avg_df"]),
         'norm_view_lims': lambda: aqplt.get_scatter_view_lims(relevant_vars["norm_count_df"].select_dtypes(['number']))
     }
@@ -420,8 +442,8 @@ def main():
             func = len_dist_plots
             arg, kwd = (args.len_dist, args.out_prefix), {}
         elif plot == 'class_charts':
-            func = class_plots
-            arg, kwd = (inputs["class_counts"], args.out_prefix), {}
+            func = class_charts
+            arg, kwd = (inputs["class_counts"], inputs['mapped_total'], args.out_prefix), {}
         elif plot == 'replicate_scatter':
             func = scatter_replicates
             arg = (inputs["norm_count_df"], args.out_prefix, inputs["sample_rep_dict"], inputs["norm_view_lims"])

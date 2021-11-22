@@ -2,6 +2,7 @@ import os
 import re
 import sys
 
+import ruamel.yaml
 from ruamel.yaml.comments import CommentedOrderedMap
 from pkg_resources import resource_filename
 from abc import ABC, abstractmethod
@@ -146,16 +147,29 @@ class ResumePlotterConfig(ResumeConfig):
         steps = ["plotter"]
 
         inputs = {
-            'norm_counts': {'var': "resume_norm", 'type': "File"},
-            'dge_tables': {'var': "resume_dge", 'type': "File[]"},
+            'raw_counts': {'var': "resume_raw", 'type': "File"},
+            'summ_stats': {'var': "resume_stat", 'type': "File"},
             'len_dist': {'var': "resume_len_dist", 'type': "File[]"}
         }
+
+        dge_outputs = {
+            'norm_counts': {'var': "resume_norm", 'type': "File"},
+            'dge_tables': {'var': "resume_dge", 'type': "File[]"}
+        }
+
+        if self._dge_subdir_exists(processed_config):
+            inputs.update(dge_outputs)
 
         # Build resume config from the previously-processed Run Config
         super().__init__(processed_config, workflow, steps, inputs)
 
-        # Remove the PCA plot input since dge is not a step in this resume workflow
-        self.workflow['steps']['organize_plotter']['in']['dir_files']['source'].remove('dge/pca_plot')
+    def _dge_subdir_exists(self, processed_config):
+        with open(processed_config, 'r') as f:
+            config = ruamel.yaml.YAML().load(f)
+            exists = os.path.isdir(config['dir_name_dge'])
+
+        self.dge_ran = exists
+        return exists
 
     def _rebuild_entry_inputs(self):
         """Set the new path inputs for the Plotter step
@@ -170,9 +184,13 @@ class ResumePlotterConfig(ResumeConfig):
 
         try:
             self['resume_raw'] = self.cwl_file(glob(counter + "/*_feature_counts.csv")[0])
-            self['resume_norm'] = self.cwl_file(glob(dge + "/*_norm_counts.csv")[0])
+            self['resume_stat'] = self.cwl_file(glob(counter + "/*_summary_stats.csv")[0])
             self['resume_len_dist'] = list(map(self.cwl_file, glob(counter + "/*_nt_len_dist.csv")))
-            self['resume_dge'] = list(map(self.cwl_file, glob(dge + "/*_deseq_table.csv")))
+
+            if self.dge_ran:
+                self['resume_dge'] = list(map(self.cwl_file, glob(dge + "/*_deseq_table.csv")))
+                self['resume_norm'] = self.cwl_file(glob(dge + "/*_norm_counts.csv")[0])
+
         except FileNotFoundError as e:
             sys.exit("The following pipeline output could not be found:\n%s" % (e.filename,))
         except IndexError:
@@ -180,3 +198,16 @@ class ResumePlotterConfig(ResumeConfig):
             if counter is None or not os.path.isdir(counter): msg += f"The directory {counter} was not found. "
             if dge is None or not os.path.isfile(dge): msg += f"The directory {dge} was not found. "
             sys.exit(msg)
+
+        steps = self.workflow['steps']
+        plotter_inputs = steps['plotter']['in']
+
+        # Remove the PCA plot input since dge is not a step in this resume workflow
+        steps['organize_plotter']['in']['dir_files']['source'].remove('dge/pca_plot')
+        if not self.dge_ran:
+            prune = set()
+            for input_var, value in plotter_inputs.items():
+                if value.startswith('dge/'):
+                    prune.add(input_var)
+            for input_var in prune:
+                del plotter_inputs[input_var]
