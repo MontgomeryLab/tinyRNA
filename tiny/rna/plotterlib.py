@@ -35,9 +35,10 @@ from abc import ABC, abstractmethod
 
 class plotterlib:
 
-    def __init__(self, user_style_sheet, debug=False):
+    def __init__(self, user_style_sheet):
 
-        if debug:
+        self.debug = getattr(sys, 'gettrace', lambda: None)() is not None
+        if self.debug:
             mpl.use("TkAgg", force=True)
             mpl.rcParams['savefig.dpi'] = 100
 
@@ -59,7 +60,7 @@ class plotterlib:
         """
 
         # Retrieve axis and styles for this plot type
-        fig, ax = self.reuse_subplot("len_dist_bar")
+        fig, ax = self.reuse_subplot("len_dist")
 
         # Convert reads to proportion
         size_prop = size_df / size_df.sum().sum()
@@ -483,6 +484,7 @@ class plotterlib:
 
         rect = Rectangle(xy=(box.x0, box.y0), width=box.width, height=box.height,
                                   transform=ax.get_transform(), clip_on=False, color="green", fill=False)
+        rect.set_in_layout(False)
         ax.add_patch(rect)
 
     def reuse_subplot(self, plot_type: str) -> Tuple[plt.Figure, Union[plt.Axes, List[plt.Axes]]]:
