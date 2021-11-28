@@ -149,16 +149,16 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
 
 
 class ReferenceTables:
-    """A GFF parser which builds feature, attribute, and alias tables, with intelligent appends
+    """A GFF parser which builds feature, identity, and alias tables, with intelligent appends
 
-    Features may be defined by multiple GFF files. If multiple files offer different attributes for
+    Features may be defined by multiple GFF files. If multiple files offer different identities for
     the same feature, the unique among those attribute keys and values are merged with the record.
     If multiple aliases (or Name Attributes, per the Features Sheet) are defined for a feature, the
     unique among those names are appended. Each GFF file defined in the Features Sheet is parsed only
     once regardless of the number of Name Attributes associated with it.
 
     Features which define a Parent or share an ID attribute are treated as discontinuous features.
-    In these cases the root ancestor feature receives merged attributes, intervals, and aliases.
+    In these cases the root ancestor feature receives merged identities, intervals, and aliases.
     Children of the root ancestor are otherwise not stored in the reference tables.
 
     Source and type filters allow the user to define acceptable values for columns 2 and 3 of the
@@ -175,20 +175,22 @@ class ReferenceTables:
         self.gff_files = gff_files
         self._set_filters(**kwargs)
         self.all_features = kwargs['all_features']
-        self.attrs_of_interest = defaultdict(set, {"Class": set()})
+        self.attrs_of_interest = defaultdict(set)
         for rule in rules:
             self.attrs_of_interest[rule['Identity'][0]].add(rule['Identity'][1])
 
         self.feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
-        self.attrs, self.alias = defaultdict(lambda: defaultdict(set)), defaultdict(set)
-        self.parents, self.filtered = {}, set()
+        self.ident, self.alias = defaultdict(lambda: defaultdict(set)), defaultdict(set)
+        self.classes, self.parents, self.filtered = {}, {}, set()
         self.intervals = defaultdict(list)
+        self.classes = defaultdict(set)
 
         # Patch the GFF attribute parser to support comma separated attribute value lists
         setattr(HTSeq.features, 'parse_GFF_attribute_string', parse_GFF_attribute_string)
 
     @report_execution_time("GFF parsing")
-    def get(self) -> Tuple['HTSeq.GenomicArrayOfSets', Dict[str, list], Dict[str, tuple], Dict[str, list]]:
+    def get(self) -> \
+            Tuple['HTSeq.GenomicArrayOfSets', Dict[str, list], Dict[str, tuple], Dict[str, list], Dict[str, list]]:
         """Initiates GFF parsing and returns the resulting reference tables"""
 
         for file, alias_keys in self.gff_files.items():
@@ -204,7 +206,7 @@ class ReferenceTables:
                         # Grab the primary key for this feature
                         feature_id = next(iter(row.attr["ID"]))
                         # Select only identities (key-val pairs) of interest
-                        idents = self.get_interesting_idents(row.attr)
+                        idents = self.get_interesting_idents(feature_id, row.attr)
                         # Only add features with identity matches if all_features is False
                         if not self.all_features and not len(idents):
                             self.exclude_row(row)
@@ -213,8 +215,8 @@ class ReferenceTables:
                         root_id = self.add_feature_iv(feature_id, row)
                         # Append alias to root feature if it is unique
                         self.add_alias(alias_keys, root_id, row.attr)
-                        # Add feature_id -> feature_attributes record
-                        self.incorporate_attributes(root_id, idents)
+                        # Add feature_id -> feature_idents record
+                        self.incorporate_idents(root_id, idents)
                     except KeyError as ke:
                         raise ValueError(f"Feature {row.name} does not contain a {ke} attribute.")
             except Exception as e:
@@ -223,7 +225,7 @@ class ReferenceTables:
                 raise e.with_traceback(sys.exc_info()[2]) from e
 
         self.finalize_tables()
-        return self.feats, self.attrs, self.alias, dict(self.intervals)
+        return self.feats, self.ident, self.alias, dict(self.intervals), self.classes
 
     def get_root_feature(self, feature_id: str, row_attrs: Dict[str, set]) -> str:
         """Returns the ID of the feature's root parent if one exists. Otherwise the original ID is returned."""
@@ -239,10 +241,10 @@ class ReferenceTables:
             parent_id = self.parents[parent_id]
             tree.append(parent_id)
 
-        # Descend tree until the descendent is found in the attributes table
+        # Descend tree until the descendent is found in the identites table
         # This is because ancestor feature(s) may have been filtered
         for ancestor in tree[::-1]:
-            if ancestor in self.attrs or ancestor == feature_id:
+            if ancestor in self.ident or ancestor == feature_id:
                 return ancestor
 
     def add_feature_iv(self, feature_id: str, row) -> str:
@@ -251,7 +253,7 @@ class ReferenceTables:
         root_id = self.get_root_feature(feature_id, row.attr)
 
         self.feats[row.iv] += root_id
-        self.attrs.setdefault(root_id, self.attrs.default_factory())
+        self.ident.setdefault(root_id, self.ident.default_factory())
         if row.iv not in self.intervals[root_id]:
             self.intervals[root_id].append(row.iv)
 
@@ -264,21 +266,22 @@ class ReferenceTables:
             for row_val in row_attr[alias_key]:
                 self.alias[root_id].add(row_val)
 
-    def get_interesting_idents(self, row_attrs: Dict[str, set]) -> Dict[str, set]:
-        """Returns only the identities of interest from the row's attributes"""
+    def get_interesting_idents(self, feat_id: str, row_attrs: Dict[str, set]) -> Dict[str, set]:
+        """Returns only the identities of interest from the row's identities"""
 
         interest_matches = {}
         for interest in self.attrs_of_interest:
             match = row_attrs[interest] & self.attrs_of_interest[interest]
             if match: interest_matches[interest] = match
 
+        self.classes[feat_id].update(c for c in row_attrs["Class"])
         return interest_matches
 
-    def incorporate_attributes(self, root_id, row_attrs):
-        """Add unique keys and values to root feature's attributes"""
+    def incorporate_idents(self, root_id, row_attrs):
+        """Add unique identities (keys and values) to root feature's identities"""
 
         for key in row_attrs:
-            self.attrs[root_id][key] |= row_attrs[key]
+            self.ident[root_id][key] |= row_attrs[key]
 
     def get_row_parent(self, feature_id: str, row_attrs: Dict[str, set]) -> str:
         """Get the current feature's parent while cooperating with filtered features"""
@@ -290,7 +293,7 @@ class ReferenceTables:
             raise ValueError(f"{feature_id} defines multiple parents which is unsupported at this time.")
         if len(parent_attr) == 0 or parent is None:
             return feature_id
-        if (parent not in self.attrs                # If parent is not a root feature
+        if (parent not in self.ident                # If parent is not a root feature
                 and parent not in self.parents      # If parent doesn't have a parent itself
                 and parent not in self.filtered):   # If parent was not a filtered root feature
             raise ValueError(f"Feature ID {parent} is referenced as a parent before being defined. Please "
@@ -302,7 +305,7 @@ class ReferenceTables:
     def exclude_row(self, row):
         """The current row was filtered, but we still need to account for it and its parent
 
-        We don't want to add filtered features to the attributes table because we later call
+        We don't want to add filtered features to the identities table because we later call
         get_keys() on the table to obtain a list of all features considered for counting.
         We still need to keep track of parents for situations where an ancestral tree has
         a gap due to filtering; in this case we still want to merge descendents with the
@@ -316,13 +319,14 @@ class ReferenceTables:
             self.feats.add_chrom(row.iv.chrom)
 
     def finalize_tables(self):
-        """Internally these iterables are sets for ease, but Counter expects tuples for speed"""
+        """Internally these are sets for ease, but Counter expects tuples for speed and hashability"""
 
+        self.classes = {feat: tuple(sorted(classes)) for feat, classes in self.classes.items()}
         self.alias = {feat: tuple(sorted(aliases)) for feat, aliases in self.alias.items()}
-        self.attrs = {feat: [(select_for, with_value)
-                             for select_for in self.attrs[feat]
-                             for with_value in self.attrs[feat][select_for]]
-                      for feat in self.attrs}
+        self.ident = {feat: [(select_for, with_value)
+                             for select_for in self.ident[feat]
+                             for with_value in self.ident[feat][select_for]]
+                      for feat in self.ident}
 
     @classmethod
     def _set_filters(cls, **kwargs):

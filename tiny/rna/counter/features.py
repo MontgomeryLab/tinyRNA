@@ -1,4 +1,3 @@
-import itertools
 import HTSeq
 
 from collections import defaultdict
@@ -19,18 +18,20 @@ RANK, RULE, FEAT = 0, 1, 2
 
 class Features:
     chrom_vectors: HTSeq.ChromVector
-    attributes: dict
+    identities: dict
     intervals: dict
+    classes: dict
     aliases: dict
 
     _instance = None  # Singleton
 
-    def __init__(self, features: HTSeq.GenomicArrayOfSets, attributes: dict, aliases: dict, intervals: dict):
+    def __init__(self, features: HTSeq.GenomicArrayOfSets, attributes: dict, aliases: dict, intervals: dict, classes: dict):
         if Features._instance is None:
             Features.chrom_vectors = features.chrom_vectors  # For interval -> feature ID lookups
-            Features.attributes = attributes                 # For feature ID -> GFF column 9 attribute lookups
+            Features.identities = attributes                 # For feature ID -> GFF column 9 attribute lookups
             Features.aliases = aliases                       # For feature ID -> preferred feature name lookups
             Features.intervals = intervals                   # For feature ID -> interval lookups
+            Features.classes = classes                       # For feature ID -> class lookups
             Features._instance = self
 
 
@@ -151,7 +152,7 @@ class FeatureSelector:
                 if read not in FeatureSelector.rules_table[hit[RULE]][selector]:
                     eliminated.add(hit)
                     if self.report_eliminations:
-                        feat_class = Features.attributes[hit[FEAT]][0][1][0]
+                        feat_class = Features.classes[hit[FEAT]]
                         self.elim_stats[feat_class][f"{selector}={read}"] += 1
 
             finalists -= eliminated
@@ -197,8 +198,8 @@ class FeatureSelector:
             # Check for perfect interval match only once per IntervalFeatures
             perfect_iv_match = self.is_perfect_iv_match(iv_feats, aln_iv.start, aln_iv.end)
             for feat in iv_feats[2]:
-                for ident in Features.attributes[feat]:
-                    for rule in self.get_identity_matches(ident):
+                for ident in Features.identities[feat]:
+                    for rule in self.inv_ident[ident]:
                         if not perfect_iv_match and FeatureSelector.rules_table[rule]['Strict']:
                             continue
                         identity_hits.append((FeatureSelector.rules_table[rule]['Hierarchy'], rule, feat))

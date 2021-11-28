@@ -105,8 +105,9 @@ class SummaryStats:
     summary_categories = ["Total Reads", "Retained Reads", "Unique Sequences",
                           "Mapped Sequences", "Mapped Reads", "Assigned Reads"]
 
-    def __init__(self, feature_attributes: dict, out_prefix: str, report_diags: bool):
-        self.feature_attributes = feature_attributes
+    def __init__(self, ref: 'Features', out_prefix: str, report_diags: bool):
+        self.feature_identities = ref.identities
+        self.feature_classes = ref.classes
         self.out_prefix = out_prefix
         self.report_diags = report_diags
 
@@ -114,7 +115,7 @@ class SummaryStats:
         self.report_summary_statistics = True
 
         self.pipeline_stats_df = pd.DataFrame(index=SummaryStats.summary_categories)
-        self.feat_counts_df = pd.DataFrame(index=feature_attributes.keys())
+        self.feat_counts_df = pd.DataFrame(index=ref.identities.keys())
         self.lib_stats_df = pd.DataFrame(index=LibraryStats.summary_categories)
         self.chrom_misses = Counter()
         self.nt_len_mat = {}
@@ -165,13 +166,13 @@ class SummaryStats:
         """
 
         # Subset the counts table to only show features that were matched on identity (regardless of count)
-        summary = self.feat_counts_df.loc[self.feature_attributes.keys()]
+        summary = self.feat_counts_df.loc[self.feature_identities.keys()]
         # Sort columns by title and round all counts to 2 decimal places
         summary = self.sort_cols_and_round(summary)
         # Add Feature Name column, which is the feature alias (default is Feature ID if no alias exists)
         summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(alias.get(feat, [feat]))))
         # Add Classes column for classes associated with the given feature
-        feat_class_map = lambda feat: ', '.join([v for k,v in self.feature_attributes[feat] if k == 'Class'])
+        feat_class_map = lambda feat: ', '.join(self.feature_classes[feat])
         summary.insert(1, "Feature Class", summary.index.map(feat_class_map))
         # Sort by index, make index its own column, and rename it to Feature ID
         summary = summary.sort_index().reset_index().rename(columns={"index": "Feature ID"})
@@ -386,7 +387,7 @@ class Diagnostics:
         for lib in sorted(selection_summary.keys()):
             out.append(lib)
             for feat_class in sorted(selection_summary[lib].keys()):
-                out.append('\t' + feat_class)
+                out.append('\t' + ','.join(feat_class))
                 for stat in sorted(selection_summary[lib][feat_class].keys()):
                     out.append("\t\t%s: %d" % (stat, selection_summary[lib][feat_class][stat]))
 

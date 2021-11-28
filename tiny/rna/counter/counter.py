@@ -13,7 +13,7 @@ import os
 from collections import defaultdict
 from typing import Tuple, List, Dict
 
-from tiny.rna.counter.features import Features, FeatureCounter, FeatureSelector
+from tiny.rna.counter.features import Features, FeatureCounter
 from tiny.rna.counter.statistics import SummaryStats
 from tiny.rna.util import report_execution_time, from_here
 from tiny.rna.configuration import CSVReader
@@ -145,7 +145,7 @@ def map_and_reduce(libraries):
     """Assigns one worker process per library and merges the statistics they report"""
 
     # SummaryStats handles final output files, regardless of multiprocessing status
-    summary = SummaryStats(Features.attributes, FeatureCounter.out_prefix, FeatureCounter.run_diags)
+    summary = SummaryStats(Features, FeatureCounter.out_prefix, FeatureCounter.run_diags)
 
     # Use a multiprocessing pool if multiple sam files were provided
     if len(libraries) > 1:
