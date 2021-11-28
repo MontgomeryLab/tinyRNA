@@ -163,9 +163,9 @@ class FeatureSelector:
         return {choice[FEAT] for choice in finalists}
 
     @staticmethod
-    def is_perfect_iv_match(feat_start, feat_end, aln_iv) -> bool:
+    def is_perfect_iv_match(feat_iv, aln_start, aln_end) -> bool:
         # Returns true if the alignment interval is fully enclosed by the feature interval
-        return feat_start <= aln_iv.start and feat_end >= aln_iv.end
+        return feat_iv[0] <= aln_start and feat_iv[1] >= aln_end
 
     def choose_identities(self, feats_list: List[Tuple[int, int, Set[str]]], aln_iv: 'HTSeq.GenomicInterval') -> Set[Hit]:
         """Performs the initial selection on the basis of identity rules: attribute (key, value)
@@ -195,7 +195,7 @@ class FeatureSelector:
 
         for iv_feats in feats_list:
             # Check for perfect interval match only once per IntervalFeatures
-            perfect_iv_match = self.is_perfect_iv_match(iv_feats[0], iv_feats[1], aln_iv)
+            perfect_iv_match = self.is_perfect_iv_match(iv_feats, aln_iv.start, aln_iv.end)
             for feat in iv_feats[2]:
                 for ident in Features.attributes[feat]:
                     for rule in self.get_identity_matches(ident):
@@ -218,43 +218,6 @@ class FeatureSelector:
                 finalists.update(hit for hit in identity_hits if hit[RANK] == min_rank)
 
         return finalists
-
-    @classmethod
-    def get_identity_matches(cls, ident) -> Iterator[int]:
-        """Returns indexes of rules associated with a feature attribute record
-
-        An attribute record is of the form ('key', ('value1', 'value2', ...)) where
-        one or more values may be associated with the key. If there are multiple values,
-        key-value products are formed, i.e. ('key', 'value1'), ('key', 'value2'), ...,
-        for lookup in the inverted identities table. In this way multiple identities may
-        be produced from a single attribute record. If any identity product matches a
-        rule in the inverted identities table, the indexes of the associated selection
-        rules are returned
-        """
-
-        try:
-            # Check if rules are defined for this feature identity
-            for identity_rule in cls.inv_ident[ident]:
-                yield identity_rule
-        except KeyError:
-            pass
-
-    @classmethod
-    def get_all_identity_matches(cls) -> Set[str]:
-        """Returns all features which match an identity rule in the rules table"""
-
-        matches = set()
-        for feat, feat_attrs in Features.attributes.items():
-            for attr in feat_attrs:
-                ident_matches = cls.get_identity_matches(attr)
-                try:
-                    next(ident_matches)
-                    matches.add(feat)
-                except StopIteration:
-                    # No rules defined for this identity
-                    pass
-
-        return matches
 
     @staticmethod
     def build_selectors(rules_table) -> List[dict]:
