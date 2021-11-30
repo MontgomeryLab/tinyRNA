@@ -7,6 +7,13 @@ baseCommand: tiny-plot
 stdout: console_output.log
 
 inputs:
+
+  raw_counts:
+    type: File
+    inputBinding:
+      prefix: -rc
+    doc: "Raw, non-normalized feature counts from Counter"
+
   norm_counts:
     type: File?
     inputBinding:
@@ -18,6 +25,12 @@ inputs:
     inputBinding:
       prefix: -dge
     doc: "Sample comparison tables from DESeq"
+
+  summ_stats:
+    type: File
+    inputBinding:
+      prefix: -ss
+    doc: "The summary stats csv from Counter"
 
   len_dist:
     type: File[]

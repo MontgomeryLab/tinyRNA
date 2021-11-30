@@ -334,7 +334,7 @@ bt_index_files: [ ]
 # The control for comparison. If unspecified, all comparisons are made
 control_condition: ''
 # If the experiment design yeilds less than one degree of freedom, deseq is skipped
-run_deseq: False
+run_deseq: True
 
 ######------------------------- DERIVED FROM FEATURES SHEET -------------------------######
 #
