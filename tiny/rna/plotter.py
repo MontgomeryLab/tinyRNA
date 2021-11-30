@@ -7,8 +7,10 @@ directory, you may find it easier to instead run `tiny replot` within that run d
 import multiprocessing as mp
 import pandas as pd
 import itertools
+import traceback
 import argparse
 import os.path
+import sys
 import csv
 import re
 
@@ -140,14 +142,14 @@ def get_mapped_total(summary_stats_file: str) -> int:
 
 def get_sample_rep_dict(df: pd.DataFrame) -> dict:
     """Group sample_rep_N format strings by sample
-    
+
     Args:
         df: The dataframe with columns using sample_rep_N format and features for rows
 
     Returns:
         sample_dict: A dictionary containing all column names corresponding to unique samples.
     """
-    
+
     sample_dict = defaultdict(list)
 
     for col in df.columns:
@@ -160,7 +162,7 @@ def get_sample_rep_dict(df: pd.DataFrame) -> dict:
 
 def get_sample_averages(df: pd.DataFrame, samples:dict) -> pd.DataFrame:
     """Average counts across replicates on a per-sample basis
-    
+
     Args:
         df: A dataframe with columns using sample_rep_N format and features for rows
         samples: A dictionary containing sample names and their associated "sample_rep_N" replicates
@@ -168,18 +170,18 @@ def get_sample_averages(df: pd.DataFrame, samples:dict) -> pd.DataFrame:
     Returns:
         new_df: The new dataframe with averaged counts per unique sample.
     """
-    
+
     new_df = pd.DataFrame(index=df.index, columns=samples.keys())
 
     for key, val in samples.items():
         new_df[key] = df.loc[:, val].mean(axis=1)
-    
+
     return new_df
 
 
 def scatter_replicates(count_df: pd.DataFrame, output_prefix: str, samples: dict, view_lims: Tuple[float, float] = None):
     """Creates pairwise scatter plots comparing replicates' counts and saves the plot as a PDF
-    
+
     Args:
         count_df: A dataframe of counts per feature
         output_prefix: A string to use as a prefix for saving files
@@ -224,7 +226,7 @@ def load_dge_tables(comparisons: list) -> pd.DataFrame:
 
         comparison_name = "_vs_".join(comparison[0])
         de_table[comparison_name] = pd.read_csv(dgefile, index_col=0)['padj']
-    
+
     return de_table
 
 
@@ -470,13 +472,18 @@ def main():
         with mp.Pool(len(itinerary)) as pool:
             results = []
             for task, args, kwds in itinerary:
-                results.append(pool.apply_async(task, args, kwds))
+                results.append(pool.apply_async(task, args, kwds, error_callback=err))
             for result in results:
-                result.get()
+                result.wait()
     elif len(itinerary) == 1:
         # Don't use multiprocessing if only one plot type requested
         task = itinerary.pop()
         task[0](*task[1], **task[2])
+
+def err(e):
+    """Allows us to print errors from a MP worker without discarding the other results"""
+    print("An error occurred. See console log for details.", file=sys.stderr)
+    print(''.join(traceback.format_exception(type(e), e, e.__traceback__)))
 
 if __name__ == '__main__':
     main()
