@@ -78,6 +78,14 @@ inputs:
       the adapter will be auto-detected. For PE data, this
       is used if R1/R2 are found not overlapped. 
       (string [=auto])
+
+  adapter_fasta:
+    type: File?
+    inputBinding:
+      prefix: --adapter_fasta
+    doc: |
+      specify a FASTA file to trim both read1 and read2 (if PE)
+      by all the sequences in this FASTA file (string [=])
   
   # Trimming options regardless of quality
   trim_poly_x:
@@ -86,6 +94,22 @@ inputs:
       prefix: --trim_poly_x
     doc: |
       enable polyX trimming in 3' ends.
+
+  trim_front1:
+    type: int?
+    inputBinding:
+      prefix: --trim_front1
+    doc: |
+      trimming how many bases in front for read1, default
+      is 0 (int [=0])
+
+  trim_tail1:
+    type: int?
+    inputBinding:
+      prefix: --trim_tail1
+    doc: |
+      trimming how many bases in tail for read1, default
+      is 0 (int [=0])
 
   poly_x_min_len:
     type: int?
