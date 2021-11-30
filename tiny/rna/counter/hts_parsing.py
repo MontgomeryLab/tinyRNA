@@ -175,15 +175,22 @@ class ReferenceTables:
     source_filter = []
     type_filter = []
 
-    def __init__(self, gff_files: Dict[str, list], rules: List[dict], **kwargs):
+    def __init__(self, gff_files: Dict[str, list], rules: Dict[str, list], inv_ident, **kwargs):
         self.gff_files = gff_files
         self._set_filters(**kwargs)
-        self.all_features = kwargs['all_features']
-        self.attrs_of_interest = defaultdict(set)
-        for rule in rules:
-            self.attrs_of_interest[rule['Identity'][0]].add(rule['Identity'][1])
+        self.all_features = kwargs.get('all_features', False)
+        # self.attrs_of_interest = defaultdict(set)
+        # for rule in rules:
+        #     self.attrs_of_interest[rule['Identity'][0]].add(rule['Identity'][1])
+        self.matchies = defaultdict(set)
+        self.inv_ident = inv_ident
+        self.rules = rules
 
-        self.feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+        import CyStep._stepvector as StepVector
+        setattr(HTSeq._HTSeq, "StepVector", StepVector)
+
+        # self.feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+        self.feats = HTSeq.GenomicArray("auto", typecode='O', stranded=True)
         self.ident, self.alias = defaultdict(lambda: defaultdict(set)), defaultdict(set)
         self.classes, self.parents, self.filtered = {}, {}, set()
         self.intervals = defaultdict(list)
@@ -210,17 +217,17 @@ class ReferenceTables:
                         # Grab the primary key for this feature
                         feature_id = next(iter(row.attr["ID"]))
                         # Select only identities (key-val pairs) of interest
-                        idents = self.get_interesting_idents(feature_id, row.attr)
+                        idxs, classes = self.get_interesting_idents(feature_id, row.attr)
                         # Only add features with identity matches if all_features is False
-                        if not self.all_features and not len(idents):
+                        if not self.all_features and not len(idxs):
                             self.exclude_row(row)
                             continue
                         # Add feature_id <-> feature_interval records
-                        root_id = self.add_feature_iv(feature_id, row)
+                        root_id = self.add_feature_iv(feature_id, row, idxs, classes)
                         # Append alias to root feature if it is unique
                         self.add_alias(alias_keys, root_id, row.attr)
                         # Add feature_id -> feature_idents record
-                        self.incorporate_idents(root_id, idents)
+                        #self.incorporate_idents(root_id, idents)
                     except KeyError as ke:
                         raise ValueError(f"Feature {row.name} does not contain a {ke} attribute.")
             except Exception as e:
@@ -251,12 +258,14 @@ class ReferenceTables:
             if ancestor in self.ident or ancestor == feature_id:
                 return ancestor
 
-    def add_feature_iv(self, feature_id: str, row) -> str:
+    def add_feature_iv(self, feature_id: str, row, idxs, classes) -> str:
         """Adds the feature and its intervals to corresponding reference tables"""
 
         root_id = self.get_root_feature(feature_id, row.attr)
+        self.classes[root_id] |= classes
+        self.matchies[root_id] |= idxs
 
-        self.feats[row.iv] += root_id
+        # self.feats[row.iv] += root_id
         self.ident.setdefault(root_id, self.ident.default_factory())
         if row.iv not in self.intervals[root_id]:
             self.intervals[root_id].append(row.iv)
@@ -270,16 +279,23 @@ class ReferenceTables:
             for row_val in row_attr[alias_key]:
                 self.alias[root_id].add(row_val)
 
-    def get_interesting_idents(self, feat_id: str, row_attrs: Dict[str, set]) -> Dict[str, set]:
+    def get_interesting_idents(self, feat_id: str, row_attrs: Dict[str, set]) -> Set[int]:
         """Returns only the identities of interest from the row's identities"""
 
-        interest_matches = {}
-        for interest in self.attrs_of_interest:
-            match = row_attrs[interest] & self.attrs_of_interest[interest]
-            if match: interest_matches[interest] = match
+        interest_matches = set()
+        # for interest in self.attrs_of_interest:
+        #     match = row_attrs[interest] & self.attrs_of_interest[interest]
+        #     if match: interest_matches[interest] = match
+        for ident, rule_idxs in self.inv_ident.items():
+            match = row_attrs.get(ident[0], None)
+            if match is not None and ident[1] in match:
+                interest_matches.update(r for r in rule_idxs)
 
-        self.classes[feat_id].update(c for c in row_attrs["Class"])
-        return interest_matches
+        # {(rule, rank, strict), ...}
+        interest_matches = {(r, self.rules[r]['Hierarchy'], self.rules[r]['Strict']) for r in interest_matches}
+        classes = {c for c in row_attrs["Class"]}
+
+        return interest_matches, classes
 
     def incorporate_idents(self, root_id, row_attrs):
         """Add unique identities (keys and values) to root feature's identities"""
@@ -331,6 +347,12 @@ class ReferenceTables:
                              for select_for in self.ident[feat]
                              for with_value in self.ident[feat][select_for]]
                       for feat in self.ident}
+
+        # (root_id, [(rule, rank, strict), ...])
+        for root_id, ivs in self.intervals.items():
+            matchies = tuple(sorted(self.matchies[root_id], key=lambda x: x[1]))
+            for iv in ivs:
+                self.feats[iv] += {(root_id, matchies)}
 
     @classmethod
     def _set_filters(cls, **kwargs):

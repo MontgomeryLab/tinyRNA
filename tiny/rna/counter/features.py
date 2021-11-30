@@ -40,14 +40,14 @@ class FeatureCounter:
     run_diags: bool
 
     def __init__(self, gff_file_set, selection_rules, **prefs):
-        reference_tables = parser.ReferenceTables(gff_file_set, selection_rules, **prefs)
+        self.stats = LibraryStats(**prefs)
+        self.selector = FeatureSelector(selection_rules, self.stats, **prefs)
+
+        reference_tables = parser.ReferenceTables(gff_file_set, self.selector.rules_table, self.selector.inv_ident, **prefs)
         Features(*reference_tables.get())
 
         FeatureCounter.out_prefix = prefs['out_prefix']
         FeatureCounter.run_diags = prefs['report_diags']
-
-        self.stats = LibraryStats(**prefs)
-        self.selector = FeatureSelector(selection_rules, self.stats, **prefs)
 
     def assign_features(self, alignment: 'parser.Alignment') -> Tuple[set, int]:
         """Determines features associated with the interval then performs rule-based feature selection"""
@@ -197,12 +197,11 @@ class FeatureSelector:
         for iv_feats in feats_list:
             # Check for perfect interval match only once per IntervalFeatures
             perfect_iv_match = self.is_perfect_iv_match(iv_feats, aln_iv.start, aln_iv.end)
-            for feat in iv_feats[2]:
-                for ident in Features.identities[feat]:
-                    for rule in self.inv_ident[ident]:
-                        if not perfect_iv_match and FeatureSelector.rules_table[rule]['Strict']:
-                            continue
-                        identity_hits.append((FeatureSelector.rules_table[rule]['Hierarchy'], rule, feat))
+            for match in iv_feats[2]:
+                for rule, rank, strict in match[1]:
+                    if strict and not perfect_iv_match:
+                        continue
+                    identity_hits.append((rank, rule, match[0]))
         # -> identity_hits: [(hierarchy, rule, feature), ...]
 
         # Perform hierarchy-based elimination
@@ -231,8 +230,6 @@ class FeatureSelector:
         the membership operator (keyword `in`) which is handled by the selector class'
         __contains__() method.
         """
-
-        rules_table = sorted(rules_table, key=lambda x: x['Hierarchy'])
 
         selector_builders = {"Strand": StrandMatch, "nt5end": NtMatch, "Length": NumericalMatch}
         for row in rules_table:

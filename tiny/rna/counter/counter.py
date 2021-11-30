@@ -137,6 +137,7 @@ def load_config(features_csv: str, is_pipeline: bool) -> Tuple[List[dict], Dict[
         if row['Name'] not in ["ID", *gff_files[gff]]: gff_files[gff].append(row['Name'])
         if rule not in rules: rules.append(rule)
 
+    rules.sort(key=lambda x: x['Hierarchy'])
     return rules, gff_files
 
 
