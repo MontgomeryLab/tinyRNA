@@ -41,6 +41,48 @@ class MyTestCase(unittest.TestCase):
 
     # === TESTS ===
 
+    def test_cystep(self):
+        import CyStep._stepvector as StepVector
+        setattr(HTSeq._HTSeq, "StepVector", StepVector)
+
+        # gas = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+        gas = HTSeq.GenomicArray(chroms="auto", stranded=True, typecode='O')
+        iva = HTSeq.GenomicInterval("I", 1, 10, '-')
+        ivb = HTSeq.GenomicInterval("I", 5, 15, '-')
+        ivc = HTSeq.GenomicInterval("I", 9, 20, '-')
+        ivd = HTSeq.GenomicInterval("I", 2, 4, "-")
+        gas[iva] += {"TestA"}
+        gas[ivb] += {"TestB"}
+        gas[ivd] += {"TestD"}
+
+        """
+        iva:  1 |--TestA--| 10
+        ivb:      5 |---TestB--| 15
+        ivc:          9 |-----------| 20
+        ivd:   2 |--| 4
+                         ^ Single base overlap: iva ∩ ivc
+        Expect:       9 |-|{B}-|-{}-| 20
+                     [9, 10)   [15,20)
+                         ^ {A ∩ B}
+        """
+
+        # list(gas[ivc].array.get_steps())
+        # Mine:  [(0, 2, {'TestA'}), (2, 4, {'TestA', 'TestD'}), (4, 5, {'TestA'}), (5, 10, {'TestB', 'TestA'}), (10, 9223372036854775807, {'TestB'})]
+        # Their: [(0, 2, {'TestA'}), (2, 4, {'TestA', 'TestD'}), (4, 5, {'TestA'}), (5, 10, {'TestA', 'TestB'}), (10, 9223372036854775807, {'TestB'})]
+
+        # list(gas[ivc].array[ivc.start:ivc.end].get_steps())
+        # Mine:  [(9, 10, {'TestA', 'TestB'}), (10, 15, {'TestB'}), (15, 20, set())]
+        # Their: [(9, 10, {'TestB', 'TestA'}), (10, 15, {'TestB'}), (15, 20, set())]
+
+        matches = list(gas[ivc].array[ivc.start:ivc.end].get_steps(values_only=True))
+        matches_with_cooridnates = list(gas[ivc].steps())
+        self.assertEqual(matches, [{"TestA", "TestB"}, {"TestB"}, set()])
+        self.assertEqual(matches_with_cooridnates[0][0], HTSeq.GenomicInterval("I", 9, 10, '-'))
+        self.assertEqual(matches_with_cooridnates[1][0], HTSeq.GenomicInterval("I", 10, 15, '-'))
+        self.assertEqual(matches_with_cooridnates[2][0], HTSeq.GenomicInterval("I", 15, 20, '-'))
+        self.assertEqual(matches_with_cooridnates[2][0], HTSeq.GenomicInterval("I", 15, 20, '-'))
+
+
     """Did SAM_reader correctly skip header values and parse all pertinent info from a single record SAM file?"""
 
     def test_sam_reader(self):
