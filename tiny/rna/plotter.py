@@ -446,7 +446,7 @@ def main():
             for task, args, kwds in itinerary:
                 results.append(pool.apply_async(task, args, kwds))
             for result in results:
-                result.wait()
+                result.get()
     elif len(itinerary) == 1:
         # Don't use multiprocessing if only one plot type requested
         task = itinerary.pop()
