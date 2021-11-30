@@ -4,11 +4,6 @@
 bioc_version="3.14"
 tested_bioc_versions="3.1[2-4]"
 
-if [[ $CONDA_DEFAULT_ENV == "$env_name" ]]; then
-    fail "You must deactivate the tinyRNA environment before running this script."
-    exit 1
-fi
-
 function success() {
   check="✓"
   green_on="\033[1;32m"
@@ -70,6 +65,11 @@ function setup_environment() {
 ################################################################################
 # Main Routine
 ################################################################################
+
+if [[ $CONDA_DEFAULT_ENV == "$env_name" ]]; then
+    fail "You must deactivate the $env_name environment before running this script."
+    exit 1
+fi
 
 # Check if os is mac or linux
 if [[ "$OSTYPE" == "darwin"* ]]; then
