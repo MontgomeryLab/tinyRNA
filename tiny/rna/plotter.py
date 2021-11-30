@@ -211,10 +211,14 @@ def load_dge_tables(comparisons: list) -> pd.DataFrame:
     de_table = pd.DataFrame()
 
     for dgefile in comparisons:
-        # Negative indexes are used since prefixes are allowed to contain underscores
-        name_split = os.path.basename(dgefile).split('_')
-        comparison_name = name_split[-5] + "_vs_" + name_split[-3]
+        comparison = re.findall(r"_cond1_(.*?)_cond2_(.*?)_deseq_table.csv", os.path.basename(dgefile))
 
+        if not comparison:
+            raise ValueError("Could not find condition names in DGE filename: " + dgefile)
+        if len(comparison) > 1:
+            print("Warning: multiple conditions matched in DGE filename. Using first match.")
+
+        comparison_name = "_vs_".join(comparison[0])
         de_table[comparison_name] = pd.read_csv(dgefile, index_col=0)['padj']
     
     return de_table
