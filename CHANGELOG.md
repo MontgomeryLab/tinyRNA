@@ -1,3 +1,6 @@
+### 11/30/2021
+- Temporary files are now removed at the end of each pipeline run when running `tiny {run|recount|replot}` commands
+
 ### 11/21/2021
 - The following improvements have been made to the  class_charts plot:
     - The proportion calculation: 
