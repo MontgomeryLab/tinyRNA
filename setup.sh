@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 
-env_name="tinyrna"
+[[ $# -eq 1 ]] && env_name=$1 || env_name="tinyrna"
 bioc_version="3.14"
 tested_bioc_versions="3.1[2-4]"
+
+if [[ $CONDA_DEFAULT_ENV == "$env_name" ]]; then
+    fail "You must deactivate the tinyRNA environment before running this script."
+    exit 1
+fi
 
 function success() {
   check="✓"
@@ -163,7 +168,8 @@ if conda env list | grep -q "$env_name"; then
     echo
     echo
     status "Updating $env_name environment..."
-    if ! conda update --file $platform_lock_file --name "$env_name" > "env_update.log" 2>&1; then
+    conda update --file $platform_lock_file --name "$env_name" 2>&1 | tee "env_update.log"
+    if ! grep -q "Executing transaction: ...working... done" env_update.log; then
       fail "Failed to update the environment"
       echo "Check the env_update.log file for more information."
       exit 1
