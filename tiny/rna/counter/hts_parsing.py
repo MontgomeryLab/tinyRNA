@@ -1,16 +1,22 @@
 import numpy as np
 import HTSeq
 import sys
+import os
 import re
 
+from line_profiler_pycharm import profile
+
 from collections import Counter, defaultdict
-from typing import Tuple, List, Dict, Union
+from typing import Tuple, List, Dict, Union, Set
+
 from tiny.rna.util import report_execution_time
 
 # For parse_GFF_attribute_string()
 _re_attr_main = re.compile(r"\s*([^\s=]+)[\s=]+(.*)")
 _re_attr_empty = re.compile(r"^\s*$")
 
+# For Alignment
+complement = {ord('A'): 'T', ord('T'): 'A', ord('G'): 'C', ord('C'): 'G'}
 
 class Alignment:
     """The data structure in which parsed SAM alignments are stored.
@@ -20,28 +26,26 @@ class Alignment:
     to the antisense strand.
     """
 
-    complement = {ord('A'): 'T', ord('T'): 'A', ord('G'): 'C', ord('C'): 'G'}
-
-    class Sequence:
-        def __init__(self, name, seq, nt5):
-            self.name = name
-            self.len = len(seq)
-            self.seq = seq
-            self.nt5 = nt5
-
-        def __repr__(self):
-            return f"<Sequence Object: '{self.name}', {self.seq} ({self.len} bases)>"
-
-        def __len__(self):
-            return self.len
-
     def __init__(self, iv, name, seq):
-        nt5 = self.complement[seq[-1]] if iv.strand == '-' else chr(seq[0])
-        self.read = self.Sequence(name, seq, nt5)
+        nt5 = complement[seq[-1]] if iv.strand == '-' else chr(seq[0])
+        self.read = Sequence(name, seq, nt5)
         self.iv = iv
 
     def __repr__(self):
         return f"<Alignment Object: Read '{self.read.name}' aligned to {self.iv}>"
+
+class Sequence:
+    def __init__(self, name, seq, nt5):
+        self.name = name
+        self.len = len(seq)
+        self.seq = seq
+        self.nt5 = nt5
+
+    def __repr__(self):
+        return f"<Sequence Object: '{self.name}', {self.seq} ({self.len} bases)>"
+
+    def __len__(self):
+        return self.len
 
 
 def read_SAM(file):
@@ -58,7 +62,7 @@ def read_SAM(file):
             cols = line.split(b'\t')
 
             # Note: we assume sRNA sequencing data is NOT reversely stranded
-            strand = "+" if (int(cols[1]) & 16) >> 4 == 0 else "-"
+            strand = "+" if (int(cols[1]) & 16) else "-"
             chrom = cols[2].decode('utf-8')
             name = cols[0].decode('utf-8')
             start = int(cols[3]) - 1
