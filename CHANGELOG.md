@@ -1,7 +1,8 @@
 ### 11/30/2021
 - Temporary files are now removed when `tiny {run|recount|replot}` commands finish.
 - The setup script now allows a custom environment name to be passed as a command line argument. It also checks to make sure it is not running in the target environment.
-- Plotter no longer crashes on DGE scatter plots if a condition name contains an underscore. Exceptions are now handled in such a way that outputs from successful workers are retained.
+- Plotter no longer crashes on DGE scatter plots if a condition name contains an underscore.
+- The default value for fastp's  minimum average quality score (`average_qual`) has been lowered to 25. Additional options for adapter trimming have been added.
 
 ### 11/21/2021
 - The following improvements have been made to the  class_charts plot:
