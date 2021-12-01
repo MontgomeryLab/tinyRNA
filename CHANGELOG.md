@@ -1,3 +1,7 @@
+### 11/30/2021
+- The setup script now allows a custom environment name to be passed as a command line argument. It also checks to make sure it is not running in the target environment.
+- Plotter no longer crashes on DGE scatter plots if a condition name contains an underscore. Exceptions are now handled in such a way that outputs from successful workers are retained.
+
 ### 11/21/2021
 - The following improvements have been made to the  class_charts plot:
     - The proportion calculation: 
