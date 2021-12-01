@@ -1,3 +1,5 @@
+import sys
+
 import HTSeq
 
 from collections import defaultdict
@@ -137,31 +139,39 @@ class FeatureSelector:
         finalists = self.choose_identities(feat_list, alignment.iv)
         if not finalists: return set()
 
-        read_aln_attrs = {
-            'Strand': (alignment.iv.strand,),
-            'nt5end': alignment.read.nt5,
-            'Length': len(alignment.read)
-        }
-
         eliminated = set()
-        for selector, read in read_aln_attrs.items():
-            for hit in finalists:
-                if selector == "Strand":
-                    feat_strand = Features.intervals[hit[FEAT]][0].strand
-                    read = (read[0], feat_strand)
-                if read not in FeatureSelector.rules_table[hit[RULE]][selector]:
-                    eliminated.add(hit)
-                    if self.report_eliminations:
-                        feat_class = Features.classes[hit[FEAT]]
-                        self.elim_stats[feat_class][f"{selector}={read}"] += 1
+        for hit in finalists:
+            strand = (alignment.iv.strand, Features.intervals[hit[FEAT]][0].strand)
+            nt5end = alignment.read.nt5
+            length = len(alignment.read)
 
-            finalists -= eliminated
-            eliminated.clear()
+            rule = FeatureSelector.rules_table[hit[RULE]]
 
-            if not finalists: return set()
+            if strand not in rule["Strand"]: eliminated.add(hit)
+            if nt5end not in rule["nt5end"]: eliminated.add(hit)
+            if length not in rule["Length"]: eliminated.add(hit)
 
-        # Remaining finalists have passed all filters
-        return {choice[FEAT] for choice in finalists}
+        return {choice[FEAT] for choice in finalists - eliminated}
+
+        # eliminated = set()
+        # for selector, read in read_aln_attrs.items():
+        #     for hit in finalists:
+        #         if selector == "Strand":
+        #             feat_strand = Features.intervals[hit[FEAT]][0].strand
+        #             read = (read[0], feat_strand)
+        #         if read not in FeatureSelector.rules_table[hit[RULE]][selector]:
+        #             eliminated.add(hit)
+        #             if self.report_eliminations:
+        #                 feat_class = Features.classes[hit[FEAT]]
+        #                 self.elim_stats[feat_class][f"{selector}={read}"] += 1
+        #
+        #     finalists -= eliminated
+        #     eliminated.clear()
+        #
+        #     if not finalists: return set()
+        #
+        # # Remaining finalists have passed all filters
+        # return {choice[FEAT] for choice in finalists}
 
     @staticmethod
     def is_perfect_iv_match(feat_iv, aln_start, aln_end) -> bool:
@@ -192,15 +202,15 @@ class FeatureSelector:
             after performing elimination by hierarchy.
         """
 
-        finalists, identity_hits = set(), list()
+        finalists, identity_hits, min_rank = set(), list(), 9223372036854775807
 
         for iv_feats in feats_list:
             # Check for perfect interval match only once per IntervalFeatures
             perfect_iv_match = self.is_perfect_iv_match(iv_feats, aln_iv.start, aln_iv.end)
             for match in iv_feats[2]:
                 for rule, rank, strict in match[1]:
-                    if strict and not perfect_iv_match:
-                        continue
+                    if strict and not perfect_iv_match: continue
+                    if rank < min_rank: min_rank = rank
                     identity_hits.append((rank, rule, match[0]))
         # -> identity_hits: [(hierarchy, rule, feature), ...]
 
@@ -208,14 +218,15 @@ class FeatureSelector:
         if len(identity_hits) == 1:
             finalists.add(identity_hits[0])
         elif len(identity_hits) > 1:
-            uniq_ranks = {hit[RANK] for hit in identity_hits}
-
-            if len(identity_hits) == len(uniq_ranks):
-                finalists.add(min(identity_hits, key=lambda x: x[RANK]))
-            else:
-                # Two or more hits share the same hierarchy.
-                min_rank = min(uniq_ranks)
-                finalists.update(hit for hit in identity_hits if hit[RANK] == min_rank)
+            finalists.update(hit for hit in identity_hits if hit[RANK] == min_rank)
+            # uniq_ranks = {hit[RANK] for hit in identity_hits}
+            #
+            # if len(identity_hits) == len(uniq_ranks):
+            #     finalists.add(min(identity_hits, key=lambda x: x[RANK]))
+            # else:
+            #     # Two or more hits share the same hierarchy.
+            #     min_rank = min(uniq_ranks)
+            #     finalists.update(hit for hit in identity_hits if hit[RANK] == min_rank)
 
         return finalists
 
