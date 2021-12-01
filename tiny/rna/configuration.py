@@ -184,8 +184,8 @@ class Configuration(ConfigBase):
             path_to_input = self.paths.from_here(input_file_path)
             return self.cwl_file(path_to_input)
 
-        self['ebwt'] = self.paths['ebwt']
-        self['plot_style_sheet'] = self.paths['plot_style_sheet']
+        for absorb_key in ['ebwt', 'plot_style_sheet', 'adapter_fasta']:
+            self[absorb_key] = self.paths[absorb_key]
         self['run_directory'] = self.paths.from_here(self.paths['run_directory'])
 
         # Configurations that need to be converted from string to a CWL File object
