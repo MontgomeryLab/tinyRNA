@@ -86,15 +86,15 @@ class FeatureCounter:
         # For each sequence in the sam file...
         # Note: HTSeq only performs bundling. The alignments are our own Alignment objects
         for bundle in HTSeq.bundle_multiple_alignments(read_seq):
-            bundle_stats = self.stats.count_bundle(bundle)
+            self.stats.count_bundle(bundle)
 
             # For each alignment of the given sequence...
             alignment: parser.Alignment
             for alignment in bundle:
                 hits, n_candidates = self.assign_features(alignment)
-                self.stats.count_bundle_alignments(bundle_stats, alignment, hits, n_candidates)
+                self.stats.count_bundle_alignments(alignment, hits, n_candidates)
 
-            self.stats.finalize_bundle(bundle_stats)
+            self.stats.finalize_bundle()
 
         # While stats are being merged, write intermediate file
         if FeatureCounter.run_diags:
@@ -142,8 +142,8 @@ class FeatureSelector:
         eliminated = set()
         for hit in finalists:
             strand = (alignment.iv.strand, Features.intervals[hit[FEAT]][0].strand)
-            nt5end = alignment.read.nt5
-            length = len(alignment.read)
+            nt5end = alignment.nt5
+            length = len(alignment)
 
             rule = FeatureSelector.rules_table[hit[RULE]]
 

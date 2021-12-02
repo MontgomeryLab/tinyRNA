@@ -28,21 +28,14 @@ class Alignment:
 
     def __init__(self, iv, name, seq):
         nt5 = complement[seq[-1]] if iv.strand == '-' else chr(seq[0])
-        self.read = Sequence(name, seq, nt5)
-        self.iv = iv
-
-    def __repr__(self):
-        return f"<Alignment Object: Read '{self.read.name}' aligned to {self.iv}>"
-
-class Sequence:
-    def __init__(self, name, seq, nt5):
         self.name = name
         self.len = len(seq)
         self.seq = seq
         self.nt5 = nt5
+        self.iv = iv
 
     def __repr__(self):
-        return f"<Sequence Object: '{self.name}', {self.seq} ({self.len} bases)>"
+        return f"<Alignment Object: Read '{self.name}' {self.seq} ({self.len} bases) aligned to {self.iv}>"
 
     def __len__(self):
         return self.len
