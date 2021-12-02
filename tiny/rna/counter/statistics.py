@@ -29,8 +29,7 @@ class LibraryStats:
         self.library = {'Name': 'Unassigned', 'File': 'Unassigned'}
         self.out_prefix = out_prefix
         self.diags = Diagnostics(out_prefix) if report_diags else None
-        
-        self.bundle = {}
+
         self.feat_counts = Counter()
         self.chrom_misses = Counter()
         self.nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
@@ -48,11 +47,10 @@ class LibraryStats:
         loci_counts = len(aln_bundle)
 
         # Calculate counts for multi-mapping
-        read_counts = int(bundle_read.name.split('=')[1])
+        read_counts = int(bundle_read['name'].split('=')[1])
         corr_counts = self.normalize_count_by(read_counts, loci_counts)
 
-        self.bundle = {
-            'mapping_type': 'Single' if loci_counts == 1 else 'Multi',
+        bundle = {
             'loci_count': loci_counts,
             'read_count': read_counts,
             'corr_count': corr_counts,
@@ -60,8 +58,10 @@ class LibraryStats:
         }
 
         # Fill in 5p nt/length matrix
-        sequence = bundle_read.seq
-        self.nt_len_mat[bundle_read.nt5][len(sequence)] += read_counts
+        sequence = bundle_read['seq']
+        self.nt_len_mat[bundle_read['nt5']][len(sequence)] += read_counts
+
+        return bundle
 
     def normalize_count_by(self, count, n_recipients):
         return count / n_recipients
@@ -69,11 +69,11 @@ class LibraryStats:
     def no_norm(self, count, _):
         return count
 
-    def count_bundle_alignments(self, aln: Alignment, assignments: set, n_candidates: int) -> None:
+    def count_bundle_alignments(self, bundle, aln: Alignment, assignments: set, n_candidates: int) -> None:
         """Called for each alignment for each read"""
 
         assigned_count = len(assignments)
-        corr_count = self.bundle['corr_count']
+        corr_count = bundle['corr_count']
 
         if assigned_count == 0:
             self.library_stats['Total Unassigned Reads'] += corr_count
@@ -89,17 +89,17 @@ class LibraryStats:
             feature_corrected_count = self.normalize_count_by(corr_count, assigned_count)
 
             for feat in assignments:
-                self.bundle['assignments'].append(feat)
+                bundle['assignments'].append(feat)
                 self.feat_counts[feat] += feature_corrected_count
 
         if self.diags is not None:
-            self.diags.record_diagnostics(assignments, n_candidates, aln, self.bundle)
-            self.diags.record_alignment_details(aln, self.bundle, assignments)
+            self.diags.record_diagnostics(assignments, n_candidates, aln, bundle)
+            self.diags.record_alignment_details(aln, bundle, assignments)
 
-    def finalize_bundle(self) -> None:
+    def finalize_bundle(self, bundle) -> None:
         """Called at the conclusion of processing each multiple-alignment bundle"""
 
-        assignment_count = len(self.bundle['assignments'])
+        assignment_count = len(bundle['assignments'])
 
         if assignment_count == 0:
             self.library_stats['Total Unassigned Sequences'] += 1
@@ -348,9 +348,9 @@ class Diagnostics:
         after the entire SAM file has been processed."""
 
         # Perform reverse complement for anti-sense reads
-        read = aln.seq \
-            if aln.iv.strand == '+' \
-            else aln.seq[::-1].translate(self.complement)
+        read = aln['seq'] \
+            if aln['strand'] == '+' \
+            else aln['seq'][::-1].translate(self.complement)
 
         # sequence, cor_counts, strand, start, end, feat1;feat2;feat3
         self.alignments.append((read, bundle['corr_count'], aln.iv.strand, aln.iv.start, aln.iv.end,
