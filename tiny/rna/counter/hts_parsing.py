@@ -26,16 +26,21 @@ class Alignment:
     to the antisense strand.
     """
 
-    def __init__(self, iv, name, seq):
-        nt5 = complement[seq[-1]] if iv.strand == '-' else chr(seq[0])
+    def __init__(self, name, chrom, start, seq, strand):
+        nt5 = complement[seq[-1]] if strand == '-' else chr(seq[0])
+        length = len(seq)
         self.name = name
-        self.len = len(seq)
+        self.len = length
         self.seq = seq
         self.nt5 = nt5
-        self.iv = iv
+
+        self.chrom = chrom
+        self.start = start
+        self.end = start + length
+        self.strand = strand
 
     def __repr__(self):
-        return f"<Alignment Object: Read '{self.name}' {self.seq} ({self.len} bases) aligned to {self.iv}>"
+        return f"<Alignment Object: Read '{self.name}' {self.seq} ({self.len} bases)>"
 
     def __len__(self):
         return self.len
@@ -53,18 +58,30 @@ def read_SAM(file):
 
         while line:
             cols = line.split(b'\t')
+            line = f.readline()
+
+            seq = cols[9]
+            start = int(cols[3]) - 1
+            length = len(seq)
 
             # Note: we assume sRNA sequencing data is NOT reversely stranded
-            strand = "+" if (int(cols[1]) & 16) else "-"
-            chrom = cols[2].decode('utf-8')
-            name = cols[0].decode('utf-8')
-            start = int(cols[3]) - 1
-            seq = cols[9]
+            if (int(cols[1]) & 16):
+                strand = '-'
+                nt5 = complement[seq[-1]]
+            else:
+                strand = '+'
+                nt5 = chr(seq[0])
 
-            iv = HTSeq.GenomicInterval(chrom, start, start + len(seq), strand)
-            yield Alignment(iv, name, seq)
-
-            line = f.readline()
+            yield {
+                "name": cols[0].decode('utf-8'),
+                "len": length,
+                "seq": seq,
+                "nt5": nt5,
+                "chrom": cols[2].decode('utf-8'),
+                "start": start,
+                "end": start + length,
+                "strand": strand
+            }
 
 
 def infer_strandedness(sam_file: str, intervals: dict) -> str:

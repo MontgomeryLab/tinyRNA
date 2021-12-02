@@ -51,17 +51,16 @@ class FeatureCounter:
         FeatureCounter.out_prefix = prefs['out_prefix']
         FeatureCounter.run_diags = prefs['report_diags']
 
-    def assign_features(self, alignment: 'parser.Alignment') -> Tuple[set, int]:
+    def assign_features(self, al: 'parser.Alignment') -> Tuple[set, int]:
         """Determines features associated with the interval then performs rule-based feature selection"""
 
         feat_matches, assignment = list(), set()
-        iv = alignment.iv
 
         try:
             # Resolve features from alignment interval on both strands, regardless of alignment strand
             feat_matches = [match for strand in BOTH_STRANDS for match in
-                            (Features.chrom_vectors[iv.chrom][strand]  # GenomicArrayOfSets -> ChromVector
-                                     .array[iv.start:iv.end]           # ChromVector -> StepVector
+                            (Features.chrom_vectors[al['chrom']][strand]  # GenomicArrayOfSets -> ChromVector
+                                     .array[al['start']:al['end']]           # ChromVector -> StepVector
                                      .get_steps(merge_steps=True))     # StepVector -> (iv_start, iv_end, {features})
                             # If an alignment does not map to a feature, an empty set is returned at tuple pos 2 ^^^
                             if len(match[2]) != 0]
@@ -70,7 +69,7 @@ class FeatureCounter:
 
         # If features are associated with the alignment interval, perform selection
         if len(feat_matches):
-            assignment = self.selector.choose(feat_matches, alignment)
+            assignment = self.selector.choose(feat_matches, al)
 
         return assignment, len(feat_matches)
 
@@ -86,15 +85,15 @@ class FeatureCounter:
         # For each sequence in the sam file...
         # Note: HTSeq only performs bundling. The alignments are our own Alignment objects
         for bundle in HTSeq.bundle_multiple_alignments(read_seq):
-            self.stats.count_bundle(bundle)
+            bstat = self.stats.count_bundle(bundle)
 
             # For each alignment of the given sequence...
             alignment: parser.Alignment
             for alignment in bundle:
                 hits, n_candidates = self.assign_features(alignment)
-                self.stats.count_bundle_alignments(alignment, hits, n_candidates)
+                self.stats.count_bundle_alignments(bstat, alignment, hits, n_candidates)
 
-            self.stats.finalize_bundle()
+            self.stats.finalize_bundle(bstat)
 
         # While stats are being merged, write intermediate file
         if FeatureCounter.run_diags:
@@ -136,49 +135,26 @@ class FeatureSelector:
 
     def choose(self, feat_list: List[Tuple[int, int, Set[str]]], alignment: 'parser.Alignment') -> Set[str]:
         # Perform hierarchy-based first round of selection for identities
-        finalists = self.choose_identities(feat_list, alignment.iv)
+        finalists = self.choose_identities(feat_list, alignment['start'], alignment['end'])
         if not finalists: return set()
 
-        eliminated = set()
+        selections = set()
         for hit in finalists:
-            strand = (alignment.iv.strand, Features.intervals[hit[FEAT]][0].strand)
-            nt5end = alignment.nt5
+            strand = (alignment['strand'], Features.intervals[hit[FEAT]][0].strand)
+            nt5end = alignment['nt5']
             length = len(alignment)
 
             rule = FeatureSelector.rules_table[hit[RULE]]
 
-            if strand not in rule["Strand"]: eliminated.add(hit)
-            if nt5end not in rule["nt5end"]: eliminated.add(hit)
-            if length not in rule["Length"]: eliminated.add(hit)
+            if strand not in rule["Strand"]: continue
+            if nt5end not in rule["nt5end"]: continue
+            if length not in rule["Length"]: continue
+            selections.add(hit[FEAT])
 
-        return {choice[FEAT] for choice in finalists - eliminated}
+        return selections
 
-        # eliminated = set()
-        # for selector, read in read_aln_attrs.items():
-        #     for hit in finalists:
-        #         if selector == "Strand":
-        #             feat_strand = Features.intervals[hit[FEAT]][0].strand
-        #             read = (read[0], feat_strand)
-        #         if read not in FeatureSelector.rules_table[hit[RULE]][selector]:
-        #             eliminated.add(hit)
-        #             if self.report_eliminations:
-        #                 feat_class = Features.classes[hit[FEAT]]
-        #                 self.elim_stats[feat_class][f"{selector}={read}"] += 1
-        #
-        #     finalists -= eliminated
-        #     eliminated.clear()
-        #
-        #     if not finalists: return set()
-        #
-        # # Remaining finalists have passed all filters
-        # return {choice[FEAT] for choice in finalists}
 
-    @staticmethod
-    def is_perfect_iv_match(feat_iv, aln_start, aln_end) -> bool:
-        # Returns true if the alignment interval is fully enclosed by the feature interval
-        return feat_iv[0] <= aln_start and feat_iv[1] >= aln_end
-
-    def choose_identities(self, feats_list: List[Tuple[int, int, Set[str]]], aln_iv: 'HTSeq.GenomicInterval') -> Set[Hit]:
+    def choose_identities(self, feats_list: List[Tuple[int, int, Set[str]]], aln_start, aln_end) -> List[Hit]:
         """Performs the initial selection on the basis of identity rules: attribute (key, value)
 
         Feature candidates are supplied to this function via feats_list. This is a list
@@ -202,11 +178,11 @@ class FeatureSelector:
             after performing elimination by hierarchy.
         """
 
-        finalists, identity_hits, min_rank = set(), list(), 9223372036854775807
+        identity_hits, min_rank = list(), 9223372036854775807
 
         for iv_feats in feats_list:
             # Check for perfect interval match only once per IntervalFeatures
-            perfect_iv_match = self.is_perfect_iv_match(iv_feats, aln_iv.start, aln_iv.end)
+            perfect_iv_match = iv_feats[0] <= aln_start and iv_feats[1] >= aln_end
             for match in iv_feats[2]:
                 for rule, rank, strict in match[1]:
                     if strict and not perfect_iv_match: continue
@@ -216,19 +192,9 @@ class FeatureSelector:
 
         # Perform hierarchy-based elimination
         if len(identity_hits) == 1:
-            finalists.add(identity_hits[0])
+            return identity_hits
         elif len(identity_hits) > 1:
-            finalists.update(hit for hit in identity_hits if hit[RANK] == min_rank)
-            # uniq_ranks = {hit[RANK] for hit in identity_hits}
-            #
-            # if len(identity_hits) == len(uniq_ranks):
-            #     finalists.add(min(identity_hits, key=lambda x: x[RANK]))
-            # else:
-            #     # Two or more hits share the same hierarchy.
-            #     min_rank = min(uniq_ranks)
-            #     finalists.update(hit for hit in identity_hits if hit[RANK] == min_rank)
-
-        return finalists
+            return [hit for hit in identity_hits if hit[RANK] == min_rank]
 
     @staticmethod
     def build_selectors(rules_table) -> List[dict]:
