@@ -145,7 +145,6 @@ class FeatureSelector:
             length = len(alignment)
 
             rule = FeatureSelector.rules_table[hit[RULE]]
-
             if strand not in rule["Strand"]: continue
             if nt5end not in rule["nt5end"]: continue
             if length not in rule["Length"]: continue
@@ -178,16 +177,16 @@ class FeatureSelector:
             after performing elimination by hierarchy.
         """
 
-        identity_hits, min_rank = list(), 9223372036854775807
+        identity_hits, min_rank = [], sys.maxsize
 
-        for iv_feats in feats_list:
+        for iv_start, iv_end, feat_matches in feats_list:
             # Check for perfect interval match only once per IntervalFeatures
-            perfect_iv_match = iv_feats[0] <= aln_start and iv_feats[1] >= aln_end
-            for match in iv_feats[2]:
-                for rule, rank, strict in match[1]:
+            perfect_iv_match = iv_start <= aln_start and iv_end >= aln_end
+            for feat, match in feat_matches:
+                for rule, rank, strict in match:
                     if strict and not perfect_iv_match: continue
                     if rank < min_rank: min_rank = rank
-                    identity_hits.append((rank, rule, match[0]))
+                    identity_hits.append((rank, rule, feat))
         # -> identity_hits: [(hierarchy, rule, feature), ...]
 
         # Perform hierarchy-based elimination
