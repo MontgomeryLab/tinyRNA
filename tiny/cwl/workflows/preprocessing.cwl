@@ -31,6 +31,9 @@ inputs:
   overrepresentation_analysis: boolean?
   overrepresentation_sampling: int?
   fastp_report_title: string # unscatter
+  adapter_fasta: File?
+  trim_front1: int?
+  trim_tail1: int?
 
   # collapser inputs
   threshold: int?
@@ -63,6 +66,9 @@ steps:
       overrepresentation_analysis: overrepresentation_analysis
       overrepresentation_sampling: overrepresentation_sampling
       report_title: fastp_report_title
+      adapter_fasta: adapter_fasta
+      trim_front1: trim_front1
+      trim_tail1: trim_tail1
     out: [fastq1, report_json, report_html, console_output]
 
   collapse:

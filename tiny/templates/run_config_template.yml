@@ -92,7 +92,7 @@ length_required: 15
 length_limit: 35
 
 ##-- Minimum average score for a read to pass quality filter --##
-average_qual: 35
+average_qual: 25
 
 ##-- Minimum phred score for a base to pass quality filter --##
 qualified_quality_phred: 20
@@ -110,6 +110,10 @@ compression: 4
 ##-- Trim poly x tails of a given length --##
 # trim_poly_x: false
 # poly_x_min_len: 0
+
+##-- Trim n bases from the front/tail of a read --##
+# trim_front1: 0
+# trim_tail1: 0
 
 ##-- Is the data phred 64? --##
 # fp_phred64: False
@@ -308,6 +312,7 @@ features_csv: { }
 samples_csv: { }
 reference_genome_files: [ ]
 plot_style_sheet: ~
+adapter_fasta: ~
 ebwt: ~
 
 
