@@ -151,9 +151,9 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
         if val.startswith('"') and val.endswith('"'):
             val = val[1:-1]
         # Modification: allow for comma separated attribute values
-        attribute_dict[sys.intern(key)] = {sys.intern(val)} \
+        attribute_dict[sys.intern(key)] = (sys.intern(val),) \
             if ',' not in val \
-            else set(c.strip() for c in val.split(','))
+            else tuple(c.strip() for c in val.split(','))
         if extra_return_first_value and i == 0:
             first_val = val
     if extra_return_first_value:
@@ -189,9 +189,6 @@ class ReferenceTables:
         self.gff_files = gff_files
         self._set_filters(**kwargs)
         self.all_features = kwargs.get('all_features', False)
-        # self.attrs_of_interest = defaultdict(set)
-        # for rule in rules:
-        #     self.attrs_of_interest[rule['Identity'][0]].add(rule['Identity'][1])
         self.matchies = defaultdict(set)
         self.inv_ident = inv_ident
         self.rules = rules
@@ -225,7 +222,7 @@ class ReferenceTables:
                         continue
                     try:
                         # Grab the primary key for this feature
-                        feature_id = next(iter(row.attr["ID"]))
+                        feature_id = row.attr["ID"][0]
                         # Select only identities (key-val pairs) of interest
                         idxs, classes = self.get_interesting_idents(feature_id, row.attr)
                         # Only add features with identity matches if all_features is False
@@ -316,8 +313,8 @@ class ReferenceTables:
     def get_row_parent(self, feature_id: str, row_attrs: Dict[str, set]) -> str:
         """Get the current feature's parent while cooperating with filtered features"""
 
-        parent_attr = row_attrs.get("Parent", {None})
-        parent = next(iter(parent_attr))
+        parent_attr = row_attrs.get("Parent", [None])
+        parent = parent_attr[0]
 
         if len(parent_attr) > 1:
             raise ValueError(f"{feature_id} defines multiple parents which is unsupported at this time.")
@@ -341,7 +338,7 @@ class ReferenceTables:
         a gap due to filtering; in this case we still want to merge descendents with the
         highest considered feature in the tree."""
 
-        feature_id = row.attr['ID'].pop()
+        feature_id = row.attr['ID'][0]
         self.filtered.add(feature_id)
         if "Parent" in row.attr:
             self.parents[feature_id] = self.get_row_parent(feature_id, row.attr)
@@ -362,6 +359,7 @@ class ReferenceTables:
         for root_id, ivs in self.intervals.items():
             matchies = tuple(sorted(self.matchies[root_id], key=lambda x: x[1]))
             for iv in ivs:
+                # self.feats[iv] += (root_id, matchies)
                 self.feats[iv] += {(root_id, matchies)}
 
     @classmethod
