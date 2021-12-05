@@ -353,7 +353,7 @@ class Diagnostics:
             else aln['seq'][::-1].translate(self.complement)
 
         # sequence, cor_counts, strand, start, end, feat1;feat2;feat3
-        self.alignments.append((read, bundle['corr_count'], aln.iv.strand, aln.iv.start, aln.iv.end,
+        self.alignments.append((read, bundle['corr_count'], aln['strand'], aln['start'], aln['end'],
                                 ';'.join(assignments)))
 
     def write_intermediate_file(self, library_name: str) -> None:
@@ -370,14 +370,14 @@ class Diagnostics:
         """Records basic diagnostic info"""
 
         if len(assignments) == 0:
-            if aln.iv.strand == '+':
+            if aln['strand'] == '+':
                 self.alignment_diags['Uncounted alignments (+)'] += 1
             else:
                 self.alignment_diags['Uncounted alignments (-)'] += 1
             if n_candidates == 0:
-                self.alignment_diags['No feature counts'] += bundle.corr_count
+                self.alignment_diags['No feature counts'] += bundle['corr_count']
             else:
-                self.alignment_diags['Eliminated counts'] += bundle.corr_count
+                self.alignment_diags['Eliminated counts'] += bundle['corr_count']
 
     @classmethod
     def write_summary(cls, out_prefix: str, alignment_summary: pd.DataFrame, selection_summary: dict) -> None:
