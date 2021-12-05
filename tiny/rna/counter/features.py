@@ -51,7 +51,7 @@ class FeatureCounter:
         FeatureCounter.out_prefix = prefs['out_prefix']
         FeatureCounter.run_diags = prefs['report_diags']
 
-    def assign_features(self, al: 'parser.Alignment') -> Tuple[set, int]:
+    def assign_features(self, al: dict) -> Tuple[set, int]:
         """Determines features associated with the interval then performs rule-based feature selection"""
 
         feat_matches, assignment = list(), set()
@@ -60,8 +60,8 @@ class FeatureCounter:
             # Resolve features from alignment interval on both strands, regardless of alignment strand
             feat_matches = [match for strand in BOTH_STRANDS for match in
                             (Features.chrom_vectors[al['chrom']][strand]  # GenomicArrayOfSets -> ChromVector
-                                     .array[al['start']:al['end']]           # ChromVector -> StepVector
-                                     .get_steps(merge_steps=True))     # StepVector -> (iv_start, iv_end, {features})
+                                     .array[al['start']:al['end']]        # ChromVector -> StepVector
+                                     .get_steps(merge_steps=True))        # StepVector -> (iv_start, iv_end, {features})
                             # If an alignment does not map to a feature, an empty set is returned at tuple pos 2 ^^^
                             if len(match[2]) != 0]
         except KeyError as ke:
@@ -84,7 +84,7 @@ class FeatureCounter:
 
         # For each sequence in the sam file...
         # Note: HTSeq only performs bundling. The alignments are our own Alignment objects
-        for bundle in HTSeq.bundle_multiple_alignments(read_seq):
+        for bundle in read_seq:
             bstat = self.stats.count_bundle(bundle)
 
             # For each alignment of the given sequence...

@@ -56,33 +56,45 @@ def read_SAM(file):
         while line[0] == ord('@'):
             line = f.readline()
 
-        while line:
-            cols = line.split(b'\t')
-            line = f.readline()
-
-            seq = cols[9]
-            start = int(cols[3]) - 1
-            length = len(seq)
-
-            # Note: we assume sRNA sequencing data is NOT reversely stranded
-            if (int(cols[1]) & 16):
-                strand = '-'
-                nt5 = complement[seq[-1]]
+        aln_iter = iter(parse_alignments(f, line))
+        bundle = [next(aln_iter)]
+        for aln in aln_iter:
+            if aln['name'] != bundle[0]['name']:
+                yield bundle
+                bundle = [aln]
             else:
-                strand = '+'
-                nt5 = chr(seq[0])
+                bundle.append(aln)
+        yield bundle
 
-            yield {
-                "name": cols[0].decode('utf-8'),
-                "len": length,
-                "seq": seq,
-                "nt5": nt5,
-                "chrom": cols[2].decode('utf-8'),
-                "start": start,
-                "end": start + length,
-                "strand": strand
-            }
 
+def parse_alignments(f, line):
+
+    while line:
+        cols = line.split(b'\t')
+        line = f.readline()
+
+        start = int(cols[3]) - 1
+        seq = cols[9]
+        length = len(seq)
+
+        # Note: we assume sRNA sequencing data is NOT reversely stranded
+        if (int(cols[1]) & 16):
+            strand = '-'
+            nt5 = complement[seq[-1]]
+        else:
+            strand = '+'
+            nt5 = chr(seq[0])
+
+        yield {
+            "name": cols[0].decode('utf-8'),
+            "len": length,
+            "seq": seq,
+            "nt5": nt5,
+            "chrom": cols[2].decode('utf-8'),
+            "start": start,
+            "end": start + length,
+            "strand": strand
+        }
 
 def infer_strandedness(sam_file: str, intervals: dict) -> str:
     """Infers strandedness from a sample SAM file and intervals from a parsed GFF file
