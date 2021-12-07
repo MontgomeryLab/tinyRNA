@@ -124,12 +124,13 @@ class plotterlib:
 
         return cbar
 
-    def class_pie_barh(self, class_s: pd.Series, mapped_total, **kwargs) -> plt.Figure:
-        """Creates both a pie & bar chart in the same figure
+    def class_pie_barh(self, class_s: pd.Series, mapped_reads, scale=2, **kwargs) -> plt.Figure:
+        """Creates both a pie & bar chart of class proportions
 
         Args:
-            class_s: A pandas Series containing counts per class
-            mapped_total: The total number of reads mapped by bowtie
+            class_s: A pandas Series containing counts per class for a sample
+            mapped_reads: The total number of reads mapped by bowtie for a sample
+            scale: The decimal scale for table percentages, and for determining "unassigned" display
             kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
 
         Returns:
@@ -140,15 +141,18 @@ class plotterlib:
         fig, ax = self.reuse_subplot("class_chart")
 
         # Convert reads to proportion
-        class_prop = (class_s / mapped_total).rename('Proportion')
-        if class_prop.sum() != 1: class_prop['Unassigned'] = 1 - class_prop.sum()
+        class_prop = (class_s / mapped_reads).rename('Proportion')
+
+        # Determine whether an unassigned category should be displayed
+        unassigned = 1 - class_prop.sum()
+        if unassigned >= 10 ** (-1 * (scale + 2)): class_prop['Unassigned'] = unassigned
 
         # Plot pie and barh on separate axes
         self.class_pie(class_prop, ax=ax[0], labels=None, **kwargs)
         self.class_barh(class_prop, ax=ax[1], legend=None, title=None, ylabel=None, **kwargs)
 
         # Add a table to the pie chart
-        table_s = class_prop.round(2).map('{:,.2%}'.format).reset_index()
+        table_s = class_prop.map(lambda x: f"{x*100:.{scale}f}%").reset_index()
         table = ax[0].table(cellText=table_s.values, loc='bottom')
         table.auto_set_column_width(col=[0, 1])
 
