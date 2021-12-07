@@ -108,36 +108,34 @@ def len_dist_plots(files_list: list, out_prefix:str, **kwargs):
         plot.figure.savefig(pdf_name)
 
 
-def class_charts(raw_class_counts: pd.DataFrame, mapped_total: int, out_prefix: str, **kwargs):
+def class_charts(raw_class_counts: pd.DataFrame, mapped_reads: pd.Series, out_prefix: str, **kwargs):
     """Create a PDF of the proportion of raw assigned counts vs total mapped reads for each class
 
     Args:
         raw_class_counts: A dataframe containing RAW class counts per library
-        mapped_total: The total number of reads mapped by bowtie
+        mapped_reads: A Series containing the total number of mapped reads per library
         out_prefix: The prefix to use when naming output PDF plots
         kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
     """
 
     for library in raw_class_counts:
-        fig = aqplt.class_pie_barh(raw_class_counts[library], mapped_total, **kwargs)
+        fig = aqplt.class_pie_barh(raw_class_counts[library], mapped_reads[library], **kwargs)
 
         # Save the plot
         pdf_name = make_filename([out_prefix, library, 'class_chart'], ext='.pdf')
         fig.savefig(pdf_name)
 
-def get_mapped_total(summary_stats_file: str) -> int:
-    """Get the total number of reads mapped by bowtie. Used by class_charts
+
+def get_mapped_reads(summary_stats_file: str) -> pd.Series:
+    """Produces a Series of mapped reads per library for calculating proportions in class charts.
 
     Args:
         summary_stats_file: the summary stats csv produced by Counter
 
-    Returns: total reads mapped by bowtie
+    Returns: a Series containing mapped reads per sample
     """
 
-    with open(summary_stats_file, 'r') as f:
-        for row in csv.reader(f):
-            if row[0] == "Mapped Reads":
-                return sum(map(lambda x: int(float(x)), row[1:]))
+    return pd.read_csv(summary_stats_file, index_col=0).loc["Mapped Reads",:]
 
 
 def get_sample_rep_dict(df: pd.DataFrame) -> dict:
@@ -396,7 +394,7 @@ def setup(args: argparse.Namespace) -> dict:
 
     required_inputs = {
         'len_dist': [],
-        'class_charts': ["raw_count_df", "class_counts", "mapped_total"],
+        'class_charts': ["raw_count_df", "class_counts", "mapped_reads"],
         'replicate_scatter': ["norm_count_df", "sample_rep_dict", "norm_view_lims"],
         'sample_avg_scatter_by_dge':
             ["norm_count_df", "sample_rep_dict", "norm_count_avg_df", "de_table", "avg_view_lims"],
@@ -407,7 +405,7 @@ def setup(args: argparse.Namespace) -> dict:
     relevant_vars: Dict[str, Union[pd.DataFrame, pd.Series, dict, None]] = {}
     input_getters = {
         'raw_count_df': lambda: load_raw_counts(args.raw_counts),
-        'mapped_total': lambda: get_mapped_total(args.summary_stats),
+        'mapped_reads': lambda: get_mapped_reads(args.summary_stats),
         'norm_count_df': lambda: load_norm_counts(args.norm_counts),
         'de_table': lambda: load_dge_tables(args.dge_tables),
         'sample_rep_dict': lambda: get_sample_rep_dict(relevant_vars["norm_count_df"]),
@@ -449,7 +447,7 @@ def main():
             arg, kwd = (args.len_dist, args.out_prefix), {}
         elif plot == 'class_charts':
             func = class_charts
-            arg, kwd = (inputs["class_counts"], inputs['mapped_total'], args.out_prefix), {}
+            arg, kwd = (inputs["class_counts"], inputs['mapped_reads'], args.out_prefix), {}
         elif plot == 'replicate_scatter':
             func = scatter_replicates
             arg = (inputs["norm_count_df"], args.out_prefix, inputs["sample_rep_dict"], inputs["norm_view_lims"])
