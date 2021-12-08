@@ -1,7 +1,7 @@
 ### 12/8/2021
 - Experiments that do not define a control condition no longer cause the DGE step to crash.
 - The calculation of the "unassigned" proportion has been corrected for class_charts
-- Percentages shown on class_charts now round to 2 decimal places. A floating point arithmetic error has been addressed which caused the "unassigned" category to not be displayed when all other proportions sum to 99%.
+- Percentages shown on class_charts now round to 2 decimal places. A floating point arithmetic error has been addressed which caused the "unassigned" category to not be displayed when all other proportions sum to 99.99%.
 
 ### 11/30/2021
 - Temporary files are now removed when `tiny {run|recount|replot}` commands finish.
