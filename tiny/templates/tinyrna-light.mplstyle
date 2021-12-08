@@ -32,7 +32,7 @@ ytick.labelsize: 16
 
 #### Axes basics ####
 axes.labelsize: 16
-axes.titlesize: 22
+axes.titlesize: 16
 axes.facecolor: white
 axes.edgecolor: 333333
 axes.linewidth: 1

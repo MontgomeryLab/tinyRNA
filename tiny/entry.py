@@ -175,7 +175,7 @@ def run_cwltool_subprocess(config_file: str, workflow: str, run_directory=None, 
 
     """
 
-    command = ['cwltool --copy-outputs --timestamps --relax-path-checks']
+    command = ['cwltool --timestamps --relax-path-checks --on-error continue']
     if verbosity == 'debug': command.append('--debug --js-console')
     if verbosity == 'quiet': command.append('--quiet')
     if run_directory: command.append(f'--outdir {run_directory}')
@@ -217,7 +217,6 @@ def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = 
     runtime_context = RuntimeContext({
         'secret_store': cwltool.secrets.SecretStore(),
         'outdir': run_directory,
-        'move_outputs': "copy",
         'on_error': "continue",
         'js_console': verbosity == "debug",
         'debug': verbosity == "debug"
