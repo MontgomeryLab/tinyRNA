@@ -35,3 +35,4 @@ jobs:
           python -m unittest unit_tests_counter
           python -m unittest unit_tests_features
           python -m unittest unit_tests_hts_parsing
+          python -m unittest unit_tests_plotter
