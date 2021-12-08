@@ -141,18 +141,19 @@ class plotterlib:
         fig, ax = self.reuse_subplot("class_chart")
 
         # Convert reads to proportion
-        class_prop = (class_s / mapped_reads).rename('Proportion')
+        scale += 2  # Convert percentage scale to decimal scale
+        class_prop = (class_s / mapped_reads).round(scale).rename('Proportion')
 
         # Determine whether an unassigned category should be displayed
-        unassigned = 1 - class_prop.sum()
-        if unassigned >= 10 ** (-1 * (scale + 2)): class_prop['Unassigned'] = unassigned
+        unassigned = round(1 - class_prop.sum(), scale)
+        if unassigned >= round(10 ** (-1 * scale), scale): class_prop['Unassigned'] = unassigned
 
         # Plot pie and barh on separate axes
         self.class_pie(class_prop, ax=ax[0], labels=None, **kwargs)
         self.class_barh(class_prop, ax=ax[1], legend=None, title=None, ylabel=None, **kwargs)
 
         # Add a table to the pie chart
-        table_s = class_prop.map(lambda x: f"{x*100:.{scale}f}%").reset_index()
+        table_s = class_prop.map(lambda x: f"{x*100:.{scale-2}f}%").reset_index()
         table = ax[0].table(cellText=table_s.values, loc='bottom')
         table.auto_set_column_width(col=[0, 1])
 
