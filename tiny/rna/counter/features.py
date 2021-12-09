@@ -133,25 +133,24 @@ class FeatureSelector:
         self.report_eliminations = report_diags
         if report_diags: self.elim_stats = libstats.diags.selection_diags
 
-    def choose(self, feat_list: List[Tuple[int, int, Set[str]]], alignment: 'parser.Alignment') -> Set[str]:
+    def choose(self, feat_list: List[Tuple[int, int, Set[str]]], alignment: dict) -> Set[str]:
         # Perform hierarchy-based first round of selection for identities
         finalists = self.choose_identities(feat_list, alignment['start'], alignment['end'])
         if not finalists: return set()
 
         selections = set()
-        for hit in finalists:
-            strand = (alignment['strand'], Features.intervals[hit[FEAT]][0].strand)
+        for rule, feat, strand in finalists:
+            strand = (alignment['strand'], strand)
             nt5end = alignment['nt5']
-            length = len(alignment)
+            length = alignment['len']
 
-            rule = FeatureSelector.rules_table[hit[RULE]]
+            rule = FeatureSelector.rules_table[rule]
             if strand not in rule["Strand"]: continue
             if nt5end not in rule["nt5end"]: continue
             if length not in rule["Length"]: continue
-            selections.add(hit[FEAT])
+            selections.add(feat)
 
         return selections
-
 
     def choose_identities(self, feats_list: List[Tuple[int, int, Set[str]]], aln_start, aln_end) -> List[Hit]:
         """Performs the initial selection on the basis of identity rules: attribute (key, value)
@@ -182,11 +181,11 @@ class FeatureSelector:
         for iv_start, iv_end, feat_matches in feats_list:
             # Check for perfect interval match only once per IntervalFeatures
             perfect_iv_match = iv_start <= aln_start and iv_end >= aln_end
-            for feat, match in feat_matches:
+            for feat, strand, match in feat_matches:
                 for rule, rank, strict in match:
                     if strict and not perfect_iv_match: continue
                     if rank < min_rank: min_rank = rank
-                    identity_hits.append((rank, rule, feat))
+                    identity_hits.append((rule, feat, strand))
         # -> identity_hits: [(hierarchy, rule, feature), ...]
 
         # Perform hierarchy-based elimination

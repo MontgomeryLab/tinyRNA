@@ -96,6 +96,7 @@ def parse_alignments(f, line):
             "strand": strand
         }
 
+
 def infer_strandedness(sam_file: str, intervals: dict) -> str:
     """Infers strandedness from a sample SAM file and intervals from a parsed GFF file
 
@@ -236,7 +237,7 @@ class ReferenceTables:
                         # Grab the primary key for this feature
                         feature_id = row.attr["ID"][0]
                         # Select only identities (key-val pairs) of interest
-                        idxs, classes = self.get_interesting_idents(feature_id, row.attr)
+                        idxs, classes = self.get_interesting_idents(row.attr)
                         # Only add features with identity matches if all_features is False
                         if not self.all_features and not len(idxs):
                             self.exclude_row(row)
@@ -298,29 +299,20 @@ class ReferenceTables:
             for row_val in row_attr[alias_key]:
                 self.alias[root_id].add(row_val)
 
-    def get_interesting_idents(self, feat_id: str, row_attrs: Dict[str, set]) -> Set[int]:
+    def get_interesting_idents(self, row_attrs: Dict[str, set]) -> Tuple[set, set]:
         """Returns only the identities of interest from the row's identities"""
 
         interest_matches = set()
-        # for interest in self.attrs_of_interest:
-        #     match = row_attrs[interest] & self.attrs_of_interest[interest]
-        #     if match: interest_matches[interest] = match
         for ident, rule_idxs in self.inv_ident.items():
             match = row_attrs.get(ident[0], None)
             if match is not None and ident[1] in match:
                 interest_matches.update(r for r in rule_idxs)
 
-        # {(rule, rank, strict), ...}
+        # {(rule, rank, strict, strand), ...}
         interest_matches = {(r, self.rules[r]['Hierarchy'], self.rules[r]['Strict']) for r in interest_matches}
         classes = {c for c in row_attrs["Class"]}
 
         return interest_matches, classes
-
-    def incorporate_idents(self, root_id, row_attrs):
-        """Add unique identities (keys and values) to root feature's identities"""
-
-        for key in row_attrs:
-            self.ident[root_id][key] |= row_attrs[key]
 
     def get_row_parent(self, feature_id: str, row_attrs: Dict[str, set]) -> str:
         """Get the current feature's parent while cooperating with filtered features"""
@@ -367,12 +359,12 @@ class ReferenceTables:
                              for with_value in self.ident[feat][select_for]]
                       for feat in self.ident}
 
-        # (root_id, [(rule, rank, strict), ...])
+        # {(rule, rank, strict), ...}
         for root_id, ivs in self.intervals.items():
             matchies = tuple(sorted(self.matchies[root_id], key=lambda x: x[1]))
             for iv in ivs:
                 # self.feats[iv] += (root_id, matchies)
-                self.feats[iv] += {(root_id, matchies)}
+                self.feats[iv] += {(root_id, iv.strand, matchies)}
 
     @classmethod
     def _set_filters(cls, **kwargs):
