@@ -6,7 +6,6 @@ import os
 from typing import Tuple, Optional, Iterable
 from collections import Counter, defaultdict
 
-from .hts_parsing import Alignment
 from ..util import make_filename
 
 
@@ -69,7 +68,7 @@ class LibraryStats:
     def no_norm(self, count, _):
         return count
 
-    def count_bundle_alignments(self, bundle, aln: Alignment, assignments: set, n_candidates: int) -> None:
+    def count_bundle_alignments(self, bundle, aln: dict, assignments: set, n_candidates: int) -> None:
         """Called for each alignment for each read"""
 
         assigned_count = len(assignments)
@@ -113,9 +112,8 @@ class SummaryStats:
     summary_categories = ["Total Reads", "Retained Reads", "Unique Sequences",
                           "Mapped Sequences", "Mapped Reads", "Assigned Reads"]
 
-    def __init__(self, ref: 'Features', out_prefix: str, report_diags: bool):
-        self.feature_identities = ref.identities
-        self.feature_classes = ref.classes
+    def __init__(self, classes, out_prefix: str, report_diags: bool):
+        self.feature_classes = classes
         self.out_prefix = out_prefix
         self.report_diags = report_diags
 
@@ -123,7 +121,7 @@ class SummaryStats:
         self.report_summary_statistics = True
 
         self.pipeline_stats_df = pd.DataFrame(index=SummaryStats.summary_categories)
-        self.feat_counts_df = pd.DataFrame(index=ref.identities.keys())
+        self.feat_counts_df = pd.DataFrame(index=self.feature_classes.keys())
         self.lib_stats_df = pd.DataFrame(index=LibraryStats.summary_categories)
         self.chrom_misses = Counter()
         self.nt_len_mat = {}
@@ -174,7 +172,7 @@ class SummaryStats:
         """
 
         # Subset the counts table to only show features that were matched on identity (regardless of count)
-        summary = self.feat_counts_df.loc[self.feature_identities.keys()]
+        summary = self.feat_counts_df.loc[self.feature_classes.keys()]
         # Sort columns by title and round all counts to 2 decimal places
         summary = self.sort_cols_and_round(summary)
         # Add Feature Name column, which is the feature alias (default is Feature ID if no alias exists)

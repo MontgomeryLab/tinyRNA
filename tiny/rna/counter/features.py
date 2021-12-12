@@ -20,19 +20,15 @@ RANK, RULE, FEAT = 0, 1, 2
 
 class Features:
     chrom_vectors: HTSeq.ChromVector
-    identities: dict
-    intervals: dict
     classes: dict
     aliases: dict
 
     _instance = None  # Singleton
 
-    def __init__(self, features: HTSeq.GenomicArrayOfSets, attributes: dict, aliases: dict, intervals: dict, classes: dict):
+    def __init__(self, features: HTSeq.GenomicArrayOfSets, aliases: dict, classes: dict):
         if Features._instance is None:
             Features.chrom_vectors = features.chrom_vectors  # For interval -> feature ID lookups
-            Features.identities = attributes                 # For feature ID -> GFF column 9 attribute lookups
             Features.aliases = aliases                       # For feature ID -> preferred feature name lookups
-            Features.intervals = intervals                   # For feature ID -> interval lookups
             Features.classes = classes                       # For feature ID -> class lookups
             Features._instance = self
 
@@ -45,7 +41,7 @@ class FeatureCounter:
         self.stats = LibraryStats(**prefs)
         self.selector = FeatureSelector(selection_rules, self.stats, **prefs)
 
-        reference_tables = parser.ReferenceTables(gff_file_set, self.selector.rules_table, self.selector.inv_ident, **prefs)
+        reference_tables = parser.ReferenceTables(gff_file_set, self.selector, **prefs)
         Features(*reference_tables.get())
 
         FeatureCounter.out_prefix = prefs['out_prefix']
@@ -76,19 +72,15 @@ class FeatureCounter:
     def count_reads(self, library: dict):
         """Collects statistics on features assigned to each alignment associated with each read"""
 
-        # For complete SAM records (slower):
-        # 1. Change the following line to HTSeq.BAM_Reader(library["File"])
-        # 2. Change FeatureSelector.choose() to assign nt5end from chr(alignment.read.seq[0])
+        # Parse and bundle multiple alignments
         read_seq = parser.read_SAM(library["File"])
         self.stats.assign_library(library)
 
         # For each sequence in the sam file...
-        # Note: HTSeq only performs bundling. The alignments are our own Alignment objects
         for bundle in read_seq:
             bstat = self.stats.count_bundle(bundle)
 
             # For each alignment of the given sequence...
-            alignment: parser.Alignment
             for alignment in bundle:
                 hits, n_candidates = self.assign_features(alignment)
                 self.stats.count_bundle_alignments(bstat, alignment, hits, n_candidates)
@@ -123,7 +115,7 @@ class FeatureSelector:
     by the alignment interval.
     """
 
-    rules_table = dict()
+    rules_table = list()
     inv_ident = dict()
 
     def __init__(self, rules: List[dict], libstats: 'LibraryStats', report_diags=False, **kwargs):
@@ -133,13 +125,28 @@ class FeatureSelector:
         self.report_eliminations = report_diags
         if report_diags: self.elim_stats = libstats.diags.selection_diags
 
-    def choose(self, feat_list: List[Tuple[int, int, Set[str]]], alignment: dict) -> Set[str]:
-        # Perform hierarchy-based first round of selection for identities
-        finalists = self.choose_identities(feat_list, alignment['start'], alignment['end'])
-        if not finalists: return set()
+    @classmethod
+    def choose(cls, feat_list: List[Tuple[int, int, Set[str]]], alignment: dict) -> Set[str]:
+
+        identity_hits, min_rank = [], sys.maxsize
+        aln_start, aln_end = alignment['start'], alignment['end']
+
+        for iv_start, iv_end, feat_matches in feat_list:
+            # Check for perfect interval match only once per IntervalFeatures
+            perfect_iv_match = iv_start <= aln_start and iv_end >= aln_end
+            for feat, strand, match in feat_matches:
+                for rule, rank, strict in match:
+                    if strict and not perfect_iv_match: continue
+                    if rank < min_rank: min_rank = rank
+                    identity_hits.append((rank, rule, feat, strand))
+        # -> identity_hits: [(hierarchy, rule, feature, strand), ...]
+
+        if not identity_hits: return set()
 
         selections = set()
-        for rule, feat, strand in finalists:
+        for rank, rule, feat, strand in identity_hits:
+            if rank != min_rank: continue
+
             strand = (alignment['strand'], strand)
             nt5end = alignment['nt5']
             length = alignment['len']
@@ -152,7 +159,8 @@ class FeatureSelector:
 
         return selections
 
-    def choose_identities(self, feats_list: List[Tuple[int, int, Set[str]]], aln_start, aln_end) -> List[Hit]:
+    @staticmethod
+    def choose_identities(feats_list: List[Tuple[int, int, Set[str]]], aln_start, aln_end) -> List[Hit]:
         """Performs the initial selection on the basis of identity rules: attribute (key, value)
 
         Feature candidates are supplied to this function via feats_list. This is a list

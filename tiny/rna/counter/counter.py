@@ -146,7 +146,7 @@ def map_and_reduce(libraries):
     """Assigns one worker process per library and merges the statistics they report"""
 
     # SummaryStats handles final output files, regardless of multiprocessing status
-    summary = SummaryStats(Features, FeatureCounter.out_prefix, FeatureCounter.run_diags)
+    summary = SummaryStats(Features.classes, FeatureCounter.out_prefix, FeatureCounter.run_diags)
 
     # Use a multiprocessing pool if multiple sam files were provided
     if len(libraries) > 1:
