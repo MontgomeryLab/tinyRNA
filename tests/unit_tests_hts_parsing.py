@@ -1,9 +1,17 @@
 import unittest
+from unittest.mock import patch
 
+from rna.counter.features import FeatureSelector
 from tiny.rna.counter.hts_parsing import *
 # from tests.unit_tests_counter import resources
 import unit_test_helpers as helpers
 resources = "./testdata/counter"
+
+
+class MockFeatureSelector:
+    def __init__(self, rules_table):
+        self.rules_table = FeatureSelector.build_selectors(rules_table)
+        self.inv_ident = FeatureSelector.build_inverted_identities(rules_table)
 
 
 class MyTestCase(unittest.TestCase):
@@ -18,13 +26,13 @@ class MyTestCase(unittest.TestCase):
         self.short_sam_file = f"{resources}/single.sam"
         self.short_sam = helpers.read(self.short_sam_file)
 
-        self.rules_template = [{'Identity': ("Name", "N/A"), 'Strand': "N/A", 'Hierarchy': "N/A", '5pnt': "N/A",
-                                'Length': "N/A", 'Strict': "N/A"}]
+        self.rules_template = [{'Identity': ("Name", "N/A"), 'Strand': "+", 'Hierarchy': "0", 'nt5end': "N",
+                                'Length': "0", 'Strict': True}]
 
     # === HELPERS ===
 
-    def get_gff_attr_string(self, file_content):
-        return file_content.split('\t')[-1]
+    def get_gff_attr_string(self, gff_line):
+        return gff_line.split('\t')[-1]
 
     def parse_gff_attr(self, gff_file_content):
         attr_str = self.get_gff_attr_string(gff_file_content)
@@ -86,48 +94,41 @@ class MyTestCase(unittest.TestCase):
     """Did SAM_reader correctly skip header values and parse all pertinent info from a single record SAM file?"""
 
     def test_sam_reader(self):
-        sam_record = next(read_SAM(self.short_sam_file))
+        sam_bundle = next(read_SAM(self.short_sam_file))
+        sam_record = sam_bundle[0]
 
-        self.assertEqual(sam_record.iv, HTSeq.GenomicInterval("I", 15064569, 15064590, '-'))
-        self.assertEqual(sam_record.read.name, "read_id")
-        self.assertEqual(sam_record.read.seq, b"CAAGACAGAGCTTCACCGTTC")
-        self.assertEqual(sam_record.read.len, 21)
-
-    """Does the alignment object construct and retain expected attributes and structure?"""
-
-    def test_alignment_obj(self):
-        iv = HTSeq.GenomicInterval("I", 15064569, 15064590, "-")
-        seq = b"CAAGACAGAGCTTCACCGTTC"
-        name = "test_aln"
-
-        aln = Alignment(iv, name, seq)
-
-        # The following object structure is expected by HTSeq, StatsCollector, and FeatureSelector
-        self.assertEqual(aln.iv, iv)
-        self.assertEqual(aln.iv.strand, "-")
-        self.assertEqual(aln.read.seq, seq)
-        self.assertEqual(aln.read.name, name)
-        self.assertEqual(aln.read.len, len(seq))
+        self.assertEqual(sam_record['chrom'], "I")
+        self.assertEqual(sam_record['start'], 15064569)
+        self.assertEqual(sam_record['end'], 15064590)
+        self.assertEqual(sam_record['strand'], '-')
+        self.assertEqual(sam_record['name'], "read_id")
+        self.assertEqual(sam_record['seq'], b"CAAGACAGAGCTTCACCGTTC")
+        self.assertEqual(sam_record['len'], 21)
+        self.assertEqual(sam_record['nt5'], 'G')
 
     """Does our custom SAM parser produce the same pertinent info as HTSeq's BAM_reader?
     
     A note on SAM files: reads are always stored 5' to 3', so antisense reads are actually
     recorded in reverse complement. HTSeq automatically performs this conversion, but we
-    are only really concerned about a sequence's 5' end NT, so our Alignment class performs
+    are only really concerned about a sequence's 5' end NT, so our alignment dicts performs
     this conversion more surgically for only the 5' end NT at construction time.
     """
 
     def test_sam_parser_comparison(self):
         file = f"{resources}/Lib304_test.sam"
         ours = read_SAM(file)
-        theirs = HTSeq.BAM_Reader(file)
+        theirs = HTSeq.bundle_multiple_alignments(HTSeq.BAM_Reader(file))
 
-        for our, their in zip(ours, theirs):
-            self.assertEqual(our.iv, their.iv)
-            self.assertEqual(our.iv.strand, their.iv.strand)
-            self.assertEqual(our.read.nt5, chr(their.read.seq[0]))  # See note above
-            self.assertEqual(our.read.name, their.read.name)
-            self.assertEqual(len(our.read), len(their.read))
+        for our_bundle, their_bundle in zip(ours, theirs):
+            self.assertEqual(len(our_bundle), len(their_bundle))
+            for our, their in zip(our_bundle, their_bundle):
+                self.assertEqual(our['chrom'], their.iv.chrom)
+                self.assertEqual(our['start'], their.iv.start)
+                self.assertEqual(our['end'], their.iv.end)
+                self.assertEqual(our['strand'], their.iv.strand)
+                self.assertEqual(our['nt5'], chr(their.read.seq[0]))  # See note above
+                self.assertEqual(our['name'], their.read.name)
+                self.assertEqual(our['seq'], their.read.seq)
 
     """Were only the correct attribute keys present in the parser result?"""
 
@@ -144,7 +145,7 @@ class MyTestCase(unittest.TestCase):
         attr = self.parse_gff_attr(self.short_gff)
 
         # All attribute values should be tuples, all attribute keys should be strs
-        self.assertTrue(all([type(val) == set for val in attr.values()]))
+        self.assertTrue(all([type(val) == tuple for val in attr.values()]))
         self.assertTrue(all([type(key) == str for key in attr.keys()]))
 
     """Were list values, and non-list values, parsed as such?"""
@@ -161,20 +162,19 @@ class MyTestCase(unittest.TestCase):
     def test_ref_tables_single_feature(self):
         feature_source = {self.short_gff_file: ["sequence_name"]}
         iv = HTSeq.GenomicInterval("I", 3746, 3908, "-")
-        selection_rules = [
-            {'Identity': ("Class", "CSR"), 'Strand': "N/A", 'Hierarchy': "N/A", '5pnt': "N/A", 'Length': "N/A",
-             'Strict': "N/A"},
-            {'Identity': ("biotype", "snoRNA"), 'Strand': "N/A", 'Hierarchy': "N/A", '5pnt': "N/A", 'Length': "N/A",
-             'Strict': "N/A"}
-        ]
-
+        mock_selector = MockFeatureSelector([
+            {'Identity': ("Class", "CSR"), 'Strand': "+", 'Hierarchy': 1, 'nt5end': "N/A", 'Length': "20",
+             'Strict': True},
+            {'Identity': ("biotype", "snoRNA"), 'Strand': "-", 'Hierarchy': 2, 'nt5end': "N/A", 'Length': "30",
+             'Strict': False}
+        ])
         kwargs = {'all_features': True}
-        feats, idents, alias, ivs, classes = ReferenceTables(feature_source, selection_rules, **kwargs).get()
+
+        feats, alias, classes = ReferenceTables(feature_source, mock_selector, **kwargs).get()
         steps = list(feats[iv].array[iv.start:iv.end].get_steps(values_only=True))
 
-        self.assertEqual((type(feats), type(idents), type(alias)), (HTSeq.GenomicArrayOfSets, dict, dict))
-        self.assertEqual(steps, [{"Gene:WBGene00023193"}])
-        self.assertEqual(idents, {'Gene:WBGene00023193': [('biotype', "snoRNA")]})
+        self.assertEqual((type(feats), type(alias), type(classes)), (HTSeq.GenomicArrayOfSets, dict, dict))
+        self.assertEqual(steps, [{("Gene:WBGene00023193", '-', ((1, 2, False),))}])
         self.assertEqual(alias, {'Gene:WBGene00023193': ('Y74C9A.6',)})
         self.assertEqual(classes, {'Gene:WBGene00023193': ('additional_class', 'unknown')})
 
@@ -183,7 +183,7 @@ class MyTestCase(unittest.TestCase):
     def test_ref_tables_missing_name_attribute(self):
         bad = "bad_name_attribute"
         feature_source = {self.short_gff_file: [bad]}
-        selection_rules = []
+        selection_rules = MockFeatureSelector([])
         kwargs = {'all_features': True}
 
         expected_err = f"Feature Gene:WBGene00023193 does not contain a '{bad}' attribute." + '\n'
@@ -213,11 +213,10 @@ class MyTestCase(unittest.TestCase):
     def test_ref_tables_alias_concat(self):
         feature_source = {self.short_gff_file: ["ID", "Class"]}
         kwargs = {'all_features': True}
-        selection_rules = []
 
         # Notice: screening for "ID" name attribute happens earlier in counter.load_config()
         expected_alias = {"Gene:WBGene00023193": ("Gene:WBGene00023193", "additional_class", "unknown")}
-        _, _, alias, _, _ = ReferenceTables(feature_source, selection_rules, **kwargs).get()
+        _, alias, _ = ReferenceTables(feature_source, MockFeatureSelector([]), **kwargs).get()
 
         self.assertDictEqual(alias, expected_alias)
 
@@ -244,13 +243,13 @@ class MyTestCase(unittest.TestCase):
             self.assertEqual(act_sorted, exp_sorted)
 
     """Does ReferenceTables.get() properly handle aliases for discontinuous features?"""
-    # todo
+
     def test_ref_tables_discontinuous_aliases(self):
         feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
-        selection_rules = self.rules_template
+        mock_selector = MockFeatureSelector(self.rules_template)
         kwargs = {'all_features': True}
 
-        _, _, alias, _, _ = ReferenceTables(feature_source, selection_rules, **kwargs).get()
+        _, alias, _ = ReferenceTables(feature_source, mock_selector, **kwargs).get()
 
         # Ancestor depth of 1, distinct aliases
         self.assertEqual(alias['Parent2'], ('Child2Name', 'Parent2Name'))
@@ -384,15 +383,15 @@ class MyTestCase(unittest.TestCase):
     def test_ref_tables_both_filter(self):
 
         feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
-        selection_rules = self.rules_template
+        selection_rules = MockFeatureSelector(self.rules_template)
 
         rt = ReferenceTables(feature_source, selection_rules, source_filter=["SourceName"], type_filter=["gene"])
-        feats, attrs, alias, intervals, classes = rt.get()
+        feats, alias, classes = rt.get()
 
         self.assertEqual(rt.filtered, {'Child1', 'Child2'})
         self.assertEqual(rt.parents, {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'})
-        self.assertEqual(list(attrs.keys()), ['GrandParent', 'Parent2', 'Sibling'])
-        self.assertEqual(list(intervals.keys()), ['GrandParent', 'Parent2', 'Sibling'])
+        # self.assertEqual(list(attrs.keys()), ['GrandParent', 'Parent2', 'Sibling'])
+        # self.assertEqual(list(intervals.keys()), ['GrandParent', 'Parent2', 'Sibling'])
         self.assertEqual(list(alias.keys()), ['GrandParent', 'Parent2', 'Sibling'])
         self.assertEqual(len(list(feats.chrom_vectors['I']['-'].array.get_steps())), 8)
         self.clear_filters()

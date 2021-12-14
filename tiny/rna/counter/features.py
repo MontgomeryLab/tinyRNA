@@ -115,8 +115,8 @@ class FeatureSelector:
     by the alignment interval.
     """
 
-    rules_table = list()
-    inv_ident = dict()
+    rules_table: List[dict]
+    inv_ident: Dict[tuple, List[int]]
 
     def __init__(self, rules: List[dict], libstats: 'LibraryStats', report_diags=False, **kwargs):
         FeatureSelector.rules_table = self.build_selectors(rules)
@@ -144,8 +144,9 @@ class FeatureSelector:
         if not identity_hits: return set()
 
         selections = set()
-        for rank, rule, feat, strand in identity_hits:
-            if rank != min_rank: continue
+        for hit in identity_hits:
+            if hit[0] != min_rank: continue
+            _, rule, feat, strand = hit
 
             strand = (alignment['strand'], strand)
             nt5end = alignment['nt5']
