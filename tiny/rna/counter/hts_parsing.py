@@ -1,10 +1,6 @@
-import numpy as np
 import HTSeq
 import sys
-import os
 import re
-
-from line_profiler_pycharm import profile
 
 from collections import Counter, defaultdict
 from typing import Tuple, List, Dict, Union, Set
@@ -322,7 +318,7 @@ class ReferenceTables:
             self.feats.add_chrom(row.iv.chrom)
 
     def finalize_tables(self):
-        """Convert sets to sorted tuples for performance and deterministic outputs"""
+        """Convert sets to sorted tuples for performance, hashability, and deterministic outputs"""
 
         # Internally these are sets for ease, but Counter expects tuples for speed and hashability
         self.classes = {feat: tuple(sorted(classes)) for feat, classes in self.classes.items()}
@@ -347,7 +343,7 @@ class ReferenceTables:
     def filter_match(cls, row):
         """Checks if the GFF row passes the inclusive filter(s)
 
-        If both filters are defined then the must both evaluate to true for a match"""
+        If both filters are defined then they must both evaluate to true for a match"""
 
         select = True
         if len(cls.source_filter):
