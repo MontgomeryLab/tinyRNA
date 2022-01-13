@@ -1,13 +1,9 @@
-import numpy as np
 import HTSeq
 import sys
-import os
 import re
 
-from line_profiler_pycharm import profile
-
 from collections import Counter, defaultdict
-from typing import Tuple, List, Dict, Union, Set
+from typing import Tuple, List, Dict, Iterator
 
 from tiny.rna.util import report_execution_time
 
@@ -18,38 +14,9 @@ _re_attr_empty = re.compile(r"^\s*$")
 # For Alignment
 complement = {ord('A'): 'T', ord('T'): 'A', ord('G'): 'C', ord('C'): 'G'}
 
-class Alignment:
-    """The data structure in which parsed SAM alignments are stored.
 
-    Strand-non-specific 5' end nucleotide is stored for efficient lookup. This
-    allows us to skip performing full reverse complement of sequences aligned
-    to the antisense strand.
-    """
-
-    def __init__(self, iv, name, seq):
-        nt5 = complement[seq[-1]] if iv.strand == '-' else chr(seq[0])
-        self.read = Sequence(name, seq, nt5)
-        self.iv = iv
-
-    def __repr__(self):
-        return f"<Alignment Object: Read '{self.read.name}' aligned to {self.iv}>"
-
-class Sequence:
-    def __init__(self, name, seq, nt5):
-        self.name = name
-        self.len = len(seq)
-        self.seq = seq
-        self.nt5 = nt5
-
-    def __repr__(self):
-        return f"<Sequence Object: '{self.name}', {self.seq} ({self.len} bases)>"
-
-    def __len__(self):
-        return self.len
-
-
-def read_SAM(file):
-    """A minimal SAM parser which only handles data relevant to the workflow, for performance."""
+def read_SAM(file) -> Iterator[dict]:
+    """A minimal SAM reader that bundles multiple-alignments and only parses data relevant to the workflow"""
 
     with open(file, 'rb') as f:
         line = f.readline()
@@ -58,20 +25,46 @@ def read_SAM(file):
         while line[0] == ord('@'):
             line = f.readline()
 
-        while line:
-            cols = line.split(b'\t')
+        # Bundle multiple alignments by name
+        aln_iter = iter(parse_alignments(f, line))
+        bundle = [next(aln_iter)]
+        for aln in aln_iter:
+            if aln['name'] != bundle[0]['name']:
+                yield bundle
+                bundle = [aln]
+            else:
+                bundle.append(aln)
+        yield bundle
 
-            # Note: we assume sRNA sequencing data is NOT reversely stranded
-            strand = "+" if (int(cols[1]) & 16) else "-"
-            chrom = cols[2].decode('utf-8')
-            name = cols[0].decode('utf-8')
-            start = int(cols[3]) - 1
-            seq = cols[9]
 
-            iv = HTSeq.GenomicInterval(chrom, start, start + len(seq), strand)
-            yield Alignment(iv, name, seq)
+def parse_alignments(f, line):
 
-            line = f.readline()
+    while line:
+        cols = line.split(b'\t')
+        line = f.readline()
+
+        start = int(cols[3]) - 1
+        seq = cols[9]
+        length = len(seq)
+
+        # Note: we assume sRNA sequencing data is NOT reversely stranded
+        if (int(cols[1]) & 16):
+            strand = '-'
+            nt5 = complement[seq[-1]]
+        else:
+            strand = '+'
+            nt5 = chr(seq[0])
+
+        yield {
+            "name": cols[0].decode('utf-8'),
+            "len": length,
+            "seq": seq,
+            "nt5": nt5,
+            "chrom": cols[2].decode('utf-8'),
+            "start": start,
+            "end": start + length,
+            "strand": strand
+        }
 
 
 def infer_strandedness(sam_file: str, intervals: dict) -> str:
@@ -80,6 +73,10 @@ def infer_strandedness(sam_file: str, intervals: dict) -> str:
     Credit: this technique is an adaptation of those in RSeQC's infer_experiment.py.
     It has been modified to accept a GFF reference file rather than a BED file,
     and to use HTSeq rather than bx-python.
+
+    Args:
+        sam_file: the path of the SAM file to evaluate
+        intervals: the intervals instance attribute of ReferenceTables, populated by .get()
     """
 
     unstranded = HTSeq.GenomicArrayOfSets("auto", stranded=False)
@@ -95,9 +92,9 @@ def infer_strandedness(sam_file: str, intervals: dict) -> str:
     for count in range(1, 20000):
         try:
             rec = next(sample_read)
-            rec.iv.strand = '.'
-            gff_strand = ':'.join(unstranded[rec.iv].get_steps())
-            sam_strand = rec.iv.strand
+            strandless = HTSeq.GenomicInterval(rec['chrom'], rec['start'], rec['end'])
+            sam_strand = rec['strand']
+            gff_strand = ':'.join(unstranded[strandless].get_steps())
             gff_sam_map[sam_strand + gff_strand] += 1
         except StopIteration:
             break
@@ -141,9 +138,9 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
         if val.startswith('"') and val.endswith('"'):
             val = val[1:-1]
         # Modification: allow for comma separated attribute values
-        attribute_dict[sys.intern(key)] = {sys.intern(val)} \
+        attribute_dict[sys.intern(key)] = (sys.intern(val),) \
             if ',' not in val \
-            else set(c.strip() for c in val.split(','))
+            else tuple(c.strip() for c in val.split(','))
         if extra_return_first_value and i == 0:
             first_val = val
     if extra_return_first_value:
@@ -153,17 +150,21 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
 
 
 class ReferenceTables:
-    """A GFF parser which builds feature, identity, and alias tables, with intelligent appends
+    """A GFF parser which builds feature, alias, and class reference tables
 
-    Features may be defined by multiple GFF files. If multiple files offer different identities for
-    the same feature, the unique among those attribute keys and values are merged with the record.
-    If multiple aliases (or Name Attributes, per the Features Sheet) are defined for a feature, the
-    unique among those names are appended. Each GFF file defined in the Features Sheet is parsed only
-    once regardless of the number of Name Attributes associated with it.
+    Discontinuous features are supported, and comma-separated attribute values (GFF3 column 9)
+    are treated as separate values. Multiple GFF3 files may define the same feature; only the
+    unique and relevant definitions are retained. Each GFF file defined in the Features Sheet
+    is parsed only once regardless of the number of Name Attributes associated with it.
 
     Features which define a Parent or share an ID attribute are treated as discontinuous features.
-    In these cases the root ancestor feature receives merged identities, intervals, and aliases.
+    In these cases the root ancestor feature receives merged match-tuples, classes, and aliases.
     Children of the root ancestor are otherwise not stored in the reference tables.
+
+    Match-tuples are created for each Features Sheet rule which matches a feature's attributes.
+    They are structured as (rank, rule, strict). "Rank" is the heirarchy value of the matching
+    rule, "rule" is the index of that rule in FeatureSelector's rules table, and "strict" is a
+    boolean representing whether a strict alignment overlap is required for a match.
 
     Source and type filters allow the user to define acceptable values for columns 2 and 3 of the
     GFF, respectively. These filters are inclusive (only rows with matching values are parsed),
@@ -175,26 +176,25 @@ class ReferenceTables:
     source_filter = []
     type_filter = []
 
-    def __init__(self, gff_files: Dict[str, list], rules: List[dict], **kwargs):
-        self.gff_files = gff_files
+    def __init__(self, gff_files: Dict[str, list], feature_selector, **kwargs):
+        self.all_features = kwargs.get('all_features', False)
+        self.inv_ident = feature_selector.inv_ident
+        self.rules = feature_selector.rules_table
         self._set_filters(**kwargs)
-        self.all_features = kwargs['all_features']
-        self.attrs_of_interest = defaultdict(set)
-        for rule in rules:
-            self.attrs_of_interest[rule['Identity'][0]].add(rule['Identity'][1])
+        self.gff_files = gff_files
 
         self.feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
-        self.ident, self.alias = defaultdict(lambda: defaultdict(set)), defaultdict(set)
-        self.classes, self.parents, self.filtered = {}, {}, set()
+        self.parents, self.filtered = {}, set()
         self.intervals = defaultdict(list)
+        self.matches = defaultdict(set)
         self.classes = defaultdict(set)
+        self.alias = defaultdict(set)
 
         # Patch the GFF attribute parser to support comma separated attribute value lists
         setattr(HTSeq.features, 'parse_GFF_attribute_string', parse_GFF_attribute_string)
 
     @report_execution_time("GFF parsing")
-    def get(self) -> \
-            Tuple['HTSeq.GenomicArrayOfSets', Dict[str, list], Dict[str, tuple], Dict[str, list], Dict[str, list]]:
+    def get(self) -> Tuple['HTSeq.GenomicArray', Dict[str, tuple], Dict[str, tuple]]:
         """Initiates GFF parsing and returns the resulting reference tables"""
 
         for file, alias_keys in self.gff_files.items():
@@ -208,19 +208,17 @@ class ReferenceTables:
                         continue
                     try:
                         # Grab the primary key for this feature
-                        feature_id = next(iter(row.attr["ID"]))
-                        # Select only identities (key-val pairs) of interest
-                        idents = self.get_interesting_idents(feature_id, row.attr)
+                        feature_id = row.attr["ID"][0]
+                        # Get feature's classes and identity match tuples
+                        matches, classes = self.get_matches_and_classes(row.attr)
                         # Only add features with identity matches if all_features is False
-                        if not self.all_features and not len(idents):
+                        if not self.all_features and not len(matches):
                             self.exclude_row(row)
                             continue
-                        # Add feature_id <-> feature_interval records
-                        root_id = self.add_feature_iv(feature_id, row)
-                        # Append alias to root feature if it is unique
-                        self.add_alias(alias_keys, root_id, row.attr)
-                        # Add feature_id -> feature_idents record
-                        self.incorporate_idents(root_id, idents)
+                        # Add feature data to root ancestor in the reference tables
+                        root_id = self.add_feature(feature_id, row, matches, classes)
+                        # Add alias to root ancestor if it is unique
+                        self.add_alias(root_id, alias_keys, row.attr)
                     except KeyError as ke:
                         raise ValueError(f"Feature {row.name} does not contain a {ke} attribute.")
             except Exception as e:
@@ -228,10 +226,9 @@ class ReferenceTables:
                 e.args = (str(e.args[0]) + "\nError occurred on line %d of %s" % (gff.line_no, file),)
                 raise e.with_traceback(sys.exc_info()[2]) from e
 
-        self.finalize_tables()
-        return self.feats, self.ident, self.alias, dict(self.intervals), self.classes
+        return self.finalize_tables()
 
-    def get_root_feature(self, feature_id: str, row_attrs: Dict[str, set]) -> str:
+    def get_root_feature(self, feature_id: str, row_attrs: Dict[str, tuple]) -> str:
         """Returns the ID of the feature's root parent if one exists. Otherwise the original ID is returned."""
 
         if "Parent" not in row_attrs:
@@ -245,59 +242,58 @@ class ReferenceTables:
             parent_id = self.parents[parent_id]
             tree.append(parent_id)
 
-        # Descend tree until the descendent is found in the identites table
+        # Descend tree until the descendent is found in the matches table
         # This is because ancestor feature(s) may have been filtered
         for ancestor in tree[::-1]:
-            if ancestor in self.ident or ancestor == feature_id:
+            if ancestor in self.matches or ancestor == feature_id:
                 return ancestor
 
-    def add_feature_iv(self, feature_id: str, row) -> str:
-        """Adds the feature and its intervals to corresponding reference tables"""
+    def add_feature(self, feature_id: str, row, matches: set, classes: set) -> str:
+        """Adds the feature and its interval under the root ancestor's ID"""
 
         root_id = self.get_root_feature(feature_id, row.attr)
+        self.classes[root_id] |= classes
+        self.matches[root_id] |= matches
 
-        self.feats[row.iv] += root_id
-        self.ident.setdefault(root_id, self.ident.default_factory())
         if row.iv not in self.intervals[root_id]:
             self.intervals[root_id].append(row.iv)
 
         return root_id
 
-    def add_alias(self, alias_keys, root_id, row_attr):
-        """Merge unique aliases with the root feature's"""
+    def add_alias(self, root_id: str, alias_keys: List[str], row_attr: Dict[str, tuple]) -> None:
+        """Add feature's aliases to the root ancestor's alias set"""
 
         for alias_key in alias_keys:
             for row_val in row_attr[alias_key]:
                 self.alias[root_id].add(row_val)
 
-    def get_interesting_idents(self, feat_id: str, row_attrs: Dict[str, set]) -> Dict[str, set]:
-        """Returns only the identities of interest from the row's identities"""
+    def get_matches_and_classes(self, row_attrs: Dict[str, set]) -> Tuple[set, set]:
+        """Grabs classes and match tuples from attributes that match identity rules"""
 
-        interest_matches = {}
-        for interest in self.attrs_of_interest:
-            match = row_attrs[interest] & self.attrs_of_interest[interest]
-            if match: interest_matches[interest] = match
+        classes = {c for c in row_attrs["Class"]}
 
-        self.classes[feat_id].update(c for c in row_attrs["Class"])
-        return interest_matches
+        identity_matches = set()
+        for ident, rule_indexes in self.inv_ident.items():
+            match = row_attrs.get(ident[0], None)
+            if match is not None and ident[1] in match:
+                identity_matches.update(
+                    (r, self.rules[r]['Hierarchy'], self.rules[r]['Strict'])
+                    for r in rule_indexes
+                )
+        # -> identity_matches: {(rule, rank, strict), ...}
+        return identity_matches, classes
 
-    def incorporate_idents(self, root_id, row_attrs):
-        """Add unique identities (keys and values) to root feature's identities"""
-
-        for key in row_attrs:
-            self.ident[root_id][key] |= row_attrs[key]
-
-    def get_row_parent(self, feature_id: str, row_attrs: Dict[str, set]) -> str:
+    def get_row_parent(self, feature_id: str, row_attrs: Dict[str, tuple]) -> str:
         """Get the current feature's parent while cooperating with filtered features"""
 
-        parent_attr = row_attrs.get("Parent", {None})
-        parent = next(iter(parent_attr))
+        parent_attr = row_attrs.get("Parent", [None])
+        parent = parent_attr[0]
 
         if len(parent_attr) > 1:
             raise ValueError(f"{feature_id} defines multiple parents which is unsupported at this time.")
         if len(parent_attr) == 0 or parent is None:
             return feature_id
-        if (parent not in self.ident                # If parent is not a root feature
+        if (parent not in self.matches              # If parent is not a root feature
                 and parent not in self.parents      # If parent doesn't have a parent itself
                 and parent not in self.filtered):   # If parent was not a filtered root feature
             raise ValueError(f"Feature ID {parent} is referenced as a parent before being defined. Please "
@@ -307,30 +303,49 @@ class ReferenceTables:
         return parent
 
     def exclude_row(self, row):
-        """The current row was filtered, but we still need to account for it and its parent
+        """Performs residual accounting of features that were excluded from the tables
 
-        We don't want to add filtered features to the identities table because we later call
-        get_keys() on the table to obtain a list of all features considered for counting.
-        We still need to keep track of parents for situations where an ancestral tree has
-        a gap due to filtering; in this case we still want to merge descendents with the
-        highest considered feature in the tree."""
+        Features may have been excluded by filters or for a lack of identity matches.
+        We still need to keep track of parents for cases where these exclusions form
+        gaps in the ancestral tree. This allows us to maintain a path to the tree's
+        root."""
 
-        feature_id = row.attr['ID'].pop()
+        feature_id = row.attr['ID'][0]
         self.filtered.add(feature_id)
         if "Parent" in row.attr:
             self.parents[feature_id] = self.get_row_parent(feature_id, row.attr)
         if row.iv.chrom not in self.feats.chrom_vectors:
             self.feats.add_chrom(row.iv.chrom)
 
-    def finalize_tables(self):
-        """Internally these are sets for ease, but Counter expects tuples for speed and hashability"""
+    def finalize_tables(self) -> Tuple['HTSeq.GenomicArray', Dict[str, tuple], Dict[str, tuple]]:
+        """Convert sets to sorted tuples for performance, hashability, and deterministic outputs"""
 
+        # Internally these are sets for ease, but Counter expects tuples for speed and hashability
         self.classes = {feat: tuple(sorted(classes)) for feat, classes in self.classes.items()}
         self.alias = {feat: tuple(sorted(aliases)) for feat, aliases in self.alias.items()}
-        self.ident = {feat: [(select_for, with_value)
-                             for select_for in self.ident[feat]
-                             for with_value in self.ident[feat][select_for]]
-                      for feat in self.ident}
+
+        # Add each feature family to the StepVector
+        for root_id, family_ivs in self.intervals.items():
+            sorted_match_tuples = tuple(sorted(self.matches[root_id], key=lambda x: x[1]))
+            # For all intervals in this feature family...
+            for iv in family_ivs:
+                self.feats[iv] += (root_id, iv.strand, sorted_match_tuples)
+
+        if self.get_feats_table_size() == 0 or len(self.classes) == 0:
+            raise ValueError("No features or classes were retained while parsing your GFF file.\n"
+                             "This may be due to a lack of features matching 'Select for...with value...'")
+
+        return self.feats, self.alias, self.classes
+
+    def get_feats_table_size(self) -> int:
+        """Returns the sum of features across all chromosomes and strands"""
+
+        total_feats = 0
+        for chrom in self.feats.chrom_vectors:
+            for strand in self.feats.chrom_vectors[chrom]:
+                total_feats += len(self.feats.chrom_vectors[chrom][strand].array)
+
+        return total_feats
 
     @classmethod
     def _set_filters(cls, **kwargs):
@@ -343,7 +358,7 @@ class ReferenceTables:
     def filter_match(cls, row):
         """Checks if the GFF row passes the inclusive filter(s)
 
-        If both filters are defined then the must both evaluate to true for a match"""
+        If both filters are defined then they must both evaluate to true for a match"""
 
         select = True
         if len(cls.source_filter):

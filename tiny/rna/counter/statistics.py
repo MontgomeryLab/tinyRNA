@@ -6,7 +6,6 @@ import os
 from typing import Tuple, Optional, Iterable
 from collections import Counter, defaultdict
 
-from .hts_parsing import Alignment
 from ..util import make_filename
 
 
@@ -40,21 +39,28 @@ class LibraryStats:
     def assign_library(self, library: dict):
         self.library = library
 
-    def count_bundle(self, aln_bundle: iter) -> Bundle:
+    def count_bundle(self, aln_bundle: iter):# -> Bundle:
         """Called for each multiple-alignment bundle before it is processed"""
 
-        bundle_read = aln_bundle[0].read
+        bundle_read = aln_bundle[0]
         loci_counts = len(aln_bundle)
 
         # Calculate counts for multi-mapping
-        read_counts = int(bundle_read.name.split('=')[1])
+        read_counts = int(bundle_read['name'].split('=')[1])
         corr_counts = self.normalize_count_by(read_counts, loci_counts)
 
-        # Fill in 5p nt/length matrix
-        sequence = bundle_read.seq
-        self.nt_len_mat[bundle_read.nt5][len(sequence)] += read_counts
+        bundle = {
+            'loci_count': loci_counts,
+            'read_count': read_counts,
+            'corr_count': corr_counts,
+            'assignments': list()
+        }
 
-        return self.Bundle(loci_counts, read_counts, corr_counts)
+        # Fill in 5p nt/length matrix
+        sequence = bundle_read['seq']
+        self.nt_len_mat[bundle_read['nt5']][len(sequence)] += read_counts
+
+        return bundle
 
     def normalize_count_by(self, count, n_recipients):
         return count / n_recipients
@@ -62,36 +68,37 @@ class LibraryStats:
     def no_norm(self, count, _):
         return count
 
-    def count_bundle_alignments(self, bundle: Bundle, aln: Alignment, assignments: set, n_candidates: int) -> None:
+    def count_bundle_alignments(self, bundle, aln: dict, assignments: set, n_candidates: int) -> None:
         """Called for each alignment for each read"""
 
         assigned_count = len(assignments)
-        corr_count = bundle.corr_count
+        corr_count = bundle['corr_count']
 
         if assigned_count == 0:
             self.library_stats['Total Unassigned Reads'] += corr_count
         if assigned_count == 1:
             self.library_stats['Reads Assigned to Single Feature'] += corr_count
+            self.library_stats["Assigned Single-Mapping Reads"] += corr_count
         if assigned_count > 1:
             self.library_stats['Reads Assigned to Multiple Features'] += corr_count
+            self.library_stats["Assigned Multi-Mapping Reads"] += corr_count
         if assigned_count > 0:
-            self.library_stats[f"Assigned {bundle.mapping_type}-Mapping Reads"] += corr_count
             self.library_stats['Total Assigned Reads'] += corr_count
 
             feature_corrected_count = self.normalize_count_by(corr_count, assigned_count)
 
             for feat in assignments:
-                bundle.assignments.append(feat)
+                bundle['assignments'].append(feat)
                 self.feat_counts[feat] += feature_corrected_count
 
         if self.diags is not None:
             self.diags.record_diagnostics(assignments, n_candidates, aln, bundle)
             self.diags.record_alignment_details(aln, bundle, assignments)
 
-    def finalize_bundle(self, bundle: Bundle) -> None:
+    def finalize_bundle(self, bundle) -> None:
         """Called at the conclusion of processing each multiple-alignment bundle"""
 
-        assignment_count = len(bundle.assignments)
+        assignment_count = len(bundle['assignments'])
 
         if assignment_count == 0:
             self.library_stats['Total Unassigned Sequences'] += 1
@@ -105,9 +112,8 @@ class SummaryStats:
     summary_categories = ["Total Reads", "Retained Reads", "Unique Sequences",
                           "Mapped Sequences", "Mapped Reads", "Assigned Reads"]
 
-    def __init__(self, ref: 'Features', out_prefix: str, report_diags: bool):
-        self.feature_identities = ref.identities
-        self.feature_classes = ref.classes
+    def __init__(self, classes, out_prefix: str, report_diags: bool):
+        self.feature_classes = classes
         self.out_prefix = out_prefix
         self.report_diags = report_diags
 
@@ -115,7 +121,7 @@ class SummaryStats:
         self.report_summary_statistics = True
 
         self.pipeline_stats_df = pd.DataFrame(index=SummaryStats.summary_categories)
-        self.feat_counts_df = pd.DataFrame(index=ref.identities.keys())
+        self.feat_counts_df = pd.DataFrame(index=self.feature_classes.keys())
         self.lib_stats_df = pd.DataFrame(index=LibraryStats.summary_categories)
         self.chrom_misses = Counter()
         self.nt_len_mat = {}
@@ -166,7 +172,7 @@ class SummaryStats:
         """
 
         # Subset the counts table to only show features that were matched on identity (regardless of count)
-        summary = self.feat_counts_df.loc[self.feature_identities.keys()]
+        summary = self.feat_counts_df.loc[self.feature_classes.keys()]
         # Sort columns by title and round all counts to 2 decimal places
         summary = self.sort_cols_and_round(summary)
         # Add Feature Name column, which is the feature alias (default is Feature ID if no alias exists)
@@ -340,12 +346,12 @@ class Diagnostics:
         after the entire SAM file has been processed."""
 
         # Perform reverse complement for anti-sense reads
-        read = aln.read.seq \
-            if aln.iv.strand == '+' \
-            else aln.read.seq[::-1].translate(self.complement)
+        read = aln['seq'] \
+            if aln['strand'] == '+' \
+            else aln['seq'][::-1].translate(self.complement)
 
         # sequence, cor_counts, strand, start, end, feat1;feat2;feat3
-        self.alignments.append((read, bundle.corr_count, aln.iv.strand, aln.iv.start, aln.iv.end,
+        self.alignments.append((read, bundle['corr_count'], aln['strand'], aln['start'], aln['end'],
                                 ';'.join(assignments)))
 
     def write_intermediate_file(self, library_name: str) -> None:
@@ -362,14 +368,14 @@ class Diagnostics:
         """Records basic diagnostic info"""
 
         if len(assignments) == 0:
-            if aln.iv.strand == '+':
+            if aln['strand'] == '+':
                 self.alignment_diags['Uncounted alignments (+)'] += 1
             else:
                 self.alignment_diags['Uncounted alignments (-)'] += 1
             if n_candidates == 0:
-                self.alignment_diags['No feature counts'] += bundle.corr_count
+                self.alignment_diags['No feature counts'] += bundle['corr_count']
             else:
-                self.alignment_diags['Eliminated counts'] += bundle.corr_count
+                self.alignment_diags['Eliminated counts'] += bundle['corr_count']
 
     @classmethod
     def write_summary(cls, out_prefix: str, alignment_summary: pd.DataFrame, selection_summary: dict) -> None:
