@@ -3,7 +3,7 @@ import sys
 import re
 
 from collections import Counter, defaultdict
-from typing import Tuple, List, Dict, Union, Set
+from typing import Tuple, List, Dict, Iterator
 
 from tiny.rna.util import report_execution_time
 
@@ -15,8 +15,8 @@ _re_attr_empty = re.compile(r"^\s*$")
 complement = {ord('A'): 'T', ord('T'): 'A', ord('G'): 'C', ord('C'): 'G'}
 
 
-def read_SAM(file):
-    """A minimal SAM parser which only handles data relevant to the workflow, for performance."""
+def read_SAM(file) -> Iterator[dict]:
+    """A minimal SAM reader that bundles multiple-alignments and only parses data relevant to the workflow"""
 
     with open(file, 'rb') as f:
         line = f.readline()
@@ -25,6 +25,7 @@ def read_SAM(file):
         while line[0] == ord('@'):
             line = f.readline()
 
+        # Bundle multiple alignments by name
         aln_iter = iter(parse_alignments(f, line))
         bundle = [next(aln_iter)]
         for aln in aln_iter:
@@ -72,6 +73,10 @@ def infer_strandedness(sam_file: str, intervals: dict) -> str:
     Credit: this technique is an adaptation of those in RSeQC's infer_experiment.py.
     It has been modified to accept a GFF reference file rather than a BED file,
     and to use HTSeq rather than bx-python.
+
+    Args:
+        sam_file: the path of the SAM file to evaluate
+        intervals: the intervals instance attribute of ReferenceTables, populated by .get()
     """
 
     unstranded = HTSeq.GenomicArrayOfSets("auto", stranded=False)
@@ -87,9 +92,9 @@ def infer_strandedness(sam_file: str, intervals: dict) -> str:
     for count in range(1, 20000):
         try:
             rec = next(sample_read)
-            rec.iv.strand = '.'
-            gff_strand = ':'.join(unstranded[rec.iv].get_steps())
-            sam_strand = rec.iv.strand
+            strandless = HTSeq.GenomicInterval(rec['chrom'], rec['start'], rec['end'])
+            sam_strand = rec['strand']
+            gff_strand = ':'.join(unstranded[strandless].get_steps())
             gff_sam_map[sam_strand + gff_strand] += 1
         except StopIteration:
             break
@@ -178,11 +183,7 @@ class ReferenceTables:
         self._set_filters(**kwargs)
         self.gff_files = gff_files
 
-        import CyStep._stepvector as StepVector
-        setattr(HTSeq._HTSeq, "StepVector", StepVector)
-
-        # self.feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
-        self.feats = HTSeq.GenomicArray("auto", typecode='O', stranded=True)
+        self.feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
         self.parents, self.filtered = {}, set()
         self.intervals = defaultdict(list)
         self.matches = defaultdict(set)
@@ -225,8 +226,7 @@ class ReferenceTables:
                 e.args = (str(e.args[0]) + "\nError occurred on line %d of %s" % (gff.line_no, file),)
                 raise e.with_traceback(sys.exc_info()[2]) from e
 
-        self.finalize_tables()
-        return self.feats, self.alias, self.classes
+        return self.finalize_tables()
 
     def get_root_feature(self, feature_id: str, row_attrs: Dict[str, tuple]) -> str:
         """Returns the ID of the feature's root parent if one exists. Otherwise the original ID is returned."""
@@ -317,7 +317,7 @@ class ReferenceTables:
         if row.iv.chrom not in self.feats.chrom_vectors:
             self.feats.add_chrom(row.iv.chrom)
 
-    def finalize_tables(self):
+    def finalize_tables(self) -> Tuple['HTSeq.GenomicArray', Dict[str, tuple], Dict[str, tuple]]:
         """Convert sets to sorted tuples for performance, hashability, and deterministic outputs"""
 
         # Internally these are sets for ease, but Counter expects tuples for speed and hashability
@@ -329,8 +329,23 @@ class ReferenceTables:
             sorted_match_tuples = tuple(sorted(self.matches[root_id], key=lambda x: x[1]))
             # For all intervals in this feature family...
             for iv in family_ivs:
-                # self.feats[iv] += (root_id, iv.strand, sorted_match_tuples)
-                self.feats[iv] += {(root_id, iv.strand, sorted_match_tuples)}
+                self.feats[iv] += (root_id, iv.strand, sorted_match_tuples)
+
+        if self.get_feats_table_size() == 0 or len(self.classes) == 0:
+            raise ValueError("No features or classes were retained while parsing your GFF file.\n"
+                             "This may be due to a lack of features matching 'Select for...with value...'")
+
+        return self.feats, self.alias, self.classes
+
+    def get_feats_table_size(self) -> int:
+        """Returns the sum of features across all chromosomes and strands"""
+
+        total_feats = 0
+        for chrom in self.feats.chrom_vectors:
+            for strand in self.feats.chrom_vectors[chrom]:
+                total_feats += len(self.feats.chrom_vectors[chrom][strand].array)
+
+        return total_feats
 
     @classmethod
     def _set_filters(cls, **kwargs):
