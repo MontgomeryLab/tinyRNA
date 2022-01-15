@@ -39,15 +39,6 @@ class MyTestCase(unittest.TestCase):
         attr_str = self.get_gff_attr_string(gff_file_content)
         return parse_GFF_attribute_string(attr_str)
 
-    def make_single_sam(self, name="read_id", flag="16", chrom="I", pos="15064570", seq="CAAGACAGAGCTTCACCGTTC"):
-        length = str(len(seq))
-        header = '\t'.join(["@SQ", "SN:%s", "LN:%s"]) % (chrom, length)
-        record = '\t'.join([
-            name, flag, chrom, pos, "255", length + "M", "*", "0", "0", seq,
-            "IIIIIIIIIIIIIIIIIIIII", "XA:i:0",	"MD:Z:" + length, "NM:i:0", "XM:i:2"])
-
-        return header + '\n' + record
-
     def selector_with_rules(self, updates_list):
         """Returns a MockFeatureSelector with the specified updates to the default rule template"""
 

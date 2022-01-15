@@ -65,16 +65,26 @@ def get_dir_checksum_tree(root_path: str) -> dict:
             for level in top.replace(root_path + os.sep, '').split(os.sep):
                 context = context[level]
 
-        context['files'] = set()
+        context['files'] = []
         for folder in dirs: context[folder] = {}
         for file in files:
             path = f"{top}{os.sep}{file}"
-            file_content = read(path)
+            file_content = read(path, 'rb')
 
             # Add (file, hash) tuple
-            context['files'].add((file, hashlib.md5(file_content).hexdigest()))
+            context['files'].append((file, hashlib.md5(file_content).hexdigest()))
 
     return dir_tree
+
+
+def make_single_sam(self, name="read_id", flag="16", chrom="I", pos="15064570", seq="CAAGACAGAGCTTCACCGTTC"):
+    length = str(len(seq))
+    header = '\t'.join(["@SQ", "SN:%s", "LN:%s"]) % (chrom, length)
+    record = '\t'.join([
+        name, flag, chrom, pos, "255", length + "M", "*", "0", "0", seq,
+        "IIIIIIIIIIIIIIIIIIIII", "XA:i:0",	"MD:Z:" + length, "NM:i:0", "XM:i:2"])
+
+    return header + '\n' + record
 
 
 # Simply reads and returns the contents of the specified file

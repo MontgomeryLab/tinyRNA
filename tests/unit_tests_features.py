@@ -1,10 +1,10 @@
 import HTSeq
 import unittest
-import unit_test_helpers as helpers
 
-from unittest.mock import patch, call
-from tiny.rna.counter.hts_parsing import Alignment, read_SAM
+from unittest.mock import patch, call, mock_open
+from tiny.rna.counter.hts_parsing import read_SAM, complement
 from tiny.rna.counter.features import *
+from unit_test_helpers import read, make_single_sam
 
 resources = "./testdata/counter"
 
@@ -14,11 +14,28 @@ class FeaturesTests(unittest.TestCase):
     def setUpClass(self):
         self.gff_file = f"{resources}/identity_choice_test.gff3"
         self.short_gff_file = f"{resources}/single.gff3"
-        self.short_gff = helpers.read(self.short_gff_file)
+        self.short_gff = read(self.short_gff_file)
 
         self.sam_file = f"{resources}/identity_choice_test.sam"
         self.short_sam_file = f"{resources}/single.sam"
-        self.short_sam = helpers.read(self.short_sam_file)
+        self.short_sam = read(self.short_sam_file)
+
+    def make_sam_record(self, name="0_count=1", length=21, seq="CAAGACAGAGCTTCACCGTTC", nt5='C',
+                        chrom='I', start=15064570, strand='+'):
+
+        if (strand == '+' and nt5 != seq[0]) or (strand == '-' and nt5 != complement[seq[-1]]):
+            raise ValueError("Invalid nt5 value for strand")
+
+        return {
+            "name": name,
+            "len": length,
+            "seq": seq,
+            "nt5": nt5,
+            "chrom": chrom,
+            "start": start,
+            "end": start + length,
+            "strand": strand
+        }
 
     """Do GenomicArraysOfSets slice to step intervals that overlap, even if by just one base?"""
 
@@ -83,14 +100,20 @@ class FeaturesTests(unittest.TestCase):
 
     """Does assign_features correctly handle alignments with zero feature matches?"""
 
-    def test_assign_features_no_match(self):
+    @patch('tiny.rna.hts_parsing.open', new_callable=mock_open())
+    def test_assign_features_no_match(self, sam_file):
         htsgas = HTSeq.GenomicArrayOfSets("auto", stranded=True)
-        iv_feat = HTSeq.GenomicInterval("I", 0, 2, "+")
-        iv_none = HTSeq.GenomicInterval("I", 2, 3, "+")
 
+        # Add test feature and interval to the GenomicArray
+        iv_feat = HTSeq.GenomicInterval("I", 0, 2, "+")
         htsgas[iv_feat] += "Should not match"
+
+        # Create mock SAM alignment with non-overlapping interval
+        iv_none = {'chrom': 'I', 'start': 2, 'len': 1, 'strand': '+'}
+        sam_file.configue_mock(read_data=make_single_sam(**iv_none))
+
         Features.chrom_vectors = htsgas.chrom_vectors
-        none_alignment = Alignment(iv_none, "Non-overlap", b"A")
+        # none_alignment = Alignment(iv_none, "Non-overlap", b"A")
 
         with patch("tiny.rna.counter.features.FeatureCounter") as mock:
             instance = mock.return_value

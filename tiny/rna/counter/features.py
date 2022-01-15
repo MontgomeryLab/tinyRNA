@@ -146,7 +146,7 @@ class FeatureSelector:
         Args:
             feats_list: a list of tuples, each representing features associated with
                 an interval which overlapped the alignment interval. See above.
-            alignment: the alignment to which
+            alignment: the alignment to which features are being selected for assignment.
 
         Returns:
             selections: a list of features which passed selection
