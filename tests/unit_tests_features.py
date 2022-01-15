@@ -2,9 +2,9 @@ import HTSeq
 import unittest
 
 from unittest.mock import patch, call, mock_open
-from tiny.rna.counter.hts_parsing import read_SAM, complement
+from tiny.rna.counter.hts_parsing import read_SAM, parse_alignments
 from tiny.rna.counter.features import *
-from unit_test_helpers import read, make_single_sam
+from unit_test_helpers import read, complement
 
 resources = "./testdata/counter"
 
@@ -20,7 +20,7 @@ class FeaturesTests(unittest.TestCase):
         self.short_sam_file = f"{resources}/single.sam"
         self.short_sam = read(self.short_sam_file)
 
-    def make_sam_record(self, name="0_count=1", length=21, seq="CAAGACAGAGCTTCACCGTTC", nt5='C',
+    def make_parsed_sam_record(self, name="0_count=1", seq="CAAGACAGAGCTTCACCGTTC", nt5='C',
                         chrom='I', start=15064570, strand='+'):
 
         if (strand == '+' and nt5 != seq[0]) or (strand == '-' and nt5 != complement[seq[-1]]):
@@ -28,12 +28,12 @@ class FeaturesTests(unittest.TestCase):
 
         return {
             "name": name,
-            "len": length,
+            "len": len(seq),
             "seq": seq,
             "nt5": nt5,
             "chrom": chrom,
             "start": start,
-            "end": start + length,
+            "end": start + len(seq),
             "strand": strand
         }
 
@@ -100,24 +100,26 @@ class FeaturesTests(unittest.TestCase):
 
     """Does assign_features correctly handle alignments with zero feature matches?"""
 
-    @patch('tiny.rna.hts_parsing.open', new_callable=mock_open())
-    def test_assign_features_no_match(self, sam_file):
+    def test_assign_features_no_match(self):
         htsgas = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+        Features.chrom_vectors = htsgas.chrom_vectors
+        chrom, strand = "I", "+"
 
         # Add test feature and interval to the GenomicArray
-        iv_feat = HTSeq.GenomicInterval("I", 0, 2, "+")
-        htsgas[iv_feat] += "Should not match"
+        iv_none = HTSeq.GenomicInterval(chrom, 0, 2, strand)
+        htsgas[iv_none] += "Should not match"
 
         # Create mock SAM alignment with non-overlapping interval
-        iv_none = {'chrom': 'I', 'start': 2, 'len': 1, 'strand': '+'}
-        sam_file.configue_mock(read_data=make_single_sam(**iv_none))
+        sam_aln = self.make_parsed_sam_record(**{'start': 2, 'chrom': chrom, 'strand': strand})
 
-        Features.chrom_vectors = htsgas.chrom_vectors
-        # none_alignment = Alignment(iv_none, "Non-overlap", b"A")
+        """
+        iv_none: 0 |--| 2
+        sam_aln:    2 |-- ... --|
+        """
 
         with patch("tiny.rna.counter.features.FeatureCounter") as mock:
             instance = mock.return_value
-            FeatureCounter.assign_features(instance, none_alignment)
+            FeatureCounter.assign_features(instance, sam_aln)
 
         instance.choose.assert_not_called()
         instance.stats.chrom_misses.assert_not_called()
@@ -126,22 +128,30 @@ class FeaturesTests(unittest.TestCase):
 
     def test_assign_features_single_base_overlap(self):
         htsgas = HTSeq.GenomicArrayOfSets("auto", stranded=True)
-        iv_feat = HTSeq.GenomicInterval("I", 0, 2, "+")  # The "feature"
-        iv_olap = HTSeq.GenomicInterval("I", 1, 2, "+")  # A single-base overlapping feature
-        iv_none = HTSeq.GenomicInterval("I", 2, 3, "+")  # A non-overlapping interval
-
-        htsgas[iv_feat] += 'The "feature"'
+        Features.chrom_vectors = htsgas.chrom_vectors
+        chrom, strand = "I", "+"
+        
+        # Add test features and intervals to the Genomic Array
+        iv_olap = HTSeq.GenomicInterval(chrom, 1, 2, strand)
+        iv_none = HTSeq.GenomicInterval(chrom, 2, 3, strand)
+        htsgas[iv_olap] += "Overlaps alignment by one base"
         htsgas[iv_none] += "Non-overlapping feature"
 
-        Features.chrom_vectors = htsgas.chrom_vectors
-        olap_alignment = Alignment(iv_olap, "Single base overlap", b"A")
+        # Create mock SAM alignment which overlaps iv_olap by one base
+        sam_aln = self.make_parsed_sam_record(**{'chrom': chrom, 'strand': strand, 'start': 0, 'seq': 'AT', 'nt5': 'A'})
+
+        """
+        iv_none:    2 |-| 3
+        iv_olap:  1 |-| 2
+        sam_aln: 0 |--| 2
+        """
 
         with patch("tiny.rna.counter.features.FeatureCounter") as mock:
             instance = mock.return_value
-            FeatureCounter.assign_features(instance, olap_alignment)
+            FeatureCounter.assign_features(instance, sam_aln)
 
-        expected_match_list = [(1, 2, {'The "feature"'})]
-        instance.selector.choose.assert_called_once_with(expected_match_list, olap_alignment)
+        expected_match_list = [(1, 2, {'Overlaps alignment by one base'})]
+        instance.selector.choose.assert_called_once_with(expected_match_list, sam_aln)
         instance.stats.chrom_misses.assert_not_called()
 
     """Does count_reads call the right functions when handling a single record library?"""
@@ -151,16 +161,17 @@ class FeaturesTests(unittest.TestCase):
     def test_count_reads_generic(self, parser, mock):
         instance = mock.return_value
         library = {'File': self.short_sam_file, 'Name': 'short'}
-        alignment = next(read_SAM(library['File']))
 
-        parser.read_SAM.return_value = iter([alignment])  # Need to feed HTSeq's bundler an actual alignment
+        # Note: mock_alignment is wrapped in a double list to imitate multi-alignment bundling
+        # It imitates a list of multi-alignment bundles with one bundle having one alignment
+        parser.read_SAM.return_value = [["mock_alignment"]]
         bundle = instance.stats.count_bundle.return_value
         instance.assign_features.return_value = ({"mock_feat"}, 1)
 
         expected_calls_to_stats = [
             call.assign_library(library),
-            call.count_bundle([alignment]),
-            call.count_bundle_alignments(bundle, alignment, {'mock_feat'}, len({'mock_feat'})),
+            call.count_bundle(["mock_alignment"]),
+            call.count_bundle_alignments(bundle, "mock_alignment", {'mock_feat'}, len({'mock_feat'})),
             call.finalize_bundle(bundle),
             call.diags.write_intermediate_file(library["Name"])
         ]
@@ -169,7 +180,7 @@ class FeaturesTests(unittest.TestCase):
         FeatureCounter.count_reads(instance, library)
 
         instance.stats.assign_library.assert_called_once()
-        instance.assign_features.assert_called_once_with(alignment)
+        instance.assign_features.assert_called_once_with("mock_alignment")
         instance.stats.assert_has_calls(expected_calls_to_stats)
 
 

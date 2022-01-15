@@ -76,7 +76,6 @@ class MyTestCase(unittest.TestCase):
         file = f"{resources}/Lib304_test.sam"
         ours = read_SAM(file)
         theirs = HTSeq.bundle_multiple_alignments(HTSeq.BAM_Reader(file))
-        comp = bytes.maketrans(b'ACGTacgt', b'TGCAtgca')
 
         for our_bundle, their_bundle in zip(ours, theirs):
             self.assertEqual(len(our_bundle), len(their_bundle))
@@ -88,7 +87,7 @@ class MyTestCase(unittest.TestCase):
                 self.assertEqual(our['nt5'], chr(their.read.seq[0]))  # See note above
                 self.assertEqual(our['strand'], their.iv.strand)
                 if our['strand'] == '-':                              # See note above
-                    self.assertEqual(our['seq'][::-1].translate(comp), their.read.seq)
+                    self.assertEqual(our['seq'][::-1].translate(helpers.complement), their.read.seq)
                 else:
                     self.assertEqual(our['seq'], their.read.seq)
 
@@ -455,8 +454,6 @@ class MyTestCase(unittest.TestCase):
 
         ReferenceTables.source_filter = []
         ReferenceTables.type_filter = []
-
-    # todo: tests for all_features=False
 
 if __name__ == '__main__':
     unittest.main()

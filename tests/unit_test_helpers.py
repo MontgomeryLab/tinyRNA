@@ -77,11 +77,17 @@ def get_dir_checksum_tree(root_path: str) -> dict:
     return dir_tree
 
 
-def make_single_sam(self, name="read_id", flag="16", chrom="I", pos="15064570", seq="CAAGACAGAGCTTCACCGTTC"):
+def make_single_sam(name="read_id", strand="+", chrom="I", start=15064570, seq="CAAGACAGAGCTTCACCGTTC"):
+    if strand == '-':
+        seq = seq.encode()[::-1].translate(complement)
+        flag = "16"
+    else:
+        flag = "0"
+
     length = str(len(seq))
     header = '\t'.join(["@SQ", "SN:%s", "LN:%s"]) % (chrom, length)
     record = '\t'.join([
-        name, flag, chrom, pos, "255", length + "M", "*", "0", "0", seq,
+        name, flag, chrom, str(start), "255", length + "M", "*", "0", "0", seq,
         "IIIIIIIIIIIIIIIIIIIII", "XA:i:0",	"MD:Z:" + length, "NM:i:0", "XM:i:2"])
 
     return header + '\n' + record
@@ -104,6 +110,10 @@ def reset_mocks(mock_open_f, mock_os, mock_stdout):
 # The gzip module uses a buffered writer, so we need to reassemble the individual writes
 def reassemble_gz_w(mock_calls):
     return b''.join([x[1][0] for x in mock_calls if x[0] == '().write'])
+
+
+# For performing reverse complement
+complement = bytes.maketrans(b'ACGTacgt', b'TGCAtgca')
 
 
 class ShellCapture:

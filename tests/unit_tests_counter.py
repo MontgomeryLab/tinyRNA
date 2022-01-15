@@ -50,7 +50,6 @@ class CounterTests(unittest.TestCase):
     def csv(type, rows):
         header = "\uFEFF"
         if type == "features.csv":
-            # header = "\uFEFFName Attribute,Attribute Key,Attribute Value,Hierarchy,Strand (sense/antisense/both),5' End Nucleotide,Length,Match,Feature Source"
             header = "\uFEFFSelect for...,with value...,Alias by...,Hierarchy,Strand (sense/antisense/both),5' End Nucleotide,Length,Match,Feature Source"
         elif type == "samples.csv":
             header = "\uFEFFInput FASTQ Files,Sample/Group Name,Replicate number,Control"
