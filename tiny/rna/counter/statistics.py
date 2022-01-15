@@ -32,7 +32,7 @@ class LibraryStats:
     def assign_library(self, library: dict):
         self.library = library
 
-    def count_bundle(self, aln_bundle: iter):# -> Bundle:
+    def count_bundle(self, aln_bundle: iter) -> dict:
         """Called for each multiple-alignment bundle before it is processed"""
 
         bundle_read = aln_bundle[0]
@@ -46,7 +46,11 @@ class LibraryStats:
             'loci_count': loci_counts,
             'read_count': read_counts,
             'corr_count': corr_counts,
-            'assignments': list()
+            'assignments': list(),
+            'mapping_stat':
+                "Assigned Single-Mapping Reads"
+                if loci_counts == 1 else
+                "Assigned Multi-Mapping Reads"
         }
 
         # Fill in 5p nt/length matrix
@@ -71,12 +75,11 @@ class LibraryStats:
             self.library_stats['Total Unassigned Reads'] += corr_count
         if assigned_count == 1:
             self.library_stats['Reads Assigned to Single Feature'] += corr_count
-            self.library_stats["Assigned Single-Mapping Reads"] += corr_count
         if assigned_count > 1:
             self.library_stats['Reads Assigned to Multiple Features'] += corr_count
-            self.library_stats["Assigned Multi-Mapping Reads"] += corr_count
         if assigned_count > 0:
             self.library_stats['Total Assigned Reads'] += corr_count
+            self.library_stats[bundle['mapping_stat']] += corr_count
 
             feature_corrected_count = self.normalize_count_by(corr_count, assigned_count)
 
