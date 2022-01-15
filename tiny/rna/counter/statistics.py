@@ -10,13 +10,6 @@ from ..util import make_filename
 
 
 class LibraryStats:
-    class Bundle:
-        def __init__(self, loci_count, read_count, corr_count):
-            self.mapping_type = 'Single' if loci_count == 1 else 'Multi'
-            self.loci_count = loci_count
-            self.read_count = read_count
-            self.corr_count = corr_count
-            self.assignments = list()
 
     summary_categories = ['Total Assigned Reads', 'Total Unassigned Reads',
                           'Total Assigned Sequences', 'Total Unassigned Sequences',
@@ -106,6 +99,7 @@ class LibraryStats:
             self.library_stats['Total Assigned Sequences'] += 1
             self.library_stats['Sequences Assigned to Single Feature'] += 1 * (assignment_count == 1)
             self.library_stats['Sequences Assigned to Multiple Features'] += 1 * (assignment_count > 1)
+
 
 class SummaryStats:
 
