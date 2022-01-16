@@ -173,7 +173,7 @@ class SummaryStats:
         # Sort columns by title and round all counts to 2 decimal places
         summary = self.sort_cols_and_round(summary)
         # Add Feature Name column, which is the feature alias (default is Feature ID if no alias exists)
-        summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(alias.get(feat, [feat]))))
+        summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(alias.get(feat, ''))))
         # Add Classes column for classes associated with the given feature
         feat_class_map = lambda feat: ', '.join(self.feature_classes[feat])
         summary.insert(1, "Feature Class", summary.index.map(feat_class_map))
