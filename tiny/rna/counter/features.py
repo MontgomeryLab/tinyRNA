@@ -9,7 +9,8 @@ from .matching import Wildcard, StrandMatch, NumericalMatch, NtMatch
 from .statistics import LibraryStats
 
 # Type aliases for human readability
-Hit = Tuple[int, int, str]
+match_tuple = Tuple[int, int, bool]
+feature_record_tuple = Tuple[str, int, int, str, Tuple[match_tuple]]
 
 BOTH_STRANDS = ('+', '-')
 
@@ -49,16 +50,17 @@ class FeatureCounter:
     def assign_features(self, al: dict) -> Tuple[set, int]:
         """Determines features associated with the interval then performs rule-based feature selection"""
 
-        feat_matches, assignment = list(), set()
+        feat_matches, assignment = set(), set()
 
         try:
             # Resolve features from alignment interval on both strands, regardless of alignment strand
-            feat_matches = [match for strand in BOTH_STRANDS for match in
-                            (Features.chrom_vectors[al['chrom']][strand]  # GenomicArrayOfSets -> ChromVector
-                                     .array[al['start']:al['end']]        # ChromVector -> StepVector
-                                     .get_steps(merge_steps=True))        # StepVector -> (iv_start, iv_end, {features})
-                            # If an alignment does not map to a feature, an empty set is returned at tuple pos 2 ^^^
-                            if len(match[2]) != 0]
+            feat_matches = feat_matches.union(*(
+                    match for strand in BOTH_STRANDS for match in
+                    (Features.chrom_vectors[al['chrom']][strand]  # GenomicArrayOfSets -> ChromVector
+                             .array[al['start']:al['end']]        # ChromVector -> StepVector
+                             .get_steps(values_only=True))        # StepVector -> (iv_start, iv_end, {features})
+                    # If an alignment does not map to a feature, an empty set is returned
+                    if len(match) != 0))
         except KeyError as ke:
             self.stats.chrom_misses[ke.args[0]] += 1
 
@@ -125,7 +127,7 @@ class FeatureSelector:
         if report_diags: self.elim_stats = libstats.diags.selection_diags
 
     @classmethod
-    def choose(cls, feat_list: List[Tuple[int, int, Set[str]]], alignment: dict) -> Set[str]:
+    def choose(cls, candidates: Set[feature_record_tuple], alignment: dict) -> Set[str]:
         """Selects features according to the selection rules provided at construction
 
         Feature candidates are supplied to this function via feats_list. This is a list
@@ -138,7 +140,7 @@ class FeatureSelector:
              (iv_B_start, iv_B_end, {features associated with iv_A, ... }), ... ]
 
             Each feature is represented as:
-                (featureID, featureStrand, (match-tuple, ... ))
+                (featureID, start, stop, strand, (match-tuple, ... ))
 
             Each match-tuple represents a rule which matched the feature on identity.
                 (rule, rank, strict)
@@ -155,14 +157,13 @@ class FeatureSelector:
         identity_hits, min_rank = [], sys.maxsize
         aln_start, aln_end = alignment['start'], alignment['end']
 
-        for iv_start, iv_end, feat_matches in feat_list:
+        for feat, iv_start, iv_end, iv_strand, matches in candidates:
             perfect_iv_match = iv_start <= aln_start and iv_end >= aln_end
-            for feat, strand, match in feat_matches:
-                for rule, rank, strict in match:
-                    if rank > min_rank: continue
-                    if strict and not perfect_iv_match: continue
-                    if rank < min_rank: min_rank = rank
-                    identity_hits.append((rank, rule, feat, strand))
+            for rule, rank, strict in matches:
+                if rank > min_rank: continue
+                if strict and not perfect_iv_match: continue
+                if rank < min_rank: min_rank = rank
+                identity_hits.append((rank, rule, feat, iv_strand))
         # -> identity_hits: [(hierarchy, rule, feature, strand), ...]
 
         if not identity_hits: return set()
