@@ -1,10 +1,8 @@
-import HTSeq
 import unittest
 
-from unittest.mock import patch, call, mock_open
-from tiny.rna.counter.hts_parsing import read_SAM, parse_alignments
+from unittest.mock import patch, call
 from tiny.rna.counter.features import *
-from unit_test_helpers import read, complement
+from unit_test_helpers import read, make_parsed_sam_record, rules_template
 
 resources = "./testdata/counter"
 
@@ -20,22 +18,6 @@ class FeaturesTests(unittest.TestCase):
         self.short_sam_file = f"{resources}/single.sam"
         self.short_sam = read(self.short_sam_file)
 
-    def make_parsed_sam_record(self, name="0_count=1", seq="CAAGACAGAGCTTCACCGTTC", nt5='C',
-                        chrom='I', start=15064570, strand='+'):
-
-        if (strand == '+' and nt5 != seq[0]) or (strand == '-' and nt5 != complement[seq[-1]]):
-            raise ValueError("Invalid nt5 value for strand")
-
-        return {
-            "name": name,
-            "len": len(seq),
-            "seq": seq,
-            "nt5": nt5,
-            "chrom": chrom,
-            "start": start,
-            "end": start + len(seq),
-            "strand": strand
-        }
 
     """Do GenomicArraysOfSets slice to step intervals that overlap, even if by just one base?"""
 
@@ -110,7 +92,7 @@ class FeaturesTests(unittest.TestCase):
         htsgas[iv_none] += "Should not match"
 
         # Create mock SAM alignment with non-overlapping interval
-        sam_aln = self.make_parsed_sam_record(**{'start': 2, 'chrom': chrom, 'strand': strand})
+        sam_aln = make_parsed_sam_record(**{'start': 2, 'chrom': chrom, 'strand': strand})
 
         """
         iv_none: 0 |--| 2
@@ -138,7 +120,7 @@ class FeaturesTests(unittest.TestCase):
         htsgas[iv_none] += "Non-overlapping feature"
 
         # Create mock SAM alignment which overlaps iv_olap by one base
-        sam_aln = self.make_parsed_sam_record(**{'chrom': chrom, 'strand': strand, 'start': 0, 'seq': 'AT', 'nt5': 'A'})
+        sam_aln = make_parsed_sam_record(**{'chrom': chrom, 'strand': strand, 'start': 0, 'seq': 'AT'})
 
         """
         iv_none:    2 |-| 3
@@ -150,7 +132,7 @@ class FeaturesTests(unittest.TestCase):
             instance = mock.return_value
             FeatureCounter.assign_features(instance, sam_aln)
 
-        expected_match_list = [(1, 2, {'Overlaps alignment by one base'})]
+        expected_match_list = {'Overlaps alignment by one base'}
         instance.selector.choose.assert_called_once_with(expected_match_list, sam_aln)
         instance.stats.chrom_misses.assert_not_called()
 
@@ -183,6 +165,68 @@ class FeaturesTests(unittest.TestCase):
         instance.assign_features.assert_called_once_with("mock_alignment")
         instance.stats.assert_has_calls(expected_calls_to_stats)
 
+    """Does FeatureSelector.choose() correctly select features with strict interval matching rules?"""
+
+    def test_feature_selector_strict_interval(self):
+        strict = True
+        chrom, strand, start, stop = "I", "+", 5, 10
+        rules = [dict(rules_template[0], Strict=strict, Identity=('N/A', 'N/A'), nt5end='all', Length='all')]
+
+        # Feature with coordinates 5..10, matching rule 0 with hierarchy 0 and strict interval
+        feat = {("Strict Overlap", start, stop, strand, ((0, 0, strict),))}
+
+        aln_base = {'seq': 'ATGC', 'chrom': chrom, 'strand': strand}
+        aln_spill_lo = make_parsed_sam_record(**dict(aln_base, start=start - 1, name="spill"))
+        aln_spill_hi = make_parsed_sam_record(**dict(aln_base, start=start + 2, name="spill"))
+        aln_contained = make_parsed_sam_record(**dict(aln_base, seq="N", start=7, name="contained"))
+        aln_contained_lo = make_parsed_sam_record(**dict(aln_base, start=start, name="contained"))
+        aln_contained_hi = make_parsed_sam_record(**dict(aln_base, start=start + 1, name="contained"))
+
+        """
+        feat:               5 |-----| 10
+        aln_spill_lo:      4 |----| 8
+        aln_spill_hi:         7 |----| 11
+        aln_contained:        7 |-| 8       # Fully contained
+        aln_contained_lo:   5 |----| 9      # Shared start position
+        aln_contained_hi:    6 |----| 10    # Shared end position
+        """
+
+        fs = FeatureSelector(rules, LibraryStats())
+        self.assertEqual(fs.choose(feat, aln_spill_lo), set())
+        self.assertEqual(fs.choose(feat, aln_spill_hi), set())
+        self.assertEqual(fs.choose(feat, aln_contained), {"Strict Overlap"})
+        self.assertEqual(fs.choose(feat, aln_contained_lo), {"Strict Overlap"})
+        self.assertEqual(fs.choose(feat, aln_contained_hi), {"Strict Overlap"})
+
+    """Does FeatureSelector.choose() correctly select features with partial interval matching rules?"""
+
+    def test_feature_selector_partial_interval(self):
+        strict = False
+        chrom, strand, start, stop = "I", "+", 5, 10
+        rules = [dict(rules_template[0], Strict=strict, Identity=('N/A', 'N/A'), nt5end='all', Length='all')]
+
+        # Feature with coordinates 5..10, matching rule 0 with hierarchy 0 and strict interval
+        feat = {("Partial Overlap", start, stop, strand, ((0, 0, strict),))}
+
+        aln_base = {'seq': 'ATGC', 'chrom': chrom, 'strand': strand}
+        aln_spill_lo = make_parsed_sam_record(**dict(aln_base, start=start - 1, name="spill"))
+        aln_spill_hi = make_parsed_sam_record(**dict(aln_base, start=start + 2, name="spill"))
+        aln_contained_lo = make_parsed_sam_record(**dict(aln_base, start=start, name="contained"))
+        aln_contained_hi = make_parsed_sam_record(**dict(aln_base, start=start + 1, name="contained"))
+
+        """
+        feat:               5 |-----| 10
+        aln_spill_lo:      4 |----| 8
+        aln_spill_hi:         7 |----| 11
+        aln_contained_lo:   5 |----| 9      Shared start position
+        aln_contained_hi:    6 |----| 10    Shared end position
+        """
+
+        fs = FeatureSelector(rules, LibraryStats())
+        self.assertEqual(fs.choose(feat, aln_spill_lo), {"Partial Overlap"})
+        self.assertEqual(fs.choose(feat, aln_spill_hi), {"Partial Overlap"})
+        self.assertEqual(fs.choose(feat, aln_contained_lo), {"Partial Overlap"})
+        self.assertEqual(fs.choose(feat, aln_contained_hi), {"Partial Overlap"})
 
 if __name__ == '__main__':
     unittest.main()
