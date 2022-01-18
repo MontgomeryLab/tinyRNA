@@ -54,11 +54,10 @@ class FeatureCounter:
 
         try:
             # Resolve features from alignment interval on both strands, regardless of alignment strand
-            feat_matches = feat_matches.union(*(
-                    match for strand in BOTH_STRANDS for match in
-                    (Features.chrom_vectors[al['chrom']][strand]  # GenomicArrayOfSets -> ChromVector
-                             .array[al['start']:al['end']]        # ChromVector -> StepVector
-                             .get_steps(values_only=True))        # StepVector -> (iv_start, iv_end, {features})
+            feat_matches = feat_matches.union(*(match for match in
+                    (Features.chrom_vectors[al['chrom']]['.']       # GenomicArrayOfSets -> ChromVector
+                             .array[al['start']:al['end']]          # ChromVector -> StepVector
+                             .get_steps(values_only=True))          # StepVector -> (iv_start, iv_end, {features})
                     # If an alignment does not map to a feature, an empty set is returned
                     if len(match) != 0))
         except KeyError as ke:

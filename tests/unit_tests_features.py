@@ -183,12 +183,13 @@ class FeaturesTests(unittest.TestCase):
         aln_contained_hi = make_parsed_sam_record(**dict(aln_base, start=start + 1, name="contained"))
 
         """
+        aln:                  |ATGC|
         feat:               5 |-----| 10
-        aln_spill_lo:      4 |----| 8
-        aln_spill_hi:         7 |----| 11
-        aln_contained:        7 |-| 8       # Fully contained
-        aln_contained_lo:   5 |----| 9      # Shared start position
-        aln_contained_hi:    6 |----| 10    # Shared end position
+        aln_spill_lo:      4 |ATGC| 8
+        aln_spill_hi:         7 |ATGC| 11
+        aln_contained:        7 |N| 8       # Fully contained
+        aln_contained_lo:   5 |ATGC| 9      # Shared start position
+        aln_contained_hi:    6 |ATGC| 10    # Shared end position
         """
 
         fs = FeatureSelector(rules, LibraryStats())
@@ -215,11 +216,12 @@ class FeaturesTests(unittest.TestCase):
         aln_contained_hi = make_parsed_sam_record(**dict(aln_base, start=start + 1, name="contained"))
 
         """
+        aln:                  |ATGC|
         feat:               5 |-----| 10
-        aln_spill_lo:      4 |----| 8
-        aln_spill_hi:         7 |----| 11
-        aln_contained_lo:   5 |----| 9      Shared start position
-        aln_contained_hi:    6 |----| 10    Shared end position
+        aln_spill_lo:      4 |ATGC| 8
+        aln_spill_hi:         7 |ATGC| 11
+        aln_contained_lo:   5 |ATGC| 9      Shared start position
+        aln_contained_hi:    6 |ATGC| 10    Shared end position
         """
 
         fs = FeatureSelector(rules, LibraryStats())
