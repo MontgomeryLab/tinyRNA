@@ -47,7 +47,7 @@ class test_entry(unittest.TestCase):
                 },
                 'workflows': {
                     'files': {
-                        'tinyrna_wf.cwl', 'per-library.cwl', 'organize-outputs.cwl'
+                        'tinyrna_wf.cwl', 'preprocessing.cwl'
                     }
                 }
             }

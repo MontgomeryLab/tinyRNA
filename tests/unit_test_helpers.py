@@ -65,16 +65,32 @@ def get_dir_checksum_tree(root_path: str) -> dict:
             for level in top.replace(root_path + os.sep, '').split(os.sep):
                 context = context[level]
 
-        context['files'] = set()
+        context['files'] = []
         for folder in dirs: context[folder] = {}
         for file in files:
             path = f"{top}{os.sep}{file}"
-            file_content = read(path)
+            file_content = read(path, 'rb')
 
             # Add (file, hash) tuple
-            context['files'].add((file, hashlib.md5(file_content).hexdigest()))
+            context['files'].append((file, hashlib.md5(file_content).hexdigest()))
 
     return dir_tree
+
+
+def make_single_sam(name="read_id", strand="+", chrom="I", start=15064570, seq="CAAGACAGAGCTTCACCGTTC"):
+    if strand == '-':
+        seq = seq.encode()[::-1].translate(complement)
+        flag = "16"
+    else:
+        flag = "0"
+
+    length = str(len(seq))
+    header = '\t'.join(["@SQ", "SN:%s", "LN:%s"]) % (chrom, length)
+    record = '\t'.join([
+        name, flag, chrom, str(start), "255", length + "M", "*", "0", "0", seq,
+        "IIIIIIIIIIIIIIIIIIIII", "XA:i:0",	"MD:Z:" + length, "NM:i:0", "XM:i:2"])
+
+    return header + '\n' + record
 
 
 # Simply reads and returns the contents of the specified file
@@ -94,6 +110,10 @@ def reset_mocks(mock_open_f, mock_os, mock_stdout):
 # The gzip module uses a buffered writer, so we need to reassemble the individual writes
 def reassemble_gz_w(mock_calls):
     return b''.join([x[1][0] for x in mock_calls if x[0] == '().write'])
+
+
+# For performing reverse complement
+complement = bytes.maketrans(b'ACGTacgt', b'TGCAtgca')
 
 
 class ShellCapture:

@@ -13,7 +13,7 @@ import os
 from collections import defaultdict
 from typing import Tuple, List, Dict
 
-from tiny.rna.counter.features import Features, FeatureCounter, FeatureSelector
+from tiny.rna.counter.features import Features, FeatureCounter
 from tiny.rna.counter.statistics import SummaryStats
 from tiny.rna.util import report_execution_time, from_here
 from tiny.rna.configuration import CSVReader
@@ -137,6 +137,7 @@ def load_config(features_csv: str, is_pipeline: bool) -> Tuple[List[dict], Dict[
         if row['Name'] not in ["ID", *gff_files[gff]]: gff_files[gff].append(row['Name'])
         if rule not in rules: rules.append(rule)
 
+    rules.sort(key=lambda x: x['Hierarchy'])
     return rules, gff_files
 
 
@@ -145,7 +146,7 @@ def map_and_reduce(libraries):
     """Assigns one worker process per library and merges the statistics they report"""
 
     # SummaryStats handles final output files, regardless of multiprocessing status
-    summary = SummaryStats(Features.attributes, FeatureCounter.out_prefix, FeatureCounter.run_diags)
+    summary = SummaryStats(Features.classes, FeatureCounter.out_prefix, FeatureCounter.run_diags)
 
     # Use a multiprocessing pool if multiple sam files were provided
     if len(libraries) > 1:
@@ -180,12 +181,8 @@ def main():
         # Assign and count features using multiprocessing and merge results
         merged_counts = map_and_reduce(libraries)
 
-        # Determine which features should be represented in the counts table
-        display_indexes = Features.attributes.keys() if args.all_features else \
-                          FeatureSelector.get_all_identity_matches()
-
         # Write final outputs
-        merged_counts.write_report_files(display_indexes, Features.aliases)
+        merged_counts.write_report_files(Features.aliases)
     except:
         traceback.print_exception(*sys.exc_info())
         print("\n\nCounter encountered an error. Don't worry! You don't have to start over.\n"

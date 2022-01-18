@@ -26,7 +26,7 @@ class CounterTests(unittest.TestCase):
         self.strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
 
         # ID, Key, Value, Hierarchy, Strand, nt5, Length, Match, Source
-        self.csv_feat_row_dict = {'Name': "Alias", 'Key': "Class", 'Value': "CSR", 'Hierarchy': "1",
+        self.csv_feat_row_dict = {'Key': "Class", 'Value': "CSR", 'Name': "Alias", 'Hierarchy': "1",
                                   'Strand': "antisense", 'nt5': '"C,G,U"', 'Length': "all", 'Match': "Partial",
                                   'Source': "./testdata/cel_ws279/c_elegans_WS279_chr1.gff3"}
                                    # nt5 needs to be double quoted since it contains commas
@@ -50,9 +50,9 @@ class CounterTests(unittest.TestCase):
     def csv(type, rows):
         header = "\uFEFF"
         if type == "features.csv":
-            header = "\uFEFFName Attribute,Attribute Key,Attribute Value,Hierarchy,Strand (sense/antisense/both),5' End Nucleotide,Length,Match,Feature Source"
+            header = "\uFEFFSelect for...,with value...,Alias by...,Hierarchy,Strand (sense/antisense/both),5' End Nucleotide,Length,Match,Feature Source"
         elif type == "samples.csv":
-            header = "\uFEFFInput FASTQ Files,Sample/Group Name,Replicate number"
+            header = "\uFEFFInput FASTQ Files,Sample/Group Name,Replicate number,Control"
 
         return '\n'.join([header, *map(','.join, rows)])
     
