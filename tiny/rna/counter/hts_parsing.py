@@ -320,16 +320,9 @@ class ReferenceTables:
     def finalize_tables(self) -> Tuple['HTSeq.GenomicArray', Dict[str, tuple], Dict[str, tuple]]:
         """Convert sets to sorted tuples for performance, hashability, and deterministic outputs"""
 
-        # Internally these are sets for ease, but Counter expects tuples for speed and hashability
-        self.classes = {feat: tuple(sorted(classes)) for feat, classes in self.classes.items()}
-        self.alias = {feat: tuple(sorted(aliases)) for feat, aliases in self.alias.items()}
-
-        # Add each feature family to the StepVector
-        for root_id, family_ivs in self.intervals.items():
-            sorted_match_tuples = tuple(sorted(self.matches[root_id], key=lambda x: x[1]))
-            # For all intervals in this feature family...
-            for iv in family_ivs:
-                self.feats[iv] += (root_id, iv.strand, sorted_match_tuples)
+        self._finalize_classes()
+        self._finalize_aliases()
+        self._finalize_features()
 
         if self.get_feats_table_size() == 0 or len(self.classes) == 0:
             raise ValueError("No features or classes were retained while parsing your GFF file.\n"
@@ -337,13 +330,48 @@ class ReferenceTables:
 
         return self.feats, self.alias, self.classes
 
+    def _finalize_features(self):
+        """Performs final accounting of discontinuous features and adds feature records to the StepVector"""
+
+        for root_id, family_ivs in self.intervals.items():
+            # Sort match tuples by rank for more efficient feature selection
+            sorted_match_tuples = tuple(sorted(self.matches[root_id], key=lambda x: x[1]))
+
+            # Sort intervals so that adjacencies are adjacent by index
+            family_ivs.sort(key=lambda x: x.start)
+            family_iter = iter(family_ivs)
+            continuous = next(family_iter).copy()
+            continuous_ivs = []
+
+            # Merge adjacent intervals for discontinuous features
+            for iv in family_iter:
+                if continuous.overlaps(iv):
+                    continuous.extend_to_include(iv)
+                else:
+                    continuous_ivs.append(continuous)
+                    continuous = iv.copy()
+            continuous_ivs.append(continuous)
+
+            # Optimization opportunity: for match tuples with partial interval matching,
+            # eliminate all but the highest ranking match in each feature family to reduce
+            # loop count in phase 1 selection.
+
+            for iv in continuous_ivs:
+                self.feats[iv] += (root_id, iv.start, iv.end, iv.strand, sorted_match_tuples)
+
+    def _finalize_aliases(self):
+        self.alias = {feat: tuple(sorted(aliases)) for feat, aliases in self.alias.items()}
+
+    def _finalize_classes(self):
+        self.classes = {feat: tuple(sorted(classes)) for feat, classes in self.classes.items()}
+
     def get_feats_table_size(self) -> int:
         """Returns the sum of features across all chromosomes and strands"""
 
         total_feats = 0
         for chrom in self.feats.chrom_vectors:
             for strand in self.feats.chrom_vectors[chrom]:
-                total_feats += len(self.feats.chrom_vectors[chrom][strand].array)
+                total_feats += self.feats.chrom_vectors[chrom][strand].array.num_steps()
 
         return total_feats
 

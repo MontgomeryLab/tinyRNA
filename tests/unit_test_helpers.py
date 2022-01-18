@@ -11,6 +11,13 @@ import sys
 import io
 import os
 
+rules_template = [{'Identity': ("Name", "N/A"),
+                   'Strand': "both",
+                   'Hierarchy': 0,
+                   'nt5end': "all",
+                   'Length': "all",   # A string is expected by FeatureSelector due to support for lists and ranges
+                   'Strict': True}]
+
 
 def get_dir_tree(root_path: str) -> dict:
     """Returns a nested dictionary representation of a given directory tree.
@@ -75,6 +82,19 @@ def get_dir_checksum_tree(root_path: str) -> dict:
             context['files'].append((file, hashlib.md5(file_content).hexdigest()))
 
     return dir_tree
+
+
+def make_parsed_sam_record(name="0_count=1", seq="CAAGACAGAGCTTCACCGTTC", chrom='I', start=15064570, strand='+'):
+    return {
+        "name": name,
+        "len": len(seq),
+        "seq": seq,
+        "nt5": seq[0] if strand == '+' else seq[-1].translate(complement),
+        "chrom": chrom,
+        "start": start,
+        "end": start + len(seq),
+        "strand": strand
+    }
 
 
 def make_single_sam(name="read_id", strand="+", chrom="I", start=15064570, seq="CAAGACAGAGCTTCACCGTTC"):

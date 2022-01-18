@@ -12,7 +12,7 @@ resources = "./testdata/counter"
 class MockFeatureSelector:
     def __init__(self, rules_table):
         self.rules_table = FeatureSelector.build_selectors(rules_table)
-        self.inv_ident = FeatureSelector.build_inverted_identities(rules_table)
+        self.inv_ident = FeatureSelector.build_inverted_identities(self.rules_table)
 
 
 class MyTestCase(unittest.TestCase):
@@ -27,9 +27,6 @@ class MyTestCase(unittest.TestCase):
         self.short_sam_file = f"{resources}/single.sam"
         self.short_sam = helpers.read(self.short_sam_file)
 
-        self.rules_template = [{'Identity': ("Name", "N/A"), 'Strand': "+", 'Hierarchy': "0", 'nt5end': "N",
-                                'Length': "0", 'Strict': True}]
-
     # === HELPERS ===
 
     def get_gff_attr_string(self, gff_line):
@@ -42,7 +39,7 @@ class MyTestCase(unittest.TestCase):
     def selector_with_rules(self, updates_list):
         """Returns a MockFeatureSelector with the specified updates to the default rule template"""
 
-        rules = [deepcopy(self.rules_template[0]) for _ in range(len(updates_list))]
+        rules = [deepcopy(helpers.rules_template[0]) for _ in range(len(updates_list))]
         for changes, template in zip(updates_list, rules):
             template.update(changes)
         return MockFeatureSelector(rules)
@@ -135,7 +132,7 @@ class MyTestCase(unittest.TestCase):
         steps = list(feats[iv].array[iv.start:iv.end].get_steps(values_only=True))
 
         self.assertEqual((type(feats), type(alias), type(classes)), (HTSeq.GenomicArrayOfSets, dict, dict))
-        self.assertEqual(steps, [{("Gene:WBGene00023193", '-', ((1, 2, False),))}])
+        self.assertEqual(steps, [{("Gene:WBGene00023193", 3746, 3909, '-', ((1, 2, False),))}])
         self.assertEqual(alias, {'Gene:WBGene00023193': ('Y74C9A.6',)})
         self.assertEqual(classes, {'Gene:WBGene00023193': ('additional_class', 'unknown')})
 
@@ -156,7 +153,7 @@ class MyTestCase(unittest.TestCase):
         steps = list(feats[iv].array[iv.start:iv.end].get_steps(values_only=True))
 
         self.assertEqual((type(feats), type(alias), type(classes)), (HTSeq.GenomicArrayOfSets, dict, dict))
-        self.assertEqual(steps, [{("Gene:WBGene00023193", '-', ((1, 2, False),))}])
+        self.assertEqual(steps, [{("Gene:WBGene00023193", 3746, 3909, '-', ((1, 2, False),))}])
         self.assertEqual(alias, {'Gene:WBGene00023193': ('Y74C9A.6',)})
         self.assertEqual(classes, {'Gene:WBGene00023193': ('additional_class', 'unknown')})
 
@@ -195,7 +192,7 @@ class MyTestCase(unittest.TestCase):
 
     def test_ref_tables_missing_id_attribute(self):
         feature_source = {self.short_gff_file: ["ID"]}
-        feature_selector = self.selector_with_rules(self.rules_template)
+        feature_selector = self.selector_with_rules(helpers.rules_template)
         kwargs = {'all_features': True}
 
         gff_row_without_id = helpers.read(self.short_gff_file).replace('ID=Gene:WBGene00023193;', '')
@@ -239,19 +236,27 @@ class MyTestCase(unittest.TestCase):
     matches for a feature?"""
 
     def test_ref_tables_identity_matches_multisource_concat(self):
-        feature_source = {self.short_gff_file: ["ID"], f"{resources}/single2.gff3": ["ID"]}
+        feature_source = {
+            self.short_gff_file: ["ID"],
+            f"{resources}/single2.gff3": ["ID"]
+        }
+
+        kwargs = {'all_features': True}
         feature_selector = self.selector_with_rules([
             {'Identity': ('Name', 'WBGene00023193b'), 'Hierarchy': 1},
             {'Identity': ('Name', 'WBGene00023193'), 'Hierarchy': 2},
             {'Identity': ('biotype', 'snoRNA'), 'Hierarchy': 3}
         ])
-        kwargs = {'all_features': True}
+
+        expected_matches = [
+            set(),
+            {('Gene:WBGene00023193', 3746, 3909, '-', ((0, 1, True), (1, 2, True), (2, 3, True)))},
+            set()
+        ]
 
         feats, _, _ = ReferenceTables(feature_source, feature_selector, **kwargs).get()
 
-        expected_matches = [set(), {('Gene:WBGene00023193', '-', ((0, 1, True), (1, 2, True), (2, 3, True)))}, set()]
         actual_idents = list(feats.chrom_vectors['I']['-'].array.get_steps(values_only=True))
-
         for act_attr, exp_attr in zip(actual_idents, expected_matches):
             self.assertEqual(act_attr, exp_attr)
 
@@ -260,7 +265,7 @@ class MyTestCase(unittest.TestCase):
     def test_ref_tables_discontinuous_aliases(self):
         kwargs = {'all_features': True}
         feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
-        mock_selector = self.selector_with_rules(self.rules_template)
+        mock_selector = self.selector_with_rules(helpers.rules_template)
 
         _, alias, _ = ReferenceTables(feature_source, mock_selector, **kwargs).get()
 
@@ -276,7 +281,7 @@ class MyTestCase(unittest.TestCase):
     def test_ref_tables_discontinuous_no_match_all_features_false(self):
         kwargs = {'all_features': False}
         feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
-        mock_selector = self.selector_with_rules(self.rules_template)
+        mock_selector = self.selector_with_rules(helpers.rules_template)
 
         expected_err = "No features or classes were retained while parsing your GFF file.\n" \
                        "This may be due to a lack of features matching 'Select for...with value...'"
@@ -289,10 +294,7 @@ class MyTestCase(unittest.TestCase):
     def test_ref_tables_discontinuous_intervals(self):
         kwargs = {'all_features': True}
         feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
-        feature_selector = self.selector_with_rules(self.rules_template)
-
-        RT_instance = ReferenceTables(feature_source, feature_selector, **kwargs)
-        _ = RT_instance.get()
+        feature_selector = self.selector_with_rules(helpers.rules_template)
 
         grandparent_iv = HTSeq.GenomicInterval('I', 0, 10, '-')
         parent_w_p_iv = HTSeq.GenomicInterval('I', 9, 20, '-')
@@ -302,6 +304,9 @@ class MyTestCase(unittest.TestCase):
         sib_1 = HTSeq.GenomicInterval('I', 99, 110, '-')
         sib_2 = HTSeq.GenomicInterval('I', 110, 120, '-')
         sib_3 = HTSeq.GenomicInterval('I', 139, 150, '-')
+
+        RT_instance = ReferenceTables(feature_source, feature_selector, **kwargs)
+        _ = RT_instance.get()
 
         # Ancestor depth of 1
         self.assertEqual(RT_instance.intervals['GrandParent'], [grandparent_iv, parent_w_p_iv, child_w_gp_iv])
@@ -313,130 +318,125 @@ class MyTestCase(unittest.TestCase):
     """Does ReferenceTables.get() properly merge identity matches of discontinuous features with the root feature?"""
 
     def test_ref_tables_discontinuous_identity_matches(self):
+
         feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
         feature_selector = self.selector_with_rules([
-            {'Identity': ('Class', 'NA'), 'Hierarchy': 2},
-            {'Identity': ('Name', 'Sibling3'), 'Hierarchy': 3},
-            {'Identity': ('UniqueAttr', 'FirstSibling'), 'Hierarchy': 0}
+            {'Identity': ('Class', 'NA'), 'Hierarchy': 2},                  # Rule 1
+            {'Identity': ('Name', 'Sibling3'), 'Hierarchy': 3},             # Rule 2
+            {'Identity': ('UniqueAttr', 'FirstSibling'), 'Hierarchy': 0}    # Rule 3
         ])
         rt_kwargs = {'all_features': True}
+        
+        rule1_match = (0, 2, True)
+        rule2_match = (1, 3, True)
+        rule3_match = (2, 0, True)
+
+        expected = [{('GrandParent', 0, 20, '-', (rule1_match,))},
+                    {('GrandParent', 0, 20, '-', (rule1_match,)), ('Parent2', 19, 30, '-', (rule1_match,))},
+                    {('Parent2', 19, 30, '-', (rule1_match,))},
+                    {('Parent2', 19, 30, '-', (rule1_match,)), ('GrandParent', 29, 40, '-', (rule1_match,))},
+                    {('GrandParent', 29, 40, '-', (rule1_match,))},
+                    {('GrandParent', 29, 40, '-', (rule1_match,)), ('Parent2', 39, 50, '-', (rule1_match,))},
+                    {('Parent2', 39, 50, '-', (rule1_match,))},
+                    set(),
+                    {('Sibling', 99, 110, '-', (rule3_match, rule2_match))},  # Note: sorted by rank, not rule index
+                    {('Sibling', 110, 120, '-', (rule3_match, rule2_match))},
+                    set(),
+                    {('Sibling', 139, 150, '-', (rule3_match, rule2_match))},
+                    set()]
 
         feats, _, _ = ReferenceTables(feature_source, feature_selector, **rt_kwargs).get()
 
-        # Match Tuple: (rule, rank, strict)
-        GrandParent = ('GrandParent', '-', ((0, 2, True),))
-        Parent2 = ('Parent2', '-', ((0, 2, True),))
-        Sibling = ('Sibling', '-', ((2, 0, True), (1, 3, True)))
-
-        expected = [
-            {GrandParent},            # (0, 19)
-            {GrandParent, Parent2},   # (19, 20)
-            {Parent2},                # (20, 29)
-            {GrandParent, Parent2},   # (29, 30)
-            {GrandParent},            # (30, 39)
-            {GrandParent, Parent2},   # (39, 40)
-            {Parent2},                # (40, 50)
-            set(),                    # (50,99)
-            {Sibling},                # (99, 120)
-            set(),                    # (120, 139)
-            {Sibling},                # (139, 150)
-            set()                     # (150, sys.maxsize)
-        ]
-
-        for act, exp in zip(feats.chrom_vectors["I"]["-"].array.get_steps(), expected):
+        for act, exp in zip(feats.chrom_vectors["I"]["-"].array.get_steps(values_only=True), expected):
             # For this test we are only interested in the match tuples for each feature
-            self.assertEqual(act[2], exp)
+            self.assertEqual(act, exp)
 
     """Does ReferenceTables.get() properly build a GenomicArrayOfSets for discontinuous features?"""
 
     def test_ref_tables_discontinuous_features(self):
+
         kwargs = {'all_features': True}
         feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
-        feature_selector = self.selector_with_rules(self.rules_template)
+        feature_selector = self.selector_with_rules(helpers.rules_template)
+
+        expected = [{('GrandParent', 0, 20, '-', ())},
+                    {('Parent2', 19, 30, '-', ()), ('GrandParent', 0, 20, '-', ())},
+                    {('Parent2', 19, 30, '-', ())},
+                    {('Parent2', 19, 30, '-', ()), ('GrandParent', 29, 40, '-', ())},
+                    {('GrandParent', 29, 40, '-', ())},
+                    {('Parent2', 39, 50, '-', ()), ('GrandParent', 29, 40, '-', ())},
+                    {('Parent2', 39, 50, '-', ())},
+                    set(),
+                    {('Sibling', 99, 110, '-', ())},
+                    {('Sibling', 110, 120, '-', ())},
+                    set(),
+                    {('Sibling', 139, 150, '-', ())},
+                    set()]
 
         feats, _, _, = ReferenceTables(feature_source, feature_selector, **kwargs).get()
-    
-        GrandParent = ('GrandParent', '-', ())
-        Parent2 = ('Parent2', '-', ())
-        Sibling = ('Sibling', '-', ())
 
-        expected = [(0, 19, {GrandParent}),
-                    (19, 20, {GrandParent, Parent2}),
-                    (20, 29, {Parent2}),
-                    (29, 30, {GrandParent, Parent2}),
-                    (30, 39, {GrandParent}),
-                    (39, 40, {GrandParent, Parent2}),
-                    (40, 50, {Parent2}),
-                    (50, 99, set()),
-                    (99, 120, {Sibling}),
-                    (120, 139, set()),
-                    (139, 150, {Sibling}),
-                    (150, sys.maxsize, set())]
-
-        for act, exp in zip(feats.chrom_vectors["I"]["-"].array.get_steps(), expected):
+        for act, exp in zip(feats.chrom_vectors["I"]["-"].array.get_steps(values_only=True), expected):
             self.assertEqual(act, exp)
 
     """Does ReferenceTables.get() properly handle source filters for discontinuous features?"""
 
     def test_ref_tables_source_filter(self):
 
+        kwargs = {'source_filter': ["Source2Name"], 'all_features': False}
         feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
-        feature_selector = self.selector_with_rules(self.rules_template)
-        
-        kwargs = {'source_filter': ["Source2Name"], 'all_features': True}
-        rt = ReferenceTables(feature_source, feature_selector, **kwargs)
-        feats, alias, classes = rt.get()
+        selection_rule = dict(helpers.rules_template[0], Identity=('Parent', 'Parent2'))
+        feature_selector = self.selector_with_rules([selection_rule])
 
         exp_alias = {'Child2': ('Child2Name',)}
-        # exp_ident = {'Child2': ('Child2Name', 'Name')}
-        exp_feats = [(0, 39, set()), (39, 50, {('Child2', '-', ())}), (50, sys.maxsize, set())]
+        exp_feats = [set(), {('Child2', 39, 50, '-', ((0, 0, True),))}, set()]
         exp_intervals = {'Child2': [HTSeq.GenomicInterval('I', 39, 50, '-')]}
         exp_classes = {'Child2': ('NA',)}
         exp_filtered = {"GrandParent", "ParentWithGrandparent", "Parent2", "Child1", "Sibling"}
         exp_parents = {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'}
 
+        rt = ReferenceTables(feature_source, feature_selector, **kwargs)
+        feats, alias, classes = rt.get()
+
         self.assertEqual(alias, exp_alias)
-        # self.assertEqual(idents, exp_ident)
         self.assertEqual(rt.intervals, exp_intervals)
         self.assertEqual(rt.parents, exp_parents)
         self.assertEqual(rt.filtered, exp_filtered)
         self.assertEqual(classes, exp_classes)
-        self.assertEqual(list(feats.chrom_vectors['I']['-'].array.get_steps()), exp_feats)
+        self.assertEqual(list(feats.chrom_vectors['I']['-'].array.get_steps(values_only=True)), exp_feats)
         self.clear_filters()
 
     """Does ReferenceTables.get() properly handle type filters for discontinuous features?"""
 
     def test_ref_tables_type_filter(self):
 
+        kwargs = {'type_filter': ["CDS"], 'all_features': False}
         feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
-        feature_selector = self.selector_with_rules(self.rules_template)
-        
-        kwargs = {'type_filter': ["CDS"], 'all_features': True}
-        rt = ReferenceTables(feature_source, feature_selector, **kwargs)
-        feats, alias, classes = rt.get()
+        selection_rule = dict(helpers.rules_template[0], Identity=('Parent', 'ParentWithGrandparent'))
+        feature_selector = self.selector_with_rules([selection_rule])
 
         exp_alias = {'Child1': ('SharedName',)}
-        exp_attrs = {'Child1': [('Class', ('NA',)), ('Name', ('SharedName',))]}
-        exp_feats = [(0, 29, set()), (29, 40, {('Child1', '-', ())}), (40, sys.maxsize, set())]
+        exp_feats = [set(), {('Child1', 29, 40, '-', ((0, 0, True),))}, set()]
         exp_intervals = {'Child1': [HTSeq.GenomicInterval('I', 29, 40, '-')]}
         exp_filtered = {"GrandParent", "ParentWithGrandparent", "Parent2", "Child2", "Sibling"}
         exp_parents = {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'}
 
+        rt = ReferenceTables(feature_source, feature_selector, **kwargs)
+        feats, alias, classes = rt.get()
+
         self.assertEqual(alias, exp_alias)
-        # self.assertEqual(ident, exp_attrs)
-        # self.assertEqual(intervals, exp_intervals)
+        self.assertEqual(rt.intervals, exp_intervals)
         self.assertEqual(rt.parents, exp_parents)
         self.assertEqual(rt.filtered, exp_filtered)
-        self.assertEqual(list(feats.chrom_vectors['I']['-'].array.get_steps()), exp_feats)
+        self.assertEqual(list(feats.chrom_vectors['I']['-'].array.get_steps(values_only=True)), exp_feats)
         self.clear_filters()
 
     """Does ReferenceTables.get() properly handle both source and type filters for discontinuous features?"""
 
     def test_ref_tables_both_filter(self):
-        kwargs = {'all_features': True}
-        kwargs.update({'source_filter': ["SourceName"], 'type_filter': ["gene"]})
+
+        kwargs = {'source_filter': ["SourceName"], 'type_filter': ["gene"], 'all_features': True}
         feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
-        feature_selector = self.selector_with_rules(self.rules_template)
+        feature_selector = self.selector_with_rules(helpers.rules_template)
 
         rt = ReferenceTables(feature_source, feature_selector, **kwargs)
         feats, alias, classes = rt.get()
@@ -445,7 +445,7 @@ class MyTestCase(unittest.TestCase):
         self.assertEqual(rt.parents, {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'})
         self.assertEqual(list(classes.keys()), ['GrandParent', 'Parent2', 'Sibling'])
         self.assertEqual(list(alias.keys()), ['GrandParent', 'Parent2', 'Sibling'])
-        self.assertEqual(len(list(feats.chrom_vectors['I']['-'].array.get_steps())), 8)
+        self.assertEqual(len(list(feats.chrom_vectors['I']['-'].array.get_steps(values_only=True))), 9)
         self.clear_filters()
 
     def clear_filters(self):

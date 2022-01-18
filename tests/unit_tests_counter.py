@@ -25,21 +25,22 @@ class CounterTests(unittest.TestCase):
 
         self.strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
 
-        # ID, Key, Value, Hierarchy, Strand, nt5, Length, Match, Source
+        # Configuration.CSVReader field names for Features Sheet:
+        # Key, Value, Name, Hierarchy, Strand, nt5end, Length, Strict, Source
         self.csv_feat_row_dict = {'Key': "Class", 'Value': "CSR", 'Name': "Alias", 'Hierarchy': "1",
-                                  'Strand': "antisense", 'nt5': '"C,G,U"', 'Length': "all", 'Match': "Partial",
+                                  'Strand': "antisense", 'nt5end': '"C,G,U"', 'Length': "all", 'Strict': "Partial",
                                   'Source': "./testdata/cel_ws279/c_elegans_WS279_chr1.gff3"}
-                                   # nt5 needs to be double quoted since it contains commas
+                                  # nt5 needs to be double quoted since it contains commas
 
         # Identity, Hierarchy, Strand, nt5, Length, Strict
-        row = self.csv_feat_row_dict
+        _row = self.csv_feat_row_dict
         self.feat_rule = [{
-            'Identity': (row['Key'], row['Value']),
-            'Hierarchy': int(row['Hierarchy']),
-            'Strand': row['Strand'],
-            'nt5end': row['nt5'].upper().translate({ord('U'): 'T'}).replace('"', ''),  # Undo csv comma quoting
-            'Length': row['Length'],
-            'Strict': row['Match'] == 'Full'
+            'Identity': (_row['Key'], _row['Value']),
+            'Hierarchy': int(_row['Hierarchy']),
+            'Strand': _row['Strand'],
+            'nt5end': _row['nt5end'].upper().translate({ord('U'): 'T'}).replace('"', ''),  # Undo csv comma quoting
+            'Length': _row['Length'],
+            'Strict': _row['Strict'] == 'Full'
         }]
 
         self.csv_samp_row_dict = {'file': "test_file.fastq", 'group': "test_group", 'rep': "0"}
@@ -213,7 +214,7 @@ class CounterTests(unittest.TestCase):
 
     def test_load_config_rna_to_cDNA(self):
         row = self.csv_feat_row_dict.copy()
-        row['nt5'] = 'U'
+        row['nt5end'] = 'U'
         csv = self.csv("features.csv", [row.values()])
 
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
