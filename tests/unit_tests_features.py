@@ -172,7 +172,7 @@ class FeaturesTests(unittest.TestCase):
         chrom, strand, start, stop = "I", "+", 5, 10
         rules = [dict(rules_template[0], Strict=strict, Identity=('N/A', 'N/A'), nt5end='all', Length='all')]
 
-        # Feature with coordinates 5..10, matching rule 0 with hierarchy 0 and strict interval
+        # Feature with coordinates 5..10, matching rule 0 with hierarchy 0 and strict interval = True
         feat = {("Strict Overlap", start, stop, strand, ((0, 0, strict),))}
 
         aln_base = {'seq': 'ATGC', 'chrom': chrom, 'strand': strand}
@@ -206,7 +206,7 @@ class FeaturesTests(unittest.TestCase):
         chrom, strand, start, stop = "I", "+", 5, 10
         rules = [dict(rules_template[0], Strict=strict, Identity=('N/A', 'N/A'), nt5end='all', Length='all')]
 
-        # Feature with coordinates 5..10, matching rule 0 with hierarchy 0 and strict interval
+        # Feature with coordinates 5..10, matching rule 0 with hierarchy 0 and strict interval = False
         feat = {("Partial Overlap", start, stop, strand, ((0, 0, strict),))}
 
         aln_base = {'seq': 'ATGC', 'chrom': chrom, 'strand': strand}
