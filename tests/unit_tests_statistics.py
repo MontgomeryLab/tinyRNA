@@ -25,8 +25,8 @@ class MyTestCase(unittest.TestCase):
 
     def test_collapser_stat(self):
         # Collapser's FASTA headers are structured as (zero-based) INDEX_count=COUNT.
-        # Headers are sorted by index, so the index of the last header is the count
-        # of unique sequences in the quality-filtered sample + 1
+        # Headers are sorted by index, so the index in the last header is the (count - 1)
+        # of unique sequences in the quality-filtered sample
 
         fasta = './testdata/collapser/Lib303_thresh_0_collapsed.fa'
         mock_libstats = self.create_mock_libstats({'collapsed': fasta})

@@ -297,8 +297,7 @@ class SummaryStats:
             # Zero-based count
             return int(count) + 1
         except ValueError:
-            self.warnings.append("Unable to parse collapsed fasta associated with for Summary Statistics.")
-            self.warnings.append("Associated file: " + other.library['File'])
+            self.warnings.append(f"Unable to parse {other.library['collapsed']} for Summary Statistics.")
             return None
 
     @staticmethod
