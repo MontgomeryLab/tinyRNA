@@ -83,7 +83,7 @@ class FeaturesTests(unittest.TestCase):
     """Does assign_features correctly handle alignments with zero feature matches?"""
 
     def test_assign_features_no_match(self):
-        htsgas = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+        htsgas = HTSeq.GenomicArrayOfSets("auto", stranded=False)
         Features.chrom_vectors = htsgas.chrom_vectors
         chrom, strand = "I", "+"
 
@@ -109,7 +109,7 @@ class FeaturesTests(unittest.TestCase):
     """Does assign_features return features that overlap the query interval by a single base?"""
 
     def test_assign_features_single_base_overlap(self):
-        htsgas = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+        htsgas = HTSeq.GenomicArrayOfSets("auto", stranded=False)
         Features.chrom_vectors = htsgas.chrom_vectors
         chrom, strand = "I", "+"
         
@@ -172,7 +172,7 @@ class FeaturesTests(unittest.TestCase):
         chrom, strand, start, stop = "I", "+", 5, 10
         rules = [dict(rules_template[0], Strict=strict, Identity=('N/A', 'N/A'), nt5end='all', Length='all')]
 
-        # Feature with coordinates 5..10, matching rule 0 with hierarchy 0 and strict interval
+        # Feature with coordinates 5..10, matching rule 0 with hierarchy 0 and strict interval = True
         feat = {("Strict Overlap", start, stop, strand, ((0, 0, strict),))}
 
         aln_base = {'seq': 'ATGC', 'chrom': chrom, 'strand': strand}
@@ -183,12 +183,13 @@ class FeaturesTests(unittest.TestCase):
         aln_contained_hi = make_parsed_sam_record(**dict(aln_base, start=start + 1, name="contained"))
 
         """
+        aln:                  |ATGC|
         feat:               5 |-----| 10
-        aln_spill_lo:      4 |----| 8
-        aln_spill_hi:         7 |----| 11
-        aln_contained:        7 |-| 8       # Fully contained
-        aln_contained_lo:   5 |----| 9      # Shared start position
-        aln_contained_hi:    6 |----| 10    # Shared end position
+        aln_spill_lo:      4 |ATGC| 8
+        aln_spill_hi:         7 |ATGC| 11
+        aln_contained:        7 |N| 8       # Fully contained
+        aln_contained_lo:   5 |ATGC| 9      # Shared start position
+        aln_contained_hi:    6 |ATGC| 10    # Shared end position
         """
 
         fs = FeatureSelector(rules, LibraryStats())
@@ -205,7 +206,7 @@ class FeaturesTests(unittest.TestCase):
         chrom, strand, start, stop = "I", "+", 5, 10
         rules = [dict(rules_template[0], Strict=strict, Identity=('N/A', 'N/A'), nt5end='all', Length='all')]
 
-        # Feature with coordinates 5..10, matching rule 0 with hierarchy 0 and strict interval
+        # Feature with coordinates 5..10, matching rule 0 with hierarchy 0 and strict interval = False
         feat = {("Partial Overlap", start, stop, strand, ((0, 0, strict),))}
 
         aln_base = {'seq': 'ATGC', 'chrom': chrom, 'strand': strand}
@@ -215,11 +216,12 @@ class FeaturesTests(unittest.TestCase):
         aln_contained_hi = make_parsed_sam_record(**dict(aln_base, start=start + 1, name="contained"))
 
         """
+        aln:                  |ATGC|
         feat:               5 |-----| 10
-        aln_spill_lo:      4 |----| 8
-        aln_spill_hi:         7 |----| 11
-        aln_contained_lo:   5 |----| 9      Shared start position
-        aln_contained_hi:    6 |----| 10    Shared end position
+        aln_spill_lo:      4 |ATGC| 8
+        aln_spill_hi:         7 |ATGC| 11
+        aln_contained_lo:   5 |ATGC| 9      Shared start position
+        aln_contained_hi:    6 |ATGC| 10    Shared end position
         """
 
         fs = FeatureSelector(rules, LibraryStats())
