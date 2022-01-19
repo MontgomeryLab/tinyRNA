@@ -83,7 +83,7 @@ class FeaturesTests(unittest.TestCase):
     """Does assign_features correctly handle alignments with zero feature matches?"""
 
     def test_assign_features_no_match(self):
-        htsgas = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+        htsgas = HTSeq.GenomicArrayOfSets("auto", stranded=False)
         Features.chrom_vectors = htsgas.chrom_vectors
         chrom, strand = "I", "+"
 
@@ -109,7 +109,7 @@ class FeaturesTests(unittest.TestCase):
     """Does assign_features return features that overlap the query interval by a single base?"""
 
     def test_assign_features_single_base_overlap(self):
-        htsgas = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+        htsgas = HTSeq.GenomicArrayOfSets("auto", stranded=False)
         Features.chrom_vectors = htsgas.chrom_vectors
         chrom, strand = "I", "+"
         
