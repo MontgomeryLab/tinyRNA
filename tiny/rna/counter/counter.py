@@ -46,6 +46,9 @@ def get_args():
     arg_parser.add_argument('-nn', '--no-normalize', action='store_true',
                         help='Do not normalize counts by genomic hits '
                              'and (selected) overlapping feature counts.')
+    arg_parser.add_argument('-dc', '--decollapse', action='store_true',
+                        help='Create a decollapsed copy of all SAM '
+                             'files listed in your Samples Sheet.')
     arg_parser.add_argument('-a', '--all-features', action='store_true',
                         help='Represent all features in output counts table, '
                              'regardless of counts or identity rules.')

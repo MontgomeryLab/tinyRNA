@@ -1,3 +1,6 @@
+import os.path
+from threading import Thread
+
 import HTSeq
 import sys
 import re
@@ -5,7 +8,7 @@ import re
 from collections import Counter, defaultdict
 from typing import Tuple, List, Dict, Iterator
 
-from tiny.rna.util import report_execution_time
+from tiny.rna.util import report_execution_time, make_filename
 
 # For parse_GFF_attribute_string()
 _re_attr_main = re.compile(r"\s*([^\s=]+)[\s=]+(.*)")
@@ -15,56 +18,103 @@ _re_attr_empty = re.compile(r"^\s*$")
 complement = {ord('A'): 'T', ord('T'): 'A', ord('G'): 'C', ord('C'): 'G'}
 
 
-def read_SAM(file) -> Iterator[dict]:
+class SAM_reader:
     """A minimal SAM reader that bundles multiple-alignments and only parses data relevant to the workflow"""
 
-    with open(file, 'rb') as f:
-        line = f.readline()
+    def __init__(self, **prefs):
+        self.decollapse = prefs["decollapse"]
+        self.out_prefix = prefs["out_prefix"]
+        self.decollapsed_outsam = None
+        self._decollapsed_reads = []
+        self._headers = []
+        self.file = None
 
-        # Skip headers
-        while line[0] == ord('@'):
-            line = f.readline()
+    def bundle_multi_alignments(self, file) -> Iterator[List[dict]]:
+        """Bundles multiple alignments by name"""
 
-        # Bundle multiple alignments by name
-        aln_iter = iter(parse_alignments(f, line))
-        bundle = [next(aln_iter)]
-        for aln in aln_iter:
-            if aln['name'] != bundle[0]['name']:
-                yield bundle
-                bundle = [aln]
+        self.file = file
+        with open(file, 'rb') as f:
+            aln_iter = iter(self.parse_alignments(f))
+            bundle = [next(aln_iter)]
+            for aln in aln_iter:
+                if aln['name'] != bundle[0]['name']:
+                    yield bundle
+                    bundle = [aln]
+                else:
+                    bundle.append(aln)
+            yield bundle
+
+        if self.decollapse and len(self._decollapsed_reads):
+            self._write_decollapsed_sam()
+
+    def parse_alignments(self, file_obj) -> Iterator[dict]:
+        """Parses and yields individual SAM alignments from the open file_obj"""
+
+        readline = self.readline if not self.decollapse else self.decollapse_line
+        line = self.read_thru_header(file_obj)
+
+        while line:
+            cols = line.split(b'\t')
+            line = readline(file_obj)
+
+            start = int(cols[3]) - 1
+            seq = cols[9]
+            length = len(seq)
+
+            # Note: we assume sRNA sequencing data is NOT reversely stranded
+            if (int(cols[1]) & 16):
+                strand = '-'
+                nt5 = complement[seq[-1]]
             else:
-                bundle.append(aln)
-        yield bundle
+                strand = '+'
+                nt5 = chr(seq[0])
 
+            yield {
+                "name": cols[0].decode('utf-8'),
+                "len": length,
+                "seq": seq,
+                "nt5": nt5,
+                "chrom": cols[2].decode('utf-8'),
+                "start": start,
+                "end": start + length,
+                "strand": strand
+            }
 
-def parse_alignments(f, line):
+    def read_thru_header(self, file_obj):
+        """Advance file_obj past the SAM header and return the first alignment unparsed"""
 
-    while line:
-        cols = line.split(b'\t')
+        line = file_obj.readline()
+        while line[0] == ord('@'):
+            self._headers.append(line)
+            line = file_obj.readline()
+
+        if self.decollapse:
+            self._decollapsed_reads.extend(self._headers)
+
+        return line
+
+    @staticmethod
+    def readline(f):
+        return f.readline()
+
+    def decollapse_line(self, f):
         line = f.readline()
+        count = int(line.split('=')[1])
+        self._decollapsed_reads.extend([line] * count)
 
-        start = int(cols[3]) - 1
-        seq = cols[9]
-        length = len(seq)
+        if len(self._decollapsed_reads) > 100000:
+            self._write_decollapsed_sam()
 
-        # Note: we assume sRNA sequencing data is NOT reversely stranded
-        if (int(cols[1]) & 16):
-            strand = '-'
-            nt5 = complement[seq[-1]]
-        else:
-            strand = '+'
-            nt5 = chr(seq[0])
+        return line
 
-        yield {
-            "name": cols[0].decode('utf-8'),
-            "len": length,
-            "seq": seq,
-            "nt5": nt5,
-            "chrom": cols[2].decode('utf-8'),
-            "start": start,
-            "end": start + length,
-            "strand": strand
-        }
+    def _write_decollapsed_sam(self):
+        if self.decollapsed_outsam is None:
+            basename = os.path.splitext(os.path.basename(self.file))[0]
+            self.decollapsed_outsam = make_filename([basename, "decollapsed"], ext='.sam')
+
+        with open(self.decollapsed_outsam, 'a') as sam_o:
+            sam_o.writelines(self._decollapsed_reads)
+            self._decollapsed_reads = []
 
 
 def infer_strandedness(sam_file: str, intervals: dict) -> str:
