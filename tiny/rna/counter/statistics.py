@@ -1,4 +1,5 @@
 import pandas as pd
+import mmap
 import json
 import sys
 import os
@@ -287,19 +288,14 @@ class SummaryStats:
         """Determine the total number of unique sequences (after quality filtering) in this library"""
 
         with open(other.library['collapsed'], 'r') as f:
-            # Get file size and seek to 75 bytes from end
-            size = f.seek(0, 2)
-            f.seek(size - 75)
-
-            # Read the last 75 bytes of the collapsed fasta
-            tail = f.read(75)
-
-        # Parse unique sequence count from the final fasta header
-        from_pos = tail.rfind(">") + 1
-        to_pos = tail.rfind("_count=")
+            with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+                from_pos = mm.rfind(b">") + 1
+                to_pos = mm.rfind(b"_count=")
+                count = mm[from_pos:to_pos]
 
         try:
-            return int(tail[from_pos:to_pos])
+            # Zero-based count
+            return int(count) + 1
         except ValueError:
             self.warnings.append("Unable to parse collapsed fasta associated with for Summary Statistics.")
             self.warnings.append("Associated file: " + other.library['File'])
