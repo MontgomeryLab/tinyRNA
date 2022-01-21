@@ -233,7 +233,7 @@ class ReferenceTables:
         self._set_filters(**kwargs)
         self.gff_files = gff_files
 
-        self.feats = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+        self.feats = HTSeq.GenomicArrayOfSets("auto", stranded=False)
         self.parents, self.filtered = {}, set()
         self.intervals = defaultdict(list)
         self.matches = defaultdict(set)

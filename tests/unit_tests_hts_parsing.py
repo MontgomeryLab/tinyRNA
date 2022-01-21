@@ -256,7 +256,7 @@ class MyTestCase(unittest.TestCase):
 
         feats, _, _ = ReferenceTables(feature_source, feature_selector, **kwargs).get()
 
-        actual_idents = list(feats.chrom_vectors['I']['-'].array.get_steps(values_only=True))
+        actual_idents = list(feats.chrom_vectors['I']['.'].array.get_steps(values_only=True))
         for act_attr, exp_attr in zip(actual_idents, expected_matches):
             self.assertEqual(act_attr, exp_attr)
 
@@ -347,7 +347,7 @@ class MyTestCase(unittest.TestCase):
 
         feats, _, _ = ReferenceTables(feature_source, feature_selector, **rt_kwargs).get()
 
-        for act, exp in zip(feats.chrom_vectors["I"]["-"].array.get_steps(values_only=True), expected):
+        for act, exp in zip(feats.chrom_vectors["I"]["."].array.get_steps(values_only=True), expected):
             # For this test we are only interested in the match tuples for each feature
             self.assertEqual(act, exp)
 
@@ -375,7 +375,7 @@ class MyTestCase(unittest.TestCase):
 
         feats, _, _, = ReferenceTables(feature_source, feature_selector, **kwargs).get()
 
-        for act, exp in zip(feats.chrom_vectors["I"]["-"].array.get_steps(values_only=True), expected):
+        for act, exp in zip(feats.chrom_vectors["I"]["."].array.get_steps(values_only=True), expected):
             self.assertEqual(act, exp)
 
     """Does ReferenceTables.get() properly handle source filters for discontinuous features?"""
@@ -402,7 +402,7 @@ class MyTestCase(unittest.TestCase):
         self.assertEqual(rt.parents, exp_parents)
         self.assertEqual(rt.filtered, exp_filtered)
         self.assertEqual(classes, exp_classes)
-        self.assertEqual(list(feats.chrom_vectors['I']['-'].array.get_steps(values_only=True)), exp_feats)
+        self.assertEqual(list(feats.chrom_vectors['I']['.'].array.get_steps(values_only=True)), exp_feats)
         self.clear_filters()
 
     """Does ReferenceTables.get() properly handle type filters for discontinuous features?"""
@@ -427,7 +427,7 @@ class MyTestCase(unittest.TestCase):
         self.assertEqual(rt.intervals, exp_intervals)
         self.assertEqual(rt.parents, exp_parents)
         self.assertEqual(rt.filtered, exp_filtered)
-        self.assertEqual(list(feats.chrom_vectors['I']['-'].array.get_steps(values_only=True)), exp_feats)
+        self.assertEqual(list(feats.chrom_vectors['I']['.'].array.get_steps(values_only=True)), exp_feats)
         self.clear_filters()
 
     """Does ReferenceTables.get() properly handle both source and type filters for discontinuous features?"""
@@ -445,7 +445,7 @@ class MyTestCase(unittest.TestCase):
         self.assertEqual(rt.parents, {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'})
         self.assertEqual(list(classes.keys()), ['GrandParent', 'Parent2', 'Sibling'])
         self.assertEqual(list(alias.keys()), ['GrandParent', 'Parent2', 'Sibling'])
-        self.assertEqual(len(list(feats.chrom_vectors['I']['-'].array.get_steps(values_only=True))), 9)
+        self.assertEqual(len(list(feats.chrom_vectors['I']['.'].array.get_steps(values_only=True))), 9)
         self.clear_filters()
 
     def clear_filters(self):
