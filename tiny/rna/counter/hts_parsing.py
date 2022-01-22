@@ -22,9 +22,9 @@ class SAM_reader:
     """A minimal SAM reader that bundles multiple-alignments and only parses data relevant to the workflow"""
 
     def __init__(self, **prefs):
-        self.decollapse = prefs["decollapse"]
-        self.out_prefix = prefs["out_prefix"]
-        self.decollapsed_outsam = None
+        self.decollapse = prefs.get("decollapse", None)
+        self.out_prefix = prefs.get("out_prefix", None)
+        self._decollapsed_filename = None
         self._decollapsed_reads = []
         self._headers = []
         self.file = None
@@ -33,8 +33,9 @@ class SAM_reader:
         """Bundles multiple alignments by name"""
 
         self.file = file
+        sam_parser = self._parse_alignments
         with open(file, 'rb') as f:
-            aln_iter = iter(self.parse_alignments(f))
+            aln_iter = iter(sam_parser(f))
             bundle = [next(aln_iter)]
             for aln in aln_iter:
                 if aln['name'] != bundle[0]['name']:
@@ -47,74 +48,85 @@ class SAM_reader:
         if self.decollapse and len(self._decollapsed_reads):
             self._write_decollapsed_sam()
 
-    def parse_alignments(self, file_obj) -> Iterator[dict]:
+    def _parse_alignments(self, file_obj) -> Iterator[dict]:
         """Parses and yields individual SAM alignments from the open file_obj"""
 
-        readline = self.readline if not self.decollapse else self.decollapse_line
-        line = self.read_thru_header(file_obj)
+        line = self._read_thru_header(file_obj)
+        line_no = len(self._headers)
+        decollapse_sam = self.decollapse
 
-        while line:
-            cols = line.split(b'\t')
-            line = readline(file_obj)
+        try:
+            while line:
+                line_no += 1
+                cols = line.split(b'\t')
 
-            start = int(cols[3]) - 1
-            seq = cols[9]
-            length = len(seq)
+                if decollapse_sam:
+                    self._decollapsed_reads.append((cols[0], line))
+                    if len(self._decollapsed_reads) > 100000:
+                        self._write_decollapsed_sam()
 
-            # Note: we assume sRNA sequencing data is NOT reversely stranded
-            if (int(cols[1]) & 16):
-                strand = '-'
-                nt5 = complement[seq[-1]]
-            else:
-                strand = '+'
-                nt5 = chr(seq[0])
+                line = file_obj.readline()  # Next line
+                start = int(cols[3]) - 1
+                seq = cols[9]
+                length = len(seq)
 
-            yield {
-                "name": cols[0].decode('utf-8'),
-                "len": length,
-                "seq": seq,
-                "nt5": nt5,
-                "chrom": cols[2].decode('utf-8'),
-                "start": start,
-                "end": start + length,
-                "strand": strand
-            }
+                # Note: we assume sRNA sequencing data is NOT reversely stranded
+                if (int(cols[1]) & 16):
+                    strand = '-'
+                    nt5 = complement[seq[-1]]
+                else:
+                    strand = '+'
+                    nt5 = chr(seq[0])
 
-    def read_thru_header(self, file_obj):
+                yield {
+                    "name": cols[0].decode(),
+                    "len": length,
+                    "seq": seq,
+                    "nt5": nt5,
+                    "chrom": cols[2].decode(),
+                    "start": start,
+                    "end": start + length,
+                    "strand": strand
+                }
+        except Exception as e:
+            # Append to error message while preserving exception provenance and traceback
+            e.args = (str(e.args[0]) + '\n' + f"Error occurred on line {line_no} of {self.file}",)
+            raise e.with_traceback(sys.exc_info()[2]) from e
+
+    def _get_decollapsed_filename(self):
+        if self._decollapsed_filename is None:
+            basename = os.path.splitext(os.path.basename(self.file))[0]
+            self._decollapsed_filename = make_filename([basename, "decollapsed"], ext='.sam')
+        return self._decollapsed_filename
+
+    def _read_thru_header(self, file_obj):
         """Advance file_obj past the SAM header and return the first alignment unparsed"""
 
         line = file_obj.readline()
         while line[0] == ord('@'):
-            self._headers.append(line)
+            self._headers.append(line.decode('utf-8'))
             line = file_obj.readline()
 
         if self.decollapse:
-            self._decollapsed_reads.extend(self._headers)
-
-        return line
-
-    @staticmethod
-    def readline(f):
-        return f.readline()
-
-    def decollapse_line(self, f):
-        line = f.readline()
-        count = int(line.split('=')[1])
-        self._decollapsed_reads.extend([line] * count)
-
-        if len(self._decollapsed_reads) > 100000:
-            self._write_decollapsed_sam()
+            # Write the same header data to the decollapsed file
+            with open(self._get_decollapsed_filename(), 'w') as f:
+                f.writelines(self._headers)
 
         return line
 
     def _write_decollapsed_sam(self):
-        if self.decollapsed_outsam is None:
-            basename = os.path.splitext(os.path.basename(self.file))[0]
-            self.decollapsed_outsam = make_filename([basename, "decollapsed"], ext='.sam')
+        aln_out, prevname, seq_count = [], None, 0
+        for name, line in self._decollapsed_reads:
+            # Parse count just once per multi-alignment
+            if name != prevname:
+                seq_count = int(name.split(b"=")[1])
 
-        with open(self.decollapsed_outsam, 'a') as sam_o:
-            sam_o.writelines(self._decollapsed_reads)
-            self._decollapsed_reads = []
+            aln_out.extend([line] * seq_count)
+            prevname = name
+
+        with open(self._get_decollapsed_filename(), 'ab') as sam_o:
+            sam_o.writelines(aln_out)
+            self._decollapsed_reads.clear()
 
 
 def infer_strandedness(sam_file: str, intervals: dict) -> str:

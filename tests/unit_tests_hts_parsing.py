@@ -1,6 +1,7 @@
+import collections
 import unittest
 from copy import deepcopy
-from unittest.mock import patch, mock_open
+from unittest.mock import patch, mock_open, call
 
 from rna.counter.features import FeatureSelector
 from tiny.rna.counter.hts_parsing import *
@@ -44,19 +45,22 @@ class MyTestCase(unittest.TestCase):
             template.update(changes)
         return MockFeatureSelector(rules)
 
+    def exhaust_iterator(self, it):
+        collections.deque(it, maxlen=0)
+
     # === TESTS ===
 
     """Did SAM_reader correctly skip header values and parse all pertinent info from a single record SAM file?"""
 
     def test_sam_reader(self):
-        sam_bundle = next(read_SAM(self.short_sam_file))
+        sam_bundle = next(SAM_reader().bundle_multi_alignments(self.short_sam_file))
         sam_record = sam_bundle[0]
 
         self.assertEqual(sam_record['chrom'], "I")
         self.assertEqual(sam_record['start'], 15064569)
         self.assertEqual(sam_record['end'], 15064590)
         self.assertEqual(sam_record['strand'], '-')
-        self.assertEqual(sam_record['name'], "read_id")
+        self.assertEqual(sam_record['name'], "0_count=5")
         self.assertEqual(sam_record['seq'], b"CAAGACAGAGCTTCACCGTTC")
         self.assertEqual(sam_record['len'], 21)
         self.assertEqual(sam_record['nt5'], 'G')
@@ -71,7 +75,7 @@ class MyTestCase(unittest.TestCase):
 
     def test_sam_parser_comparison(self):
         file = f"{resources}/Lib304_test.sam"
-        ours = read_SAM(file)
+        ours = SAM_reader().bundle_multi_alignments(file)
         theirs = HTSeq.bundle_multiple_alignments(HTSeq.BAM_Reader(file))
 
         for our_bundle, their_bundle in zip(ours, theirs):
@@ -454,6 +458,80 @@ class MyTestCase(unittest.TestCase):
 
         ReferenceTables.source_filter = []
         ReferenceTables.type_filter = []
+
+    """Does SAM_reader._get_decollapsed_filename() create an appropriate filename?"""
+
+    def test_SAM_reader_get_decollapsed_filename(self):
+        reader = SAM_reader()
+        reader.file = "~/path/to/input/sam_file.sam"
+
+        sam_out = reader._get_decollapsed_filename()
+
+        self.assertEqual(sam_out, "sam_file_decollapsed.sam")
+
+    """Does SAM_reader._read_thru_header() correctly identify header lines and write them to the decollapsed file?"""
+
+    def test_SAM_reader_read_thru_header(self):
+        reader = SAM_reader(decollapse=True)
+        reader._decollapsed_filename = "mock_outfile_name.sam"
+
+        with open(self.short_sam_file, 'rb') as sam_in:
+            with patch('builtins.open', mock_open()) as sam_out:
+                line = reader._read_thru_header(sam_in)
+
+        expected_writelines = [
+            call('mock_outfile_name.sam', 'w'),
+            call().__enter__(),
+            call().writelines(["@SQ	SN:I	LN:21\n"]),
+            call().__exit__(None, None, None)
+        ]
+
+        sam_out.assert_has_calls(expected_writelines)
+        self.assertTrue(len(reader._headers) == 1)
+
+    """Does SAM_reader._write_decollapsed_sam() write the correct number of duplicates to the decollapsed file?"""
+
+    def test_SAM_reader_write_decollapsed_sam(self):
+        reader = SAM_reader(decollapse=True)
+        reader._decollapsed_reads = [(b"0_count=5", b"mock line from SAM file")]
+        reader._decollapsed_filename = "mock_outfile_name.sam"
+
+        expected_writelines = [
+            call('mock_outfile_name.sam', 'ab'),
+            call().__enter__(),
+            call().writelines([b"mock line from SAM file"] * 5),
+            call().__exit__(None, None, None)
+        ]
+
+        with patch('builtins.open', mock_open()) as outfile:
+            reader._write_decollapsed_sam()
+
+        outfile.assert_has_calls(expected_writelines)
+        self.assertTrue(len(reader._decollapsed_reads) == 0)
+
+    """Does SAM_reader._parse_alignments() save lines and write them to the decollapsed file when appropriate?"""
+
+    def test_SAM_reader_parse_alignments_decollapse(self):
+        with patch.object(SAM_reader, "_write_decollapsed_sam") as write_fn, \
+                patch('tiny.rna.counter.hts_parsing.open', new_callable=mock_open) as mopen:
+
+            reader = SAM_reader(decollapse=True)
+            reader._decollapsed_reads = [0] * 99999     # At 100,001, buffer will be written
+            reader.file = self.short_sam_file           # File with single alignment
+
+            with open(self.short_sam_file, 'rb') as sam_in:
+                self.exhaust_iterator(reader._parse_alignments(sam_in))
+                write_fn.assert_not_called()
+
+                # Rewind and add one more alignment to push it over threshold
+                sam_in.seek(0)
+                self.exhaust_iterator(reader._parse_alignments(sam_in))
+                write_fn.assert_called_once()
+
+            self.assertTrue(len(reader._decollapsed_reads) == 0)
+
+
+
 
 if __name__ == '__main__':
     unittest.main()
