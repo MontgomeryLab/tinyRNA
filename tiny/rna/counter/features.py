@@ -4,7 +4,7 @@ import sys
 from collections import defaultdict
 from typing import List, Tuple, Set, Dict
 
-import tiny.rna.counter.hts_parsing as parser
+from tiny.rna.counter.hts_parsing import ReferenceTables, SAM_reader
 from .matching import Wildcard, StrandMatch, NumericalMatch, NtMatch
 from .statistics import LibraryStats
 
@@ -39,9 +39,10 @@ class FeatureCounter:
 
     def __init__(self, gff_file_set, selection_rules, **prefs):
         self.stats = LibraryStats(**prefs)
+        self.sam_reader = SAM_reader(**prefs)
         self.selector = FeatureSelector(selection_rules, self.stats, **prefs)
 
-        reference_tables = parser.ReferenceTables(gff_file_set, self.selector, **prefs)
+        reference_tables = ReferenceTables(gff_file_set, self.selector, **prefs)
         Features(*reference_tables.get())
 
         FeatureCounter.out_prefix = prefs['out_prefix']
@@ -71,8 +72,7 @@ class FeatureCounter:
     def count_reads(self, library: dict):
         """Collects statistics on features assigned to each alignment associated with each read"""
 
-        # Parse and bundle multiple alignments
-        read_seq = parser.read_SAM(library["File"])
+        read_seq = self.sam_reader.bundle_multi_alignments(library["File"])
         self.stats.assign_library(library)
 
         # For each sequence in the sam file...
