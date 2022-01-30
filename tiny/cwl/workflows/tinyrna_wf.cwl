@@ -93,6 +93,7 @@ inputs:
 
   # plotter options
   plot_requests: string[]
+  plot_vector_points: boolean?
   plot_style_sheet: File?
   plot_pval: float?
 
@@ -232,6 +233,7 @@ steps:
       style_sheet: plot_style_sheet
       out_prefix: run_name
       plot_requests: plot_requests
+      vector_scatter: plot_vector_points
     out: [plots, console_output]
 
   organize_bt_indexes:

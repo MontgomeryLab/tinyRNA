@@ -50,6 +50,12 @@ inputs:
       prefix: -s
     doc: "A .mplstyle sheet to use instead of tinyrna default styles"
 
+  vector_scatter:
+    type: boolean?
+    inputBinding:
+      prefix: -v
+    doc: "If provided, scatter plots will have vectorized points (slower)"
+
   out_prefix:
     type: string?
     inputBinding:
