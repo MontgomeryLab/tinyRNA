@@ -74,10 +74,6 @@ class LibraryStats:
 
         if assigned_count == 0:
             self.library_stats['Total Unassigned Reads'] += corr_count
-        if assigned_count == 1:
-            self.library_stats['Reads Assigned to Single Feature'] += corr_count
-        if assigned_count > 1:
-            self.library_stats['Reads Assigned to Multiple Features'] += corr_count
         if assigned_count > 0:
             self.library_stats['Total Assigned Reads'] += corr_count
             self.library_stats[bundle['mapping_stat']] += corr_count
@@ -99,8 +95,11 @@ class LibraryStats:
 
         if assignment_count == 0:
             self.library_stats['Total Unassigned Sequences'] += 1
+        elif assignment_count == 1:
+            self.library_stats['Reads Assigned to Single Feature'] += bundle['read_count']
         else:
             self.library_stats['Total Assigned Sequences'] += 1
+            self.library_stats['Reads Assigned to Multiple Features'] += bundle['read_count']
             self.library_stats['Sequences Assigned to Single Feature'] += 1 * (assignment_count == 1)
             self.library_stats['Sequences Assigned to Multiple Features'] += 1 * (assignment_count > 1)
 
