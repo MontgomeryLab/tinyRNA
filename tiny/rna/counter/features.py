@@ -82,7 +82,7 @@ class FeatureCounter:
             # For each alignment of the given sequence...
             for alignment in bundle:
                 hits, n_candidates = self.assign_features(alignment)
-                self.stats.count_bundle_alignments(bstat, alignment, hits, n_candidates)
+                self.stats.count_bundle_assignments(bstat, alignment, hits, n_candidates)
 
             self.stats.finalize_bundle(bstat)
 
