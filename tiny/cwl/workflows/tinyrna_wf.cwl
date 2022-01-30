@@ -79,6 +79,7 @@ inputs:
   aligned_seqs: File[]?
   is_pipeline: boolean?
   counter_diags: boolean?
+  counter_decollapse: boolean?
   counter_no_normalize: boolean?
   counter_all_features: boolean?
   counter_type_filter: string[]?
@@ -198,13 +199,14 @@ steps:
       all_features: counter_all_features
       source_filter: counter_source_filter
       no_normalize: counter_no_normalize
+      decollapse: counter_decollapse
       type_filter: counter_type_filter
       is_pipeline: {default: true}
       diagnostics: counter_diags
       fastp_logs: preprocessing/json_report_file
       collapsed_fa: preprocessing/uniq_seqs
     out: [ feature_counts, other_counts, alignment_stats, summary_stats, console_output,
-           intermed_out_files, alignment_diags, selection_diags ]
+           decollapsed_sams, intermed_out_files, alignment_diags, selection_diags ]
 
   dge:
     run: ../tools/tiny-deseq.cwl
@@ -274,7 +276,7 @@ steps:
       dir_files:
         source: [ counter/feature_counts, counter/other_counts, counter/alignment_stats, counter/summary_stats,
                   counter/intermed_out_files, counter/alignment_diags, counter/selection_diags, counter/console_output,
-                  features_csv ]
+                  counter/decollapsed_sams, features_csv ]
       dir_name: dir_name_counter
     out: [ subdir ]
 
