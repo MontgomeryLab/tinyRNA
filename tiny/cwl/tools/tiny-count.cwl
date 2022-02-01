@@ -48,6 +48,11 @@ inputs:
     inputBinding:
       prefix: -nn
 
+  decollapse:
+    type: boolean?
+    inputBinding:
+      prefix: -dc
+
   all_features:
     type: boolean?
     inputBinding:
@@ -101,6 +106,11 @@ outputs:
     type: File
     outputBinding:
       glob: $(inputs.out_prefix)_summary_stats.csv
+
+  decollapsed_sams:
+    type: File[]?
+    outputBinding:
+      glob: "*_decollapsed.sam"
 
   intermed_out_files:
     type: File[]?
