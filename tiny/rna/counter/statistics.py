@@ -47,7 +47,8 @@ class LibraryStats:
             'loci_count': loci_counts,
             'read_count': read_counts,
             'corr_count': corr_counts,
-            'assignments': list(),
+            'assigned_feats': set(),
+            'assigned_reads': 0,
             'mapping_stat':
                 "Assigned Single-Mapping Reads"
                 if loci_counts == 1 else
@@ -66,7 +67,7 @@ class LibraryStats:
     def no_norm(self, count, _):
         return count
 
-    def count_bundle_alignments(self, bundle, aln: dict, assignments: set, n_candidates: int) -> None:
+    def count_bundle_assignments(self, bundle: dict, aln: dict, assignments: set, n_candidates: int) -> None:
         """Called for each alignment for each read"""
 
         assigned_count = len(assignments)
@@ -74,35 +75,36 @@ class LibraryStats:
 
         if assigned_count == 0:
             self.library_stats['Total Unassigned Reads'] += corr_count
-        if assigned_count == 1:
-            self.library_stats['Reads Assigned to Single Feature'] += corr_count
-        if assigned_count > 1:
-            self.library_stats['Reads Assigned to Multiple Features'] += corr_count
         if assigned_count > 0:
             self.library_stats['Total Assigned Reads'] += corr_count
             self.library_stats[bundle['mapping_stat']] += corr_count
 
             feature_corrected_count = self.normalize_count_by(corr_count, assigned_count)
+            bundle['assigned_feats'] |= assignments
+            bundle['assigned_reads'] += corr_count
 
             for feat in assignments:
-                bundle['assignments'].append(feat)
                 self.feat_counts[feat] += feature_corrected_count
 
         if self.diags is not None:
             self.diags.record_diagnostics(assignments, n_candidates, aln, bundle)
             self.diags.record_alignment_details(aln, bundle, assignments)
 
-    def finalize_bundle(self, bundle) -> None:
+    def finalize_bundle(self, bundle: dict) -> None:
         """Called at the conclusion of processing each multiple-alignment bundle"""
 
-        assignment_count = len(bundle['assignments'])
+        assignment_count = len(bundle['assigned_feats'])
 
         if assignment_count == 0:
             self.library_stats['Total Unassigned Sequences'] += 1
         else:
             self.library_stats['Total Assigned Sequences'] += 1
-            self.library_stats['Sequences Assigned to Single Feature'] += 1 * (assignment_count == 1)
-            self.library_stats['Sequences Assigned to Multiple Features'] += 1 * (assignment_count > 1)
+            if assignment_count == 1:
+                self.library_stats['Reads Assigned to Single Feature'] += bundle['assigned_reads']
+                self.library_stats['Sequences Assigned to Single Feature'] += 1
+            else:
+                self.library_stats['Reads Assigned to Multiple Features'] += bundle['assigned_reads']
+                self.library_stats['Sequences Assigned to Multiple Features'] += 1
 
 
 class SummaryStats:
