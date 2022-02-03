@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 import os
 import sys
-import setuptools
 
+from setuptools import setup, Extension
 from setuptools.command.install import install
+
+from Cython.Build import cythonize
 
 # Package metadata
 NAME = 'tinyrna'
@@ -29,7 +31,16 @@ class PreFlight(install):
             install.run(self)
 
 
-setuptools.setup(
+extensions = [
+    Extension("tiny.rna.bitpack.short_seq",
+              sources=['tiny/rna/bitpack/short_seq.pyx'],
+              extra_compile_args=['-stdlib=libc++', '-std=c++11', "-O3", '-ftree-vectorizer-verbose',
+                                  '-march=native'],
+              language='c++')
+]
+
+
+setup(
     name=NAME,
     version=VERSION,
     author=AUTHOR,
@@ -48,6 +59,7 @@ setuptools.setup(
             'tiny-plot = tiny.rna.plotter:main'
         ]
     },
+    ext_modules=cythonize(extensions, compiler_directives={'language_level': '3'}),
     scripts=['tiny/rna/tiny-deseq.r'],
     classifiers=[
         'Programming Language :: Python :: 3',

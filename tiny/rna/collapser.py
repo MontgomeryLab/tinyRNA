@@ -60,8 +60,27 @@ def get_args() -> 'argparse.NameSpace':
         help='Use gzip compression when writing fasta outputs'
     )
 
-    return parser.parse_args()
+    parser.add_argument(
+        '--3p-trim', metavar='LENGTH', required=False, type=int,
+        help="Treat N BASES at the 3' end of each sequence as a UMI and trim them"
+    )
 
+    parser.add_argument(
+        '--5p-trim', metavar='LENGTH', required=False, type=int,
+        help="Treat N BASES at the 5' end of each sequence as a UMI and trim them"
+    )
+
+    parser.add_argument(
+        '-d', '--discard_umi_duplicates', action='store_true',
+        help="Discard duplicate UMIs. The --3p-trim and/or --5p-trim arguments "
+             "define which part of each sequence to treat as the UMI sequence."
+    )
+
+    args = parser.parse_args()
+    if args.discard_umi_duplicates and not (getattr(args, '3p_trim', None) or getattr(args, '5p_trim', None)):
+        raise argparse.ArgumentError(None, "UMI deduplication requires the length and location of the UMI(s) to be "
+                                           "specified with --3p-trim and/or --5p-trim.")
+    return args
 
 def seq_counter(fastq_file: str, file_reader: callable = builtins.open) -> 'OrderedDict':
     """Counts the number of times each sequence appears
