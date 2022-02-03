@@ -62,8 +62,11 @@ savefig.pad_inches: 0.1
 
 #### Font ####
 font.family: sans-serif
-font.sans-serif: Arial
+font.sans-serif: Arial Unicode MS
 font.size: 10
+
+#### TeX Font ####
+mathtext.default: regular
 
 #### Line style ####
 lines.linewidth: 1.0
