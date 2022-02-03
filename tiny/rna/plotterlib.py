@@ -247,7 +247,7 @@ class plotterlib:
                                         log_norm=log_norm, color=next(colors), **kwargs)
         else:
             # Plot the outgroup in light grey (these are counts not in *args)
-            gscat = self.scatter_simple(count_x_base,count_y_base, log_norm=log_norm, color='#B3B3B3', **kwargs)
+            gscat = self.scatter_simple(count_x_base,count_y_base, log_norm=log_norm, color='#A1A1A1', **kwargs)
 
         # Add each group to plot with a different color
         for group in argsit:
