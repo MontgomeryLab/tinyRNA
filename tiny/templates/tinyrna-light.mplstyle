@@ -65,6 +65,9 @@ font.family: sans-serif
 font.sans-serif: Arial
 font.size: 10
 
+#### TeX Font ####
+mathtext.default: regular
+
 #### Line style ####
 lines.linewidth: 1.0
 lines.markersize: 3.25

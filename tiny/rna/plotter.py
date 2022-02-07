@@ -195,8 +195,8 @@ def scatter_replicates(count_df: pd.DataFrame, output_prefix: str, samples: dict
             aqplt.set_scatter_ticks(rscat)
             rscat.set_title(samp)
             rep1, rep2 = pair[0].split('_rep_')[1], pair[1].split('_rep_')[1]
-            rscat.set_xlabel('Log$_{2}$ normalized reads in replicate ' + rep1)
-            rscat.set_ylabel('Log$_{2}$ normalized reads in replicate ' + rep2)
+            rscat.set_xlabel("Log$_{2}$ normalized reads in replicate " + rep1)
+            rscat.set_ylabel("Log$_{2}$ normalized reads in replicate " + rep2)
             pdf_name = make_filename([output_prefix, samp, 'replicates', rep1, rep2, 'scatter'], ext='.pdf')
             rscat.figure.savefig(pdf_name)
 
