@@ -1,90 +1,41 @@
-# cython: language_level = 3
-# cython: profile=False
-# language: c++
+# cython: language_level = 3, language=c++, profile=False, linetrace=False
 
-import cython
-from cython.operator cimport dereference as deref, preincrement as inc
+import cython  # For function decorators
 
-cdef class ShortSeq:                 # 16 bytes (PyObject_HEAD)
-    cdef uPY_LONG_LONG _PyLong_hash  # 8 bytes
-    cdef uint8_t _length             # 1 byte
-    # cdef uint8_t pad[7]            # Remain: 7 bytes pad/free
+# Avoids initial increment from zero (reuse existing one-object instead)
+cdef object one = PyLong_FromSize_t(1)
 
-    def __cinit__(self, bytes sequence):
-        cdef Py_ssize_t length
-        cdef uPY_LONG_LONG seqhash
+cdef class ShortSeqCounter(dict):
+    def __init__(self, list iterable):
+        super().__init__()
+        self.count_items(iterable)
 
-        length = Py_SIZE(sequence)
-        seqhash = _marshall_bytes(sequence, length)
+    @cython.boundscheck(False)
+    cdef count_items(self, list iterable):
+        cdef PyObject* oldval
+        cdef bytes seqbytes
+        cdef Py_ssize_t i
+        cdef uint8_t length
 
-        self._PyLong_hash = seqhash
-        self._length = length
+        for i in range(len(iterable)):
+            seqbytes = <bytes>PyList_GET_ITEM(iterable, i)
+            length = Py_SIZE(seqbytes)
 
-    @property
-    def _length(self) -> uint8_t:
-        return self._length
+            if 32 < length < 64:
+                seq = make_ShortSeq128(seqbytes)
+            elif length <= 32:
+                seq = make_ShortSeq64(seqbytes)
+            else:
+                raise Exception()
 
-    @_length.setter
-    def _length(self, uint8_t val):
-        self._length = val
+            seqhash = hash(seq)
+            oldval = _PyDict_GetItem_KnownHash(self, seq, seqhash)
 
-    @property
-    def _PyLong_hash(self) -> uPY_LONG_LONG:
-        return self._PyLong_hash
-
-    @_PyLong_hash.setter
-    def _PyLong_hash(self, uPY_LONG_LONG val):
-        self._PyLong_hash = val
-
-    def __hash__(self) -> uPY_LONG_LONG:
-        return self._PyLong_hash
-
-    def __eq__(self, ShortSeq other):
-        return self._length == other._length and self._PyLong_hash == other._PyLong_hash
-
-    def __str__(self):
-        return _unmarshall_bytes(self._PyLong_hash, self._length)
-
-    def __len__(self):
-        return self._length
-
-
-cdef uint8_t table_91[91]
-table_91[:] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0]
-
-
-@cython.wraparound(False)
-@cython.cdivision(True)
-@cython.boundscheck(False)
-cdef inline uPY_LONG_LONG _marshall_bytes(bytes seq_bytes, uint8_t length):
-    cdef uint8_t* sequence = <uint8_t*>(deref(<PyBytesObject*>seq_bytes).ob_sval)
-    cdef uint64_t hashed = 0L
-    cdef uint8_t i
-
-    for i in reversed(range(length)):
-        hashed = (hashed << 2) | table_91[sequence[i]]
-
-    return hashed
-
-
-cdef uint8_t mask = 0x3
-cdef uint8_t encoded = 0
-cdef char out_buff[32]
-cdef char charmap[4]
-charmap = [b'A', b'C', b'T', b'G']
-
-@cython.wraparound(False)
-@cython.cdivision(True)
-@cython.boundscheck(False)
-cdef unicode _unmarshall_bytes(uPY_LONG_LONG enc_seq, size_t length):
-    cdef uint8_t i
-
-    for i in reversed(range(length)):
-        out_buff[i] = charmap[enc_seq & mask]
-        enc_seq >>= 2
-
-    return PyUnicode_DecodeASCII(out_buff, length, NULL)
+            if oldval == NULL:
+                if PyErr_Occurred():
+                    raise Exception("Something went wrong while retrieving sequence count.")
+                if _PyDict_SetItem_KnownHash(self, seq, one, seqhash) < 0:
+                    raise Exception("Something went wrong while setting a new sequence count.")
+            else:
+                if _PyDict_SetItem_KnownHash(self, seq, <object>oldval + 1, seqhash) < 0:
+                    raise Exception("Something went wrong while setting an incremented sequence count.")

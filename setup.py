@@ -36,7 +36,22 @@ extensions = [
               sources=['tiny/rna/bitpack/short_seq.pyx'],
               extra_compile_args=['-stdlib=libc++', '-std=c++11', "-O3", '-ftree-vectorizer-verbose',
                                   '-march=native'],
-              language='c++')
+              language='c++'),
+    Extension("tiny.rna.bitpack.short_seq_128",
+              sources=['tiny/rna/bitpack/short_seq_128.pyx'],
+              extra_compile_args=['-stdlib=libc++', '-std=c++11', "-O3", '-ftree-vectorizer-verbose',
+                                  '-march=native'],
+              language='c++'),
+    Extension("tiny.rna.bitpack.short_seq_64",
+              sources=['tiny/rna/bitpack/short_seq_64.pyx'],
+              extra_compile_args=['-stdlib=libc++', '-std=c++11', "-O3", '-ftree-vectorizer-verbose',
+                                  '-march=native'],
+              language='c++'),
+    Extension("tiny.rna.bitpack.short_seq_util",
+              sources=['tiny/rna/bitpack/short_seq_util.pyx'],
+              extra_compile_args=['-stdlib=libc++', '-std=c++11', "-O3", '-ftree-vectorizer-verbose',
+                                  '-march=native'],
+              language='c++'),
 ]
 
 

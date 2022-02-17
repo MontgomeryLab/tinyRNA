@@ -1,17 +1,18 @@
-from libc.stdint cimport uint8_t, uint64_t
-
-from cpython.long cimport uPY_LONG_LONG, PyLong_FromSize_t
-from cpython.dict cimport PyDict_New
+from cpython.long cimport PyLong_FromSize_t
+from cpython.list cimport PyList_GET_ITEM
 from cpython.exc cimport PyErr_Occurred
-from cpython.unicode cimport PyUnicode_DecodeASCII
-from cpython.object cimport Py_SIZE, PyObject
-from cpython.number cimport PyNumber_Add
-from cpython.ref cimport Py_XDECREF, Py_XINCREF
 
-cdef size_t MAX_CHARS = sizeof(unsigned long long) * 4
+from .short_seq_util cimport *
+from .short_seq_128 cimport *
+from .short_seq_64 cimport *
 
-ctypedef struct PyBytesObject:
-    PyObject ob_base
-    Py_ssize_t ob_size
-    Py_hash_t ob_shash
-    char ob_sval[1]
+"""
+Private dictionary fast-path methods not currently offered by the Cython wrapper
+"""
+cdef extern from "Python.h":
+    dict _PyDict_NewPresized(int minused)
+    PyObject* _PyDict_GetItem_KnownHash(object mp, object key, Py_hash_t hash)
+    PyObject* _PyDict_Pop_KnownHash(object mp, object key, Py_hash_t hash, object deflt)
+    int _PyDict_SetItem_KnownHash(object mp, object key, object item, Py_hash_t hash)
+    int _PyDict_DelItem_KnownHash(object mp, object key, Py_hash_t hash)
+    bint _PyDict_Contains_KnownHash(object mp, object key, Py_hash_t hash)
