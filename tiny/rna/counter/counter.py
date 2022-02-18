@@ -132,7 +132,7 @@ def load_config(features_csv: str, is_pipeline: bool) -> Tuple[List[dict], Dict[
         rule['nt5end'] = rule['nt5end'].upper().translate({ord('U'): 'T'})  # Convert RNA base to cDNA base
         rule['Identity'] = (row['Key'], row['Value'])                       # Create identity tuple
         rule['Hierarchy'] = int(rule['Hierarchy'])                          # Convert hierarchy to number
-        rule['Strict'] = rule['Strict'] == 'Full'                           # Convert strict intersection to boolean
+        rule['Strict'] = rule['Strict'].lower()                             # Built later in ReferenceTables
 
         gff = os.path.basename(row['Source']) if is_pipeline else from_here(features_csv, row['Source'])
 

@@ -1,12 +1,13 @@
 """Selector classes which determine a match via __contains__()"""
 
 import re
+import HTSeq
 
 
 class Wildcard:
     @staticmethod
-    def __contains__(x): return True
-    def __repr__(self): return "all"
+    def __contains__(_): return True
+    def __repr__(_): return "all"
 
 
 class StrandMatch:
@@ -46,7 +47,8 @@ class NumericalMatch(frozenset):
     """For evaluating sequence length against a list and/or range of desired values
 
     FeatureSelector will determine a match by checking the frozenset
-    superclass's __contains__() function. Frozensets have marginally faster lookup for wider ranges of values.
+    superclass's __contains__() function. Frozensets have
+    marginally faster lookup for wider ranges of values.
     """
 
     def __new__(cls, lengths):
@@ -62,3 +64,82 @@ class NumericalMatch(frozenset):
 
         # Call frozenset superclass constructor
         return super().__new__(cls, lengths)
+
+
+class IntervalPartialMatch(Wildcard):
+    """This is a no-op filter
+
+    Since StepVector only returns features that overlap each alignment by
+    at least one base, no further evaluation is required when this filter
+    is used by FeatureSelector.choose()"""
+
+    __slots__ = ("start", "end")
+
+    def __init__(self, iv: HTSeq.GenomicInterval):
+        self.start = iv.start
+        self.end = iv.end
+
+    def __repr__(self):
+        return f"Any overlap {self.start}:{self.end}"
+
+
+class IntervalFullMatch:
+    __slots__ = ("start", "end")
+
+    def __init__(self, iv: HTSeq.GenomicInterval):
+        self.start = iv.start
+        self.end = iv.end
+
+    def __contains__(self, alignment):
+        return self.start <= alignment['start'] and alignment['end'] <= self.end
+
+    def __repr__(self):
+        return f"Between {self.start}:{self.end}"
+
+
+class IntervalExactMatch:
+    __slots__ = ("start", "end")
+
+    def __init__(self, iv: HTSeq.GenomicInterval):
+        self.start = iv.start
+        self.end = iv.end
+
+    def __contains__(self, alignment):
+        return self.start == alignment['start'] and alignment['end'] == self.end
+
+    def __repr__(self):
+        return f"Exactly {self.start}:{self.end}"
+
+
+class Interval5pMatch:
+    __slots__ = ("start", "strand")
+
+    def __init__(self, iv: HTSeq.GenomicInterval):
+        self.strand = iv.strand
+        self.start = iv.start
+
+    def __contains__(self, alignment):
+        if self.strand == alignment['strand']:
+            return self.start == alignment['start']
+        else:
+            return self.start == alignment['end']
+
+    def __repr__(self):
+        return f"5' anchored to {self.start} ({self.strand})"
+
+
+class Interval3pMatch:
+    __slots__ = ("end", "strand")
+
+    def __init__(self, iv: HTSeq.GenomicInterval):
+        self.strand = iv.strand
+        self.end = iv.end
+
+    def __contains__(self, alignment):
+        if self.strand == alignment['strand']:
+            return self.end == alignment['end']
+        else:
+            return self.end == alignment['start']
+
+    def __repr__(self):
+        return f"3' anchored to {self.end} ({self.strand})"

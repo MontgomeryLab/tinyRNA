@@ -5,17 +5,12 @@ from collections import defaultdict
 from typing import List, Tuple, Set, Dict
 
 from tiny.rna.counter.hts_parsing import ReferenceTables, SAM_reader
-from .matching import Wildcard, StrandMatch, NumericalMatch, NtMatch
 from .statistics import LibraryStats
+from .matching import *
 
 # Type aliases for human readability
 match_tuple = Tuple[int, int, bool]
 feature_record_tuple = Tuple[str, int, int, str, Tuple[match_tuple]]
-
-BOTH_STRANDS = ('+', '-')
-
-# Global indexes for Hits produced by choose_identity()
-RANK, RULE, FEAT = 0, 1, 2
 
 
 class Features:
@@ -153,15 +148,13 @@ class FeatureSelector:
         """
 
         identity_hits, min_rank = [], sys.maxsize
-        aln_start, aln_end = alignment['start'], alignment['end']
 
-        for feat, iv_start, iv_end, iv_strand, matches in candidates:
-            perfect_iv_match = iv_start <= aln_start and iv_end >= aln_end
-            for rule, rank, strict in matches:
+        for feat, strand, matches in candidates:
+            for rule, rank, iv_match in matches:
                 if rank > min_rank: continue
-                if strict and not perfect_iv_match: continue
+                if alignment not in iv_match: continue
                 if rank < min_rank: min_rank = rank
-                identity_hits.append((rank, rule, feat, iv_strand))
+                identity_hits.append((rank, rule, feat, strand))
         # -> identity_hits: [(hierarchy, rule, feature, strand), ...]
 
         if not identity_hits: return set()
@@ -205,6 +198,40 @@ class FeatureSelector:
                     row[selector] = build_fn(defn)
 
         return rules_table
+
+    @staticmethod
+    def build_interval_selectors(iv, match_tuples):
+        """Builds partial/full/exact/3' anchored/5' anchored interval selectors
+
+        Unlike build_selectors() and build_inverted_identities(), this function
+        is not called at construction time. Instead, it is called when finalizing
+        match tuples in ReferenceTables. This is because interval selectors are
+        created for each feature (requiring start/stop/strand to be known) for
+        each of the feature's identity matches (each match tuple).
+
+        Args:
+            iv: The interval of the feature from which each selector is built
+            match_tuples: A list of tuples representing the feature's identity
+                matches. Each tuple index 2 defines and is replaced by the selector.
+        """
+
+        selector_factory = {
+            'full': lambda: IntervalFullMatch(iv),
+            'exact': lambda: IntervalExactMatch(iv),
+            'partial': lambda: IntervalPartialMatch(iv),
+            "5' anchored": lambda: Interval5pMatch(iv),
+            "3' anchored": lambda: Interval3pMatch(iv),
+        }
+
+        for i in range(len(match_tuples)):
+            try:
+                match = match_tuples[i]
+                selector = selector_factory[match[2]]()
+                match_tuples[i] = (match[0], match[1], selector)
+            except KeyError:
+                raise ValueError(f"Unrecognized match type: '{match_tuples[i][2]}'")
+
+        return match_tuples
 
     @staticmethod
     def build_inverted_identities(rules_table) -> Dict[Tuple[str, str], List[int]]:
