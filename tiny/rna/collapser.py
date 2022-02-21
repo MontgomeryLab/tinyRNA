@@ -42,15 +42,15 @@ def get_args() -> 'argparse.NameSpace':
         'counts fall below threshold, {prefix}_collapsed_lowcounts.fa'
     )
 
-    def positive_threshold(t):
+    def positive_number(t):
         if int(t) >= 0:
             return int(t)
         else:
-            raise argparse.ArgumentTypeError("Threshold must be >= 0")
+            raise argparse.ArgumentTypeError("Numerical arguments must be >= 0")
 
     # Optional arguments
     parser.add_argument(
-        '-t', '--threshold', default=0, required=False, type=positive_threshold,
+        '-t', '--threshold', default=0, required=False, type=positive_number,
         help='Sequences <= THRESHOLD will be omitted from {prefix}_collapsed.fa '
         'and will instead be placed in {prefix}_collapsed_lowcounts.fa'
     )
@@ -61,12 +61,12 @@ def get_args() -> 'argparse.NameSpace':
     )
 
     parser.add_argument(
-        '--3p-trim', metavar='LENGTH', required=False, type=int,
+        '--3p-trim', metavar='N BASES', required=False, type=positive_number,
         help="Treat N BASES at the 3' end of each sequence as a UMI and trim them"
     )
 
     parser.add_argument(
-        '--5p-trim', metavar='LENGTH', required=False, type=int,
+        '--5p-trim', metavar='N BASES', required=False, type=positive_number,
         help="Treat N BASES at the 5' end of each sequence as a UMI and trim them"
     )
 
@@ -109,6 +109,14 @@ def seq_counter(fastq_file: str, file_reader: callable = builtins.open) -> 'Orde
 
     seqs.pop("", None)  # Remove blank line counts from the dictionary
     return seqs
+
+
+def trim5p(line, nbases=0):
+    return line[nbases:], line[:nbases]
+
+
+def trim3p(line, nbases=0):
+    return line[:nbases], line[nbases:]
 
 
 def seq2fasta(seqs: dict, out_prefix: str, thresh: int = 0, gz: bool = False) -> None:

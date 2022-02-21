@@ -1,7 +1,6 @@
 # cython: language_level=3, language=c++, profile=False, linetrace=False
 
 cimport cython
-from cython.operator cimport dereference as deref
 
 """
 ShortSeq128: packs sequences up to 64 bases in length
@@ -22,31 +21,28 @@ Consider encoding length:
 
 cdef class ShortSeq128:
     def __hash__(self):
-        return <uint64_t>self._packed_seq
+        return <uint64_t>self._packed
 
     def __len__(self):
         return self._length
 
-    def __eq__(self, ShortSeq128 other):
-        return self._length == other._length and self._packed_seq == other._packed_seq
+    def __eq__(self, other):
+        if type(other) is ShortSeq64:
+            return self._length == (<ShortSeq64> other)._length and \
+                   self._packed == (<ShortSeq64> other)._packed
+        elif type(other) is ShortSeq128:
+            return self._length == (<ShortSeq128> other)._length and \
+                   self._packed == (<ShortSeq128> other)._packed
+        else:
+            return False
 
     def __str__(self):
-        return _unmarshall_128(self._packed_seq, self._length)
-
-# This avoids the (relatively) massive overhead of calling __cinit__()
-@cython.always_allow_keywords(False)
-cdef inline ShortSeq128 make_ShortSeq128(bytes sequence):
-    cdef ShortSeq128 obj = ShortSeq128.__new__(ShortSeq128)
-    cdef uint8_t length = Py_SIZE(sequence)
-    obj._packed_seq = _marshall_bytes_128(sequence, length, with_length=False)
-    obj._length = length
-    return obj
+        return _unmarshall_bytes_128(self._packed, self._length)
 
 @cython.wraparound(False)
 @cython.cdivision(True)
 @cython.boundscheck(False)
-cdef inline uint128_t _marshall_bytes_128(bytes seq_bytes, uint8_t length, bint with_length = False):
-    cdef uint8_t* sequence = <uint8_t*>(deref(<PyBytesObject*>seq_bytes).ob_sval)
+cdef inline uint128_t _marshall_bytes_128(uint8_t* sequence, uint8_t length, bint with_length = False) nogil:
     cdef uint128_t hashed = 0LL
     cdef uint8_t i
 
@@ -61,7 +57,7 @@ cdef inline uint128_t _marshall_bytes_128(bytes seq_bytes, uint8_t length, bint 
 @cython.wraparound(False)
 @cython.cdivision(True)
 @cython.boundscheck(False)
-cdef inline unicode _unmarshall_128(uint128_t enc_seq, uint8_t length = 0, bint with_length = False):
+cdef inline unicode _unmarshall_bytes_128(uint128_t enc_seq, uint8_t length = 0, bint with_length = False):
     cdef uint8_t i
 
     if with_length:

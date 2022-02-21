@@ -10,3 +10,5 @@ table_91 = [
 ]
 
 charmap = [b'A', b'C', b'T', b'G']
+
+mask = 0x3

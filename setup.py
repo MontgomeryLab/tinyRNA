@@ -31,26 +31,33 @@ class PreFlight(install):
             install.run(self)
 
 
+bitpack_dir = "tiny/rna/bitpack/"
+short_seq_common_compile_args = [
+    '-stdlib=libc++',
+    '-std=c++11',
+    "-O3",
+    '-march=native']
+
 extensions = [
     Extension("tiny.rna.bitpack.short_seq",
-              sources=['tiny/rna/bitpack/short_seq.pyx'],
-              extra_compile_args=['-stdlib=libc++', '-std=c++11', "-O3", '-ftree-vectorizer-verbose',
-                                  '-march=native'],
+              sources=[bitpack_dir + 'short_seq.pyx'],
+              extra_compile_args=short_seq_common_compile_args,
               language='c++'),
     Extension("tiny.rna.bitpack.short_seq_128",
-              sources=['tiny/rna/bitpack/short_seq_128.pyx'],
-              extra_compile_args=['-stdlib=libc++', '-std=c++11', "-O3", '-ftree-vectorizer-verbose',
-                                  '-march=native'],
+              sources=[bitpack_dir + 'short_seq_128.pyx'],
+              extra_compile_args=short_seq_common_compile_args,
               language='c++'),
     Extension("tiny.rna.bitpack.short_seq_64",
-              sources=['tiny/rna/bitpack/short_seq_64.pyx'],
-              extra_compile_args=['-stdlib=libc++', '-std=c++11', "-O3", '-ftree-vectorizer-verbose',
-                                  '-march=native'],
+              sources=[bitpack_dir + 'short_seq_64.pyx'],
+              extra_compile_args=short_seq_common_compile_args,
               language='c++'),
     Extension("tiny.rna.bitpack.short_seq_util",
-              sources=['tiny/rna/bitpack/short_seq_util.pyx'],
-              extra_compile_args=['-stdlib=libc++', '-std=c++11', "-O3", '-ftree-vectorizer-verbose',
-                                  '-march=native'],
+              sources=[bitpack_dir + 'short_seq_util.pyx'],
+              extra_compile_args=short_seq_common_compile_args,
+              language='c++'),
+    Extension("tiny.rna.bitpack.fast_read",
+              sources=[bitpack_dir + 'fast_read.pyx'],
+              extra_compile_args=short_seq_common_compile_args,
               language='c++'),
 ]
 

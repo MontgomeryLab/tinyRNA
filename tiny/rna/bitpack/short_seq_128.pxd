@@ -7,9 +7,10 @@ cdef extern from *:
 # Reusable buffer for unmarshalling
 cdef char out_ascii_buffer_64[64]
 
-cdef class ShortSeq128:                 # 16 bytes (PyObject_HEAD)
-    cdef uint128_t _packed_seq          # 16 bytes
-    cdef uint8_t _length                # 1 byte
-                                        # Remain: 15 bytes pad/free
+cdef class ShortSeq128:                # 16 bytes (PyObject_HEAD)
+    cdef uint128_t _packed             # 16 bytes
+    cdef uint8_t _length               # 1 byte
+                                       # Remain: 15 bytes pad/free
 
-cdef ShortSeq128 make_ShortSeq128(bytes sequence)
+# Forward declaration to allow for cimport
+cdef uint128_t _marshall_bytes_128(uint8_t* seq_bytes, uint8_t length, bint with_length=*) nogil

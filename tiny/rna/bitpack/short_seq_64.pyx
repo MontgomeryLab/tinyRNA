@@ -1,8 +1,6 @@
 # cython: language_level = 3, language=c++, profile=False, linetrace=False
-import sys
 
 cimport cython
-from cython.operator cimport dereference as deref
 
 """
 ShortSeq64: packs sequences up to 32 bases in length
@@ -24,39 +22,36 @@ cdef class ShortSeq64:
         self._length = val
 
     @property
-    def _packed_seq(self) -> uint64_t:
-        return self._packed_seq
+    def _packed(self) -> uint64_t:
+        return self._packed
 
-    @_packed_seq.setter
-    def _packed_seq(self, val):
-        self._packed_seq = val
+    @_packed.setter
+    def _packed(self, val):
+        self._packed = val
 
     def __hash__(self) -> uint64_t:
-        return self._packed_seq
+        return self._packed
 
-    def __eq__(self, ShortSeq64 other):
-        return self._length == other._length and self._packed_seq == other._packed_seq
+    def __eq__(self, other):
+        if type(other) is ShortSeq64:
+            return self._length == (<ShortSeq64>other)._length and \
+                   self._packed == (<ShortSeq64>other)._packed
+        elif type(other) is ShortSeq128:
+            return self._length == (<ShortSeq128>other)._length and \
+                   self._packed == (<ShortSeq128>other)._packed
+        else:
+            return False
 
     def __str__(self):
-        return _unmarshall_bytes_64(self._packed_seq, self._length)
+        return _unmarshall_bytes_64(self._packed, self._length)
 
     def __len__(self):
         return self._length
 
-# This avoids the (relatively) massive overhead of calling __cinit__()
-@cython.always_allow_keywords(False)
-cdef inline ShortSeq64 make_ShortSeq64(bytes sequence):
-    cdef ShortSeq64 obj = ShortSeq64.__new__(ShortSeq64)
-    cdef uint8_t length = Py_SIZE(sequence)
-    obj._packed_seq = _marshall_bytes_64(sequence, length)
-    obj._length = length
-    return obj
-
 @cython.wraparound(False)
 @cython.cdivision(True)
 @cython.boundscheck(False)
-cdef inline uint64_t _marshall_bytes_64(bytes seq_bytes, uint8_t length) nogil:
-    cdef uint8_t* sequence = <uint8_t*>(deref(<PyBytesObject*>seq_bytes).ob_sval)
+cdef inline uint64_t _marshall_bytes_64(uint8_t* sequence, uint8_t length) nogil:
     cdef uint64_t hashed = 0L
     cdef uint8_t i
 
@@ -71,7 +66,7 @@ cdef inline uint64_t _marshall_bytes_64(bytes seq_bytes, uint8_t length) nogil:
 cdef inline unicode _unmarshall_bytes_64(uint64_t enc_seq, size_t length):
     cdef uint8_t i
 
-    for i in reversed(range(length)):
+    for i in range(length):
         out_ascii_buffer_32[i] = charmap[enc_seq & mask]
         enc_seq >>= 2
 

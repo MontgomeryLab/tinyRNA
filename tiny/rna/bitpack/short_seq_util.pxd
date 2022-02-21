@@ -1,11 +1,16 @@
 from libc.stdint cimport uint8_t, uint64_t
+from libc.string cimport strlen
+from libcpp.cast cimport reinterpret_cast
 
 from cpython.object cimport Py_SIZE, PyObject
 from cpython.ref cimport Py_XDECREF, Py_XINCREF
 from cpython.unicode cimport PyUnicode_DecodeASCII
 
+from .short_seq_64 cimport ShortSeq64
+from .short_seq_128 cimport ShortSeq128
+
 # Constants
-cdef uint8_t mask = 0x3
+cdef uint8_t mask
 cdef char[4] charmap
 
 """
@@ -31,3 +36,12 @@ For vectorized operations.
 """
 cdef extern from "x86intrin.h" nogil:
     uint64_t _pext_u64(uint64_t __X, uint64_t __Y)
+
+"""
+A little bit of hackery to allow fast access to the packed hash field of both
+ShortSeq64 and ShortSeq128, since inheritance and virtual function emulation
+come with a heavy cost in Cython.
+"""
+ctypedef struct ShortSeq:
+    PyObject ob_base
+    uint64_t _packed

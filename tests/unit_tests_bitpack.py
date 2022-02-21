@@ -7,7 +7,7 @@ import psutil
 from collections import Counter
 from random import randint
 
-from tiny.rna.bitpack import ShortSeqCounter
+from tiny.rna.bitpack import ShortSeqCounter, fast_read_and_count, ShortSeqFactory
 
 resources = "./testdata/bitpack"
 
@@ -104,8 +104,8 @@ class MyTestCase(unittest.TestCase):
         mem = []
         process = psutil.Process(os.getpid())
 
-        # seqs = self.read_data(ten_m_wo_repeat)
-        seqs = self.read_data(one_m_w_repeats)
+        seqs = self.read_data(ten_m_wo_repeat)
+        # seqs = self.read_data(one_m_w_repeats)
         mem.append(process.memory_info().rss)
 
         counts1, t1 = self.benchmark_unicode_tp_hash(seqs, decode=True)
