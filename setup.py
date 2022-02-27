@@ -59,6 +59,10 @@ extensions = [
               sources=[bitpack_dir + 'fast_read.pyx'],
               extra_compile_args=short_seq_common_compile_args,
               language='c++'),
+    Extension("tiny.rna.bitpack.umi",
+              sources=[bitpack_dir + 'umi.pyx'],
+              extra_compile_args=short_seq_common_compile_args,
+              language='c++'),
 ]
 
 

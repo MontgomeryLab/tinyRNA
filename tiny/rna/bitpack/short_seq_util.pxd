@@ -1,4 +1,4 @@
-from libc.stdint cimport uint8_t, uint64_t
+from libc.stdint cimport uint8_t, uint32_t, uint64_t
 from libc.string cimport strlen
 from libcpp.cast cimport reinterpret_cast
 
@@ -45,3 +45,9 @@ come with a heavy cost in Cython.
 ctypedef struct ShortSeq:
     PyObject ob_base
     uint64_t _packed
+
+
+cpdef inline printbin(header, value, value_width, chunk_width):
+    string = f"{value:0{value_width}b}"
+    chunks = [string[i:i + chunk_width] for i in range(0, len(string), chunk_width)]
+    print(header + " ".join(chunks))

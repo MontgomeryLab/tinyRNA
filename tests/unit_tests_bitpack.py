@@ -103,6 +103,12 @@ class MyTestCase(unittest.TestCase):
     def test_benchmark(self):
         mem = []
         process = psutil.Process(os.getpid())
+        t1 = time.time()
+        # counts = fast_read_and_count(one_m_w_repeats)
+        counts = fast_read_and_count("/Users/alex/Projects/PycharmProjects/tinyrna/TAI/full_dataset_2022-01-30_16-56-05_run_directory/fastp/Lib304.fastq_cleaned.fastq")
+        t2 = time.time()
+        print(t2 -t1)
+        sys.exit(0)
 
         seqs = self.read_data(ten_m_wo_repeat)
         # seqs = self.read_data(one_m_w_repeats)
