@@ -1,17 +1,13 @@
 import cython
 import sys
 
-from cython.operator cimport dereference as deref, preincrement as inc
+from cython.operator cimport dereference as deref
 
 cdef class UMI:
     # All UMI subtypes hash by sequence
     # Deduplication then happens naturally via __eq__()
     def __hash__(self):
         return deref(self.seq)
-
-    def __str__(self):
-        self.printit()
-        return ""
 
     cpdef printit(self):
         string = ""
@@ -96,9 +92,14 @@ cdef inline uint64_t* _marshall_bytes_256(uint8_t* seq_bytes, uint8_t length):
         return NULL
 
     for i in range(<int>(length / 8)):
-        hashed[i] = _pext_u64(sequence[i], pext_mask)
+        hashed[i] = _pext_u64(sequence[i], pext_mask_64)
 
-    if rem:
-        hashed[i] >>= (32 - rem) * 2
+    hashed[i] >>= (32 - rem) * 2
+    return hashed
+
+cdef inline uint32_t _marshall_bytes_32(uint8_t* seq_bytes, uint8_t length):
+    cdef uint32_t* sequence = reinterpret_cast[istr](seq_bytes)
+    cdef uint32_t hashed = _pext_u32(sequence[0], pext_mask_32)
+    hashed >>= (16 - length) * 2
 
     return hashed

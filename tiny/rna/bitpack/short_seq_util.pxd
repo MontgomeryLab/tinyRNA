@@ -36,6 +36,7 @@ For vectorized operations.
 """
 cdef extern from "x86intrin.h" nogil:
     uint64_t _pext_u64(uint64_t __X, uint64_t __Y)
+    uint32_t _pext_u32(uint32_t __X, uint32_t __Y)
 
 """
 A little bit of hackery to allow fast access to the packed hash field of both
