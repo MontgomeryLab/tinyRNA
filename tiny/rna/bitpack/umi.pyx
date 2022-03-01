@@ -1,7 +1,7 @@
 import cython
 import sys
 
-from cython.operator cimport dereference as deref
+from cython.operator cimport dereference as deref, postincrement as inc
 
 cdef class UMI:
     # All UMI subtypes hash by sequence
@@ -9,14 +9,9 @@ cdef class UMI:
     def __hash__(self):
         return deref(self.seq)
 
-    cpdef printit(self):
-        string = ""
-        for i in range(int(self.seq_len / 32)):
-            string += str(self.seq[i]) + " "
-
     def __dealloc__(self):
         if self.seq is not NULL:
-            free(self.seq)
+            PyObject_Free(<void *>self.seq)
 
 cdef class UMI5p(UMI):
     def __eq__(self, UMI5p other):
@@ -82,24 +77,61 @@ cdef class UMIFactory:
         obj.umi[1] = 0
         return obj
 
+cdef uint64_t pext_mask_64 = 0x0606060606060606
 cdef inline uint64_t* _marshall_bytes_256(uint8_t* seq_bytes, uint8_t length):
-    cdef uint64_t* hashed = <llstr>PyObject_Calloc(<int>(length / 32), 8)
-    cdef uint64_t* sequence = reinterpret_cast[llstr](seq_bytes)
-    cdef uint8_t rem = length % 8
-    cdef uint8_t i
+    cdef:
+        uint64_t* sequence = reinterpret_cast[llstr](seq_bytes)
+        uint8_t num_blocks = <uint8_t>ceil(length / 32)
+        uint8_t block_overhang = <uint8_t>ceil((length % 32) / 8)   # In units of pext (
+        uint8_t pext_overhang = length % 8
+        uint8_t i, j
+        uint64_t* hashed = <llstr>PyObject_Calloc(num_blocks, 8)
 
     if hashed is NULL:
+        PyErr_NoMemory()
         return NULL
 
-    for i in range(<int>(length / 8)):
-        hashed[i] = _pext_u64(sequence[i], pext_mask_64)
+    if num_blocks > 1:
+        print("bang")
 
-    hashed[i] >>= (32 - rem) * 2
+    for i in range(0, length // 8, 4):
+        block = 0LL
+        for j in reversed(range(i, (i + 4))):
+            block = (block << 16) | _pext_u64(sequence[j], pext_mask_64)
+
+        hashed[i // 4] = block
+
+    if block_overhang:
+        i += 4
+        block_idx = i // 4
+        for j in range(i, i + block_overhang):
+            hashed[block_idx] = (hashed[block_idx] << 16) | _pext_u64(sequence[j], pext_mask_64)
+
+    if pext_overhang:
+        # Mask lower n bits (n = 2 * pext_overhang)
+        # This is making me rethink the benefits of using pext for the last lil bit...
+        hashed[block_idx] &= (1 << pext_overhang * 2) - 1
+
+    for i in range(num_blocks):
+        printbin(f"Block {i}: ", hashed[i], 64, 2)
+
     return hashed
 
 cdef inline uint32_t _marshall_bytes_32(uint8_t* seq_bytes, uint8_t length):
     cdef uint32_t* sequence = reinterpret_cast[istr](seq_bytes)
     cdef uint32_t hashed = _pext_u32(sequence[0], pext_mask_32)
-    hashed >>= (16 - length) * 2
+
+    # hashed >>= (16 - length) * 2
+    hashed &= (1 << ((16 - length) * 2)) - 1
+    hashed = (hashed << 4) | length
 
     return hashed
+
+cdef inline unicode _unmarshall_bytes_256(uint64_t* enc_seq, uint8_t length):
+    cdef:
+        uint8_t full_blocks = <uint8_t> floor(length / 32)
+        uint8_t i, j
+
+    for i in range(full_blocks):
+        # for j in range()
+        pass

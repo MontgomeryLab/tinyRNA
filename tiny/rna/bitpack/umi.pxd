@@ -1,7 +1,7 @@
 from .short_seq_util cimport *
-
-from cpython.mem cimport PyObject_Calloc
-from libc.stdlib cimport free
+from cpython.mem cimport PyObject_Calloc, PyObject_Free
+from cpython.exc cimport PyErr_NoMemory
+from libc.math cimport ceil, floor
 
 # This is a function pointer typedef for _factory_* methods
 # This allows us to use dynamic dispatch in C space rather than slow Python
@@ -21,12 +21,14 @@ cdef class UMIFactory:
     cdef inline object _factory_both(self, char * read, uint8_t length)
 
 # For encoding the seq field
-cdef uint64_t pext_mask_64 = 0x0606060606060606
 cdef uint64_t* _marshall_bytes_256(uint8_t* seq_bytes, uint8_t length)
 
 # For encoding each umi field
 cdef uint32_t pext_mask_32 = 0x06060606
 cdef uint32_t _marshall_bytes_32(uint8_t* seq_bytes, uint8_t length)
+
+# Reusable buffer for unmarshalling
+cdef char out_ascii_buffer_128[128]
 
 """
 ============================================================================

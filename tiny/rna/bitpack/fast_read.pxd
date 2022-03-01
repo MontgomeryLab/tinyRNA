@@ -17,4 +17,4 @@ cdef extern from "<fcntl.h>" nogil:
     int F_RDAHEAD
 
 cdef void read_fastq(char* fname, vector[PyObject *] &out)
-cdef void read_fastq_raw(char * fname, vector[char *] &out) nogil
+cdef void read_fastq_raw(char* fname, vector[char *] &out) nogil

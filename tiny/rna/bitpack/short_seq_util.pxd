@@ -48,7 +48,16 @@ ctypedef struct ShortSeq:
     uint64_t _packed
 
 
-cpdef inline printbin(header, value, value_width, chunk_width):
-    string = f"{value:0{value_width}b}"
-    chunks = [string[i:i + chunk_width] for i in range(0, len(string), chunk_width)]
+cpdef inline printbin(header, value, value_bitwidth, chunk_bitwidth):
+    """Convenience function for printing any size integer as zero-padded
+    binary tokenized into chunk_bitwidth length chunks.
+    
+    Args:
+        header: Prefix string (helps distinguish between values)
+        value: The integer value to print
+        value_bitwidth: The width of the value type (zero-padded to this length)
+        chunk_bitwidth: The desired width of the tokenized chunks
+    """
+    string = f"{value:0{value_bitwidth}b}"
+    chunks = [string[i:i + chunk_bitwidth] for i in range(0, len(string), chunk_bitwidth)]
     print(header + " ".join(chunks))

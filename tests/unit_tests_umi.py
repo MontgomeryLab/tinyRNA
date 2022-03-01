@@ -19,7 +19,14 @@ class MyTestCase(unittest.TestCase):
         self.assertIsInstance(f_bo.from_bytes(b"ATGC"), UMIboth)
 
     def test_seq_basic(self):
-        UMIFactory(len_5p=5).from_bytes(b"ATGC").printit()
+        #                             remain: GCGTAATA GGGGGTTT CGCTGTGG GGCGGCT
+        # GCGTAATA GGGGGTTT CGCTGTGG GGCGGCTA GCGTAATA GGGGGTTT CGCTGTGG GGCGGCT
+        # seq = b"GCGTAATAGGGGGTTTCGCTGTGGGGCGGCTAGCGTAATAGGGGGTTTCGCTGTGGGGCGGCT"
+        # UMIFactory(len_5p=5).from_bytes(seq)
+
+        # GCGTAATA GGGGGTTT CGCTGTGG GGCGGCTA G
+        seq = b"GCGTAATAGGGGGTTTCGCTGTGGGGCGGCTAG"
+        UMIFactory(len_5p=5).from_bytes(seq)
 
 
 if __name__ == '__main__':

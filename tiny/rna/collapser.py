@@ -136,6 +136,9 @@ def with_umi(seq_iter: Iterable, umi_spec: dict) -> Iterable:
     trim3 = umi_spec['trim3']
     dedup = umi_spec['dedup']
 
+    # I know this looks terrible, but hear me out:
+    # The decision tree is evaluated just once then
+    # settles into/resumes the appropriate loop.
     if dedup:
         if trim5 and trim3:
             for seq in seq_iter:
