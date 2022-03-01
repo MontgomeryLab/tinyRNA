@@ -48,11 +48,12 @@ class plotterlib:
         self.subplot_cache = {}
         self.dge_scatter_tick_cache = {}
 
-    def len_dist_bar(self, size_df: pd.DataFrame, **kwargs) -> plt.Axes:
+    def len_dist_bar(self, size_df: pd.DataFrame, subtype: str, **kwargs) -> plt.Axes:
         """Creates a stacked barplot of 5' end nucleotides by read length
 
         Args:
             size_df: A dataframe containing the size x 5'nt raw counts
+            subtype: The subtype of this len_dist plot so the title can be properly set
             kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
 
         Returns:
@@ -72,7 +73,7 @@ class plotterlib:
         with plt.style.context(colors):
             plt.sca(ax)
             sizeb = size_prop.plot(kind='bar', stacked=True, reuse_plot=True, **kwargs)
-            sizeb.set_title('Distribution of aligned reads')
+            sizeb.set_title(f'Distribution of {subtype} Reads')
             sizeb.set_ylim(0,np.max(np.sum(size_prop, axis=1))+0.025)
             sizeb.set_ylabel('Proportion of Reads')
             sizeb.set_xlabel('Length of Sequence')

@@ -85,11 +85,6 @@ def len_dist_plots(files_list: list, out_prefix:str, **kwargs):
     """
 
     for size_file in files_list:
-        # Read the size_dist file
-        size_dist = pd.read_csv(size_file, index_col=0)
-
-        # Create the plot
-        plot = aqplt.len_dist_bar(size_dist, **kwargs)
 
         # Parse the "sample_rep_N" string from the input filename to avoid duplicate out_prefix's in the basename
         basename = os.path.splitext(os.path.basename(size_file))[0]
@@ -103,6 +98,13 @@ def len_dist_plots(files_list: list, out_prefix:str, **kwargs):
         else:
             # File does not appear to have been produced by the pipeline
             condition_and_rep = basename
+
+        # Read the size_dist file
+        size_dist = pd.read_csv(size_file, index_col=0)
+
+        # Create the plot
+        subtype = "Assigned" if "assigned" in condition_and_rep else "Mapped"
+        plot = aqplt.len_dist_bar(size_dist, subtype, **kwargs)
 
         pdf_name = make_filename([out_prefix, condition_and_rep, "len_dist"], ext='.pdf')
         plot.figure.savefig(pdf_name)
