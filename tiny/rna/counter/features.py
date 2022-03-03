@@ -9,8 +9,8 @@ from .statistics import LibraryStats
 from .matching import *
 
 # Type aliases for human readability
-match_tuple = Tuple[int, int, bool]
-feature_record_tuple = Tuple[str, int, int, str, Tuple[match_tuple]]
+match_tuple = Tuple[int, int, IntervalSelector]             # (rank, rule, interval selector)
+feature_record_tuple = Tuple[str, str, Tuple[match_tuple]]  # (feature ID, strand, match tuple)
 
 
 class Features:
@@ -200,7 +200,7 @@ class FeatureSelector:
         return rules_table
 
     @staticmethod
-    def build_interval_selectors(iv, match_tuples):
+    def build_interval_selectors(iv: 'HTSeq.GenomicInterval', match_tuples: List[Tuple]):
         """Builds partial/full/exact/3' anchored/5' anchored interval selectors
 
         Unlike build_selectors() and build_inverted_identities(), this function

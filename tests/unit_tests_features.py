@@ -165,15 +165,46 @@ class FeaturesTests(unittest.TestCase):
         instance.assign_features.assert_called_once_with("mock_alignment")
         instance.stats.assert_has_calls(expected_calls_to_stats)
 
-    """Does FeatureSelector.choose() correctly select features with strict interval matching rules?"""
+    """Does FeatureSelector build the proper interval selectors?"""
 
-    def test_feature_selector_strict_interval(self):
-        strict = True
-        chrom, strand, start, stop = "I", "+", 5, 10
-        rules = [dict(rules_template[0], Strict=strict, Identity=('N/A', 'N/A'), nt5end='all', Length='all')]
+    def test_feature_selector_interval_build(self):
+        fs = FeatureSelector(rules_template, LibraryStats())
+        iv = HTSeq.GenomicInterval('I', 0, 10, '+')
 
-        # Feature with coordinates 5..10, matching rule 0 with hierarchy 0 and strict interval = True
-        feat = {("Strict Overlap", start, stop, strand, ((0, 0, strict),))}
+        # Match tuples formed during GFF parsing
+        match_tuples = [('n/a', 'n/a', 'partial'),
+                        ('n/a', 'n/a', 'full'),
+                        ('n/a', 'n/a', 'exact'),
+                        ('n/a', 'n/a', "5' anchored"),
+                        ('n/a', 'n/a', "3' anchored")]
+
+        result = fs.build_interval_selectors(iv, match_tuples)
+
+        self.assertIsInstance(result[0][2], IntervalPartialMatch)
+        self.assertIsInstance(result[1][2], IntervalFullMatch)
+        self.assertIsInstance(result[2][2], IntervalExactMatch)
+        self.assertIsInstance(result[3][2], Interval5pMatch)
+        self.assertIsInstance(result[4][2], Interval3pMatch)
+
+    """Helper function."""
+
+    def make_feature_for_interval_test(self, iv_rule, feat_id, chrom, strand, start, stop):
+        feat_iv = HTSeq.GenomicInterval(chrom, start, stop, strand)
+        rules = [dict(rules_template[0], Strict=iv_rule, Identity=('N/A', 'N/A'), nt5end='all', Length='all')]
+        fs = FeatureSelector(rules, LibraryStats())
+
+        # Feature with specified coordinates, matching rule 0 with hierarchy 0 and the appropriate selector for iv_rule
+        match_tuple = tuple(fs.build_interval_selectors(feat_iv, [(0, 0, iv_rule)]))
+        feat = {(feat_id, strand, match_tuple)}
+
+        return feat, fs
+
+    """Does FeatureSelector.choose() correctly select features defining `full` interval matching rules?"""
+
+    def test_feature_selector_full_interval(self):
+        iv_rule = 'full'
+        chrom, strand, start, stop = "n/a", ".", 5, 10
+        feat, fs = self.make_feature_for_interval_test(iv_rule, "Strict Overlap", chrom, strand, start, stop)
 
         aln_base = {'seq': 'ATGC', 'chrom': chrom, 'strand': strand}
         aln_spill_lo = make_parsed_sam_record(**dict(aln_base, start=start - 1, name="spill"))
@@ -192,22 +223,18 @@ class FeaturesTests(unittest.TestCase):
         aln_contained_hi:    6 |ATGC| 10    # Shared end position
         """
 
-        fs = FeatureSelector(rules, LibraryStats())
         self.assertEqual(fs.choose(feat, aln_spill_lo), set())
         self.assertEqual(fs.choose(feat, aln_spill_hi), set())
         self.assertEqual(fs.choose(feat, aln_contained), {"Strict Overlap"})
         self.assertEqual(fs.choose(feat, aln_contained_lo), {"Strict Overlap"})
         self.assertEqual(fs.choose(feat, aln_contained_hi), {"Strict Overlap"})
 
-    """Does FeatureSelector.choose() correctly select features with partial interval matching rules?"""
+    """Does FeatureSelector.choose() correctly select features with `partial` interval matching rules?"""
 
     def test_feature_selector_partial_interval(self):
-        strict = False
-        chrom, strand, start, stop = "I", "+", 5, 10
-        rules = [dict(rules_template[0], Strict=strict, Identity=('N/A', 'N/A'), nt5end='all', Length='all')]
-
-        # Feature with coordinates 5..10, matching rule 0 with hierarchy 0 and strict interval = False
-        feat = {("Partial Overlap", start, stop, strand, ((0, 0, strict),))}
+        iv_rule = "partial"
+        chrom, strand, start, stop = "n/a", ".", 5, 10
+        feat, fs = self.make_feature_for_interval_test(iv_rule, "Partial Overlap", chrom, strand, start, stop)
 
         aln_base = {'seq': 'ATGC', 'chrom': chrom, 'strand': strand}
         aln_spill_lo = make_parsed_sam_record(**dict(aln_base, start=start - 1, name="spill"))
@@ -224,11 +251,101 @@ class FeaturesTests(unittest.TestCase):
         aln_contained_hi:    6 |ATGC| 10    Shared end position
         """
 
-        fs = FeatureSelector(rules, LibraryStats())
         self.assertEqual(fs.choose(feat, aln_spill_lo), {"Partial Overlap"})
         self.assertEqual(fs.choose(feat, aln_spill_hi), {"Partial Overlap"})
         self.assertEqual(fs.choose(feat, aln_contained_lo), {"Partial Overlap"})
         self.assertEqual(fs.choose(feat, aln_contained_hi), {"Partial Overlap"})
+
+    """Does FeatureSelector.choose() correctly select features with `exact` interval matching rules?"""
+
+    def test_feature_selector_exact_interval(self):
+        iv_rule = "exact"
+        chrom, strand, start, stop = "n/a", ".", 5, 9
+        feat, fs = self.make_feature_for_interval_test(iv_rule, "Exact Overlap", chrom, strand, start, stop)
+
+        aln_match = {'seq': 'ATGC', 'chrom': chrom, 'strand': strand}
+        aln_short = {'seq': 'NNN', 'chrom': chrom, 'strand': strand}
+        aln_exact = make_parsed_sam_record(**dict(aln_match, start=start, name="exact"))
+        aln_short_lo = make_parsed_sam_record(**dict(aln_short, start=start, name="match lo"))
+        aln_short_hi = make_parsed_sam_record(**dict(aln_short, start=start + 1, name="match hi"))
+        aln_spill_lo = make_parsed_sam_record(**dict(aln_match, start=start - 1, name="spill lo"))
+        aln_spill_hi = make_parsed_sam_record(**dict(aln_match, start=start + 1, name="spill hi"))
+
+        """
+        aln_match:            |ATGC|
+        aln_short:            |NNN|
+        feat:               5 |----| 9
+        aln_exact:          5 |ATGC| 9
+        aln_short_lo:       5 |NNN| 8
+        aln_short_hi:        6 |NNN| 9
+        aln_spill_lo:      4 |ATGC| 8
+        aln_spill_hi:        6 |ATGC| 10
+        """
+
+        self.assertEqual(fs.choose(feat, aln_exact), {"Exact Overlap"})
+        self.assertEqual(fs.choose(feat, aln_short_lo), set())
+        self.assertEqual(fs.choose(feat, aln_short_hi), set())
+        self.assertEqual(fs.choose(feat, aln_spill_lo), set())
+        self.assertEqual(fs.choose(feat, aln_spill_hi), set())
+
+    """Does FeatureSelector.choose() correctly select features with `5' anchored` interval matching rules?"""
+
+    def test_feature_selector_5p_interval(self):
+        iv_rule = "5' anchored"
+        chrom, strand, start, stop = "n/a", ".", 5, 10
+        feat, fs = self.make_feature_for_interval_test(iv_rule, "5' Anchored Overlap", chrom, strand, start, stop)
+
+        aln_short = {'seq': 'ATGC', 'chrom': chrom, 'strand': strand}
+        aln_long = {'seq': 'ATGCNN', 'chrom': chrom, 'strand': strand}
+        aln_match_short = make_parsed_sam_record(**dict(aln_short, start=start, name="match, short"))
+        aln_match_long = make_parsed_sam_record(**dict(aln_long, start=start, name="match, long"))
+        aln_spill_lo_short = make_parsed_sam_record(**dict(aln_short, start=start - 1, name="spill lo, short"))
+        aln_spill_lo_long = make_parsed_sam_record(**dict(aln_long, start=start - 1, name="spill lo, long"))
+
+        """
+        aln_short:              |ATGC|
+        aln_long:               |ATGCNN|
+        feat:                 5 |-----| 10
+        aln_match_short:      5 |ATGC| 9
+        aln_match_long:       5 |ATGCNN| 10
+        aln_spill_lo_short:  4 |ATGC| 8
+        aln_spill_lo_long:   4 |ATGCNN| 10
+        """
+
+        self.assertEqual(fs.choose(feat, aln_match_short), {"5' Anchored Overlap"})
+        self.assertEqual(fs.choose(feat, aln_match_long), {"5' Anchored Overlap"})
+        self.assertEqual(fs.choose(feat, aln_spill_lo_short), set())
+        self.assertEqual(fs.choose(feat, aln_spill_lo_long), set())
+
+    """Does FeatureSelector.choose() correctly select features with `3' anchored` interval matching rules?"""
+
+    def test_feature_selector_3p_interval(self):
+        iv_rule = "3' anchored"
+        chrom, strand, start, stop = "n/a", ".", 5, 10
+        feat, fs = self.make_feature_for_interval_test(iv_rule, "3' Anchored Overlap", chrom, strand, start, stop)
+
+        aln_short = {'seq': 'ATGC', 'chrom': chrom, 'strand': strand}
+        aln_long = {'seq': 'ATGCNN', 'chrom': chrom, 'strand': strand}
+        aln_match_short = make_parsed_sam_record(**dict(aln_short, start=start + 1, name="match, short"))
+        aln_match_long = make_parsed_sam_record(**dict(aln_long, start=start - 1, name="match, long"))
+        aln_spill_lo_short = make_parsed_sam_record(**dict(aln_short, start=start + 2, name="spill hi, short"))
+        aln_spill_lo_long = make_parsed_sam_record(**dict(aln_long, start=start, name="spill hi, long"))
+
+        """
+        aln_short:               |ATGC|
+        aln_long:              |ATGCNN|
+        feat:                 5 |-----| 10
+        aln_match_short:       6 |ATGC| 10
+        aln_match_long:      4 |ATGCNN| 10
+        aln_spill_hi_short:     7 |ATGC| 11
+        aln_spill_hi_long:    5 |ATGCNN| 11
+        """
+
+        self.assertEqual(fs.choose(feat, aln_match_short), {"3' Anchored Overlap"})
+        self.assertEqual(fs.choose(feat, aln_match_long), {"3' Anchored Overlap"})
+        self.assertEqual(fs.choose(feat, aln_spill_lo_short), set())
+        self.assertEqual(fs.choose(feat, aln_spill_lo_long), set())
+
 
 if __name__ == '__main__':
     unittest.main()

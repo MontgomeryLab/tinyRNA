@@ -66,7 +66,10 @@ class NumericalMatch(frozenset):
         return super().__new__(cls, lengths)
 
 
-class IntervalPartialMatch(Wildcard):
+class IntervalSelector: __slots__ = ()
+
+
+class IntervalPartialMatch(Wildcard, IntervalSelector):
     """This is a no-op filter
 
     Since StepVector only returns features that overlap each alignment by
@@ -83,7 +86,7 @@ class IntervalPartialMatch(Wildcard):
         return f"Any overlap {self.start}:{self.end}"
 
 
-class IntervalFullMatch:
+class IntervalFullMatch(IntervalSelector):
     __slots__ = ("start", "end")
 
     def __init__(self, iv: HTSeq.GenomicInterval):
@@ -97,7 +100,7 @@ class IntervalFullMatch:
         return f"Between {self.start}:{self.end}"
 
 
-class IntervalExactMatch:
+class IntervalExactMatch(IntervalSelector):
     __slots__ = ("start", "end")
 
     def __init__(self, iv: HTSeq.GenomicInterval):
@@ -111,35 +114,27 @@ class IntervalExactMatch:
         return f"Exactly {self.start}:{self.end}"
 
 
-class Interval5pMatch:
-    __slots__ = ("start", "strand")
+class Interval5pMatch(IntervalSelector):
+    __slots__ = ("start")
 
     def __init__(self, iv: HTSeq.GenomicInterval):
-        self.strand = iv.strand
         self.start = iv.start
 
     def __contains__(self, alignment):
-        if self.strand == alignment['strand']:
-            return self.start == alignment['start']
-        else:
-            return self.start == alignment['end']
+        return self.start == alignment['start']
 
     def __repr__(self):
-        return f"5' anchored to {self.start} ({self.strand})"
+        return f"5' anchored to {self.start}"
 
 
-class Interval3pMatch:
-    __slots__ = ("end", "strand")
+class Interval3pMatch(IntervalSelector):
+    __slots__ = ("end")
 
     def __init__(self, iv: HTSeq.GenomicInterval):
-        self.strand = iv.strand
         self.end = iv.end
 
     def __contains__(self, alignment):
-        if self.strand == alignment['strand']:
-            return self.end == alignment['end']
-        else:
-            return self.end == alignment['start']
+        return self.end == alignment['end']
 
     def __repr__(self):
-        return f"3' anchored to {self.end} ({self.strand})"
+        return f"3' anchored to {self.end}"
