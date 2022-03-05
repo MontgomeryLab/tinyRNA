@@ -24,6 +24,7 @@ class LibraryStats:
         self.diags = Diagnostics(out_prefix) if report_diags else None
 
         self.feat_counts = Counter()
+        self.ident_counts = Counter()
         self.chrom_misses = Counter()
         self.nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
         self.library_stats = {stat: 0 for stat in LibraryStats.summary_categories}
@@ -83,8 +84,10 @@ class LibraryStats:
             bundle['assigned_feats'] |= assignments
             bundle['assigned_reads'] += corr_count
 
-            for feat in assignments:
-                self.feat_counts[feat] += feature_corrected_count
+            for feature_and_rule in assignments:
+                bundle['assigned_feats'].add(feature_and_rule)
+                self.feat_counts[feature_and_rule[0]] += feature_corrected_count
+                self.ident_counts[feature_and_rule[1]] += feature_corrected_count
 
         if self.diags is not None:
             self.diags.record_diagnostics(assignments, n_candidates, aln, bundle)
@@ -112,10 +115,11 @@ class SummaryStats:
     summary_categories = ["Total Reads", "Retained Reads", "Unique Sequences",
                           "Mapped Sequences", "Mapped Reads", "Assigned Reads"]
 
-    def __init__(self, classes, out_prefix: str, report_diags: bool):
+    def __init__(self, classes, feature_counter):
         self.feature_classes = classes
-        self.out_prefix = out_prefix
-        self.report_diags = report_diags
+        self.out_prefix = feature_counter.out_prefix
+        self.report_diags = feature_counter.run_diags
+        self.rules_table = feature_counter.selector.rules_table
 
         # Will become False if an added library lacks its corresponding Collapser and Bowtie outputs
         self.report_summary_statistics = True
@@ -123,11 +127,12 @@ class SummaryStats:
         self.pipeline_stats_df = pd.DataFrame(index=SummaryStats.summary_categories)
         self.feat_counts_df = pd.DataFrame(index=self.feature_classes.keys())
         self.lib_stats_df = pd.DataFrame(index=LibraryStats.summary_categories)
+        self.ident_counts_df = pd.DataFrame()
         self.chrom_misses = Counter()
         self.nt_len_mat = {}
         self.warnings = []
 
-        if report_diags:
+        if self.report_diags:
             self.aln_diags = pd.DataFrame(columns=Diagnostics.aln_diag_categories)
             self.selection_diags = {}
 
@@ -137,6 +142,7 @@ class SummaryStats:
             Diagnostics.write_summary(self.out_prefix, self.aln_diags, self.selection_diags)
 
         self.write_feat_counts(alias, self.out_prefix)
+        self.write_ident_counts(self.out_prefix)
         self.write_alignment_statistics(self.out_prefix)
         self.write_pipeline_statistics(self.out_prefix)
         self.write_nt_len_mat(self.out_prefix)
@@ -172,7 +178,7 @@ class SummaryStats:
         """
 
         # Subset the counts table to only show features that were matched on identity (regardless of count)
-        summary = self.feat_counts_df.loc[self.feature_classes.keys()]
+        summary = self.feat_counts_df.loc[self.feature_classes.keys()] # Todo: redundant subset of index (already done at construction time)
         # Sort columns by title and round all counts to 2 decimal places
         summary = self.sort_cols_and_round(summary)
         # Add Feature Name column, which is the feature alias (default is Feature ID if no alias exists)
@@ -193,12 +199,24 @@ class SummaryStats:
             len_dist_df = pd.DataFrame(matrix).sort_index().fillna(0)
             len_dist_df.to_csv(f'{prefix}_{sanitized_lib_name}_nt_len_dist.csv')
 
+    def write_ident_counts(self, prefix: str) -> None:
+        rule_idx_to_ident = lambda x: '='.join(self.rules_table[x]['Identity'])
+        self.ident_counts_df['Identity'] = self.ident_counts_df.index.map(rule_idx_to_ident)
+        self.ident_counts_df = (self.sort_cols_and_round(self.ident_counts_df)
+                                .set_index('Identity')
+                                .sort_index()
+                                .fillna(0))
+
+        self.df_to_csv(self.ident_counts_df, "Identity", prefix, 'ident_counts')
+
     def add_library(self, other: LibraryStats) -> None:
-        # Add incoming feature counts as a new column of the data frame
-        # Since other.feat_counts is a Counter object, unrecorded features default to 0 on lookup
-        self.feat_counts_df[other.library["Name"]] = self.feat_counts_df.index.map(other.feat_counts)
-        self.lib_stats_df[other.library["Name"]] = self.lib_stats_df.index.map(other.library_stats)
-        self.nt_len_mat[other.library["Name"]] = other.nt_len_mat
+        name = other.library["Name"]
+        # Index varies per library -> join
+        self.ident_counts_df = self.ident_counts_df.join(pd.Series(other.ident_counts, name=name), how='outer')
+        # Index is consistent across libraries -> index.map
+        self.feat_counts_df[name] = self.feat_counts_df.index.map(other.feat_counts)
+        self.lib_stats_df[name] = self.lib_stats_df.index.map(other.library_stats)
+        self.nt_len_mat[name] = other.nt_len_mat
         self.chrom_misses.update(other.chrom_misses)
 
         if self.report_diags: self.add_diags(other)

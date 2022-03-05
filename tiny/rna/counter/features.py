@@ -125,7 +125,7 @@ class FeatureSelector:
         if report_diags: self.elim_stats = libstats.diags.selection_diags
 
     @classmethod
-    def choose(cls, candidates: Set[feature_record_tuple], alignment: dict) -> Set[str]:
+    def choose(cls, candidates: Set[feature_record_tuple], alignment: dict) -> Set[Tuple[str, int]]:
         """Selects features according to the selection rules provided at construction
 
         Feature candidates are supplied to this function via feats_list. This is a list
@@ -175,11 +175,11 @@ class FeatureSelector:
             nt5end = alignment['nt5']
             length = alignment['len']
 
-            rule = FeatureSelector.rules_table[rule]
-            if strand not in rule["Strand"]: continue
-            if nt5end not in rule["nt5end"]: continue
-            if length not in rule["Length"]: continue
-            selections.add(feat)
+            rule_def = FeatureSelector.rules_table[rule]
+            if strand not in rule_def["Strand"]: continue
+            if nt5end not in rule_def["nt5end"]: continue
+            if length not in rule_def["Length"]: continue
+            selections.add((feat, rule))
 
         return selections
 
