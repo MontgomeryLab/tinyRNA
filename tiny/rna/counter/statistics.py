@@ -71,6 +71,12 @@ class LibraryStats:
     def count_bundle_assignments(self, bundle: dict, aln: dict, assignments: set, n_candidates: int) -> None:
         """Called for each alignment for each read"""
 
+        # TODO:
+        #  Previous counting that relied on length of assigned_count or bundle['assigned_feats']
+        #  is no longer correct. assigned_count no longer contains unique feature entries; it now contains
+        #  unique feature-rule pairs, which means there will be multiple entries for a feature if multiple
+        #  MATCHING rules share the lowest hierarchy value, and more than one of them matches the feature.
+
         assigned_count = len(assignments)
         corr_count = bundle['corr_count']
 
@@ -177,8 +183,7 @@ class SummaryStats:
         formatted for each library as {group}_rep_{replicate}
         """
 
-        # Subset the counts table to only show features that were matched on identity (regardless of count)
-        summary = self.feat_counts_df.loc[self.feature_classes.keys()] # Todo: redundant subset of index (already done at construction time)
+        summary = self.feat_counts_df
         # Sort columns by title and round all counts to 2 decimal places
         summary = self.sort_cols_and_round(summary)
         # Add Feature Name column, which is the feature alias (default is Feature ID if no alias exists)
