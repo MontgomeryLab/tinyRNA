@@ -18,17 +18,17 @@ class LibraryStats:
                           'Reads Assigned to Single Feature', 'Sequences Assigned to Single Feature',
                           'Reads Assigned to Multiple Features', 'Sequences Assigned to Multiple Features']
 
-    def __init__(self, out_prefix: str = None, report_diags: bool = False, no_normalize = False, **kwargs):
+    def __init__(self, out_prefix: str = None, report_diags: bool = False, normalize=True, **kwargs):
         self.library = {'Name': 'Unassigned', 'File': 'Unassigned'}
         self.out_prefix = out_prefix
         self.diags = Diagnostics(out_prefix) if report_diags else None
+        self.norm = normalize
 
         self.feat_counts = Counter()
         self.chrom_misses = Counter()
-        self.nt_len_mat = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
+        self.mapped_nt_len = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
+        self.assigned_nt_len = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
         self.library_stats = {stat: 0 for stat in LibraryStats.summary_categories}
-
-        if no_normalize: setattr(self, "normalize_count_by", self.no_norm)
 
     def assign_library(self, library: dict):
         self.library = library
@@ -38,10 +38,11 @@ class LibraryStats:
 
         bundle_read = aln_bundle[0]
         loci_counts = len(aln_bundle)
+        nt5, seqlen = bundle_read['nt5'], len(bundle_read['seq'])
 
         # Calculate counts for multi-mapping
         read_counts = int(bundle_read['name'].split('=')[1])
-        corr_counts = self.normalize_count_by(read_counts, loci_counts)
+        corr_counts = read_counts / loci_counts
 
         bundle = {
             'loci_count': loci_counts,
@@ -49,6 +50,8 @@ class LibraryStats:
             'corr_count': corr_counts,
             'assigned_feats': set(),
             'assigned_reads': 0,
+            'seq_len': seqlen,
+            'nt5': nt5,
             'mapping_stat':
                 "Assigned Single-Mapping Reads"
                 if loci_counts == 1 else
@@ -56,16 +59,9 @@ class LibraryStats:
         }
 
         # Fill in 5p nt/length matrix
-        sequence = bundle_read['seq']
-        self.nt_len_mat[bundle_read['nt5']][len(sequence)] += read_counts
+        self.mapped_nt_len[nt5][seqlen] += read_counts
 
         return bundle
-
-    def normalize_count_by(self, count, n_recipients):
-        return count / n_recipients
-
-    def no_norm(self, count, _):
-        return count
 
     def count_bundle_assignments(self, bundle: dict, aln: dict, assignments: set, n_candidates: int) -> None:
         """Called for each alignment for each read"""
@@ -76,12 +72,14 @@ class LibraryStats:
         if assigned_count == 0:
             self.library_stats['Total Unassigned Reads'] += corr_count
         if assigned_count > 0:
-            self.library_stats['Total Assigned Reads'] += corr_count
-            self.library_stats[bundle['mapping_stat']] += corr_count
+            feature_corrected_count = corr_count / assigned_count if self.norm else corr_count
+            assigned_reads = feature_corrected_count * assigned_count
 
-            feature_corrected_count = self.normalize_count_by(corr_count, assigned_count)
+            self.library_stats['Total Assigned Reads'] += assigned_reads
+            self.library_stats[bundle['mapping_stat']] += assigned_reads
+
             bundle['assigned_feats'] |= assignments
-            bundle['assigned_reads'] += corr_count
+            bundle['assigned_reads'] += assigned_reads
 
             for feat in assignments:
                 self.feat_counts[feat] += feature_corrected_count
@@ -93,13 +91,15 @@ class LibraryStats:
     def finalize_bundle(self, bundle: dict) -> None:
         """Called at the conclusion of processing each multiple-alignment bundle"""
 
-        assignment_count = len(bundle['assigned_feats'])
+        assigned_feat_count = len(bundle['assigned_feats'])
 
-        if assignment_count == 0:
+        if assigned_feat_count == 0:
             self.library_stats['Total Unassigned Sequences'] += 1
         else:
             self.library_stats['Total Assigned Sequences'] += 1
-            if assignment_count == 1:
+            self.assigned_nt_len[bundle['nt5']][bundle['seq_len']] += bundle['assigned_reads']
+
+            if assigned_feat_count == 1:
                 self.library_stats['Reads Assigned to Single Feature'] += bundle['assigned_reads']
                 self.library_stats['Sequences Assigned to Single Feature'] += 1
             else:
@@ -124,7 +124,7 @@ class SummaryStats:
         self.feat_counts_df = pd.DataFrame(index=self.feature_classes.keys())
         self.lib_stats_df = pd.DataFrame(index=LibraryStats.summary_categories)
         self.chrom_misses = Counter()
-        self.nt_len_mat = {}
+        self.nt_len_matrices = {}
         self.warnings = []
 
         if report_diags:
@@ -139,7 +139,7 @@ class SummaryStats:
         self.write_feat_counts(alias, self.out_prefix)
         self.write_alignment_statistics(self.out_prefix)
         self.write_pipeline_statistics(self.out_prefix)
-        self.write_nt_len_mat(self.out_prefix)
+        self.write_nt_len_matrices(self.out_prefix)
 
     def write_alignment_statistics(self, prefix: str) -> None:
         # Sort columns by title and round all counts to 2 decimal places
@@ -185,20 +185,24 @@ class SummaryStats:
 
         summary.to_csv(prefix + '_feature_counts.csv', index=False)
 
-    def write_nt_len_mat(self, prefix: str) -> None:
-        """Writes each library's 5' end nucleotide / length matrix to its own file."""
+    def write_nt_len_matrices(self, prefix: str) -> None:
+        """Writes each library's 5' end nucleotide / length matrices to their own files."""
 
-        for lib_name, matrix in self.nt_len_mat.items():
+        for lib_name, matrices in self.nt_len_matrices.items():
             sanitized_lib_name = lib_name.replace('/', '_')
-            len_dist_df = pd.DataFrame(matrix).sort_index().fillna(0)
-            len_dist_df.to_csv(f'{prefix}_{sanitized_lib_name}_nt_len_dist.csv')
+
+            mapped_nt_len_df = pd.DataFrame(matrices[0]).sort_index().fillna(0)
+            mapped_nt_len_df.to_csv(f'{prefix}_{sanitized_lib_name}_mapped_nt_len_dist.csv')
+
+            assigned_nt_len_df = pd.DataFrame(matrices[1]).sort_index().round(decimals=2).fillna(0)
+            assigned_nt_len_df.to_csv(f'{prefix}_{sanitized_lib_name}_assigned_nt_len_dist.csv')
 
     def add_library(self, other: LibraryStats) -> None:
         # Add incoming feature counts as a new column of the data frame
         # Since other.feat_counts is a Counter object, unrecorded features default to 0 on lookup
         self.feat_counts_df[other.library["Name"]] = self.feat_counts_df.index.map(other.feat_counts)
         self.lib_stats_df[other.library["Name"]] = self.lib_stats_df.index.map(other.library_stats)
-        self.nt_len_mat[other.library["Name"]] = other.nt_len_mat
+        self.nt_len_matrices[other.library["Name"]] = [other.mapped_nt_len, other.assigned_nt_len]
         self.chrom_misses.update(other.chrom_misses)
 
         if self.report_diags: self.add_diags(other)

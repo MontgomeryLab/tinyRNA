@@ -92,10 +92,15 @@ outputs:
     outputBinding:
       glob: $(inputs.out_prefix)_feature_counts.csv
 
-  other_counts:
+  mapped_nt_len_dist:
     type: File[]
     outputBinding:
-      glob: $(inputs.out_prefix)*_nt_len_dist.csv
+      glob: $(inputs.out_prefix)*_mapped_nt_len_dist.csv
+
+  assigned_nt_len_dist:
+    type: File[]
+    outputBinding:
+      glob: $(inputs.out_prefix)*_assigned_nt_len_dist.csv
 
   alignment_stats:
     type: File

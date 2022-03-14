@@ -44,8 +44,8 @@ def get_args():
                         help='Only produce counts for features whose '
                              'GFF column 3 matches the type(s) listed')
     arg_parser.add_argument('-nn', '--no-normalize', action='store_true',
-                        help='Do not normalize counts by genomic hits '
-                             'and (selected) overlapping feature counts.')
+                        help='Do not normalize counts by (selected) '
+                             'overlapping feature counts.')
     arg_parser.add_argument('-dc', '--decollapse', action='store_true',
                         help='Create a decollapsed copy of all SAM '
                              'files listed in your Samples Sheet.')
