@@ -22,7 +22,7 @@ class SAM_reader:
     """A minimal SAM reader that bundles multiple-alignments and only parses data relevant to the workflow"""
 
     def __init__(self, **prefs):
-        self.decollapse = prefs.get("decollapse", None)
+        self.decollapse = prefs.get("decollapse", False)
         self.out_prefix = prefs.get("out_prefix", None)
         self._decollapsed_filename = None
         self._decollapsed_reads = []
@@ -316,6 +316,9 @@ class ReferenceTables:
         self.classes[root_id] |= classes
         self.matches[root_id] |= matches
 
+        # Optimization opportunity: only append intervals for features that have matches.
+        # This is skipped to make testing more succinct; if users routinely use --all-features,
+        # it would be wise to add this check here, but at the cost of rewriting many unit tests.
         if row.iv not in self.intervals[root_id]:
             self.intervals[root_id].append(row.iv)
 
