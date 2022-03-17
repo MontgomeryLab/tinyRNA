@@ -44,8 +44,8 @@ def get_args():
                         help='Only produce counts for features whose '
                              'GFF column 3 matches the type(s) listed')
     arg_parser.add_argument('-nn', '--no-normalize', action='store_true',
-                        help='Do not normalize counts by genomic hits '
-                             'and (selected) overlapping feature counts.')
+                        help='Do not normalize counts by (selected) '
+                             'overlapping feature counts.')
     arg_parser.add_argument('-dc', '--decollapse', action='store_true',
                         help='Create a decollapsed copy of all SAM '
                              'files listed in your Samples Sheet.')
@@ -132,7 +132,7 @@ def load_config(features_csv: str, is_pipeline: bool) -> Tuple[List[dict], Dict[
         rule['nt5end'] = rule['nt5end'].upper().translate({ord('U'): 'T'})  # Convert RNA base to cDNA base
         rule['Identity'] = (row['Key'], row['Value'])                       # Create identity tuple
         rule['Hierarchy'] = int(rule['Hierarchy'])                          # Convert hierarchy to number
-        rule['Strict'] = rule['Strict'] == 'Full'                           # Convert strict intersection to boolean
+        rule['Strict'] = rule['Strict'].lower()                             # Built later in ReferenceTables
 
         gff = os.path.basename(row['Source']) if is_pipeline else from_here(features_csv, row['Source'])
 

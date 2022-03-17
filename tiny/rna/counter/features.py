@@ -5,17 +5,12 @@ from collections import defaultdict
 from typing import List, Tuple, Set, Dict
 
 from tiny.rna.counter.hts_parsing import ReferenceTables, SAM_reader
-from .matching import Wildcard, StrandMatch, NumericalMatch, NtMatch
 from .statistics import LibraryStats
+from .matching import *
 
 # Type aliases for human readability
-match_tuple = Tuple[int, int, bool]
-feature_record_tuple = Tuple[str, int, int, str, Tuple[match_tuple]]
-
-BOTH_STRANDS = ('+', '-')
-
-# Global indexes for Hits produced by choose_identity()
-RANK, RULE, FEAT = 0, 1, 2
+match_tuple = Tuple[int, int, IntervalSelector]             # (rank, rule, interval selector)
+feature_record_tuple = Tuple[str, str, Tuple[match_tuple]]  # (feature ID, strand, match tuple)
 
 
 class Features:
@@ -98,20 +93,19 @@ class FeatureSelector:
 
     Two sources of data serve as targets for selection: feature attributes (sourced from
     input GFF files), and sequence attributes (sourced from input SAM files).
+    All candidate features are assumed to have matched at least one Identity selector,
+    as determined by hts_parsing.ReferenceTables.get_matches_and_classes()
 
-    The first round of selection is performed against each candidate feature's attributes.
-    The target for this stage is feature attribute key-value pairs, referred to here as Identities.
-    A candidate may match multiple identities. Each match is referred to as a Hit. If more
-    than one Hit is produced, elimination is performed using each Hit's hierarchy/rank value.
-    Hits are tuples for performance reasons, and are of the format:
-        (hierarchy, rule, feature_id, strand)
+    The first round of selection was performed during GFF parsing.
 
-    If more than one Hit remains following first round selection, a second round of selection
-    is performed against sequence attributes: strand, 5' end nucleotide, and length. Rules for
-    5' end nucleotides support lists (e.g. C,G,U) and wildcards (e.g. "all"). Rules for length
-    support lists, wildcards, and ranges (i.e. 20-27) which may be intermixed in the same rule.
-    Lengths may be specified as "strict", meaning that the feature must be completely contained
-    by the alignment interval.
+    The second round is performed against the hierarchy values and
+    IntervalSelectors in each candidate's match-tuples.
+
+    If more than one candidate remains, a final round of selection is performed
+    against sequence attributes: strand, 5' end nucleotide, and length. Rules for
+    5' end nucleotides support lists (e.g. C,G,U) and wildcards (e.g. "all").
+    Rules for length support lists, wildcards, and ranges (e.g. 20-27) which
+    may be intermixed in the same rule.
     """
 
     rules_table: List[dict]
@@ -128,46 +122,40 @@ class FeatureSelector:
     def choose(cls, candidates: Set[feature_record_tuple], alignment: dict) -> Set[Tuple[str, int]]:
         """Selects features according to the selection rules provided at construction
 
-        Feature candidates are supplied to this function via feats_list. This is a list
-        of tuples, each representing features associated with an interval which
-        overlapped the alignment interval. The interval in this tuple may be a partial
-        (incomplete) overlap with the alignment.
+        The `candidates` argument is a set of nested tuples, each representing a
+        feature whose interval overlapped the alignment interval by at least one base.
+        It is structured as:
 
-        The feats_list takes the following form:
-            [(iv_A_start, iv_A_end, {features associated with iv_A, ... }),
-             (iv_B_start, iv_B_end, {features associated with iv_A, ... }), ... ]
+            { (feature_record_tuple 1), (feature_record_tuple 2), ... }
 
-            Each feature is represented as:
-                (featureID, start, stop, strand, (match-tuple, ... ))
+            Each feature_record_tuple is structured as:
+                ( featureID, strand, ( match_tuple, ... ) )
 
-            Each match-tuple represents a rule which matched the feature on identity.
-                (rule, rank, strict)
+            Each match_tuple represents a rule which matched the feature on identity.
+                ( rule, rank, IntervalSelector )
 
         Args:
-            feats_list: a list of tuples, each representing features associated with
-                an interval which overlapped the alignment interval. See above.
+            candidates: a list of tuples, each representing features associated with
+                an interval which overlapped the alignment interval by at least one base.
             alignment: the alignment to which features are being selected for assignment.
 
         Returns:
-            selections: a list of features which passed selection
+            selections: a set of features which passed selection
         """
 
-        identity_hits, min_rank = [], sys.maxsize
-        aln_start, aln_end = alignment['start'], alignment['end']
+        hits, min_rank = [], sys.maxsize
 
-        for feat, iv_start, iv_end, iv_strand, matches in candidates:
-            perfect_iv_match = iv_start <= aln_start and iv_end >= aln_end
-            for rule, rank, strict in matches:
+        for feat, strand, matches in candidates:
+            for rule, rank, iv_match in matches:
                 if rank > min_rank: continue
-                if strict and not perfect_iv_match: continue
+                if alignment not in iv_match: continue
                 if rank < min_rank: min_rank = rank
-                identity_hits.append((rank, rule, feat, iv_strand))
-        # -> identity_hits: [(hierarchy, rule, feature, strand), ...]
+                hits.append((rank, rule, feat, strand))
 
-        if not identity_hits: return set()
+        if not hits: return set()
 
         selections = set()
-        for hit in identity_hits:
+        for hit in hits:
             if hit[0] != min_rank: continue
             _, rule, feat, strand = hit
 
@@ -205,6 +193,42 @@ class FeatureSelector:
                     row[selector] = build_fn(defn)
 
         return rules_table
+
+    @staticmethod
+    def build_interval_selectors(iv: 'HTSeq.GenomicInterval', match_tuples: List[Tuple]):
+        """Builds partial/full/exact/3' anchored/5' anchored interval selectors
+
+        Unlike build_selectors() and build_inverted_identities(), this function
+        is not called at construction time. Instead, it is called when finalizing
+        match-tuples in ReferenceTables. This is because interval selectors are
+        created for each feature (requiring start/stop/strand to be known) for
+        each of the feature's identity matches (each match-tuple).
+
+        Args:
+            iv: The interval of the feature from which each selector is built
+            match_tuples: A list of tuples representing the feature's identity
+                matches. Each tuple index 2 defines and is replaced by the selector.
+        """
+
+        built_selectors = {}
+        selector_factory = {
+            'full': lambda: IntervalFullMatch(iv),
+            'exact': lambda: IntervalExactMatch(iv),
+            'partial': lambda: IntervalPartialMatch(iv),
+            "5' anchored": lambda: Interval5pMatch(iv),
+            "3' anchored": lambda: Interval3pMatch(iv),
+        }
+
+        for i in range(len(match_tuples)):
+            try:
+                match = match_tuples[i]
+                # Cache instances to prevent duplicates for the same match type on the same iv
+                selector = built_selectors.setdefault(match[2], selector_factory[match[2]]())
+                match_tuples[i] = (match[0], match[1], selector)
+            except KeyError:
+                raise ValueError(f"Unrecognized interval match type: '{match_tuples[i][2]}'")
+
+        return match_tuples
 
     @staticmethod
     def build_inverted_identities(rules_table) -> Dict[Tuple[str, str], List[int]]:

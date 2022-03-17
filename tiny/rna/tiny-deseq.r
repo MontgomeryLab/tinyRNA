@@ -1,7 +1,6 @@
 #!/usr/bin/env Rscript
 
 #### ---- Validate the provided command line arguments ---- ####
-
 args <- commandArgs(trailingOnly = TRUE)
 usage <- "The following arguments are accepted:
 
@@ -26,6 +25,9 @@ usage <- "The following arguments are accepted:
        --drop-zero
               Optional. Prior to performing analysis, this will drop all
               rows/features which have a zero count in all samples."
+
+# Increase max error string length by the length of the usage string
+options(warning.length = getOption("warning.length") + nchar(usage))
 
 ## Returns the provided data as a dataframe with a corresponding classes column, regardless of order
 df_with_classes <- function(classless_df){
