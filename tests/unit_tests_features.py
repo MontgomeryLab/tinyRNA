@@ -178,27 +178,6 @@ class FeaturesTests(unittest.TestCase):
         instance.assign_features.assert_called_once_with("mock_alignment")
         instance.stats.assert_has_calls(expected_calls_to_stats)
 
-    """Does FeatureSelector build the proper interval selectors?"""
-
-    def test_feature_selector_interval_build(self):
-        fs = FeatureSelector(deepcopy(rules_template), LibraryStats())
-        iv = HTSeq.GenomicInterval('I', 0, 10, '+')
-
-        # Match tuples formed during GFF parsing
-        match_tuples = [('n/a', 'n/a', 'partial'),
-                        ('n/a', 'n/a', 'full'),
-                        ('n/a', 'n/a', 'exact'),
-                        ('n/a', 'n/a', "5' anchored"),
-                        ('n/a', 'n/a', "3' anchored")]
-
-        result = fs.build_interval_selectors(iv, match_tuples)
-
-        self.assertIsInstance(result[0][2], IntervalPartialMatch)
-        self.assertIsInstance(result[1][2], IntervalFullMatch)
-        self.assertIsInstance(result[2][2], IntervalExactMatch)
-        self.assertIsInstance(result[3][2], Interval5pMatch)
-        self.assertIsInstance(result[4][2], Interval3pMatch)
-
     """Does FeatureSelector.choose() correctly select features defining `full` interval matching rules?"""
 
     def test_feature_selector_full_interval(self):
