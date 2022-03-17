@@ -139,21 +139,20 @@ class FeaturesTests(unittest.TestCase):
     """Does count_reads call the right functions when handling a single record library?"""
 
     @patch("tiny.rna.counter.features.FeatureCounter")
-    @patch("tiny.rna.counter.features.parser")
-    def test_count_reads_generic(self, parser, mock):
+    def test_count_reads_generic(self, mock):
         instance = mock.return_value
         library = {'File': self.short_sam_file, 'Name': 'short'}
 
         # Note: mock_alignment is wrapped in a double list to imitate multi-alignment bundling
         # It imitates a list of multi-alignment bundles with one bundle having one alignment
-        parser.read_SAM.return_value = [["mock_alignment"]]
+        instance.sam_reader.bundle_multi_alignments.return_value = [["mock_alignment"]]
         bundle = instance.stats.count_bundle.return_value
         instance.assign_features.return_value = ({"mock_feat"}, 1)
 
         expected_calls_to_stats = [
             call.assign_library(library),
             call.count_bundle(["mock_alignment"]),
-            call.count_bundle_alignments(bundle, "mock_alignment", {'mock_feat'}, len({'mock_feat'})),
+            call.count_bundle_assignments(bundle, "mock_alignment", {'mock_feat'}, len({'mock_feat'})),
             call.finalize_bundle(bundle),
             call.diags.write_intermediate_file(library["Name"])
         ]

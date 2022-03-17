@@ -528,8 +528,6 @@ class MyTestCase(unittest.TestCase):
                 self.exhaust_iterator(reader._parse_alignments(sam_in))
                 write_fn.assert_called_once()
 
-            self.assertTrue(len(reader._decollapsed_reads) == 0)
-
 
 
 
