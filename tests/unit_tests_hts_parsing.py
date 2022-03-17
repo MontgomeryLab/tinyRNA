@@ -129,7 +129,7 @@ class MyTestCase(unittest.TestCase):
             {'Identity': ("biotype", "snoRNA"), 'Strand': "-", 'Hierarchy': 2, 'nt5end': "N/A", 'Length': "30",
              'Strict': False}
         ])
-        iv = HTSeq.GenomicInterval("I", 3746, 3908, "-")
+        iv = HTSeq.GenomicInterval("I", 3746, 3909, "-")
         kwargs = {'all_features': True}
 
         feats, alias, classes = ReferenceTables(feature_source, feature_selector, **kwargs).get()
@@ -151,7 +151,7 @@ class MyTestCase(unittest.TestCase):
             {'Identity': ("biotype", "snoRNA"), 'Strand': "-", 'Hierarchy': 2, 'nt5end': "N/A", 'Length': "30",
              'Strict': False}
         ])
-        iv = HTSeq.GenomicInterval("I", 3746, 3908, "-")
+        iv = HTSeq.GenomicInterval("I", 3746, 3909, "-")
 
         feats, alias, classes = ReferenceTables(feature_source, feature_selector, **kwargs).get()
         steps = list(feats[iv].array[iv.start:iv.end].get_steps(values_only=True))
@@ -361,26 +361,25 @@ class MyTestCase(unittest.TestCase):
 
         kwargs = {'all_features': True}
         feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
-        feature_selector = self.selector_with_rules(helpers.rules_template)
+        feature_selector = self.selector_with_template(helpers.rules_template)
 
-        expected = [{('GrandParent', 0, 20, '-', ())},
-                    {('Parent2', 19, 30, '-', ()), ('GrandParent', 0, 20, '-', ())},
-                    {('Parent2', 19, 30, '-', ())},
-                    {('Parent2', 19, 30, '-', ()), ('GrandParent', 29, 40, '-', ())},
-                    {('GrandParent', 29, 40, '-', ())},
-                    {('Parent2', 39, 50, '-', ()), ('GrandParent', 29, 40, '-', ())},
-                    {('Parent2', 39, 50, '-', ())},
+        expected = [{('GrandParent', '-', ())},
+                    {('Parent2', '-', ()), ('GrandParent', '-', ())},
+                    {('Parent2', '-', ())},
+                    {('Parent2', '-', ()), ('GrandParent', '-', ())},
+                    {('GrandParent', '-', ())},
+                    {('Parent2', '-', ()), ('GrandParent', '-', ())},
+                    {('Parent2', '-', ())},
                     set(),
-                    {('Sibling', 99, 110, '-', ())},
-                    {('Sibling', 110, 120, '-', ())},
+                    {('Sibling', '-', ())},
                     set(),
-                    {('Sibling', 139, 150, '-', ())},
+                    {('Sibling', '-', ())},
                     set()]
 
         feats, _, _, = ReferenceTables(feature_source, feature_selector, **kwargs).get()
+        actual = list(feats.chrom_vectors["I"]["."].array.get_steps(values_only=True))
+        self.assertListEqual(actual, expected)
 
-        for act, exp in zip(feats.chrom_vectors["I"]["."].array.get_steps(values_only=True), expected):
-            self.assertEqual(act, exp)
 
     """Does ReferenceTables.get() properly handle source filters for discontinuous features?"""
 
