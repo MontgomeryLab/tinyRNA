@@ -40,7 +40,7 @@ class CounterTests(unittest.TestCase):
             'Strand': _row['Strand'],
             'nt5end': _row['nt5end'].upper().translate({ord('U'): 'T'}).replace('"', ''),  # Undo csv comma quoting
             'Length': _row['Length'],
-            'Strict': _row['Strict'] == 'Full'
+            'Strict': _row['Strict'].lower()
         }]
 
         self.csv_samp_row_dict = {'file': "test_file.fastq", 'group': "test_group", 'rep': "0"}
