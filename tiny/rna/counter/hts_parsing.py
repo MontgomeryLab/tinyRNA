@@ -22,7 +22,7 @@ class SAM_reader:
     """A minimal SAM reader that bundles multiple-alignments and only parses data relevant to the workflow"""
 
     def __init__(self, **prefs):
-        self.decollapse = prefs.get("decollapse", None)
+        self.decollapse = prefs.get("decollapse", False)
         self.out_prefix = prefs.get("out_prefix", None)
         self._decollapsed_filename = None
         self._decollapsed_reads = []
@@ -240,8 +240,7 @@ class ReferenceTables:
 
     def __init__(self, gff_files: Dict[str, list], feature_selector, **kwargs):
         self.all_features = kwargs.get('all_features', False)
-        self.inv_ident = feature_selector.inv_ident
-        self.rules = feature_selector.rules_table
+        self.selector = feature_selector
         self._set_filters(**kwargs)
         self.gff_files = gff_files
 
@@ -317,6 +316,9 @@ class ReferenceTables:
         self.classes[root_id] |= classes
         self.matches[root_id] |= matches
 
+        # Optimization opportunity: only append intervals for features that have matches.
+        # This is skipped to make testing more succinct; if users routinely use --all-features,
+        # it would be wise to add this check here, but at the cost of rewriting many unit tests.
         if row.iv not in self.intervals[root_id]:
             self.intervals[root_id].append(row.iv)
 
@@ -335,13 +337,15 @@ class ReferenceTables:
         classes = {c for c in row_attrs["Class"]}
 
         identity_matches = set()
-        for ident, rule_indexes in self.inv_ident.items():
+        for ident, rule_indexes in self.selector.inv_ident.items():
             match = row_attrs.get(ident[0], None)
             if match is not None and ident[1] in match:
                 identity_matches.update(
-                    (r, self.rules[r]['Hierarchy'], self.rules[r]['Strict'])
-                    for r in rule_indexes
-                )
+                    (r,
+                     self.selector.rules_table[r]['Hierarchy'],
+                     self.selector.rules_table[r]['Strict']
+                     )
+                    for r in rule_indexes)
         # -> identity_matches: {(rule, rank, strict), ...}
         return identity_matches, classes
 
@@ -395,31 +399,38 @@ class ReferenceTables:
     def _finalize_features(self):
         """Performs final accounting of discontinuous features and adds feature records to the StepVector"""
 
-        for root_id, family_ivs in self.intervals.items():
-            # Sort match tuples by rank for more efficient feature selection
-            sorted_match_tuples = tuple(sorted(self.matches[root_id], key=lambda x: x[1]))
+        for root_id, unmerged_sub_ivs in self.intervals.items():
+            merged_sub_ivs = self._merge_adjacent_subintervals(unmerged_sub_ivs)
 
-            # Sort intervals so that adjacencies are adjacent by index
-            family_ivs.sort(key=lambda x: x.start)
-            family_iter = iter(family_ivs)
-            continuous = next(family_iter).copy()
-            continuous_ivs = []
-
-            # Merge adjacent intervals for discontinuous features
-            for iv in family_iter:
-                if continuous.overlaps(iv):
-                    continuous.extend_to_include(iv)
-                else:
-                    continuous_ivs.append(continuous)
-                    continuous = iv.copy()
-            continuous_ivs.append(continuous)
-
-            # Optimization opportunity: for match tuples with partial interval matching,
+            # Optimization opportunity: for features whose interval selectors are all "partial",
             # eliminate all but the highest ranking match in each feature family to reduce
             # loop count in phase 1 selection.
 
-            for iv in continuous_ivs:
-                self.feats[iv] += (root_id, iv.start, iv.end, iv.strand, sorted_match_tuples)
+            # Sort match tuples by rank for more efficient feature selection
+            sorted_matches = sorted(self.matches[root_id], key=lambda x: x[1])
+
+            for sub_iv in merged_sub_ivs:
+                finalized_match_tuples = self.selector.build_interval_selectors(sub_iv, sorted_matches.copy())
+                self.feats[sub_iv] += (root_id, sub_iv.strand, tuple(finalized_match_tuples))
+
+    @staticmethod
+    def _merge_adjacent_subintervals(unmerged_sub_ivs):
+
+        # Sort intervals so that adjacencies are adjacent by index
+        unmerged_sub_ivs = iter(sorted(unmerged_sub_ivs, key=lambda x: x.start))
+        continuous_iv = next(unmerged_sub_ivs).copy()
+        merged_ivs = []
+
+        # Merge adjacent intervals for discontinuous features
+        for sub_iv in unmerged_sub_ivs:
+            if continuous_iv.overlaps(sub_iv):
+                continuous_iv.extend_to_include(sub_iv)
+            else:
+                merged_ivs.append(continuous_iv)
+                continuous_iv = sub_iv.copy()
+        merged_ivs.append(continuous_iv)
+
+        return merged_ivs
 
     def _finalize_aliases(self):
         self.alias = {feat: tuple(sorted(aliases)) for feat, aliases in self.alias.items()}

@@ -31,8 +31,10 @@ jobs:
         working-directory: ./tests
         run: |
           python -m unittest unit_tests_collapser
-          python -m unittest unit_tests_entry
           python -m unittest unit_tests_counter
+          python -m unittest unit_tests_entry
           python -m unittest unit_tests_features
           python -m unittest unit_tests_hts_parsing
+          python -m unittest unit_tests_matching
           python -m unittest unit_tests_plotter
+          python -m unittest unit_tests_statistics

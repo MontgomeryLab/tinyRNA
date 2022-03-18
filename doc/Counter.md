@@ -1,47 +1,71 @@
 # Feature Selection
-Small RNAs can often be classified by sequence features, such as length, strandedness, and 5' nucleotide. We provide a Features Sheet (`features.csv`) in which you can define selection rules to more accurately capture counts for the small RNAs of interest.
-
-Selection takes place for every feature associated with every alignment of every small RNA sequence. It occurs in two phases:
-1. Against the candidate feature's attribute key/value pairs, as defined in your GFF3 file.
-2. Against the alignment's small RNA attributes (strand relative to feature of interest, 5' end nucleotide, and length).
-
-Each rule must be assigned a hierarchy value. A lower value indicates higher selection preference and multiple rules may share the same value. We utilize this value only during the first phase of selection; if multiple features match the attribute key/value pairs defined in your rules, then only the feature(s) with the lowest hierarchy values move to the second selection phase. The remaining features are discarded for the given read alignment. 
-
-You can use higher hierarchy values to exclude features that are not of interest. For example, suppose you have a miRNA locus embedded within a coding gene locus (within an intron for example). By assigning a hierarchy of 1 to miRNA and a hierarchy of 2 to coding genes, all small RNA counts from sequences matching to the miRNA would be excluded from total counts for the coding gene. Reversing the hierarchy such that miRNA had a hierarchy of 2 and coding genes had a hierarchy of 1 would instead exclude reads from sequences matching to the coding gene from total counts for the miRNA. If a hierarchy of 1 was assigned to both miRNAs and coding genes, counts for sequences matching both features would be split between them.
+We provide a Features Sheet (`features.csv`) in which you can define selection rules to more accurately capture counts for the small RNAs of interest. The parameters for these rules include attributes commonly used in the classification of small RNAs, such as length, strandedness, and 5' nucleotide. They are utilized at each alignment locus to determine which overlapping features should be assigned a portion of the read counts for the given sequence.
 
 >**Important**: candidate features do not receive counts if they do not pass selection process described below
 
-## Feature Attribute Parameters
-| Select for... | with value... | Hierarchy |
-| --- | --- | --- |
+Selection occurs in three stages, with the output of each stage as input to the next:
+1. Features are matched to rules based on their GFF3 column 9 attributes
+2. Features which overlap an alignment are eliminated based on the hierarchy values and desired overlap characteristics defined in their mached rules
+3. Remaining feature candidates are then selected based on the small RNA attributes of the alignment to which they are being assigned. These attributes are, again, defined in each feature's matched rules
 
-The first round of selection is performed using this portion of the rule. Each rule must be assigned a hierarchy value, which applies only to this round of selection. A lower hierarchy value indicates higher selection preference and rules may share hierarchy values.
+## Stage 1: Feature Attribute Parameters
+| features.csv columns: | Select for... | with value... |
+|-----------------------|---------------| --- |
 
-For each alignment, all associated features will first be examined to see if their column 9 attributes contain a "select for" key whose values contain a "with value". If multiple features match, then elimination will be performed using the hierarchy values of the rules they matched. The feature-rule pair(s) with the lowest hierarchy value will be selected for a second round of elimination. Internally, these matches are represented as `(hierarchy, rule, feature)` tuples which we call _hits_.
+Each feature's column 9 attributes are searched for the key-value combinations defined in the `Select for...` and `with value...` columns. Features, and the rules they matched, are retained for overlap evaluation at alignment loci. Attribute keys are allowed to have multiple comma separated values, and these values are treated as a list; only one of the listed values needs to match the `with value...` to be considered a valid match to the rule.
 
-A feature may match multiple rules. When this happens, a _hit_ is produced for each matched rule and normal hierarchical elimination is performed. This means that the product of the first round of elimination is not just a list of features, but rather feature-rule pairs in the form of _hits_.
+For example, if a rule contained `Class` and `WAGO` in these columns, then a feature with attributes<br>`... ;Class=CSR,WAGO; ...` would be considered a match for the rule.
 
->**Tip**: These parameters are case sensitive. The capitalization in your rule must match the capitalization in your GFF files
+>**Tip**: These parameters are case sensitive. The capitalization in your rule must match the capitalization in your GFF3 files
 
-## Read Attribute Parameters
-| Strand | 5' End Nucleotide | Length | Match |
-| --- | --- | --- | --- |
+## Stage 2: Hierarchy and Overlap Parameters
+| features.csv columns: | Hierarchy | Match |
+|-----------------------|-----------| --- |
 
-The second round of selection switches to attributes of the read to which features are being assigned. Recall that the first round of selection yields a list of _hits_. Now, only the rules contained in this list of _hits_ are used for selection. Contrast this with the first round in which the key-value pairs of all rules were considered.
+This stage of selection is concerned with the interval overlap between alignments and features. **Overlap is determined in a strandless fashion.** See the `Strand` section in Stage 3 for refinement of selections by strand.
+
+### Hierarchy
+Each rule must be assigned a hierarchy value. This value is used to perform elimination when multiple features, or multiple feature-rule pairs, overlap an alignment locus.
+- Each feature can have multiple hierarchy values if it matched more than one rule during Stage 1 selection
+- Multiple rules are allowed to share the same value
+- Only the lowest value is selected at each locus
+
+>**Important:**
+Let's take a step back. What exactly is the product of selection here? Not just a feature, but a feature _and_ a rule it had matched during Stage 1 selection. This is an important distinction because in Stage 3, only the **selected rule(s)** will be used to determine if the corresponding feature is an appropriate assignment based on the alignment's attributes.
+
+You can use higher hierarchy values to exclude features that are not of interest.
+
+>**Example:** suppose you have a miRNA locus embedded within a coding gene locus (within an intron for example). By assigning a hierarchy of 1 to miRNA and a hierarchy of 2 to coding genes, all small RNA counts from sequences matching to the miRNA would be excluded from total counts for the coding gene. Reversing the hierarchy such that miRNA had a hierarchy of 2 and coding genes had a hierarchy of 1 would instead exclude reads from sequences matching to the coding gene from total counts for the miRNA. If a hierarchy of 1 was assigned to both miRNAs and coding genes, counts for sequences matching both features would be split between them.
+
+### Match
+The match column allows you to specify which read alignments should be assigned based on how their start and end points overlap with candidate features. Candidates for each matched rule can be selected using the following options:
+- `partial`: alignment overlaps feature by at least one base
+- `full`: alignment does not extend beyond either terminus of the feature
+- `exact`: alignment termini are equal to the feature's
+- `5' anchored`: alignment's 5' end is equal to the corresponding terminus of the feature
+- `3' anchored`: alignment's 3' end is equal to the corresponding terminus of the feature
+
+The following diagrams demonstrate the strand semantics of these interval selectors. The first two options show separate illustrations for features on each strand for emphasis. All matches shown in the remaining three options apply to features on either strand.
+![3'_anchored_5'_anchored](../images/3'_anchored_5'_anchored.png)
+![Full_Exact_Partial](../images/Full_Exact_Partial.png)
+
+## Stage 3: Alignment Attribute Parameters
+| features.csv columns: | Strand | 5' End Nucleotide | Length |
+|-----------------------|--------| --- | --- |
+
+The final stage of selection is concerned with attributes of the alignment to which features are being assigned.
 
 ### Strand
 - `sense`: the alignment strand must match the feature's strand for a match
 - `antisense`: the alignment strand must not match the feature's strand for a match
 - `both`: strand is not evaluated
 
-### Match
-Valid values are `Partial` and `Full`. This parameter is referring to the required amount of overlap between a read alignment and a feature in order for that feature to be a candidate for selection. If a rule specifies a `Partial` Match value, then features which overlap a read alignment by at least one base will be considered for selection. If a rule specifies a `Full` Match value, then only features whose endpoints are fully contained by or equal to the read alignment will be considered for selection.
 
 ### 5' End Nucleotide and Length
 | Parameter | Single | List | Range | Wildcard |
-| --- | :---: | :---: | :---: | :---: |
-| 5' end nt | X | X |  | X |
-| Length | X | X | X | X |
+| --- |:------:|:----:|:-----:|:--------:|
+| 5' end nt |   ✓    |  ✓   |       |    ✓     |
+| Length |    ✓    |   ✓   |   ✓    |     ✓     |
 
 Examples:
 - **Single**: `G` or `22`
@@ -55,21 +79,24 @@ Examples:
 >**Tip:** you may specify U and T bases in your rules. Uracil bases will be converted to thymine when your Features Sheet is loaded.
 
 ### Misc
-| Alias by... | Feature Source |
-| --- | --- |
+| features.csv columns: | Alias by... | Feature Source |
+| --- |-------------| --- |
 
-You may specify an **Alias by...** which is a GFF column 9 attribute key you wish to represent each feature. The intention of this column is to provide a human-friendly name for each feature. The value associated with each feature's **Alias by...** attribute will be shown in the `Feature Name` column of the Feature Counts output table.  For example, if one of your rules specifies an alias of `sequence_name` and gene1's `sequence_name` attribute is "abc123", then gene1's `Feature Name` column in the Feature Counts table will read "abc123".
+You may specify an **Alias by...** which is a GFF3 column 9 attribute key you wish to represent each feature. The intention of this column is to provide a human-friendly name for each feature. The value associated with each feature's **Alias by...** attribute will be shown in the `Feature Name` column of the Feature Counts output table.  For example, if one of your rules specifies an alias of `sequence_name` and gene1's `sequence_name` attribute is "abc123", then gene1's `Feature Name` column in the Feature Counts table will read "abc123".
 
 The **Feature Source** field of a rule is tied only to the **Alias by...**; rules are _not_ partitioned on a GFF file basis, and features parsed from these GFF files are similarly not partitioned as they all go into the same lookup table regardless of source. For each rule, aliases are built on a per-GFF file basis; that is, **Alias by...** values will only be gathered from their corresponding **Feature Source**. Additionally, each GFF file is parsed only once regardless of the number of times it occurs in the Features Sheet.
 
 ## Count Normalization
-Small RNA reads passing selection will receive a normalized count increment. By default, read counts are normalized twice before being assigned to a feature (these settings can be changed in `run_config.yml`). Counts for each small RNA sequence are divided: 
+Small RNA reads passing selection will receive a normalized count increment. By default, read counts are normalized twice before being assigned to a feature. The second normalization step can be disabled in `run_config.yml` if desired. Counts for each small RNA sequence are divided: 
 1. By the number of loci it aligns to in the genome.
-2. By the number of selected features for each of its alignments.
+2. By the number of _selected_ features for each of its alignments.
 
-### The Nitty Gritty Details
+### The Details
 You may encounter the following cases when you have more than one unique GFF file listed in your **Feature Source**s:
-- Attribute value lists are supported. Values which contain commas are treated as lists of values when parsing GFF files
-- If a feature is defined in one GFF file, then again in another but with differing attributes, then those attribute values will be appended
-- A feature may have multiple **Alias by...** attributes associated with it
-- If a feature is defined in one GFF file, then again but under a different **Alias by...**, then both aliases are retained and treated as a list. All aliases will be present in the `Feature Name` column of the Feature Counts output table. They will be comma separated.
+- If a feature is defined in one GFF3 file, then again in another but with differing attributes, rule and alias matches will be merged for the feature
+- If a feature is defined in one GFF3 file, then again but under a different **Alias by...**, then both aliases are retained and treated as a list. All aliases will be present in the `Feature Name` column of the Feature Counts output table. They will be comma separated.
+
+Discontinuous features and feature filtering support:
+- Discontinuous features are supported (as defined by the `Parent` attribute key, or by a shared `ID` attribute value). Rule and alias matches of descendents are merged with the root parent's.
+- Features can be filtered during GFF3 parsing by on their `source` and/or `type` columns, and these preferences can be specified in the Run Config file. These are inclusive filters. Only features matching the values specified will be retained for selection. An empty list allows all values.
+- If a filtered feature breaks a feature lineage (that is, features chained via the `Parent` attribute), then the highest non-filtered ancestor is still considered to be the root parent. The lineage is maintained transparently but the filtered feature does not contribute to the domains of selection.

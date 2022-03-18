@@ -6,9 +6,11 @@ from tiny.rna.counter.statistics import LibraryStats, SummaryStats
 
 
 class MyTestCase(unittest.TestCase):
-    def test_something(self):
-        self.assertEqual(True, False)
+    @classmethod
+    def setUpClass(self):
+        pass
 
+    """ Helper function """
     def create_mock_libstats(self, lib=None):
         library = {
             'Name': 'mock_name',
