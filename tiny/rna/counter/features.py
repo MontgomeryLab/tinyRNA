@@ -2,7 +2,7 @@ import HTSeq
 import sys
 
 from collections import defaultdict
-from typing import List, Tuple, Set, Dict
+from typing import List, Tuple, Set, Dict, DefaultDict
 
 from tiny.rna.counter.hts_parsing import ReferenceTables, SAM_reader
 from .statistics import LibraryStats
@@ -119,7 +119,7 @@ class FeatureSelector:
         if report_diags: self.elim_stats = libstats.diags.selection_diags
 
     @classmethod
-    def choose(cls, candidates: Set[feature_record_tuple], alignment: dict) -> Set[Tuple[str, int]]:
+    def choose(cls, candidates: Set[feature_record_tuple], alignment: dict) -> DefaultDict[str, set]:
         """Selects features according to the selection rules provided at construction
 
         The `candidates` argument is a set of nested tuples, each representing a
@@ -152,9 +152,9 @@ class FeatureSelector:
                 if rank < min_rank: min_rank = rank
                 hits.append((rank, rule, feat, strand))
 
-        if not hits: return set()
+        selections = defaultdict(set)
+        if not hits: return selections
 
-        selections = set()
         for hit in hits:
             if hit[0] != min_rank: continue
             _, rule, feat, strand = hit
@@ -167,7 +167,7 @@ class FeatureSelector:
             if strand not in rule_def["Strand"]: continue
             if nt5end not in rule_def["nt5end"]: continue
             if length not in rule_def["Length"]: continue
-            selections.add((feat, rule))
+            selections[feat].add(rule)
 
         return selections
 

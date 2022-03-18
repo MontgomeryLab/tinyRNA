@@ -49,7 +49,7 @@ class LibraryStats:
             'loci_count': loci_counts,
             'read_count': read_counts,
             'corr_count': corr_counts,
-            'assigned_pairs': set(),
+            'assigned_feats': set(),
             'assigned_reads': 0,
             'nt5_count': self.assigned_nt_len[nt5],
             'seq_len': seqlen,
@@ -64,34 +64,34 @@ class LibraryStats:
 
         return bundle
 
-    def count_bundle_assignments(self, bundle: dict, aln: dict, assignments: set, n_candidates: int) -> None:
+    def count_bundle_assignments(self, bundle: dict, aln: dict, assignments: dict, n_candidates: int) -> None:
         """Called for each alignment for each read"""
 
-        pair_count = len(assignments)
+        feat_count = len(assignments)
         corr_count = bundle['corr_count']
 
-        if pair_count == 0:
+        if feat_count == 0:
             self.library_stats['Total Unassigned Reads'] += corr_count
         else:
-            fcorr_count = corr_count / pair_count if self.norm else corr_count
-            assigned_read_count = fcorr_count * pair_count
+            fcorr_count = corr_count / feat_count if self.norm else corr_count
+            bundle['assigned_reads'] += fcorr_count * feat_count
+            bundle['assigned_feats'] |= assignments.keys()
 
-            bundle['assigned_reads'] += assigned_read_count
-            bundle['assigned_pairs'] |= assignments
-
-            for feat, rule in assignments:
+            for feat, rules in assignments.items():
                 self.feat_counts[feat] += fcorr_count
-                self.ident_counts[rule] += fcorr_count
+                rcorr_count = fcorr_count / len(rules)
+
+                for rule in rules:
+                    self.ident_counts[rule] += rcorr_count
 
         if self.diags is not None:
-            assigned_feats = {feat_and_rule[0] for feat_and_rule in assignments}
-            self.diags.record_diagnostics(assigned_feats, n_candidates, aln, bundle)
-            self.diags.record_alignment_details(aln, bundle, assigned_feats)
+            self.diags.record_diagnostics(assignments.keys(), n_candidates, aln, bundle)
+            self.diags.record_alignment_details(aln, bundle, assignments.keys())
 
     def finalize_bundle(self, bundle: dict) -> None:
         """Called at the conclusion of processing each multiple-alignment bundle"""
 
-        assigned_feat_count = len({pair[0] for pair in bundle['assigned_pairs']})
+        assigned_feat_count = len(bundle['assigned_feats'])
 
         if assigned_feat_count == 0:
             self.library_stats['Total Unassigned Sequences'] += 1
