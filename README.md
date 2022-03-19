@@ -80,7 +80,7 @@ You can use either relative or absolute paths in your configuration files. **Rel
 
 #### Run Config
 
-The overall behavior of the pipeline and its steps is determined by the Run Config file (`run_config.yml`). This YAML file can be edited using a simple text editor such as BBEDIT for Mac or Notepad++ for Windows. Within it you must specify the location of your Paths file (`paths.yml`). All other settings are optional. When the pipeline starts up, tinyRNA will process the Run Config based on the contents of it and your other configuration files, and the processed copy will be saved to your run directory. The processed configuration is what ultimately determines the behavior of the workflow. This provides auto-documentation for all of your pipeline runs.
+The overall behavior of the pipeline and its steps is determined by the Run Config file (`run_config.yml`). This YAML file can be edited using a simple text editor. Within it you must specify the location of your Paths file (`paths.yml`). All other settings are optional. When the pipeline starts up, tinyRNA will process the Run Config based on the contents of it and your other configuration files, and the processed copy will be saved to your run directory. The processed configuration is what ultimately determines the behavior of the workflow. This provides auto-documentation for all of your pipeline runs.
 
 #### Paths File
 
@@ -92,7 +92,7 @@ To make it simple to specify your fastq files and their locations, along with as
 
 #### Features Sheet
 
-Small RNAs can often be classified by sequence characteristics, such as length, strandedness, and 5' nucleotide. We provide a Features Sheet (`features.csv`) in which you can define selection rules to more accurately capture counts for the small RNAs of interest.  Rules apply to features parsed from **all** Feature Sources, with the exception of "Alias by..." which only applies to the Feature Source on the same row. These rules are used to select among overlapping features at each alignment locus. Selection first takes place against feature attributes (GFF3 column 9), and is directed by defining the attribute you want to be considered (Select by...) and the acceptable values for that attribute (with value...). Rules that match features at this stage will undergo hierarchical elimination and pass to the second stage of selection which examines characteristics of the alignment itself: strand relative to the feature of interest, 5' end nucleotide, and length, with options for full or partial interval matching with the target sequence. See [Counter](doc/Counter.md) for more information.
+Small RNAs can often be classified by sequence characteristics, such as length, strandedness, and 5' nucleotide. We provide a Features Sheet (`features.csv`) in which you can define selection rules to more accurately capture counts for the small RNAs of interest.  Rules apply to features parsed from **all** Feature Sources, with the exception of "Alias by..." which only applies to the Feature Source on the same row. These rules are used to select among overlapping features at each alignment locus. Selection first takes place against feature attributes (GFF3 column 9), and is directed by defining the attribute you want to be considered (Select by...) and the acceptable values for that attribute (with value...). Rules that match features at this stage will be used in a second stage of selection which includes elimination by hierarchy and interval overlap characteristics. Remaining candidates pass to the third and final stage of selection which examines characteristics of the alignment itself: strand relative to the feature of interest, 5' end nucleotide, and length. See [Counter](doc/Counter.md) for more information.
 
 >**Tip**: Don't worry about having duplicate Feature Source entries. Each GFF3 file is parsed only once.
 
@@ -162,7 +162,7 @@ tiny-collapse [-h] -i FASTQFILE -o OUTPREFIX [-t THRESHOLD] [-c]
 ```
 tiny-count [-h] -i SAMPLES -c CONFIGFILE -o OUTPUTPREFIX
                   [-sf [SOURCE [SOURCE ...]]] [-tf [TYPE [TYPE ...]]] [-nn]
-                  [-a] [-p] [-d]
+                  [-dc] [-a] [-p] [-d]
 
 This submodule assigns feature counts for SAM alignments using a Feature Sheet
 ruleset. If you find that you are sourcing all of your input files from a prior
@@ -179,6 +179,8 @@ optional arguments:
                         matches the type(s) listed
   -nn, --no-normalize   Do not normalize counts by genomic hits and (selected)
                         overlapping feature counts.
+  -dc, --decollapse     Create a decollapsed copy of all SAM files listed in
+                        your Samples Sheet.
   -a, --all-features    Represent all features in output counts table,
                         regardless of counts or identity rules.
   -p, --is-pipeline     Indicates that counter was invoked as part of a
@@ -223,15 +225,15 @@ tiny-deseq.r --input-file COUNTFILE --outfile-prefix PREFIX [--control CONDITION
 ```
 ##### Plotter
 ```
-tiny-plot [-nc NORM_COUNTS] [-dge COMPARISON [COMPARISON ...]]
-                 [-len 5P_LEN [5P_LEN ...]] [-h] [-o PREFIX] [-pv VALUE]
-                 [-s MPLSTYLE] [-v] -p PLOT [PLOT ...]
+tiny-plot [-rc RAW_COUNTS] [-nc NORM_COUNTS] [-ss STAT]
+          [-dge COMPARISON [COMPARISON ...]] [-len 5P_LEN [5P_LEN ...]]
+          [-h] [-o PREFIX] [-pv VALUE] [-s MPLSTYLE] [-v] -p PLOT [PLOT ...]
 
 This script produces basic static plots for publication as part of the tinyRNA
 workflow. Input file requirements vary by plot type and you are free to supply
 only the files necessary for your plot selections. If you are sourcing all of
-your input files from the same run directory, you may find it easier to instead
-run `tiny replot` within that run directory.
+your input files from the same run directory, you may find it easier to
+instead run `tiny replot` within that run directory.
 
 Required arguments:
   -p PLOT [PLOT ...], --plots PLOT [PLOT ...]
@@ -251,15 +253,18 @@ Required arguments:
                           significantly different genes highlighted.
 
 Input files produced by Counter:
+  -rc RAW_COUNTS, --raw-counts RAW_COUNTS
+                        The ...feature_counts.csv file
+  -ss STAT, --summary-stats STAT
+                        The ...summary_stats.csv file
   -len 5P_LEN [5P_LEN ...], --len-dist 5P_LEN [5P_LEN ...]
-                        The ...nt_len_dist.csv files produced by tiny-count
+                        The ...nt_len_dist.csv files
 
 Input files produced by DGE:
   -nc NORM_COUNTS, --norm-counts NORM_COUNTS
-                        The ...norm_counts.csv file produced by tiny-deseq.r
+                        The ...norm_counts.csv file
   -dge COMPARISON [COMPARISON ...], --dge-tables COMPARISON [COMPARISON ...]
-                        The ...cond1...cond2...deseq.csv files produced by
-                        tiny-deseq.r
+                        The ...cond1...cond2...deseq.csv files
 
 Optional arguments:
   -h, --help            show this help message and exit
@@ -272,8 +277,6 @@ Optional arguments:
   -v, --vector-scatter  Produce scatter plots with vectorized points (slower).
                         Note: only the points on scatter plots will be raster
                         if this option is not provided.
-
-
 ```
 
 ##### fastp, bowtie-build, and bowtie
@@ -324,6 +327,8 @@ The row for this feature in the feature counts table would read:
 |------------|--------------|---------------|-----------|-----------|-----|
 | 406904 | mir-1,hsa-miR-1 | miRNA | 1234 | 999 | ... |
 
+#### Counts by Rule
+This output table shows the same assigned counts as those in the Feature Counts table, but instead breaks them down by the rule which led to the assignment. A Mapped Reads row is added (available only during pipeline runs) which represents each library's total read counts which were available for assignment prior to counting.
 
 #### Alignment Statistics
 A single table of alignment statistics includes columns for each library and the following rows:
@@ -348,18 +353,23 @@ A single table of summary statistics includes columns for each library and the f
 
 #### 5'nt vs. Length Matrix
 
-After alignment, a size and 5' nt distribution table is created for each library. The distribution of lengths and 5' nt can be used to assess the overall quality of your libraries. This can also be used for analyzing small RNA distributions in non-model organisms without annotations.
+During counting, size and 5' nt distribution tables are created for each library. The distribution of lengths and 5' nt can be used to assess the overall quality of your libraries. This can also be used for analyzing small RNA distributions in non-model organisms without annotations.
+
+Two tables are produced:
+- **... mapped_nt_len_dist.csv**: full counts from all mapped sequences regardless of feature assignment
+- **... assigned_nt_len_dist.csv**: only the assigned counts for sequences receiving feature assignment
 
 ### Differential Expression Analysis
 DGE is performed using the `DESeq2` R package. It reports differential expression tables for your experiment design, and a table of normalized feature counts. If your control condition is indicated in your Samples Sheet then pairwise comparisons will be  made against the control. If a control condition is not indicated then all possible bidirectional pairwise comparisons are made. 
 
 ### Plots
 Simple static plots are generated from the outputs of Counter and Deseq2. These plots are useful for assessing the quality of your experiment design and the quality of your libraries. The available plots are:
-- len_dist: A stacked barplot showing size & 5' nucleotide distribution.
-- class_charts: A pie and barchart showing proportions of counts per class.
+- len_dist: A stacked barplot showing size & 5' nucleotide distribution; one output for mapped reads and one for assigned reads.
+- class_charts: A pie, barchart, and table showing proportions of counts per class.
 - replicate_scatter: A scatter plot comparing replicates for all count files given.
 - sample_avg_scatter_by_dge: A scatter plot comparing all sample groups, with significantly different genes highlighted.
 - sample_avg_scatter_by_dge_class: A scatter plot comparing all sample groups, with classes and significantly different genes highlighted.
+- PCA plot: a standard PCA plot from variance stabilizing transformed feature counts (produced during the DGE step)
 
 
 ## Contributing
