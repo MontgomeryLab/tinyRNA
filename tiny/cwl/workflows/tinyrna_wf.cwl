@@ -206,7 +206,7 @@ steps:
       diagnostics: counter_diags
       fastp_logs: preprocessing/json_report_file
       collapsed_fa: preprocessing/uniq_seqs
-    out: [ feature_counts, mapped_nt_len_dist, assigned_nt_len_dist,
+    out: [ feature_counts, rule_counts, mapped_nt_len_dist, assigned_nt_len_dist,
            alignment_stats, summary_stats, console_output, decollapsed_sams,
            intermed_out_files, alignment_diags, selection_diags ]
 
@@ -279,7 +279,7 @@ steps:
     run: ../tools/make-subdir.cwl
     in:
       dir_files:
-        source: [ counter/feature_counts, counter/mapped_nt_len_dist, counter/assigned_nt_len_dist,
+        source: [ counter/feature_counts, counter/rule_counts, counter/mapped_nt_len_dist, counter/assigned_nt_len_dist,
                   counter/alignment_stats, counter/summary_stats, counter/console_output, counter/decollapsed_sams,
                   counter/intermed_out_files, counter/alignment_diags, counter/selection_diags,
                   features_csv ]
