@@ -140,16 +140,15 @@ def load_config(features_csv: str, is_pipeline: bool) -> Tuple[List[dict], Dict[
         if row['Name'] not in ["ID", *gff_files[gff]]: gff_files[gff].append(row['Name'])
         if rule not in rules: rules.append(rule)
 
-    rules.sort(key=lambda x: x['Hierarchy'])
     return rules, gff_files
 
 
 @report_execution_time("Counting and merging")
-def map_and_reduce(libraries, counter_instance):
+def map_and_reduce(libraries, prefs):
     """Assigns one worker process per library and merges the statistics they report"""
 
     # SummaryStats handles final output files, regardless of multiprocessing status
-    summary = SummaryStats(Features.classes, counter_instance)
+    summary = SummaryStats(Features.classes, prefs)
 
     # Use a multiprocessing pool if multiple sam files were provided
     if len(libraries) > 1:
@@ -182,7 +181,7 @@ def main():
         counter = FeatureCounter(gff_file_set, selection_rules, **vars(args))
 
         # Assign and count features using multiprocessing and merge results
-        merged_counts = map_and_reduce(libraries, counter)
+        merged_counts = map_and_reduce(libraries, vars(args))
 
         # Write final outputs
         merged_counts.write_report_files(Features.aliases)

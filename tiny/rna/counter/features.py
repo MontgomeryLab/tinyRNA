@@ -2,7 +2,7 @@ import HTSeq
 import sys
 
 from collections import defaultdict
-from typing import List, Tuple, Set, Dict, DefaultDict
+from typing import List, Tuple, Set, Dict, Mapping
 
 from tiny.rna.counter.hts_parsing import ReferenceTables, SAM_reader
 from .statistics import LibraryStats
@@ -29,8 +29,6 @@ class Features:
 
 
 class FeatureCounter:
-    out_prefix: str
-    run_diags: bool
 
     def __init__(self, gff_file_set, selection_rules, **prefs):
         self.stats = LibraryStats(**prefs)
@@ -39,14 +37,12 @@ class FeatureCounter:
 
         reference_tables = ReferenceTables(gff_file_set, self.selector, **prefs)
         Features(*reference_tables.get())
+        self.prefs = prefs
 
-        FeatureCounter.out_prefix = prefs['out_prefix']
-        FeatureCounter.run_diags = prefs['report_diags']
-
-    def assign_features(self, al: dict) -> Tuple[set, int]:
+    def assign_features(self, al: dict) -> Tuple[dict, int]:
         """Determines features associated with the interval then performs rule-based feature selection"""
 
-        feat_matches, assignment = set(), set()
+        feat_matches, assignment = set(), {}
 
         try:
             feat_matches = feat_matches.union(*(match for match in
@@ -81,8 +77,7 @@ class FeatureCounter:
 
             self.stats.finalize_bundle(bstat)
 
-        # While stats are being merged, write intermediate file
-        if FeatureCounter.run_diags:
+        if self.prefs.get('report_diags', False):
             self.stats.diags.write_intermediate_file(library["Name"])
 
         return self.stats
@@ -119,19 +114,19 @@ class FeatureSelector:
         if report_diags: self.elim_stats = libstats.diags.selection_diags
 
     @classmethod
-    def choose(cls, candidates: Set[feature_record_tuple], alignment: dict) -> DefaultDict[str, set]:
+    def choose(cls, candidates: Set[feature_record_tuple], alignment: dict) -> Mapping[str, set]:
         """Selects features according to the selection rules provided at construction
 
         The `candidates` argument is a set of nested tuples, each representing a
         feature whose interval overlapped the alignment interval by at least one base.
-        It is structured as:
 
-            { (feature_record_tuple 1), (feature_record_tuple 2), ... }
+            It is structured as:
+                { ( feature_record_tuple 1 ), ( feature_record_tuple 2 ), ... }
 
             Each feature_record_tuple is structured as:
                 ( featureID, strand, ( match_tuple, ... ) )
 
-            Each match_tuple represents a rule which matched the feature on identity.
+            Each match_tuple represents a rule which matched the feature on identity:
                 ( rule, rank, IntervalSelector )
 
         Args:
@@ -152,9 +147,9 @@ class FeatureSelector:
                 if rank < min_rank: min_rank = rank
                 hits.append((rank, rule, feat, strand))
 
-        selections = defaultdict(set)
-        if not hits: return selections
+        if not hits: return {}
 
+        selections = defaultdict(set)
         for hit in hits:
             if hit[0] != min_rank: continue
             _, rule, feat, strand = hit
