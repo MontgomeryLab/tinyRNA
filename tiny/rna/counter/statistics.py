@@ -26,7 +26,7 @@ class LibraryStats:
         self.norm = normalize
 
         self.feat_counts = Counter()
-        self.ident_counts = Counter()
+        self.rule_counts = Counter()
         self.chrom_misses = Counter()
         self.mapped_nt_len = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
         self.assigned_nt_len = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
@@ -80,7 +80,7 @@ class LibraryStats:
                 self.feat_counts[feat] += fcorr_count
                 rcorr_count = fcorr_count / len(matched_rules)
                 for rule in matched_rules:
-                    self.ident_counts[rule] += rcorr_count
+                    self.rule_counts[rule] += rcorr_count
 
         if self.diags is not None:
             self.diags.record_diagnostics(assignments.keys(), n_candidates, aln, bundle)
@@ -226,7 +226,7 @@ class SummaryStats:
     def add_library(self, other: LibraryStats) -> None:
         name = other.library["Name"]
         # Index varies per library -> join
-        self.rule_counts_df = self.rule_counts_df.join(pd.Series(other.ident_counts, name=name), how='outer')
+        self.rule_counts_df = self.rule_counts_df.join(pd.Series(other.rule_counts, name=name), how='outer')
         # Index is consistent across libraries -> index.map
         self.feat_counts_df[name] = self.feat_counts_df.index.map(other.feat_counts)
         self.lib_stats_df[name] = self.lib_stats_df.index.map(other.library_stats)
