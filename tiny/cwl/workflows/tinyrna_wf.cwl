@@ -65,6 +65,10 @@ inputs:
   end_to_end: int?
   nofw: boolean?
   norc: boolean?
+  seedmms: int?
+  seedlen: int?
+  best: boolean?
+  strata: boolean?
   k_aln: int?
   all_aln: boolean?
   no_unal: boolean?
@@ -179,6 +183,11 @@ steps:
       solexa13: solexa13
       end_to_end: end_to_end
       nofw: nofw
+      norc: norc
+      seedmms: seedmms
+      seedlen: seedlen
+      best: best
+      strata: strata
       k_aln: k_aln
       all_aln: all_aln
       no_unal: no_unal
