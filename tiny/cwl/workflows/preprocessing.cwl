@@ -38,6 +38,8 @@ inputs:
   # collapser inputs
   threshold: int?
   compress: boolean?
+  5p_trim: int?
+  3p_trim: int?
 
 steps:
   fastp:
@@ -79,6 +81,8 @@ steps:
       out_prefix: { valueFrom: $(inputs.sample_basename) }
       threshold: threshold
       compress: compress
+      5p_trim: 5p_trim
+      3p_trim: 3p_trim
     out: [collapsed_fa, low_counts_fa, console_output]
 
 outputs:
