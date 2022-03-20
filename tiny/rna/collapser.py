@@ -10,7 +10,6 @@ import argparse
 import builtins
 import gzip
 import os
-import re
 
 from collections import Counter
 from functools import partial
@@ -62,47 +61,35 @@ def get_args() -> 'argparse.NameSpace':
     )
 
     parser.add_argument(
-        '--3p-trim', metavar='N BASES', required=False, type=positive_number,
-        help="Treat N BASES at the 3' end of each sequence as a UMI and trim them"
+        '--5p-trim', metavar='LENGTH', required=False, type=positive_number,
+        help="Trim LENGTH bases from the 5' end of each sequence"
     )
 
     parser.add_argument(
-        '--5p-trim', metavar='N BASES', required=False, type=positive_number,
-        help="Treat N BASES at the 5' end of each sequence as a UMI and trim them"
-    )
-
-    parser.add_argument(
-        '-d', '--discard_umi_duplicates', action='store_true',
-        help="Discard duplicate UMIs. The --3p-trim and/or --5p-trim arguments "
-             "define which part of each sequence to treat as the UMI sequence."
+        '--3p-trim', metavar='LENGTH', required=False, type=positive_number,
+        help="Trim LENGTH bases from the 3' end of each sequence"
     )
 
     args = parser.parse_args()
-    umi = {
-        'dedup': args.discard_umi_duplicates,
-        'trim5': getattr(args, '5p_trim', 0),
-        'trim3': getattr(args, '3p_trim', 0)
-    }
 
-    if umi['dedup'] and not (umi['trim3'] or umi['trim5']):
-        raise argparse.ArgumentError(None, "UMI deduplication requires the length and location of the UMI(s) to be "
-                                           "specified with --3p-trim and/or --5p-trim.")
+    # This is due to 1) args is an object not a dict, and 2) variable names starting with numbers not allowed
+    trim = {end: vars(args)[end] for end in ['5p_trim', '3p_trim'] if vars(args)[end] not in [None, 0]}
+    return args, trim
 
-    return args, umi
 
-def seq_counter(fastq_file: str, file_reader: callable = builtins.open, umi: dict = None) -> 'Counter':
+def seq_counter(fastq_file: str, file_reader: callable, trim: dict = None) -> 'Counter':
     """Counts the number of times each sequence appears
 
     Args:
         fastq_file: A trimmed, quality filtered, optionally gzip compressed fastq file.
         file_reader: The file context manager to use. Must support .readline() and 'rb'
-        umi: A dictionary specifying 5'/3' trim lengths and deduplication preferences
+        trim: A dictionary specifying 5'/3' trim lengths
 
     Returns: An ordered dictionary of unique sequences with associated counts.
     """
 
     with file_reader(fastq_file, 'rb') as f:
-        def sequences():    # Generator function for every 4th line (fastq sequence line) of file
+        def sequences():         # Generator function for every 4th line (fastq sequence line) of file
             while f.readline():  # Sequence identifier
                 # Sequence (Binary -> ASCII extract every 4th from 1st line, newline removed)
                 yield f.readline()[:-1].decode("utf-8")
@@ -110,75 +97,37 @@ def seq_counter(fastq_file: str, file_reader: callable = builtins.open, umi: dic
                 f.readline()     # Quality Score
 
         # Switch file_reader interface if reading gzipped fastq files
-        if f.read(2) == b'\x1F\x8B': return seq_counter(fastq_file, gz_f, umi)
+        if f.read(2) == b'\x1F\x8B': return seq_counter(fastq_file, gz_f, trim)
 
         # Count occurrences of unique sequences while maintaining insertion order
-        counts = Counter(sequences() if umi is None else with_umi(sequences(), umi))
+        counts = Counter(sequences() if not len(trim) else trim_seqs(sequences(), trim))
 
     counts.pop("", None)  # Remove blank line counts from the dictionary
     return counts
 
 
-def with_umi(seq_iter: Iterable, umi_spec: dict) -> Iterable:
-    """Restructure each FASTQ sequence for counting in accordance with the umi_spec
-
-    If deduplication is requested, the resulting sequence
+def trim_seqs(seq_iter: Iterable, lengths: dict) -> Iterable:
+    """Trims the specified lengths from either end of a sequence
 
     Args:
         seq_iter: iterator of sequences read from FASTQ file
-        umi_spec: a dictionary specifying 5'/3' trim lengths and a boolean flag
-            to indicate whether deduplication should be performed
+        lengths: a dictionary specifying 5'/3' trim lengths
 
-    Returns: nested generator yielding the appropriate UMI tuple
+    Returns: nested generator yielding trimmed sequences
     """
 
-    trim5 = umi_spec['trim5']
-    trim3 = umi_spec['trim3']
-    dedup = umi_spec['dedup']
+    trim5 = lengths.get('5p_trim', 0)
+    trim3 = lengths.get('3p_trim', 0)
 
-    # I know this looks terrible, but hear me out:
-    # The decision tree is evaluated just once then
-    # settles into/resumes the appropriate loop.
-    if dedup:
-        if trim5 and trim3:
-            for seq in seq_iter:
-                yield seq[:trim5], seq[trim5:-trim3], seq[-trim3:]
-        elif trim5:
-            for seq in seq_iter:
-                yield seq[:trim5], seq[trim5:]
-        elif trim3:
-            for seq in seq_iter:
-                yield seq[:-trim3], seq[-trim3:]
-    else:
-        if trim5 and trim3:
-            for seq in seq_iter:
-                yield seq[trim5:-trim3]
-        elif trim5:
-            for seq in seq_iter:
-                yield seq[trim5:]
-        elif trim3:
-            for seq in seq_iter:
-                yield seq[:-trim3]
-
-
-def with_umi_regex(seq_iter: Iterable, umi_spec: dict) -> Iterable:
-    """Marginally more readable (and marginally slower) version for testing"""
-
-    trim5 = umi_spec['trim5']
-    trim3 = umi_spec['trim3']
-    dedup = umi_spec['dedup']
-
-    def umigrp(length):
-        if length == 0: return ""
-        pattern = r"(.{" + length + "})"
-        if not dedup: pattern = pattern[1:-1]
-        return pattern
-
-    umipat = umigrp(trim5) + r"(.*)" + umigrp(trim3)
-    umipat = re.compile(umipat)
-
-    for seq in seq_iter:
-        yield umipat.findall(seq)[0]
+    if trim5 and trim3:
+        for seq in seq_iter:
+            yield seq[trim5:-trim3]
+    elif trim5:
+        for seq in seq_iter:
+            yield seq[trim5:]
+    elif trim3:
+        for seq in seq_iter:
+            yield seq[:-trim3]
 
 
 def seq2fasta(seqs: dict, out_prefix: str, thresh: int = 0, gz: bool = False) -> None:
@@ -259,11 +208,11 @@ def fasta_interface(gz: bool) -> Tuple[callable, callable, str]:
 
 def main():
     # Get command line arguments
-    args, umi_spec = get_args()
+    args, trim = get_args()
     # Ensure that the provided prefix will not result in overwritten output files
     look_before_you_leap(args.out_prefix, args.compress)
-    # Count unique sequences in input fastq file
-    seqs = seq_counter(args.input_file)
+    # Count unique sequences in input fastq file after optional trimming
+    seqs = seq_counter(args.input_file, builtins.open, trim)
     # Write counted sequences to output file(s)
     seq2fasta(seqs, args.out_prefix, args.threshold, args.compress)
 
