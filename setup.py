@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 import os
 import sys
+import setuptools
 
-from setuptools import setup, Extension
 from setuptools.command.install import install
-
-from Cython.Build import cythonize
 
 # Package metadata
 NAME = 'tinyrna'
@@ -31,42 +29,7 @@ class PreFlight(install):
             install.run(self)
 
 
-bitpack_dir = "tiny/rna/bitpack/"
-short_seq_common_compile_args = [
-    '-stdlib=libc++',
-    '-std=c++11',
-    "-O3",
-    '-march=native']
-
-extensions = [
-    Extension("tiny.rna.bitpack.short_seq",
-              sources=[bitpack_dir + 'short_seq.pyx'],
-              extra_compile_args=short_seq_common_compile_args,
-              language='c++'),
-    Extension("tiny.rna.bitpack.short_seq_128",
-              sources=[bitpack_dir + 'short_seq_128.pyx'],
-              extra_compile_args=short_seq_common_compile_args,
-              language='c++'),
-    Extension("tiny.rna.bitpack.short_seq_64",
-              sources=[bitpack_dir + 'short_seq_64.pyx'],
-              extra_compile_args=short_seq_common_compile_args,
-              language='c++'),
-    Extension("tiny.rna.bitpack.short_seq_util",
-              sources=[bitpack_dir + 'short_seq_util.pyx'],
-              extra_compile_args=short_seq_common_compile_args,
-              language='c++'),
-    Extension("tiny.rna.bitpack.fast_read",
-              sources=[bitpack_dir + 'fast_read.pyx'],
-              extra_compile_args=short_seq_common_compile_args,
-              language='c++'),
-    Extension("tiny.rna.bitpack.umi",
-              sources=[bitpack_dir + 'umi.pyx'],
-              extra_compile_args=short_seq_common_compile_args,
-              language='c++'),
-]
-
-
-setup(
+setuptools.setup(
     name=NAME,
     version=VERSION,
     author=AUTHOR,
@@ -85,7 +48,6 @@ setup(
             'tiny-plot = tiny.rna.plotter:main'
         ]
     },
-    ext_modules=cythonize(extensions, compiler_directives={'language_level': '3'}),
     scripts=['tiny/rna/tiny-deseq.r'],
     classifiers=[
         'Programming Language :: Python :: 3',
