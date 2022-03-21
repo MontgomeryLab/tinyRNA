@@ -228,6 +228,7 @@ steps:
       norm_counts: dge/norm_counts
       dge_tables: dge/comparisons
       raw_counts: counter/feature_counts
+      rule_counts: counter/rule_counts
       summ_stats: counter/summary_stats
       len_dist:
         source: [ counter/mapped_nt_len_dist, counter/assigned_nt_len_dist ]
