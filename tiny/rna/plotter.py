@@ -37,6 +37,8 @@ def get_args():
                                help='The ...feature_counts.csv file')
     diffexp_files.add_argument('-nc', '--norm-counts', metavar='NORM_COUNTS',
                                help='The ...norm_counts.csv file')
+    counter_files.add_argument('-uc', '--rule-counts', metavar='RULE_COUNTS',
+                               help='The ...counts-by-rule.csv file')
     counter_files.add_argument('-ss', '--summary-stats', metavar='STAT',
                                help='The ...summary_stats.csv file')
 
@@ -64,7 +66,8 @@ def get_args():
     required_args.add_argument('-p', '--plots', metavar='PLOT', required=True, nargs='+',
                                help="R|List of plots to create. Options: \n"
                                "• len_dist: A stacked barplot showing size & 5' nucleotide distribution.\n"
-                               "• class_charts: A pie and barchart showing proportions of counts per class.\n"
+                               "• rule_charts: A pie and barchart showing proportions of counts by matched rule.\n"
+                               "• class_charts: A pie and barchart showing proportions of counts by Class attribute.\n"
                                "• replicate_scatter: A scatter plot comparing replicates for all count files given.\n"
                                "• sample_avg_scatter_by_dge: A scatter plot comparing all sample groups, with "
                                "significantly different genes highlighted. P-value can be set using --p-value. "
@@ -121,10 +124,33 @@ def class_charts(raw_class_counts: pd.DataFrame, mapped_reads: pd.Series, out_pr
     """
 
     for library in raw_class_counts:
-        fig = aqplt.class_pie_barh(raw_class_counts[library], mapped_reads[library], **kwargs)
+        fig = aqplt.class_pie_barh(raw_class_counts[library], mapped_reads[library], "class", **kwargs)
 
         # Save the plot
         pdf_name = make_filename([out_prefix, library, 'class_chart'], ext='.pdf')
+        fig.savefig(pdf_name)
+
+
+def rule_charts(rule_counts: pd.DataFrame, out_prefix: str, **kwargs):
+    """Create a PDF of the proportion of raw assigned counts vs total mapped reads for each matched rule
+
+    Args:
+        rule_counts: A dataframe containing raw rule counts per library
+        out_prefix: The prefix to use when naming output PDF plots
+        **kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
+    """
+
+    mapped_reads = rule_counts.loc['Mapped Reads']
+    rule_counts.drop('Mapped Reads', inplace=True)
+
+    rule_counts_iter = iter(rule_counts)
+    rule_strings = next(rule_counts_iter)
+
+    for library in rule_counts_iter:
+        fig = aqplt.class_pie_barh(rule_counts[library], mapped_reads[library], "matched rules", **kwargs)
+
+        # Save the plot
+        pdf_name = make_filename([out_prefix, library, 'rule_chart'], ext='.pdf')
         fig.savefig(pdf_name)
 
 
@@ -293,6 +319,17 @@ def load_raw_counts(raw_counts_file: str) -> Optional[pd.DataFrame]:
     return pd.read_csv(raw_counts_file, index_col=0)
 
 
+def load_rule_counts(rule_counts_file: str) -> pd.DataFrame:
+    """Loads a rule_counts CSV as a DataFrame
+    Args:
+        rule_counts_file: The rule counts CSV produced by Counter
+    Returns:
+        The rule counts DataFrame
+    """
+
+    return pd.read_csv(rule_counts_file, index_col=0)
+
+
 def load_norm_counts(norm_counts_file: str) -> Optional[pd.DataFrame]:
     """Loads a norm_counts CSV as a DataFrame
     Args:
@@ -355,6 +392,7 @@ def validate_inputs(args: argparse.Namespace) -> None:
 
     dependencies_satisfied_for = {
         'len_dist': all([args.len_dist]),
+        'rule_charts': all([args.rule_counts]),
         'class_charts': all([args.raw_counts, args.summary_stats]),
         'replicate_scatter': all([args.norm_counts]),
         'sample_avg_scatter_by_dge': all([args.norm_counts, args.dge_tables]),
@@ -363,12 +401,13 @@ def validate_inputs(args: argparse.Namespace) -> None:
 
     nc_file = "normalized count file (-nc/--norm-counts)"
     rc_file = "raw count file (-rc/--raw-counts)"
-    sc_file = "summary stats file (-sc/--summary-stats)"
+    ss_file = "summary stats file (-sc/--summary-stats)"
     dge_files = "differential expression tables (-dge/--dge-tables)"
 
     error_message = {
         'len_dist': "5' nucleotide/length tables (-len/--len-dist) are required for ",
-        'class_charts': f"A {rc_file} and {sc_file} are required for ",
+        'rule_charts': "A rule counts file (-uc/--rule-counts) is required for ",
+        'class_charts': f"A {rc_file} and {ss_file} are required for ",
         'replicate_scatter': f"A {nc_file} is required for ",
         'sample_avg_scatter_by_dge': f"A {nc_file} and {dge_files} are required for ",
         'sample_avg_scatter_by_dge_class': f"A {nc_file} and {dge_files} are required for ",
@@ -396,26 +435,28 @@ def setup(args: argparse.Namespace) -> dict:
 
     required_inputs = {
         'len_dist': [],
-        'class_charts': ["raw_count_df", "class_counts", "mapped_reads"],
-        'replicate_scatter': ["norm_count_df", "sample_rep_dict", "norm_view_lims"],
+        'rule_charts': ["rule_counts_df"],
+        'class_charts': ["raw_counts_df", "class_counts_df", "mapped_reads_s"],
+        'replicate_scatter': ["norm_counts_df", "sample_rep_dict", "norm_view_lims"],
         'sample_avg_scatter_by_dge':
-            ["norm_count_df", "sample_rep_dict", "norm_count_avg_df", "de_table", "avg_view_lims"],
+            ["norm_counts_df", "sample_rep_dict", "norm_counts_avg_df", "de_table_df", "avg_view_lims"],
         'sample_avg_scatter_by_dge_class':
-            ["norm_count_df", "sample_rep_dict", "norm_count_avg_df", "feat_classes", "de_table", "avg_view_lims"],
+            ["norm_counts_df", "sample_rep_dict", "norm_counts_avg_df", "feat_classes_df", "de_table_df", "avg_view_lims"]
     }
 
     relevant_vars: Dict[str, Union[pd.DataFrame, pd.Series, dict, None]] = {}
     input_getters = {
-        'raw_count_df': lambda: load_raw_counts(args.raw_counts),
-        'mapped_reads': lambda: get_mapped_reads(args.summary_stats),
-        'norm_count_df': lambda: load_norm_counts(args.norm_counts),
-        'de_table': lambda: load_dge_tables(args.dge_tables),
-        'sample_rep_dict': lambda: get_sample_rep_dict(relevant_vars["norm_count_df"]),
-        'norm_count_avg_df': lambda: get_sample_averages(relevant_vars["norm_count_df"], relevant_vars["sample_rep_dict"]),
-        'feat_classes': lambda: get_flat_classes(relevant_vars["norm_count_df"]),
-        'class_counts': lambda: get_class_counts(relevant_vars["raw_count_df"]),
-        'avg_view_lims': lambda: aqplt.get_scatter_view_lims(relevant_vars["norm_count_avg_df"]),
-        'norm_view_lims': lambda: aqplt.get_scatter_view_lims(relevant_vars["norm_count_df"].select_dtypes(['number']))
+        'raw_counts_df': lambda: load_raw_counts(args.raw_counts),
+        'mapped_reads_s': lambda: get_mapped_reads(args.summary_stats),
+        'norm_counts_df': lambda: load_norm_counts(args.norm_counts),
+        'rule_counts_df': lambda: load_rule_counts(args.rule_counts),
+        'de_table_df': lambda: load_dge_tables(args.dge_tables),
+        'sample_rep_dict': lambda: get_sample_rep_dict(relevant_vars["norm_counts_df"]),
+        'norm_counts_avg_df': lambda: get_sample_averages(relevant_vars["norm_counts_df"], relevant_vars["sample_rep_dict"]),
+        'feat_classes_df': lambda: get_flat_classes(relevant_vars["norm_counts_df"]),
+        'class_counts_df': lambda: get_class_counts(relevant_vars["raw_counts_df"]),
+        'avg_view_lims': lambda: aqplt.get_scatter_view_lims(relevant_vars["norm_counts_avg_df"]),
+        'norm_view_lims': lambda: aqplt.get_scatter_view_lims(relevant_vars["norm_counts_df"].select_dtypes(['number']))
     }
 
     for plot in args.plots:
@@ -449,19 +490,22 @@ def main():
             arg, kwd = (args.len_dist, args.out_prefix), {}
         elif plot == 'class_charts':
             func = class_charts
-            arg, kwd = (inputs["class_counts"], inputs['mapped_reads'], args.out_prefix), {}
+            arg, kwd = (inputs["class_counts_df"], inputs['mapped_reads_s'], args.out_prefix), {}
+        elif plot == 'rule_charts':
+            func = rule_charts
+            arg, kwd = (inputs['rule_counts_df'], args.out_prefix), {}
         elif plot == 'replicate_scatter':
             func = scatter_replicates
-            arg = (inputs["norm_count_df"], args.out_prefix, inputs["sample_rep_dict"], inputs["norm_view_lims"])
+            arg = (inputs["norm_counts_df"], args.out_prefix, inputs["sample_rep_dict"], inputs["norm_view_lims"])
             kwd = {}
         elif plot == 'sample_avg_scatter_by_dge':
             func = scatter_dges
-            arg = (inputs["norm_count_avg_df"], inputs["de_table"], args.out_prefix, inputs["avg_view_lims"])
+            arg = (inputs["norm_counts_avg_df"], inputs["de_table_df"], args.out_prefix, inputs["avg_view_lims"])
             kwd = {"pval": args.p_value}
         elif plot == 'sample_avg_scatter_by_dge_class':
             func = scatter_dges
-            arg = (inputs["norm_count_avg_df"], inputs["de_table"], args.out_prefix, inputs["avg_view_lims"])
-            kwd = {"classes": inputs["feat_classes"], "pval": args.p_value}
+            arg = (inputs["norm_counts_avg_df"], inputs["de_table_df"], args.out_prefix, inputs["avg_view_lims"])
+            kwd = {"classes": inputs["feat_classes_df"], "pval": args.p_value}
         else:
             print('Plot type %s not recognized, please check the -p/--plot arguments' % plot)
             continue

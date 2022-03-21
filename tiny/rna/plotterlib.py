@@ -125,12 +125,13 @@ class plotterlib:
 
         return cbar
 
-    def class_pie_barh(self, class_s: pd.Series, mapped_reads, scale=2, **kwargs) -> plt.Figure:
+    def class_pie_barh(self, class_s: pd.Series, mapped_reads_s: pd.Series, subtype: str, scale=2, **kwargs) -> plt.Figure:
         """Creates both a pie & bar chart of class proportions
 
         Args:
             class_s: A pandas Series containing counts per class for a sample
-            mapped_reads: The total number of reads mapped by bowtie for a sample
+            mapped_reads_s: The total number of reads mapped by bowtie for a sample
+            subtype: The subtype of this chart so the title can be properly set
             scale: The decimal scale for table percentages, and for determining "unassigned" display
             kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
 
@@ -143,7 +144,7 @@ class plotterlib:
 
         # Convert reads to proportion
         scale += 2  # Convert percentage scale to decimal scale
-        class_prop = (class_s / mapped_reads).round(scale).rename('Proportion')
+        class_prop = (class_s / mapped_reads_s).round(scale).rename('Proportion')
 
         # Determine whether an unassigned category should be displayed
         unassigned = round(1 - class_prop.sum(), scale)
@@ -159,7 +160,7 @@ class plotterlib:
         table.auto_set_column_width(col=[0, 1])
 
         # finalize & save figure
-        fig.suptitle("Proportion of small RNAs by class", fontsize=22)
+        fig.suptitle(f"Proportion of small RNAs by {subtype}", fontsize=22)
         fig.subplots_adjust(top=0.85)
 
         return fig
