@@ -136,12 +136,18 @@ compression: 4
 # We use a custom Python script for collapsing duplicate reads.
 # We recommend using the default (keep all reads, or threshold: 0).
 # Sequences <= threshold will not be included in downstream steps.
+# Trimming takes place prior to counting/collapsing.
 #
 # We have specified default parameters for small RNA data based on our own "best practices".
 # You may change the parameters here.
 #
 ######-------------------------------------------------------------------------------######
 
+##-- Trim the specified number of bases from the 5' end of each sequence --#
+5p_trim: 1
+
+##-- Trim the specified number of bases from the 3' end of each sequence --#
+3p_trim: 1
 
 ##-- Sequences with count <= threshold will be placed in a separate low_counts fasta --##
 threshold: 0

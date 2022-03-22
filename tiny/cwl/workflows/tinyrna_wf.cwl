@@ -51,6 +51,8 @@ inputs:
   # collapser inputs
   threshold: int?
   compress: boolean?
+  5p_trim: int?
+  3p_trim: int?
 
   # bowtie inputs
   bt_index_files: File[]
@@ -140,6 +142,8 @@ steps:
       # Collapser
       threshold: threshold
       compress: compress
+      5p_trim: 5p_trim
+      3p_trim: 3p_trim
     out: [fastq_clean, html_report_file, json_report_file, fastp_console, uniq_seqs, uniq_seqs_low, collapser_console]
 
   bt_build_optional:
