@@ -19,7 +19,7 @@ from tiny.rna.util import report_execution_time, from_here
 from tiny.rna.configuration import CSVReader
 
 # Global variables for multiprocessing
-feature_counter: FeatureCounter
+counter: FeatureCounter
 
 
 def get_args():
@@ -140,27 +140,26 @@ def load_config(features_csv: str, is_pipeline: bool) -> Tuple[List[dict], Dict[
         if row['Name'] not in ["ID", *gff_files[gff]]: gff_files[gff].append(row['Name'])
         if rule not in rules: rules.append(rule)
 
-    rules.sort(key=lambda x: x['Hierarchy'])
     return rules, gff_files
 
 
 @report_execution_time("Counting and merging")
-def map_and_reduce(libraries):
+def map_and_reduce(libraries, prefs):
     """Assigns one worker process per library and merges the statistics they report"""
 
     # SummaryStats handles final output files, regardless of multiprocessing status
-    summary = SummaryStats(Features.classes, FeatureCounter.out_prefix, FeatureCounter.run_diags)
+    summary = SummaryStats(Features.classes, prefs)
 
     # Use a multiprocessing pool if multiple sam files were provided
     if len(libraries) > 1:
         with mp.Pool(len(libraries)) as pool:
-            async_results = pool.imap_unordered(feature_counter.count_reads, libraries)
+            async_results = pool.imap_unordered(counter.count_reads, libraries)
 
             for stats_result in async_results:
                 summary.add_library(stats_result)
     else:
         # Only one library, multiprocessing not beneficial for task
-        summary.add_library(feature_counter.count_reads(libraries[0]))
+        summary.add_library(counter.count_reads(libraries[0]))
 
     return summary
 
@@ -178,11 +177,11 @@ def main():
         selection_rules, gff_file_set = load_config(args.config, args.is_pipeline)
 
         # global for multiprocessing
-        global feature_counter
-        feature_counter = FeatureCounter(gff_file_set, selection_rules, **vars(args))
+        global counter
+        counter = FeatureCounter(gff_file_set, selection_rules, **vars(args))
 
         # Assign and count features using multiprocessing and merge results
-        merged_counts = map_and_reduce(libraries)
+        merged_counts = map_and_reduce(libraries, vars(args))
 
         # Write final outputs
         merged_counts.write_report_files(Features.aliases)

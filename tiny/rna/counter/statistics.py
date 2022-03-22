@@ -1,6 +1,7 @@
 import pandas as pd
 import mmap
 import json
+import csv
 import sys
 import os
 
@@ -25,6 +26,7 @@ class LibraryStats:
         self.norm = normalize
 
         self.feat_counts = Counter()
+        self.rule_counts = Counter()
         self.chrom_misses = Counter()
         self.mapped_nt_len = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
         self.assigned_nt_len = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
@@ -44,49 +46,45 @@ class LibraryStats:
         read_counts = int(bundle_read['name'].split('=')[1])
         corr_counts = read_counts / loci_counts
 
-        bundle = {
+        # Fill in 5p nt/length matrix
+        self.mapped_nt_len[nt5][seqlen] += read_counts
+
+        return {
             'loci_count': loci_counts,
             'read_count': read_counts,
             'corr_count': corr_counts,
             'assigned_feats': set(),
             'assigned_reads': 0,
-            'seq_len': seqlen,
-            'nt5': nt5,
+            'nt5_counts': self.assigned_nt_len[nt5],
+            'seq_length': seqlen,
             'mapping_stat':
                 "Assigned Single-Mapping Reads"
                 if loci_counts == 1 else
                 "Assigned Multi-Mapping Reads"
         }
 
-        # Fill in 5p nt/length matrix
-        self.mapped_nt_len[nt5][seqlen] += read_counts
-
-        return bundle
-
-    def count_bundle_assignments(self, bundle: dict, aln: dict, assignments: set, n_candidates: int) -> None:
+    def count_bundle_assignments(self, bundle: dict, aln: dict, assignments: dict, n_candidates: int) -> None:
         """Called for each alignment for each read"""
 
-        assigned_count = len(assignments)
+        feat_count = len(assignments)
         corr_count = bundle['corr_count']
 
-        if assigned_count == 0:
+        if feat_count == 0:
             self.library_stats['Total Unassigned Reads'] += corr_count
-        if assigned_count > 0:
-            feature_corrected_count = corr_count / assigned_count if self.norm else corr_count
-            assigned_reads = feature_corrected_count * assigned_count
+        else:
+            fcorr_count = corr_count / feat_count if self.norm else corr_count
+            bundle['assigned_reads'] += fcorr_count * feat_count
+            bundle['assigned_feats'] |= assignments.keys()
 
-            self.library_stats['Total Assigned Reads'] += assigned_reads
-            self.library_stats[bundle['mapping_stat']] += assigned_reads
-
-            bundle['assigned_feats'] |= assignments
-            bundle['assigned_reads'] += assigned_reads
-
-            for feat in assignments:
-                self.feat_counts[feat] += feature_corrected_count
+            for feat, matched_rules in assignments.items():
+                self.feat_counts[feat] += fcorr_count
+                rcorr_count = fcorr_count / len(matched_rules)
+                for rule in matched_rules:
+                    self.rule_counts[rule] += rcorr_count
 
         if self.diags is not None:
-            self.diags.record_diagnostics(assignments, n_candidates, aln, bundle)
-            self.diags.record_alignment_details(aln, bundle, assignments)
+            self.diags.record_diagnostics(assignments.keys(), n_candidates, aln, bundle)
+            self.diags.record_alignment_details(aln, bundle, assignments.keys())
 
     def finalize_bundle(self, bundle: dict) -> None:
         """Called at the conclusion of processing each multiple-alignment bundle"""
@@ -97,25 +95,35 @@ class LibraryStats:
             self.library_stats['Total Unassigned Sequences'] += 1
         else:
             self.library_stats['Total Assigned Sequences'] += 1
-            self.assigned_nt_len[bundle['nt5']][bundle['seq_len']] += bundle['assigned_reads']
+            assigned_reads = bundle['assigned_reads']
+
+            self.library_stats['Total Assigned Reads'] += assigned_reads
+            self.library_stats[bundle['mapping_stat']] += assigned_reads
+            bundle['nt5_counts'][bundle['seq_length']] += assigned_reads
 
             if assigned_feat_count == 1:
-                self.library_stats['Reads Assigned to Single Feature'] += bundle['assigned_reads']
+                self.library_stats['Reads Assigned to Single Feature'] += assigned_reads
                 self.library_stats['Sequences Assigned to Single Feature'] += 1
             else:
-                self.library_stats['Reads Assigned to Multiple Features'] += bundle['assigned_reads']
+                self.library_stats['Reads Assigned to Multiple Features'] += assigned_reads
                 self.library_stats['Sequences Assigned to Multiple Features'] += 1
 
+
+# Todo: this class is messy. It needs to be refactored into purposed classes stored in a list
+#  and iterated over with minimum interface:
+#  - add_library()
+#  - write_output_logfile()
 
 class SummaryStats:
 
     summary_categories = ["Total Reads", "Retained Reads", "Unique Sequences",
                           "Mapped Sequences", "Mapped Reads", "Assigned Reads"]
 
-    def __init__(self, classes, out_prefix: str, report_diags: bool):
+    def __init__(self, classes, prefs):
         self.feature_classes = classes
-        self.out_prefix = out_prefix
-        self.report_diags = report_diags
+        self.out_prefix = prefs.get('out_prefix', '')
+        self.report_diags = prefs.get('report_diags', False)
+        self.features_csv = prefs['config']
 
         # Will become False if an added library lacks its corresponding Collapser and Bowtie outputs
         self.report_summary_statistics = True
@@ -123,11 +131,12 @@ class SummaryStats:
         self.pipeline_stats_df = pd.DataFrame(index=SummaryStats.summary_categories)
         self.feat_counts_df = pd.DataFrame(index=self.feature_classes.keys())
         self.lib_stats_df = pd.DataFrame(index=LibraryStats.summary_categories)
+        self.rule_counts_df = pd.DataFrame()
         self.chrom_misses = Counter()
         self.nt_len_matrices = {}
         self.warnings = []
 
-        if report_diags:
+        if self.report_diags:
             self.aln_diags = pd.DataFrame(columns=Diagnostics.aln_diag_categories)
             self.selection_diags = {}
 
@@ -137,6 +146,7 @@ class SummaryStats:
             Diagnostics.write_summary(self.out_prefix, self.aln_diags, self.selection_diags)
 
         self.write_feat_counts(alias, self.out_prefix)
+        self.write_rule_counts(self.out_prefix)
         self.write_alignment_statistics(self.out_prefix)
         self.write_pipeline_statistics(self.out_prefix)
         self.write_nt_len_matrices(self.out_prefix)
@@ -171,8 +181,7 @@ class SummaryStats:
         formatted for each library as {group}_rep_{replicate}
         """
 
-        # Subset the counts table to only show features that were matched on identity (regardless of count)
-        summary = self.feat_counts_df.loc[self.feature_classes.keys()]
+        summary = self.feat_counts_df
         # Sort columns by title and round all counts to 2 decimal places
         summary = self.sort_cols_and_round(summary)
         # Add Feature Name column, which is the feature alias (default is Feature ID if no alias exists)
@@ -197,12 +206,31 @@ class SummaryStats:
             assigned_nt_len_df = pd.DataFrame(matrices[1]).sort_index().round(decimals=2).fillna(0)
             assigned_nt_len_df.to_csv(f'{prefix}_{sanitized_lib_name}_assigned_nt_len_dist.csv')
 
+    def write_rule_counts(self, prefix: str) -> None:
+        # Reread the Features Sheet since FeatureSelector.rules_table is processed and less readable
+        with open(self.features_csv, 'r', encoding='utf-8-sig') as f:
+            # Convert each CSV row to a string with values labeled by column headers
+            rules = ['; '.join([': '.join([c,v]) for c,v in row.items()]) for row in csv.DictReader(f)]
+
+        self.rule_counts_df = self.rule_counts_df.join(pd.Series(rules, name="Rule"), how="outer")
+        self.rule_counts_df = self.sort_cols_and_round(self.rule_counts_df).set_index('Rule').fillna(0)
+        self.rule_counts_df.loc["Mapped Reads"] = mapped_reads = self.pipeline_stats_df.loc["Mapped Reads"]
+
+        if mapped_reads.empty:
+            # Row will be empty if Summary Stats were not gathered
+            # Todo: Mapped Reads can be calculated without pipeline outputs
+            self.rule_counts_df.drop("Mapped Reads", axis=0, inplace=True)
+
+        self.df_to_csv(self.rule_counts_df, "Rule", prefix, 'counts_by_rule')
+
     def add_library(self, other: LibraryStats) -> None:
-        # Add incoming feature counts as a new column of the data frame
-        # Since other.feat_counts is a Counter object, unrecorded features default to 0 on lookup
-        self.feat_counts_df[other.library["Name"]] = self.feat_counts_df.index.map(other.feat_counts)
-        self.lib_stats_df[other.library["Name"]] = self.lib_stats_df.index.map(other.library_stats)
-        self.nt_len_matrices[other.library["Name"]] = [other.mapped_nt_len, other.assigned_nt_len]
+        name = other.library["Name"]
+        # Index varies per library -> join
+        self.rule_counts_df = self.rule_counts_df.join(pd.Series(other.rule_counts, name=name), how='outer')
+        # Index is consistent across libraries -> index.map
+        self.feat_counts_df[name] = self.feat_counts_df.index.map(other.feat_counts)
+        self.lib_stats_df[name] = self.lib_stats_df.index.map(other.library_stats)
+        self.nt_len_matrices[name] = [other.mapped_nt_len, other.assigned_nt_len]
         self.chrom_misses.update(other.chrom_misses)
 
         if self.report_diags: self.add_diags(other)
