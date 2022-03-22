@@ -16,6 +16,8 @@ import os
 
 # cwltool appears to unset all environment variables including those related to locale
 # This leads to warnings from plt's FontConfig manager, but only for pipeline/cwl runs
+from matplotlib.gridspec import GridSpec
+
 curr_locale = locale.getlocale()
 if curr_locale[0] is None:
     # Default locale otherwise unset
@@ -81,89 +83,83 @@ class plotterlib:
 
         return sizeb
 
-    def class_pie(self, class_prop: pd.Series, **kwargs) -> plt.Axes:
-        """Creates a pie chart of sRNA classes.
+    def pie_proportion(self, prop_ds: pd.Series, ax: plt.Axes, scale=2, **kwargs) -> plt.Axes:
+        """Creates a pie chart of read proportions
 
         Args:
-            class_prop: A pandas Series with class proportions to plot
+            prop_ds: A pandas Series with proportions to plot
+            ax: The subplot axes to use for the pie chart
+            scale: The desired number of *percentage* decimal places for labels
             kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
 
         Returns:
-            cpie: A pie chart of sRNA classes
+            cpie: A pie chart axes object
         """
 
         # Create the plot
-        cpie = class_prop.plot(kind='pie', normalize=True, **kwargs)
-        cpie.legend(loc='best', bbox_to_anchor=(1, 1), fontsize=10, labels=class_prop.index)
+        cpie = prop_ds.plot(kind='pie', normalize=True, ax=ax, **kwargs)
+        cpie.legend(
+            loc='lower center',
+            bbox_to_anchor=(0.5, -0.3),
+            fontsize=10,
+            ncol=math.ceil(len(prop_ds) / 5),
+            labels=[f"{c} ({v:.{scale}f}%)" for c,v in prop_ds.to_dict().items()])
         cpie.set_aspect("equal")
         cpie.set_ylabel('')
         cpie.set_xlabel('')
 
         return cpie
 
-    def class_barh(self, class_prop: pd.Series, **kwargs) -> plt.Axes:
-        """Creates a horizontal bar chart of sRNA classes.
+    def barh_proportion(self, prop_ds: pd.Series, max_prop=1.0, scale=2, **kwargs) -> plt.Axes:
+        """Creates a horizontal bar chart of read proportions (as percentages) for a library
 
         Args:
-            class_prop: A pandas Series with class proportions to plot
+            prop_ds: A pandas Series with proportions to chart
+            max_prop: The xaxis upper bound as a float between 0 and 1
+            scale: The desired number of *percentage* decimal places for labels
             kwargs: Additional keyword arguments to pass to pandas.Series.plot()
 
         Returns:
-            cbar: A horizontal bar chart of sRNA classes
-        """
-
-        # df.plot(kind=barh) ignores axes.prop_cycle... (ugh)
-        colors = kwargs.get('colors', plt.rcParams['axes.prop_cycle'].by_key()['color'])
-
-        # Create the plot
-        cbar = class_prop.plot(kind='barh', color=colors, **kwargs)
-        cbar.set_xlabel('Proportion of reads')
-        cbar.legend().set_visible(False)
-        cbar.set_title('')
-        cbar.set_ylabel('')
-        cbar.set_xlim(0,1)
-
-        return cbar
-
-    def class_pie_barh(self, class_s: pd.Series, mapped_reads_s: pd.Series, subtype: str, scale=2, **kwargs) -> plt.Figure:
-        """Creates both a pie & bar chart of class proportions
-
-        Args:
-            class_s: A pandas Series containing counts per class for a sample
-            mapped_reads_s: The total number of reads mapped by bowtie for a sample
-            subtype: The subtype of this chart so the title can be properly set
-            scale: The decimal scale for table percentages, and for determining "unassigned" display
-            kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
-
-        Returns:
-            cplots: A pie chart & horizontal bar chart of sRNA classes
+            cbar: A horizontal bar chart axes object
         """
 
         # Retrieve axis and styles for this plot type
-        fig, ax = self.reuse_subplot("class_chart")
+        fig, ax = self.reuse_subplot("proportions")
+        prop_ds = prop_ds.dropna()[::-1]
 
-        # Convert reads to proportion
-        scale += 2  # Convert percentage scale to decimal scale
-        class_prop = (class_s / mapped_reads_s).round(scale).rename('Proportion')
+        # Set bar and text colormaps
+        bar_colors = kwargs.get('colors', plt.get_cmap("viridis")(prop_ds))
+        text_colors = plt.get_cmap("Greys")
 
-        # Determine whether an unassigned category should be displayed
-        unassigned = round(1 - class_prop.sum(), scale)
-        if unassigned >= round(10 ** (-1 * scale), scale): class_prop['Unassigned'] = unassigned
+        # Create the plot and set plot attributes
+        cbar = (prop_ds * 100).plot(kind='barh', ax=ax, color=bar_colors, sort_columns=False, **kwargs)
+        cbar.xaxis.set_major_formatter(tix.PercentFormatter())
+        cbar.tick_params(labelsize=10)
+        cbar.set_xlabel('Percentage of Reads')
+        cbar.set_xlim(0, min([(max_prop * 100) + 10, 100]))
 
-        # Plot pie and barh on separate axes
-        self.class_pie(class_prop, ax=ax[0], labels=None, **kwargs)
-        self.class_barh(class_prop, ax=ax[1], legend=None, title=None, ylabel=None, **kwargs)
+        # Remove irrelevant plot attributes
+        cbar.legend().set_visible(False)
+        cbar.grid(False, axis='y')
+        cbar.set_title('')
 
-        # Add a table to the pie chart
-        table_s = class_prop.map(lambda x: f"{x*100:.{scale-2}f}%").reset_index()
-        table = ax[0].table(cellText=table_s.values, loc='bottom')
-        table.auto_set_column_width(col=[0, 1])
+        # For converting data coordinates to axes fraction coordinates
+        frac_tf = cbar.transData + cbar.transAxes.inverted()
 
-        # finalize & save figure
-        fig.suptitle(f"Proportion of small RNAs by {subtype}", fontsize=22)
-        fig.subplots_adjust(top=0.85)
+        # Place percentage annotations
+        for bar in cbar.patches:
+            width = bar.get_width()
+            axes_frac = frac_tf.transform((width, 0))[0]
+            x_offset = 8 if axes_frac < 0.8 else -5 * 8
+            cbar.annotate(
+                f"{width:.{scale}f}%",
+                (1.0, 0.5), xycoords=bar,  # anchor text to bar
+                xytext=(x_offset, 0), textcoords='offset points',
+                color=text_colors(width / 100 + 0.4),
+                va='center_baseline',
+            )
 
-        return fig
+        return cbar
 
     def scatter_simple(self, count_x: pd.Series, count_y: pd.Series, log_norm=False, **kwargs) -> plt.Axes:
         """Creates a simple scatter plot of counts.
@@ -486,6 +482,19 @@ class plotterlib:
         return box
 
     @staticmethod
+    def data_val_to_points(ax, val):
+        """Converts a length from data coordinates (relative coords) to points (absolute coords)"""
+
+        # Map a (1, 1) point from data coordinates to display coordinates
+        dd = ax.transData.transform([[0, 0], [1, 1]])  # Units: px
+
+        # Calculate the data/points coefficient
+        co = ax.get_figure().get_dpi() / round(dd[1, 1] - dd[0, 1]) / 72  # Units: data/pts
+
+        return val / co  # Units: data * pts/data = pts
+
+
+    @staticmethod
     def draw_bbox_rectangle(ax: plt.Axes, box: Bbox):
         """Draws a green rectangle around the specified Bbox"""
 
@@ -509,12 +518,12 @@ class plotterlib:
             cache = self.subplot_cache[plot_type]
         else:
             self.subplot_cache[plot_type] = cache = {
-                "class_chart": ClassChartCache,
+                "proportions": ClassChartCache,
                 "len_dist": LenDistCache,
                 "scatter": ScatterCache
             }[plot_type]()
 
-        if self.debug: plt.show(block=False)
+        # if self.debug: plt.show(block=False)
         return cache.get()
 
 
@@ -525,10 +534,10 @@ class CacheBase(ABC):
 
 class ClassChartCache(CacheBase):
     def __init__(self):
-        self.fig, self.ax = plt.subplots(figsize=(8, 4), nrows=1, ncols=2)
+        self.fig, self.ax = plt.subplots(figsize=(5, 4))
 
-    def get(self) -> Tuple[plt.Figure, List[plt.Axes]]:
-        for subax in self.ax: subax.clear()
+    def get(self) -> Tuple[plt.Figure, plt.Axes]:
+        self.ax.clear()
         return self.fig, self.ax
 
 
