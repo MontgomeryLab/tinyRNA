@@ -144,10 +144,10 @@ compression: 4
 ######-------------------------------------------------------------------------------######
 
 ##-- Trim the specified number of bases from the 5' end of each sequence --#
-5p_trim: 1
+5p_trim: 0
 
 ##-- Trim the specified number of bases from the 3' end of each sequence --#
-3p_trim: 1
+3p_trim: 0
 
 ##-- Sequences with count <= threshold will be placed in a separate low_counts fasta --##
 threshold: 0
