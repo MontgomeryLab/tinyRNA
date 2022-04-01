@@ -16,8 +16,6 @@ import os
 
 # cwltool appears to unset all environment variables including those related to locale
 # This leads to warnings from plt's FontConfig manager, but only for pipeline/cwl runs
-from matplotlib.gridspec import GridSpec
-
 curr_locale = locale.getlocale()
 if curr_locale[0] is None:
     # Default locale otherwise unset
@@ -523,7 +521,7 @@ class plotterlib:
                 "scatter": ScatterCache
             }[plot_type]()
 
-        # if self.debug: plt.show(block=False)
+        if self.debug: plt.show(block=False)
         return cache.get()
 
 
