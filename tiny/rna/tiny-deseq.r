@@ -29,10 +29,10 @@ usage <- "The following arguments are accepted:
 # Increase max error string length by the length of the usage string
 options(warning.length = getOption("warning.length") + nchar(usage))
 
-## Returns the provided data as a dataframe with a corresponding classes column, regardless of order
-df_with_classes <- function(classless_df){
+## Returns the provided data as a dataframe with corresponding metadata columns, regardless of order
+df_with_metadata <- function(classless_df){
   return(data.frame(
-    merge(classes, data.frame(classless_df), by=0),
+    merge(metadata, data.frame(classless_df), by=0),
     row.names = "Row.names",
     check.names = FALSE
   ))
@@ -74,9 +74,9 @@ count_file <- normalizePath(count_file)
 ## DESeq2 prefers R-safe column names. We want to preserve the original col names to use in final outputs
 orig_sample_names <- colnames(read.csv(count_file, check.names = FALSE, row.names = 1, nrows = 1))[0:-2]
 
-## Read counts CSV with sanitized column names for handling. Subset classes.
+## Read counts CSV with sanitized column names for handling. Subset classes and aliases.
 counts <- read.csv(count_file, row.names = 1)
-classes <- data.frame("Feature Class" = counts[[2]], row.names = rownames(counts), check.names = FALSE)
+metadata <- data.frame("Feature Name" = counts[[1]], "Feature Class" = counts[[2]], row.names = rownames(counts), check.names = FALSE)
 
 ## Subset counts table to drop Feature Name and Feature Class columns before integer sapply
 counts <- data.frame(sapply(counts[0:-2], as.integer), row.names = rownames(counts))
@@ -128,8 +128,8 @@ if (plot_pca){
 }
 
 ## Get normalized counts and write them to CSV with original sample names in header
-deseq_counts <- df_with_classes(counts(deseq_run, normalized=TRUE))
-colnames(deseq_counts)[0:-1] <- orig_sample_names
+deseq_counts <- df_with_metadata(counts(deseq_run, normalized=TRUE))
+colnames(deseq_counts)[0:-2] <- orig_sample_names
 write.csv(deseq_counts, paste(out_pref, "norm_counts.csv", sep="_"))
 
 if (has_control){
@@ -158,7 +158,7 @@ for (i in seq_len(nrow(all_comparisons))){
   comparison <- all_comparisons[i,]
 
   deseq_res <- DESeq2::results(deseq_run, c("condition", comparison[2], comparison[1]))
-  result_df <- df_with_classes(deseq_res[order(deseq_res$padj),])
+  result_df <- df_with_metadata(deseq_res[order(deseq_res$padj),])
 
   # Resolve original condition names for use in output filename
   cond1 <- sampleConditions[[comparison[1]]]

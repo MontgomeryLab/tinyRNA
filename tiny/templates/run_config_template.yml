@@ -136,12 +136,18 @@ compression: 4
 # We use a custom Python script for collapsing duplicate reads.
 # We recommend using the default (keep all reads, or threshold: 0).
 # Sequences <= threshold will not be included in downstream steps.
+# Trimming takes place prior to counting/collapsing.
 #
 # We have specified default parameters for small RNA data based on our own "best practices".
 # You may change the parameters here.
 #
 ######-------------------------------------------------------------------------------######
 
+##-- Trim the specified number of bases from the 5' end of each sequence --#
+5p_trim: 0
+
+##-- Trim the specified number of bases from the 3' end of each sequence --#
+3p_trim: 0
 
 ##-- Sequences with count <= threshold will be placed in a separate low_counts fasta --##
 threshold: 0
@@ -160,51 +166,56 @@ compress: False
 ######-------------------------------------------------------------------------------######
 
 
-##-- Max allowed num of mismatches --##
+##-- Report end-to-end hits w/ <=v mismatches; ignore qualities --##
 end_to_end: 0
 
-##-- If True: report all alignments --##
+##-- Report all alignments per read (much slower than low -k) --##
 all_aln: True
 
-##-- Set a random seed for alignment --##
+##-- Seed for random number generator --##
 seed: 0
 
-##-- If True: supress sam records for unaligned reads --##
+##-- Suppress SAM records for unaligned reads --##
 no_unal: True
 
-##-- If True: input files are fasta --##
-fasta: True
-
-##-- If True: output a sam file instead of stdout --##
-sam: True
-
-##-- If True: use shared mem for index; many bowtie's can share --##
+##-- Use shared mem for index; many bowtie's can share --##
 ##-- Note: this requires further configuration of your OS --##
 ##-- http://bowtie-bio.sourceforge.net/manual.shtml#bowtie-options-shmem --##
 shared_memory: False
 
 ###-- Unused option inputs: Remove '#' in front to use --###
-##-- If true: do not align to reverse-compliment reference --##
+##-- Hits are guaranteed best stratum, sorted; ties broken by quality --##
+#best: False
+
+##-- Hits in sub-optimal strata aren't reported (requires best, ^^^^) --##
+#strata: False
+
+##-- Max mismatches in seed (can be 0-3, default: -n 2) --##
+#seedmms: 2
+
+##-- Seed length for seedmms (default: 28) --##
+#seedlen: 28
+
+##-- Do not align to reverse-compliment reference --##
 # norc: False
 
-##-- If True: do not align to forward reference --##
+##-- Do not align to forward reference --##
 # nofw: False
 
-##-- If True: input quality scores are Phred64 --##
+##-- Input quals are Phred+64 (same as --solexa1.3-quals) --##
 # bt_phred64: False
 
-##-- If True: input files are fastq --##
-# fastq: False
-
-##-- Number of alignments to report --##
+##-- Report up to <int> good alignments per read (default: 1) --##
 # k_aln
 
 ##-- Number of bases to trim from 5' or 3' end of reads --##
 # trim5: 0
 # trim3: 0
 
-##-- If True: input files are solexa or solexa 1.3 quality --##
+##-- Input quals are from GA Pipeline ver. < 1.3 --##
 # solexa: false
+
+##-- Input quals are from GA Pipeline ver. >= 1.3 --##
 # solexa13: false
 
 

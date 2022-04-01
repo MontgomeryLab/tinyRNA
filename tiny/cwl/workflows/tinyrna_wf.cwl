@@ -51,12 +51,12 @@ inputs:
   # collapser inputs
   threshold: int?
   compress: boolean?
+  5p_trim: int?
+  3p_trim: int?
 
   # bowtie inputs
   bt_index_files: File[]
   ebwt: string
-  fastq: boolean?
-  fasta: boolean?
   trim5: int?
   trim3: int?
   bt_phred64: boolean?
@@ -65,10 +65,13 @@ inputs:
   end_to_end: int?
   nofw: boolean?
   norc: boolean?
+  seedmms: int?
+  seedlen: int?
+  best: boolean?
+  strata: boolean?
   k_aln: int?
   all_aln: boolean?
   no_unal: boolean?
-  sam: boolean?
   seed: int?
   shared_memory: boolean?
 
@@ -140,6 +143,8 @@ steps:
       # Collapser
       threshold: threshold
       compress: compress
+      5p_trim: 5p_trim
+      3p_trim: 3p_trim
     out: [fastq_clean, html_report_file, json_report_file, fastp_console, uniq_seqs, uniq_seqs_low, collapser_console]
 
   bt_build_optional:
@@ -170,8 +175,6 @@ steps:
       ebwt: ebwt
       outfile: { valueFrom: $(inputs.sample_basename + "_aligned_seqs.sam") }
       logfile: { valueFrom: $(inputs.sample_basename + "_console_output.log") }
-      fastq: fastq
-      fasta: fasta
       trim5: trim5
       trim3: trim3
       phred64: bt_phred64
@@ -179,11 +182,15 @@ steps:
       solexa13: solexa13
       end_to_end: end_to_end
       nofw: nofw
+      norc: norc
+      seedmms: seedmms
+      seedlen: seedlen
+      best: best
+      strata: strata
       k_aln: k_aln
       all_aln: all_aln
       no_unal: no_unal
       un: { valueFrom: $(inputs.sample_basename + "_unaligned_seqs.fa") }
-      sam: sam
       threads: threads
       shared_memory: shared_memory
       seed: seed

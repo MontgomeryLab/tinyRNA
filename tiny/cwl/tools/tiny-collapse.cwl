@@ -43,6 +43,22 @@ inputs:
       prefix: -c
     doc: "Use gzip compression when writing fasta outputs"
 
+  5p_trim:
+    type: int?
+    default: 0
+    inputBinding:
+      position: 4
+      prefix: --5p-trim
+    doc: "Trim the specified number of bases from the 5' end of each sequence"
+
+  3p_trim:
+    type: int?
+    default: 0
+    inputBinding:
+      position: 5
+      prefix: --3p-trim
+    doc: "Trim the specified number of bases from the 3' end of each sequence"
+
 outputs:
   collapsed_fa:
     type: File

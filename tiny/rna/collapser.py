@@ -11,9 +11,9 @@ import builtins
 import gzip
 import os
 
-from collections import OrderedDict
+from collections import Counter
 from functools import partial
-from typing import Tuple
+from typing import Tuple, Iterable
 
 try:
     from _collections import _count_elements  # Load Counter's C helper function if it is available
@@ -42,15 +42,15 @@ def get_args() -> 'argparse.NameSpace':
         'counts fall below threshold, {prefix}_collapsed_lowcounts.fa'
     )
 
-    def positive_threshold(t):
+    def positive_number(t):
         if int(t) >= 0:
             return int(t)
         else:
-            raise argparse.ArgumentTypeError("Threshold must be >= 0")
+            raise argparse.ArgumentTypeError("Numerical arguments must be >= 0")
 
     # Optional arguments
     parser.add_argument(
-        '-t', '--threshold', default=0, required=False, type=positive_threshold,
+        '-t', '--threshold', default=0, required=False, type=positive_number,
         help='Sequences <= THRESHOLD will be omitted from {prefix}_collapsed.fa '
         'and will instead be placed in {prefix}_collapsed_lowcounts.fa'
     )
@@ -60,21 +60,36 @@ def get_args() -> 'argparse.NameSpace':
         help='Use gzip compression when writing fasta outputs'
     )
 
-    return parser.parse_args()
+    parser.add_argument(
+        '--5p-trim', metavar='LENGTH', required=False, type=positive_number,
+        help="Trim LENGTH bases from the 5' end of each sequence"
+    )
+
+    parser.add_argument(
+        '--3p-trim', metavar='LENGTH', required=False, type=positive_number,
+        help="Trim LENGTH bases from the 3' end of each sequence"
+    )
+
+    args = parser.parse_args()
+
+    # This is due to 1) args is an object not a dict, and 2) variable names starting with numbers not allowed
+    trim = {end: vars(args)[end] for end in ['5p_trim', '3p_trim'] if vars(args)[end] not in [None, 0]}
+    return args, trim
 
 
-def seq_counter(fastq_file: str, file_reader: callable = builtins.open) -> 'OrderedDict':
+def seq_counter(fastq_file: str, file_reader: callable, trim: dict = None) -> 'Counter':
     """Counts the number of times each sequence appears
 
     Args:
         fastq_file: A trimmed, quality filtered, optionally gzip compressed fastq file.
         file_reader: The file context manager to use. Must support .readline() and 'rb'
+        trim: A dictionary specifying 5'/3' trim lengths
 
     Returns: An ordered dictionary of unique sequences with associated counts.
     """
 
     with file_reader(fastq_file, 'rb') as f:
-        def line_generator():    # Generator function for every 4th line (fastq sequence line) of file
+        def sequences():         # Generator function for every 4th line (fastq sequence line) of file
             while f.readline():  # Sequence identifier
                 # Sequence (Binary -> ASCII extract every 4th from 1st line, newline removed)
                 yield f.readline()[:-1].decode("utf-8")
@@ -82,14 +97,37 @@ def seq_counter(fastq_file: str, file_reader: callable = builtins.open) -> 'Orde
                 f.readline()     # Quality Score
 
         # Switch file_reader interface if reading gzipped fastq files
-        if f.read(2) == b'\x1F\x8B': return seq_counter(fastq_file, gz_f)
+        if f.read(2) == b'\x1F\x8B': return seq_counter(fastq_file, gz_f, trim)
 
         # Count occurrences of unique sequences while maintaining insertion order
-        seqs = OrderedDict()
-        _count_elements(seqs, line_generator())
+        counts = Counter(sequences() if not len(trim) else trim_seqs(sequences(), trim))
 
-    seqs.pop("", None)  # Remove blank line counts from the dictionary
-    return seqs
+    counts.pop("", None)  # Remove blank line counts from the dictionary
+    return counts
+
+
+def trim_seqs(seq_iter: Iterable, lengths: dict) -> Iterable:
+    """Trims the specified lengths from either end of a sequence
+
+    Args:
+        seq_iter: iterator of sequences read from FASTQ file
+        lengths: a dictionary specifying 5'/3' trim lengths
+
+    Returns: nested generator yielding trimmed sequences
+    """
+
+    trim5 = lengths.get('5p_trim', 0)
+    trim3 = lengths.get('3p_trim', 0)
+
+    if trim5 and trim3:
+        for seq in seq_iter:
+            yield seq[trim5:-trim3]
+    elif trim5:
+        for seq in seq_iter:
+            yield seq[trim5:]
+    elif trim3:
+        for seq in seq_iter:
+            yield seq[:-trim3]
 
 
 def seq2fasta(seqs: dict, out_prefix: str, thresh: int = 0, gz: bool = False) -> None:
@@ -170,11 +208,11 @@ def fasta_interface(gz: bool) -> Tuple[callable, callable, str]:
 
 def main():
     # Get command line arguments
-    args = get_args()
+    args, trim = get_args()
     # Ensure that the provided prefix will not result in overwritten output files
     look_before_you_leap(args.out_prefix, args.compress)
-    # Count unique sequences in input fastq file
-    seqs = seq_counter(args.input_file)
+    # Count unique sequences in input fastq file after optional trimming
+    seqs = seq_counter(args.input_file, builtins.open, trim)
     # Write counted sequences to output file(s)
     seq2fasta(seqs, args.out_prefix, args.threshold, args.compress)
 

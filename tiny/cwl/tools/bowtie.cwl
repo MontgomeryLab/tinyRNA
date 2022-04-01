@@ -17,7 +17,7 @@ inputs:
   ebwt:
     type: string
     inputBinding:
-      position: 17
+      position: 23
     doc: "The basename of the index to be searched."
 
   # Only used by InitialWorkDirRequirement
@@ -29,13 +29,13 @@ inputs:
     type: File
     inputBinding:
       itemSeparator: ","
-      position: 18
+      position: 24
     doc: "Comma-separated list of files containing unpaired reads"
 
   outfile:
     type: string
     inputBinding:
-      position: 19
+      position: 25
     doc: "File to write hits to"
 
   logfile:
@@ -107,22 +107,57 @@ inputs:
     inputBinding:
       prefix: --nofw
       position: 8
-    doc: "do not align to forward/reverse-complement reference strand"
+    doc: "do not align to forward reference strand"
+
+  norc:
+    type: boolean?
+    inputBinding:
+      prefix: --norc
+      position: 9
+    doc: "do not align to reverse-complement reference strand"
+
+  seedmms:
+    type: int?
+    inputBinding:
+      prefix: --seedmms
+      position: 10
+    doc: "max mismatches in seed (can be 0-3, default: -n 2)"
+
+  seedlen:
+    type: int?
+    inputBinding:
+      prefix: --seedlen
+      position: 11
+    doc: "seed length for --seedmms (default: 28)"
 
   ### REPORTING ###
+
+  best:
+    type: boolean?
+    inputBinding:
+      prefix: --best
+      position: 12
+    doc: "hits guaranteed best stratum; ties broken by quality"
+
+  strata:
+    type: boolean?
+    inputBinding:
+      prefix: --strata
+      position: 13
+    doc: "hits in sub-optimal strata aren't reported (requires --best)"
 
   k_aln:
     type: int?
     inputBinding:
       prefix: -k
-      position: 9
+      position: 14
     doc: "report up to <int> good alignments per read (default: 1)"
 
   all_aln:
     type: boolean?
     inputBinding:
       prefix: --all
-      position: 10
+      position: 15
     default: true
     doc: "report all alignments per read (much slower than low -k)"
 
@@ -132,7 +167,7 @@ inputs:
     type: boolean?
     inputBinding:
       prefix: -t
-      position: 11
+      position: 16
     default: true
     doc: "print wall-clock time taken by search phases"
 
@@ -140,14 +175,14 @@ inputs:
     type: string?
     inputBinding:
       prefix: --un
-      position: 12
+      position: 17
     doc: "write unaligned reads/pairs to file(s) <fname>"
 
   no_unal:
     type: boolean?
     inputBinding:
       prefix: --no-unal
-      position: 12
+      position: 18
     default: true
     doc: "suppress SAM records for unaligned reads"
 
@@ -157,7 +192,7 @@ inputs:
     type: boolean?
     inputBinding:
       prefix: --sam
-      position: 13
+      position: 19
     default: true
     doc: "write hits in SAM format"
 
@@ -167,14 +202,14 @@ inputs:
     type: int?
     inputBinding:
       prefix: --threads
-      position: 14
+      position: 20
     doc: "number of alignment threads to launch (default: 1)"
 
   shared_memory:
     type: boolean?
     inputBinding:
       prefix: --shmem
-      position: 15
+      position: 21
     doc: "use shared mem for index; many bowtie's can share"
 
   ### OTHER ###
@@ -183,7 +218,7 @@ inputs:
     type: int?
     inputBinding:
       prefix: --seed
-      position: 16
+      position: 22
     doc: "seed for random number generator"
 
 outputs:
