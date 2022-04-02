@@ -211,9 +211,12 @@ class SummaryStats:
         with open(self.features_csv, 'r', encoding='utf-8-sig') as f:
             # Convert each CSV row to a string with values labeled by column headers
             rules = ['; '.join([': '.join([c,v]) for c,v in row.items()]) for row in csv.DictReader(f)]
+            rules = [rule.replace("...", "") for rule in rules]
 
-        self.rule_counts_df = self.rule_counts_df.join(pd.Series(rules, name="Rule"), how="outer")
-        self.rule_counts_df = self.sort_cols_and_round(self.rule_counts_df).set_index('Rule').fillna(0)
+        self.rule_counts_df = self.sort_cols_and_round(self.rule_counts_df)
+        order = ["Rule String"] + self.rule_counts_df.columns.to_list()
+
+        self.rule_counts_df = self.rule_counts_df.join(pd.Series(rules, name="Rule String"), how="outer")[order].fillna(0)
         self.rule_counts_df.loc["Mapped Reads"] = mapped_reads = self.pipeline_stats_df.loc["Mapped Reads"]
 
         if mapped_reads.empty:
@@ -221,7 +224,7 @@ class SummaryStats:
             # Todo: Mapped Reads can be calculated without pipeline outputs
             self.rule_counts_df.drop("Mapped Reads", axis=0, inplace=True)
 
-        self.df_to_csv(self.rule_counts_df, "Rule", prefix, 'counts_by_rule')
+        self.df_to_csv(self.rule_counts_df, "Rule Index", prefix, 'counts_by_rule', sort_axis=None)
 
     def add_library(self, other: LibraryStats) -> None:
         name = other.library["Name"]
@@ -339,9 +342,12 @@ class SummaryStats:
         if postfix is None:
             postfix = '_'.join(map(str.lower, idx_name.split(' ')))
 
-        out_df = SummaryStats.sort_cols_and_round(df, axis=sort_axis)
-        out_df.index.name = idx_name
+        if sort_axis is not None:
+            out_df = SummaryStats.sort_cols_and_round(df, axis=sort_axis)
+        else:
+            out_df = df.round(decimals=2)
 
+        out_df.index.name = idx_name
         file_name = make_filename([prefix, postfix])
         out_df.to_csv(file_name)
 

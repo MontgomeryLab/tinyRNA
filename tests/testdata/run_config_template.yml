@@ -277,6 +277,7 @@ dge_drop_zero: False
 ##-- Disable plots by commenting (adding a '#') for the undesired plot type --##
 plot_requests:
   - 'len_dist'
+  - 'rule_charts'
   - 'class_charts'
   - 'replicate_scatter'
   - 'sample_avg_scatter_by_dge'
