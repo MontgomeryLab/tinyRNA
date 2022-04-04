@@ -14,6 +14,12 @@ inputs:
       prefix: -rc
     doc: "Raw, non-normalized feature counts from Counter"
 
+  rule_counts:
+    type: File
+    inputBinding:
+      prefix: -uc
+    doc: "Raw, non-normalized counts by matched rule from Counter"
+
   norm_counts:
     type: File?
     inputBinding:

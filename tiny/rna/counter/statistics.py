@@ -133,9 +133,12 @@ class MergedStat(ABC):
         if postfix is None:
             postfix = '_'.join(map(str.lower, idx_name.split(' ')))
 
-        out_df = MergedStat.sort_cols_and_round(df, axis=sort_axis)
-        out_df.index.name = idx_name
+        if sort_axis is not None:
+            out_df = SummaryStats.sort_cols_and_round(df, axis=sort_axis)
+        else:
+            out_df = df.round(decimals=2)
 
+        out_df.index.name = idx_name
         file_name = make_filename([prefix, postfix])
         out_df.to_csv(file_name)
 
@@ -238,12 +241,15 @@ class RuleCounts(MergedStat):
         with open(self.features_csv, 'r', encoding='utf-8-sig') as f:
             # Convert each CSV row to a string with values labeled by column headers
             rules = ['; '.join([
-                ': '.join([c, v])
-                for c, v in row.items()])
-            for row in csv.DictReader(f)]
+                        ': '.join(
+                            [col.replace("...", ""), val])
+                        for col, val in row.items()])
+                     for row in csv.DictReader(f)]
 
-        self.rule_counts_df = self.rule_counts_df.join(pd.Series(rules, name="Rule"), how="outer")
-        self.rule_counts_df = self.sort_cols_and_round(self.rule_counts_df).set_index('Rule').fillna(0)
+        self.rule_counts_df = self.sort_cols_and_round(self.rule_counts_df)
+        order = ["Rule String"] + self.rule_counts_df.columns.to_list()
+
+        self.rule_counts_df = self.rule_counts_df.join(pd.Series(rules, name="Rule String"), how="outer")[order].fillna(0)
         self.rule_counts_df.loc["Mapped Reads"] = mapped_reads = SummaryStats.pipeline_stats_df.loc["Mapped Reads"]
 
         if mapped_reads.empty:
@@ -251,7 +257,7 @@ class RuleCounts(MergedStat):
             # Todo: Mapped Reads can be calculated without pipeline outputs
             self.rule_counts_df.drop("Mapped Reads", axis=0, inplace=True)
 
-        self.df_to_csv(self.rule_counts_df, "Rule", self.prefix, 'counts_by_rule')
+        self.df_to_csv(self.rule_counts_df, "Rule Index", self.prefix, 'counts_by_rule', sort_axis=None)
 
 
 class NtLenMatrices(MergedStat):

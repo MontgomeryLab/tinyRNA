@@ -148,6 +148,7 @@ class ResumePlotterConfig(ResumeConfig):
 
         inputs = {
             'raw_counts': {'var': "resume_raw", 'type': "File"},
+            'rule_counts': {'var': "resume_rule", 'type': "File"},
             'summ_stats': {'var': "resume_stat", 'type': "File"},
             'len_dist': {'var': "resume_len_dist", 'type': "File[]"}
         }
@@ -185,6 +186,7 @@ class ResumePlotterConfig(ResumeConfig):
         try:
             self['resume_raw'] = self.cwl_file(glob(counter + "/*_feature_counts.csv")[0])
             self['resume_stat'] = self.cwl_file(glob(counter + "/*_summary_stats.csv")[0])
+            self['resume_rule'] = self.cwl_file(glob(counter + "/*_counts_by_rule.csv")[0])
             self['resume_len_dist'] = list(map(self.cwl_file, glob(counter + "/*_nt_len_dist.csv")))
 
             if self.dge_ran:
