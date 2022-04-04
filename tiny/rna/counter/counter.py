@@ -14,7 +14,7 @@ from collections import defaultdict
 from typing import Tuple, List, Dict
 
 from tiny.rna.counter.features import Features, FeatureCounter
-from tiny.rna.counter.statistics import SummaryStats
+from tiny.rna.counter.statistics import MergedStatsManager
 from tiny.rna.util import report_execution_time, from_here
 from tiny.rna.configuration import CSVReader
 
@@ -147,8 +147,8 @@ def load_config(features_csv: str, is_pipeline: bool) -> Tuple[List[dict], Dict[
 def map_and_reduce(libraries, prefs):
     """Assigns one worker process per library and merges the statistics they report"""
 
-    # SummaryStats handles final output files, regardless of multiprocessing status
-    summary = SummaryStats(Features.classes, prefs)
+    # MergedStatsManager handles final output files, regardless of multiprocessing status
+    summary = MergedStatsManager(Features, prefs)
 
     # Use a multiprocessing pool if multiple sam files were provided
     if len(libraries) > 1:
@@ -184,7 +184,7 @@ def main():
         merged_counts = map_and_reduce(libraries, vars(args))
 
         # Write final outputs
-        merged_counts.write_report_files(Features.aliases)
+        merged_counts.write_report_files()
     except:
         traceback.print_exception(*sys.exc_info())
         print("\n\nCounter encountered an error. Don't worry! You don't have to start over.\n"

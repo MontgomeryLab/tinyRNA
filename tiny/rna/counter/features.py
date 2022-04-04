@@ -77,9 +77,6 @@ class FeatureCounter:
 
             self.stats.finalize_bundle(bstat)
 
-        if self.prefs.get('report_diags', False):
-            self.stats.diags.write_intermediate_file(library["Name"])
-
         return self.stats
 
 
