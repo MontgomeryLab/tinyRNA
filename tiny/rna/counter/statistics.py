@@ -134,7 +134,7 @@ class MergedStat(ABC):
             postfix = '_'.join(map(str.lower, idx_name.split(' ')))
 
         if sort_axis is not None:
-            out_df = SummaryStats.sort_cols_and_round(df, axis=sort_axis)
+            out_df = MergedStat.sort_cols_and_round(df, axis=sort_axis)
         else:
             out_df = df.round(decimals=2)
 
