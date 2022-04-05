@@ -5,7 +5,8 @@ import csv
 import sys
 import os
 
-from typing import Tuple, Optional, Iterable
+from abc import abstractmethod, ABC
+from typing import Tuple, Optional
 from collections import Counter, defaultdict
 
 from ..util import make_filename
@@ -109,58 +110,90 @@ class LibraryStats:
                 self.library_stats['Sequences Assigned to Multiple Features'] += 1
 
 
-# Todo: this class is messy. It needs to be refactored into purposed classes stored in a list
-#  and iterated over with minimum interface:
-#  - add_library()
-#  - write_output_logfile()
+class MergedStat(ABC):
+    prefix = None
 
-class SummaryStats:
+    @abstractmethod
+    def add_library(self, other: LibraryStats): pass
 
-    summary_categories = ["Total Reads", "Retained Reads", "Unique Sequences",
-                          "Mapped Sequences", "Mapped Reads", "Assigned Reads"]
+    @abstractmethod
+    def write_output_logfile(self): pass
 
-    def __init__(self, classes, prefs):
-        self.feature_classes = classes
-        self.out_prefix = prefs.get('out_prefix', '')
-        self.report_diags = prefs.get('report_diags', False)
-        self.features_csv = prefs['config']
+    @staticmethod
+    def add_warning(msg):
+        MergedStatsManager.warnings.append(msg)
 
-        # Will become False if an added library lacks its corresponding Collapser and Bowtie outputs
-        self.report_summary_statistics = True
+    @staticmethod
+    def sort_cols_and_round(df: pd.DataFrame, axis="columns") -> pd.DataFrame:
+        """Convenience function to sort columns by title and round all values to 2 decimal places"""
+        return df.round(decimals=2).sort_index(axis=axis)
 
-        self.pipeline_stats_df = pd.DataFrame(index=SummaryStats.summary_categories)
-        self.feat_counts_df = pd.DataFrame(index=self.feature_classes.keys())
-        self.lib_stats_df = pd.DataFrame(index=LibraryStats.summary_categories)
-        self.rule_counts_df = pd.DataFrame()
-        self.chrom_misses = Counter()
-        self.nt_len_matrices = {}
-        self.warnings = []
+    @staticmethod
+    def df_to_csv(df: pd.DataFrame, idx_name: str, prefix: str, postfix: str = None, sort_axis="columns"):
+        if postfix is None:
+            postfix = '_'.join(map(str.lower, idx_name.split(' ')))
 
-        if self.report_diags:
-            self.aln_diags = pd.DataFrame(columns=Diagnostics.aln_diag_categories)
-            self.selection_diags = {}
+        if sort_axis is not None:
+            out_df = MergedStat.sort_cols_and_round(df, axis=sort_axis)
+        else:
+            out_df = df.round(decimals=2)
 
-    def write_report_files(self, alias: dict) -> None:
+        out_df.index.name = idx_name
+        file_name = make_filename([prefix, postfix])
+        out_df.to_csv(file_name)
+
+
+class MergedStatsManager:
+    chrom_misses = Counter()
+    warnings = []
+
+    def __init__(self, Features_obj, prefs):
+        MergedStat.prefix = prefs.get('out_prefix', '')
+
+        self.merged_stats = [
+            FeatureCounts(Features_obj), RuleCounts(prefs['config']),
+            AlignmentStats(), SummaryStats(),
+            NtLenMatrices()
+        ]
+
+        if prefs.get('report_diags', False):
+            self.merged_stats.append(MergedDiags())
+
+    def write_report_files(self) -> None:
         self.print_warnings()
-        if self.report_diags:
-            Diagnostics.write_summary(self.out_prefix, self.aln_diags, self.selection_diags)
+        for output_stat in self.merged_stats:
+            output_stat.write_output_logfile()
 
-        self.write_feat_counts(alias, self.out_prefix)
-        self.write_rule_counts(self.out_prefix)
-        self.write_alignment_statistics(self.out_prefix)
-        self.write_pipeline_statistics(self.out_prefix)
-        self.write_nt_len_matrices(self.out_prefix)
+    def add_library(self, other: LibraryStats) -> None:
+        for merger in self.merged_stats:
+            merger.add_library(other)
+        self.chrom_misses.update(other.chrom_misses)
 
-    def write_alignment_statistics(self, prefix: str) -> None:
-        # Sort columns by title and round all counts to 2 decimal places
-        self.df_to_csv(self.lib_stats_df, "Alignment Statistics", prefix, 'alignment_stats')
+    def print_warnings(self):
+        if len(self.chrom_misses) != 0:
+            self.warnings.append("\nSome reads aligned to chromosomes not defined in your GFF files.")
+            self.warnings.append("This may be due to a mismatch in formatting (e.g. roman vs. arabic numerals)")
+            self.warnings.append("between your bowtie indexes and GFF files, or your bowtie indexes may")
+            self.warnings.append("contain chromosomes not defined in your GFF files.")
+            self.warnings.append("The chromosome names and their alignment counts are:")
+            for chr in sorted(self.chrom_misses.keys()):
+                self.warnings.append("\t" + chr + ": " + str(self.chrom_misses[chr]))
+            self.warnings.append("\n")
 
-    def write_pipeline_statistics(self, prefix: str) -> None:
-        if self.report_summary_statistics:
-            # Sort columns by title and round all counts to 2 decimal places
-            self.df_to_csv(self.pipeline_stats_df, "Summary Statistics", prefix, "summary_stats")
+        for warning in self.warnings:
+            print(warning, file=sys.stderr)
 
-    def write_feat_counts(self, alias: dict, prefix: str) -> None:
+
+class FeatureCounts(MergedStat):
+    def __init__(self, Features_obj):
+        self.feat_counts_df = pd.DataFrame(index=Features_obj.classes.keys())
+        self.classes = Features_obj.classes
+        self.aliases = Features_obj.aliases
+
+    def add_library(self, other: LibraryStats) -> None:
+        self.feat_counts_df[other.library["Name"]] = self.feat_counts_df.index.map(other.feat_counts)
+
+    def write_output_logfile(self) -> None:
         """Writes selected features and their associated counts to {prefix}_out_feature_counts.csv
 
         Only the features in display_index will be listed in the output table, regardless of count, even
@@ -181,69 +214,106 @@ class SummaryStats:
         formatted for each library as {group}_rep_{replicate}
         """
 
-        summary = self.feat_counts_df
         # Sort columns by title and round all counts to 2 decimal places
-        summary = self.sort_cols_and_round(summary)
+        summary = self.sort_cols_and_round(self.feat_counts_df)
         # Add Feature Name column, which is the feature alias (default is Feature ID if no alias exists)
-        summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(alias.get(feat, ''))))
+        summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(self.aliases.get(feat, ''))))
         # Add Classes column for classes associated with the given feature
-        feat_class_map = lambda feat: ', '.join(self.feature_classes[feat])
+        feat_class_map = lambda feat: ', '.join(self.classes[feat])
         summary.insert(1, "Feature Class", summary.index.map(feat_class_map))
         # Sort by index, make index its own column, and rename it to Feature ID
         summary = summary.sort_index().reset_index().rename(columns={"index": "Feature ID"})
 
-        summary.to_csv(prefix + '_feature_counts.csv', index=False)
+        summary.to_csv(self.prefix + '_feature_counts.csv', index=False)
 
-    def write_nt_len_matrices(self, prefix: str) -> None:
-        """Writes each library's 5' end nucleotide / length matrices to their own files."""
 
-        for lib_name, matrices in self.nt_len_matrices.items():
-            sanitized_lib_name = lib_name.replace('/', '_')
+class RuleCounts(MergedStat):
+    def __init__(self, features_csv):
+        self.rule_counts_df = pd.DataFrame()
+        self.features_csv = features_csv
 
-            mapped_nt_len_df = pd.DataFrame(matrices[0]).sort_index().fillna(0)
-            mapped_nt_len_df.to_csv(f'{prefix}_{sanitized_lib_name}_mapped_nt_len_dist.csv')
+    def add_library(self, other: LibraryStats):
+        counts = pd.Series(other.rule_counts, name=other.library['Name'])
+        self.rule_counts_df = self.rule_counts_df.join(counts, how='outer')
 
-            assigned_nt_len_df = pd.DataFrame(matrices[1]).sort_index().round(decimals=2).fillna(0)
-            assigned_nt_len_df.to_csv(f'{prefix}_{sanitized_lib_name}_assigned_nt_len_dist.csv')
-
-    def write_rule_counts(self, prefix: str) -> None:
+    def write_output_logfile(self):
         # Reread the Features Sheet since FeatureSelector.rules_table is processed and less readable
         with open(self.features_csv, 'r', encoding='utf-8-sig') as f:
             # Convert each CSV row to a string with values labeled by column headers
-            rules = ['; '.join([': '.join([c,v]) for c,v in row.items()]) for row in csv.DictReader(f)]
-            rules = [rule.replace("...", "") for rule in rules]
+            rules = ['; '.join([
+                        ': '.join(
+                            [col.replace("...", ""), val])
+                        for col, val in row.items()])
+                     for row in csv.DictReader(f)]
 
         self.rule_counts_df = self.sort_cols_and_round(self.rule_counts_df)
         order = ["Rule String"] + self.rule_counts_df.columns.to_list()
 
         self.rule_counts_df = self.rule_counts_df.join(pd.Series(rules, name="Rule String"), how="outer")[order].fillna(0)
-        self.rule_counts_df.loc["Mapped Reads"] = mapped_reads = self.pipeline_stats_df.loc["Mapped Reads"]
+        self.rule_counts_df.loc["Mapped Reads"] = mapped_reads = SummaryStats.pipeline_stats_df.loc["Mapped Reads"]
 
         if mapped_reads.empty:
             # Row will be empty if Summary Stats were not gathered
             # Todo: Mapped Reads can be calculated without pipeline outputs
             self.rule_counts_df.drop("Mapped Reads", axis=0, inplace=True)
 
-        self.df_to_csv(self.rule_counts_df, "Rule Index", prefix, 'counts_by_rule', sort_axis=None)
+        self.df_to_csv(self.rule_counts_df, "Rule Index", self.prefix, 'counts_by_rule', sort_axis=None)
 
-    def add_library(self, other: LibraryStats) -> None:
-        name = other.library["Name"]
-        # Index varies per library -> join
-        self.rule_counts_df = self.rule_counts_df.join(pd.Series(other.rule_counts, name=name), how='outer')
-        # Index is consistent across libraries -> index.map
-        self.feat_counts_df[name] = self.feat_counts_df.index.map(other.feat_counts)
-        self.lib_stats_df[name] = self.lib_stats_df.index.map(other.library_stats)
-        self.nt_len_matrices[name] = [other.mapped_nt_len, other.assigned_nt_len]
-        self.chrom_misses.update(other.chrom_misses)
 
-        if self.report_diags: self.add_diags(other)
+class NtLenMatrices(MergedStat):
+    def __init__(self):
+        self.nt_len_matrices = {}
 
-        # Process pipeline step outputs for this library, if they exist, to provide Summary Statistics
-        if self.report_summary_statistics and self.library_has_pipeline_outputs(other):
-            self.add_summary_stats(other)
+    def add_library(self, other: LibraryStats):
+        name = other.library['Name']
+        self.nt_len_matrices[name] = [
+            other.mapped_nt_len,
+            other.assigned_nt_len
+        ]
 
-    def add_summary_stats(self, other: LibraryStats):
+    def write_output_logfile(self):
+        """Writes each library's 5' end nucleotide / length matrices to their own files."""
+
+        for lib_name, matrices in self.nt_len_matrices.items():
+            sanitized_lib_name = lib_name.replace('/', '_')
+
+            # Whole number counts because number of reads mapped is always integer
+            mapped_nt_len_df = pd.DataFrame(matrices[0]).sort_index().fillna(0)
+            mapped_nt_len_df.to_csv(f'{self.prefix}_{sanitized_lib_name}_mapped_nt_len_dist.csv')
+
+            # Fractional counts due to (loci count) and/or (assigned feature count) normalization
+            assigned_nt_len_df = pd.DataFrame(matrices[1]).sort_index().round(decimals=2).fillna(0)
+            assigned_nt_len_df.to_csv(f'{self.prefix}_{sanitized_lib_name}_assigned_nt_len_dist.csv')
+
+
+class AlignmentStats(MergedStat):
+    def __init__(self):
+        self.alignment_stats_df = pd.DataFrame(index=LibraryStats.summary_categories)
+
+    def add_library(self, other: LibraryStats):
+        library, stats = other.library['Name'], other.library_stats
+        self.alignment_stats_df[library] = self.alignment_stats_df.index.map(stats)
+
+    def write_output_logfile(self):
+        self.df_to_csv(self.alignment_stats_df, "Alignment Statistics", self.prefix, 'alignment_stats')
+
+
+class SummaryStats(MergedStat):
+
+    summary_categories = ["Total Reads", "Retained Reads", "Unique Sequences",
+                          "Mapped Sequences", "Mapped Reads", "Assigned Reads"]
+
+    pipeline_stats_df = pd.DataFrame(index=summary_categories)
+
+    def __init__(self):
+        # Will become False if an added library lacks its corresponding Collapser and Bowtie outputs
+        self.report_summary_statistics = True
+
+    def add_library(self, other: LibraryStats):
         """Add incoming summary stats as new column in the master table"""
+
+        if not self.report_summary_statistics or not self.library_has_pipeline_outputs(other):
+            return
 
         mapped_seqs = sum([other.library_stats[stat] for stat in
                            ["Total Assigned Sequences",
@@ -267,26 +337,9 @@ class SummaryStats:
 
         self.pipeline_stats_df[other.library["Name"]] = self.pipeline_stats_df.index.map(other_summary)
 
-    def add_diags(self, other: LibraryStats) -> None:
-        """Append alignment and selection diagnostics to the master tables"""
-
-        other_lib = other.library['Name']
-        self.selection_diags[other_lib] = other.diags.selection_diags
-        self.aln_diags.loc[other_lib] = other.diags.alignment_diags
-
-    def print_warnings(self):
-        if len(self.chrom_misses) != 0:
-            self.warnings.append("\nSome reads aligned to chromosomes not defined in your GFF files.")
-            self.warnings.append("This may be due to a mismatch in formatting (e.g. roman vs. arabic numerals)")
-            self.warnings.append("between your bowtie indexes and GFF files, or your bowtie indexes may")
-            self.warnings.append("contain chromosomes not defined in your GFF files.")
-            self.warnings.append("The chromosome names and their alignment counts are:")
-            for chr in sorted(self.chrom_misses.keys()):
-                self.warnings.append("\t" + chr + ": " + str(self.chrom_misses[chr]))
-            self.warnings.append("\n")
-
-        for warning in self.warnings:
-            print(warning, file=sys.stderr)
+    def write_output_logfile(self):
+        if self.report_summary_statistics:
+            self.df_to_csv(self.pipeline_stats_df, "Summary Statistics", self.prefix, "summary_stats")
 
     def library_has_pipeline_outputs(self, other: LibraryStats) -> bool:
         """Check working directory for pipeline outputs from previous steps"""
@@ -297,7 +350,7 @@ class SummaryStats:
         collapsed_fa = lib_basename + "_collapsed.fa"
 
         if not os.path.isfile(fastp_logfile) or not os.path.isfile(collapsed_fa):
-            self.warnings.append(f"Pipeline output for {lib_basename} not found. Summary Statistics were skipped.")
+            self.add_warning(f"Pipeline output for {lib_basename} not found. Summary Statistics were skipped.")
             self.report_summary_statistics = False
             return False
         else:
@@ -315,8 +368,8 @@ class SummaryStats:
             total_reads = fastp_summary['before_filtering']['total_reads']
             retained_reads = fastp_summary['after_filtering']['total_reads']
         except (KeyError, json.JSONDecodeError):
-            self.warnings.append("Unable to parse fastp json logs for Summary Statistics.")
-            self.warnings.append("Associated file: " + other.library['File'])
+            self.add_warning("Unable to parse fastp json logs for Summary Statistics.")
+            self.add_warning("Associated file: " + other.library['File'])
             return None
 
         return total_reads, retained_reads
@@ -334,27 +387,8 @@ class SummaryStats:
             # Zero-based count
             return int(count) + 1
         except ValueError:
-            self.warnings.append(f"Unable to parse {other.library['collapsed']} for Summary Statistics.")
+            self.add_warning(f"Unable to parse {other.library['collapsed']} for Summary Statistics.")
             return None
-
-    @staticmethod
-    def df_to_csv(df: pd.DataFrame, idx_name:str, prefix: str, postfix: str = None, sort_axis="columns"):
-        if postfix is None:
-            postfix = '_'.join(map(str.lower, idx_name.split(' ')))
-
-        if sort_axis is not None:
-            out_df = SummaryStats.sort_cols_and_round(df, axis=sort_axis)
-        else:
-            out_df = df.round(decimals=2)
-
-        out_df.index.name = idx_name
-        file_name = make_filename([prefix, postfix])
-        out_df.to_csv(file_name)
-
-    @staticmethod
-    def sort_cols_and_round(df: pd.DataFrame, axis="columns") -> pd.DataFrame:
-        """Convenience function to sort columns by title and round all values to 2 decimal places"""
-        return df.round(decimals=2).sort_index(axis=axis)
 
 
 class Diagnostics:
@@ -365,7 +399,7 @@ class Diagnostics:
     complement = bytes.maketrans(b'ACGTacgt', b'TGCAtgca')
 
     def __init__(self, out_prefix: str):
-        self.out_prefix = out_prefix
+        self.prefix = out_prefix
         self.alignment_diags = {stat: 0 for stat in Diagnostics.aln_diag_categories}
         self.selection_diags = defaultdict(Counter)
         self.alignments = []
@@ -386,16 +420,6 @@ class Diagnostics:
         self.alignments.append((read, bundle['corr_count'], aln['strand'], aln['start'], aln['end'],
                                 ';'.join(assignments)))
 
-    def write_intermediate_file(self, library_name: str) -> None:
-        """Write all recorded alignment info for this library to its corresponding alignment table."""
-
-        outfile = make_filename([self.out_prefix, library_name, 'aln_table'], ext='.txt')
-        with open(outfile, 'w') as imf:
-            imf.writelines(
-                # sequence, cor_counts, strand, start, end, feat1a/feat1b;feat2;...
-                map(lambda rec: "%s\t%f\t%c\t%d\t%d\t%s\n" % rec, self.alignments)
-            )
-
     def record_diagnostics(self, assignments, n_candidates, aln, bundle):
         """Records basic diagnostic info"""
 
@@ -409,26 +433,45 @@ class Diagnostics:
             else:
                 self.alignment_diags['Eliminated counts'] += bundle['corr_count']
 
-    @classmethod
-    def write_summary(cls, out_prefix: str, alignment_summary: pd.DataFrame, selection_summary: dict) -> None:
-        """Write summary diagnostics, gathered by SummaryStatistics, for all libraries
 
-        Args:
-            out_prefix: prefix for the output diagnostic files
-            alignment_summary: alignment diagnostics for ALL libraries
-            selection_summary: selection diagnostics for ALL libraries
-        """
+class MergedDiags(MergedStat):
+    def __init__(self):
+        self.aln_diags = pd.DataFrame(columns=Diagnostics.aln_diag_categories)
+        self.selection_diags = {}
+        self.alignment_tables = {}
 
-        SummaryStats.df_to_csv(alignment_summary, "Sample", out_prefix, "alignment_diags", sort_axis="index")
+    def add_library(self, other: LibraryStats):
+        other_lib = other.library['Name']
+        self.alignment_tables[other_lib] = other.diags.alignments
+        self.selection_diags[other_lib] = other.diags.selection_diags
+        self.aln_diags.loc[other_lib] = other.diags.alignment_diags
 
+    def write_output_logfile(self):
+        self.write_alignment_diags()
+        self.write_selection_diags()
+        self.write_alignment_tables()
+
+    def write_alignment_diags(self):
+        MergedStat.df_to_csv(self.aln_diags, "Sample", self.prefix, "alignment_diags", sort_axis="index")
+
+    def write_alignment_tables(self):
+        for library_name, table in self.alignment_tables.items():
+            outfile = make_filename([self.prefix, library_name, 'aln_table'], ext='.txt')
+            with open(outfile, 'w') as imf:
+                imf.writelines(
+                    # sequence, cor_counts, strand, start, end, feat1a/feat1b;feat2;...
+                    map(lambda rec: "%s\t%f\t%c\t%d\t%d\t%s\n" % rec, table)
+                )
+
+    def write_selection_diags(self):
         out = []
-        for lib in sorted(selection_summary.keys()):
+        for lib in sorted(self.selection_diags.keys()):
             out.append(lib)
-            for feat_class in sorted(selection_summary[lib].keys()):
+            for feat_class in sorted(self.selection_diags[lib].keys()):
                 out.append('\t' + ','.join(feat_class))
-                for stat in sorted(selection_summary[lib][feat_class].keys()):
-                    out.append("\t\t%s: %d" % (stat, selection_summary[lib][feat_class][stat]))
+                for stat in sorted(self.selection_diags[lib][feat_class].keys()):
+                    out.append("\t\t%s: %d" % (stat, self.selection_diags[lib][feat_class][stat]))
 
-        selection_summary_filename = make_filename([out_prefix, 'selection_diags'], ext='.txt')
+        selection_summary_filename = make_filename([self.prefix, 'selection_diags'], ext='.txt')
         with open(selection_summary_filename, 'w') as f:
             f.write('\n'.join(out))

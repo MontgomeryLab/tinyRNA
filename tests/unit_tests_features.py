@@ -167,8 +167,7 @@ class FeaturesTests(unittest.TestCase):
             call.assign_library(library),
             call.count_bundle(["mock_alignment"]),
             call.count_bundle_assignments(bundle, "mock_alignment", {'mock_feat'}, len({'mock_feat'})),
-            call.finalize_bundle(bundle),
-            call.diags.write_intermediate_file(library["Name"])
+            call.finalize_bundle(bundle)
         ]
 
         # CALL FUNCTION
