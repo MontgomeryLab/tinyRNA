@@ -1,5 +1,7 @@
 import collections
 import unittest
+from random import randint
+
 import HTSeq
 from copy import deepcopy
 from unittest.mock import patch, mock_open, call
@@ -548,7 +550,79 @@ class MyTestCase(unittest.TestCase):
                 self.exhaust_iterator(reader._parse_alignments(sam_in))
                 write_fn.assert_called_once()
 
+    """Does CaseInsensitiveAttrs correctly store, check membership, and retrieve?"""
 
+    def test_CaseInsensitiveAttrs(self):
+        def rand_case(string):
+            return ''.join([l.upper() if randint(0,1) else l for l in string.lower()])
+
+        cia = CaseInsensitiveAttrs()
+        cia["AtTrKeY"] = ("AtTrVaL1", "AtTrVaL2")
+
+        self.assertIn("attrkey", cia)
+        self.assertIn(rand_case("attrkey"), cia)
+
+        self.assertEqual(cia['attrkey'], ("AtTrVaL1", "AtTrVaL2"))
+        self.assertEqual(cia[rand_case('attrkey')], ("AtTrVaL1", "AtTrVaL2"))
+
+        self.assertEqual(cia.get('attrkey'), ("AtTrVaL1", "AtTrVaL2"))
+        self.assertEqual(cia.get(rand_case('attrkey')), ("AtTrVaL1", "AtTrVaL2"))
+
+        self.assertEqual(cia.get(rand_case('attrkey'), None), ("AtTrVaL1", "AtTrVaL2"))
+        self.assertEqual(cia.get('badkey', "altval"), "altval")
+
+        self.assertTrue(cia.contains_ident(('attrkey', 'attrval1')))
+        self.assertTrue(cia.contains_ident((rand_case('attrkey'), rand_case('attrval2'))))
+
+    """Does CaseInsensitiveAttrs correctly support iteration of original-case keys and values?"""
+
+    def test_CaseInsensitiveAttrs_iteration(self):
+        cia = CaseInsensitiveAttrs()
+
+        cia["AtTrKeY"] = ("AtTrVaL1", "AtTrVaL2")
+        cia["AtTrKeY2"] = ("AtTrVaL3",)
+        cia["AtTrKeY3"] = ("AtTrVaL4", "AtTrVaL5", "AtTrVaL6")
+
+        self.assertListEqual(list(cia.keys()), [
+            "AtTrKeY",
+            "AtTrKeY2",
+            "AtTrKeY3"
+        ])
+        self.assertListEqual(list(cia.values()), [
+            ("AtTrVaL1", "AtTrVaL2"),
+            ("AtTrVaL3",),
+            ("AtTrVaL4", "AtTrVaL5", "AtTrVaL6")
+        ])
+        self.assertListEqual(list(cia.items()), [
+            ("AtTrKeY", ("AtTrVaL1", "AtTrVaL2")),
+            ("AtTrKeY2", ("AtTrVaL3",)),
+            ("AtTrKeY3", ("AtTrVaL4", "AtTrVaL5", "AtTrVaL6"))
+        ])
+
+    """Does CaseInsensitiveAttrs throw KeyError when there's a case-independent key mismatch on lookup?"""
+
+    def test_CaseInsensitiveAttrs_KeyError(self):
+        cia = CaseInsensitiveAttrs()
+        cia['attrkey'] = ('N/A',)
+
+        with self.assertRaises(KeyError):
+            _ = cia['badkey']
+
+        self.assertEqual(cia.get('badkey'), None)
+
+    """Does CaseInsensitiveAttrs support the setdefault() method?"""
+
+    def test_CaseInsensitiveAttrs_setdefault(self):
+        cia = CaseInsensitiveAttrs()
+        cia['AtTrKeY'] = ("AtTrVaL1", "AtTrVaL2")
+
+        exists = cia.setdefault('attrkey', ('attrval',))
+        dne = cia.setdefault('OtHeRkEy', ('AtTrVaL2',))
+
+        self.assertEqual(exists, ("AtTrVaL1", "AtTrVaL2"))
+        self.assertEqual(dne, ('AtTrVaL2',))
+        self.assertEqual(cia['otherkey'], ('AtTrVaL2',))
+        self.assertEqual(cia['attrkey'], ("AtTrVaL1", "AtTrVaL2"))
 
 
 if __name__ == '__main__':
