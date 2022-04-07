@@ -92,15 +92,15 @@ To make it simple to specify your fastq files and their locations, along with as
 
 #### Features Sheet
 
-Small RNAs can often be classified by sequence characteristics, such as length, strandedness, and 5' nucleotide. We provide a Features Sheet (`features.csv`) in which you can define selection rules to more accurately capture counts for the small RNAs of interest.  Rules apply to features parsed from **all** Feature Sources, with the exception of "Alias by..." which only applies to the Feature Source on the same row. These rules are used to select among overlapping features at each alignment locus. Selection first takes place against feature attributes (GFF3 column 9), and is directed by defining the attribute you want to be considered (Select by...) and the acceptable values for that attribute (with value...). Rules that match features at this stage will be used in a second stage of selection which includes elimination by hierarchy and interval overlap characteristics. Remaining candidates pass to the third and final stage of selection which examines characteristics of the alignment itself: strand relative to the feature of interest, 5' end nucleotide, and length. See [Counter](doc/Counter.md) for more information.
+Small RNAs can often be classified by sequence characteristics, such as length, strandedness, and 5' nucleotide. We provide a Features Sheet (`features.csv`) in which you can define selection rules to more accurately capture counts for the small RNAs of interest.  Rules apply to features parsed from **all** Feature Sources, with the exception of "Alias by..." which only applies to the Feature Source on the same row. These rules are used to select among overlapping features at each alignment locus. Selection first takes place against feature attributes (GFF column 9), and is directed by defining the attribute you want to be considered (Select by...) and the acceptable values for that attribute (with value...). Rules that match features at this stage will be used in a second stage of selection which includes elimination by hierarchy and interval overlap characteristics. Remaining candidates pass to the third and final stage of selection which examines characteristics of the alignment itself: strand relative to the feature of interest, 5' end nucleotide, and length. See [Counter](doc/Counter.md) for more information.
 
->**Tip**: Don't worry about having duplicate Feature Source entries. Each GFF3 file is parsed only once.
+>**Tip**: Don't worry about having duplicate Feature Source entries. Each GFF file is parsed only once.
 
 ### User-Provided Input File Requirements
 
-  1. A GFF3 formatted file with with genomic coordinates for your features of interest, such as miRNAs (see c_elegans_WS279_chr1.gff3 in the reference_data folder for an example)
-     - Each feature must have an attributes column (column 9) which defines its `ID` and `Class` (case-sensitive).
-       - For example: `chrI	.	miRNA	100	121	.	+	.	ID=miR-1;Class=miRNA`
+  1. A GFF3 / GFF2 / GTF formatted file with genomic coordinates for your features of interest, such as miRNAs (see c_elegans_WS279_chr1.gff3 in the reference_data folder for an example)
+     - Each feature must have an attributes column (column 9) which defines its `ID`.
+       - For example: `chrI	.	miRNA	100	121	.	+	.	ID=miR-1;...`
      - All features must be stranded.
      - Attribute values which contain commas will be parsed as lists.
   2. FASTQ(.gz) <sup>*</sup> formatted files with your small RNA high-throughput sequencing data (files must be demultiplexed).
@@ -114,9 +114,9 @@ In most cases you will use this toolset as an end-to-end pipeline. This will run
 
 1. High-throughput sequencing data in fastq format. 
 2. The genome sequence of interest in fasta format.
-3. Genome coordinates of small RNA features of interest in gff3 format.
+3. Genome coordinates of small RNA features of interest in GFF format.
 4. A completed Samples Sheet (`samples.csv`) with paths to the fastq files.
-5. A completed Features Sheet (`features.csv`) with paths to the gff3 file(s).
+5. A completed Features Sheet (`features.csv`) with paths to the GFF file(s).
 6. An updated Paths File (`paths.yml`) with the path to the genome sequence.
 7. A Run Config file (`run_config.yml`) located in your working directory or the path to the file. The template provided does not need to be updated if you wish to use the default settings.
 
@@ -315,7 +315,7 @@ A "collapsed" FASTA contains unique reads found in fastp's quality filtered FAST
 The counter step produces a variety of outputs
 
 #### Feature Counts
-Custom Python scripts and HTSeq are used to generate a single table of feature counts that includes columns for each library analyzed. A feature's _Feature ID_ and _Feature Class_ are simply the values of its `ID` and `Class` attributes. We have also included a _Feature Name_ column which displays aliases of your choice, as specified in the _Alias by..._ column of the Features Sheet. If _Alias by..._ is set to`ID`, the _Feature Name_ column is left empty.
+Custom Python scripts and HTSeq are used to generate a single table of feature counts that includes columns for each library analyzed. A feature's _Feature ID_ and _Feature Class_ are simply the values of its `ID` and `Class` attributes. Features lacking a Class attribute will be assigned class `_UNKNOWN_`. We have also included a _Feature Name_ column which displays aliases of your choice, as specified in the _Alias by..._ column of the Features Sheet. If _Alias by..._ is set to`ID`, the _Feature Name_ column is left empty.
 
 For example, if your Features Sheet has a rule which specifies an ID Attribute of `sequence_name` and the GFF entry for this feature has the following attributes column:
 ```

@@ -1,12 +1,11 @@
 import os.path
-from threading import Thread
-
 import HTSeq
 import sys
 import re
 
-from collections import Counter, defaultdict
-from typing import Tuple, List, Dict, Iterator
+from collections import Counter, defaultdict, namedtuple
+from typing import Tuple, List, Dict, Iterator, Optional
+from inspect import stack
 
 from tiny.rna.util import report_execution_time, make_filename
 
@@ -183,7 +182,8 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
         ID."
     """
 
-    attribute_dict = {}
+    # Modification: store attributes in a dict subclass that allows case-insensitive ops
+    attribute_dict = CaseInsensitiveAttrs()
     first_val = "_unnamed_"
     for i, attr in enumerate(HTSeq._HTSeq.quotesafe_split(attrStr.rstrip().encode())):
         attr = attr.decode()
@@ -209,6 +209,78 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
         return attribute_dict, first_val
     else:
         return attribute_dict
+
+
+class CaseInsensitiveAttrs(Dict[str, tuple]):
+    """A dictionary subclass that allows for case-insensitive queries against feature attributes"""
+
+    def __init__(self):
+        super().__init__()
+        self.Entry = namedtuple("Entry", "orig_key orig_val ci_val")
+
+    def __setitem__(self, key: str, val: tuple):
+        lowercase_val = tuple(v.lower() for v in val)
+        super().__setitem__(key.lower(), self.Entry(key, val, lowercase_val))
+
+    def __getitem__(self, key: str):
+        # Allows case-insensitive key lookups which return original case values
+        # Ensure that KeyError contains the original key
+        if key.lower() not in self: raise KeyError(key)
+        return super().__getitem__(key.lower()).orig_val
+
+    def __contains__(self, key: str):
+        # Allows case-insensitive membership queries by key
+        return super().__contains__(key.lower())
+
+    def __str__(self):
+        # Returns original case keys/values
+        return str({v.orig_key: v.orig_val for v in super().values()})
+
+    def __repr__(self):
+        # Returns both original case and lowercase keys/values
+        return str({f"{k}/{v.orig_key}": f"{v.ci_val}/{v.orig_val}" for k,v in super().items()})
+
+    def setdefault(self, key: str, value: Optional[Tuple]=None):
+        if key not in self:
+            self[key] = value
+            return value
+        else:
+            return self[key]
+
+    def get(self, key: str, default=None):
+        # Same as __getitem__() but with a default return value
+        return self[key] if key in self else default
+
+    def keys(self):
+        # Roughly mimics a KeysView with original case
+        for v in super(CaseInsensitiveAttrs, self).values():
+            yield v.orig_key
+
+    def values(self):
+        # Roughly mimics a ValuesView with original case
+        for v in super(CaseInsensitiveAttrs, self).values():
+            yield v.orig_val
+
+    def items(self):
+        # Roughly mimics an ItemsView with original case
+        yield from zip(self.keys(), self.values())
+
+    # Non-overridden method
+    def contains_ident(self, query: tuple):
+        # Allows case-insensitive membership queries by (key, value)
+        key = query[0].lower()
+        val = query[1].lower()
+        return key in self and \
+               val in super(CaseInsensitiveAttrs, self).__getitem__(key).ci_val
+
+    # Dict methods not implemented which are invalid if delegated to dict class
+    def update(self, other, **kwargs): self.not_implemented()
+    def fromkeys(self, it, val=None): self.not_implemented()
+    def popitem(self): self.not_implemented()
+    def copy(self): self.not_implemented()
+
+    def not_implemented(self):
+        raise NotImplementedError(f"CaseInsensitiveAttrs does not support {stack()[1].function}")
 
 
 class ReferenceTables:
@@ -289,7 +361,7 @@ class ReferenceTables:
 
         return self.finalize_tables()
 
-    def get_root_feature(self, feature_id: str, row_attrs: Dict[str, tuple]) -> str:
+    def get_root_feature(self, feature_id: str, row_attrs: CaseInsensitiveAttrs) -> str:
         """Returns the ID of the feature's root parent if one exists. Otherwise the original ID is returned."""
 
         if "Parent" not in row_attrs:
@@ -324,32 +396,32 @@ class ReferenceTables:
 
         return root_id
 
-    def add_alias(self, root_id: str, alias_keys: List[str], row_attr: Dict[str, tuple]) -> None:
+    def add_alias(self, root_id: str, alias_keys: List[str], row_attrs: CaseInsensitiveAttrs) -> None:
         """Add feature's aliases to the root ancestor's alias set"""
 
         for alias_key in alias_keys:
-            for row_val in row_attr[alias_key]:
+            for row_val in row_attrs[alias_key]:
                 self.alias[root_id].add(row_val)
 
-    def get_matches_and_classes(self, row_attrs: Dict[str, set]) -> Tuple[set, set]:
+    def get_matches_and_classes(self, row_attrs: CaseInsensitiveAttrs) -> Tuple[set, set]:
         """Grabs classes and match tuples from attributes that match identity rules"""
 
+        row_attrs.setdefault("Class", ("_UNKNOWN_",))
         classes = {c for c in row_attrs["Class"]}
 
         identity_matches = set()
         for ident, rule_indexes in self.selector.inv_ident.items():
-            match = row_attrs.get(ident[0], None)
-            if match is not None and ident[1] in match:
+            if row_attrs.contains_ident(ident):
                 identity_matches.update(
                     (r,
                      self.selector.rules_table[r]['Hierarchy'],
                      self.selector.rules_table[r]['Strict']
-                     )
-                    for r in rule_indexes)
+                     ) for r in rule_indexes
+                )
         # -> identity_matches: {(rule, rank, strict), ...}
         return identity_matches, classes
 
-    def get_row_parent(self, feature_id: str, row_attrs: Dict[str, tuple]) -> str:
+    def get_row_parent(self, feature_id: str, row_attrs: CaseInsensitiveAttrs) -> str:
         """Get the current feature's parent while cooperating with filtered features"""
 
         parent_attr = row_attrs.get("Parent", [None])

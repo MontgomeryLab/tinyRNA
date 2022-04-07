@@ -4,7 +4,7 @@ We provide a Features Sheet (`features.csv`) in which you can define selection r
 >**Important**: candidate features do not receive counts if they do not pass selection process described below
 
 Selection occurs in three stages, with the output of each stage as input to the next:
-1. Features are matched to rules based on their GFF3 column 9 attributes
+1. Features are matched to rules based on their GFF column 9 attributes
 2. Features which overlap an alignment are eliminated based on the hierarchy values and desired overlap characteristics defined in their mached rules
 3. Remaining feature candidates are then selected based on the small RNA attributes of the alignment to which they are being assigned. These attributes are, again, defined in each feature's matched rules
 
@@ -16,7 +16,7 @@ Each feature's column 9 attributes are searched for the key-value combinations d
 
 For example, if a rule contained `Class` and `WAGO` in these columns, then a feature with attributes<br>`... ;Class=CSR,WAGO; ...` would be considered a match for the rule.
 
->**Tip**: These parameters are case sensitive. The capitalization in your rule must match the capitalization in your GFF3 files
+>**Tip**: The rules defined in your Features Sheet are case-insensitive. You do not need to match the capitalization of your target attributes.
 
 ## Stage 2: Hierarchy and Overlap Parameters
 | features.csv columns: | Hierarchy | Match |
@@ -82,7 +82,7 @@ Examples:
 | features.csv columns: | Alias by... | Feature Source |
 | --- |-------------| --- |
 
-You may specify an **Alias by...** which is a GFF3 column 9 attribute key you wish to represent each feature. The intention of this column is to provide a human-friendly name for each feature. The value associated with each feature's **Alias by...** attribute will be shown in the `Feature Name` column of the Feature Counts output table.  For example, if one of your rules specifies an alias of `sequence_name` and gene1's `sequence_name` attribute is "abc123", then gene1's `Feature Name` column in the Feature Counts table will read "abc123".
+You may specify an **Alias by...** which is a GFF column 9 attribute key you wish to represent each feature. The intention of this column is to provide a human-friendly name for each feature. The value associated with each feature's **Alias by...** attribute will be shown in the `Feature Name` column of the Feature Counts output table.  For example, if one of your rules specifies an alias of `sequence_name` and gene1's `sequence_name` attribute is "abc123", then gene1's `Feature Name` column in the Feature Counts table will read "abc123".
 
 The **Feature Source** field of a rule is tied only to the **Alias by...**; rules are _not_ partitioned on a GFF file basis, and features parsed from these GFF files are similarly not partitioned as they all go into the same lookup table regardless of source. For each rule, aliases are built on a per-GFF file basis; that is, **Alias by...** values will only be gathered from their corresponding **Feature Source**. Additionally, each GFF file is parsed only once regardless of the number of times it occurs in the Features Sheet.
 
@@ -93,10 +93,10 @@ Small RNA reads passing selection will receive a normalized count increment. By 
 
 ### The Details
 You may encounter the following cases when you have more than one unique GFF file listed in your **Feature Source**s:
-- If a feature is defined in one GFF3 file, then again in another but with differing attributes, rule and alias matches will be merged for the feature
-- If a feature is defined in one GFF3 file, then again but under a different **Alias by...**, then both aliases are retained and treated as a list. All aliases will be present in the `Feature Name` column of the Feature Counts output table. They will be comma separated.
+- If a feature is defined in one GFF file, then again in another but with differing attributes, rule and alias matches will be merged for the feature
+- If a feature is defined in one GFF file, then again but under a different **Alias by...**, then both aliases are retained and treated as a list. All aliases will be present in the `Feature Name` column of the Feature Counts output table. They will be comma separated.
 
 Discontinuous features and feature filtering support:
 - Discontinuous features are supported (as defined by the `Parent` attribute key, or by a shared `ID` attribute value). Rule and alias matches of descendents are merged with the root parent's.
-- Features can be filtered during GFF3 parsing by on their `source` and/or `type` columns, and these preferences can be specified in the Run Config file. These are inclusive filters. Only features matching the values specified will be retained for selection. An empty list allows all values.
+- Features can be filtered during GFF parsing by on their `source` and/or `type` columns, and these preferences can be specified in the Run Config file. These are inclusive filters. Only features matching the values specified will be retained for selection. An empty list allows all values.
 - If a filtered feature breaks a feature lineage (that is, features chained via the `Parent` attribute), then the highest non-filtered ancestor is still considered to be the root parent. The lineage is maintained transparently but the filtered feature does not contribute to the domains of selection.
