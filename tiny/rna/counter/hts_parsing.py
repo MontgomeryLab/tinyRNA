@@ -13,6 +13,9 @@ from tiny.rna.util import report_execution_time, make_filename
 _re_attr_main = re.compile(r"\s*([^\s=]+)[\s=]+(.*)")
 _re_attr_empty = re.compile(r"^\s*$")
 
+# For SAM_reader
+_re_fastx = r'seq\d+_x(\d+)'
+
 # For Alignment
 complement = {ord('A'): 'T', ord('T'): 'A', ord('G'): 'C', ord('C'): 'G'}
 
@@ -23,10 +26,12 @@ class SAM_reader:
     def __init__(self, **prefs):
         self.decollapse = prefs.get("decollapse", False)
         self.out_prefix = prefs.get("out_prefix", None)
+        self.collapser_type = None
+        self.file = None
         self._decollapsed_filename = None
         self._decollapsed_reads = []
-        self._headers = []
-        self.file = None
+        self._header_lines = []
+        self._header_dict = {}
 
     def bundle_multi_alignments(self, file) -> Iterator[List[dict]]:
         """Bundles multiple alignments by name"""
@@ -50,8 +55,8 @@ class SAM_reader:
     def _parse_alignments(self, file_obj) -> Iterator[dict]:
         """Parses and yields individual SAM alignments from the open file_obj"""
 
-        line = self._read_thru_header(file_obj)
-        line_no = len(self._headers)
+        line, line_no = self._read_thru_header(file_obj)
+        self._validate_collapsed_input(line)
         decollapse_sam = self.decollapse
 
         try:
@@ -101,24 +106,57 @@ class SAM_reader:
     def _read_thru_header(self, file_obj):
         """Advance file_obj past the SAM header and return the first alignment unparsed"""
 
+        lineno = 1
         line = file_obj.readline()
         while line[0] == ord('@'):
-            self._headers.append(line.decode('utf-8'))
+            self._save_header_line(line.decode('utf-8'))
             line = file_obj.readline()
+            lineno += 1
 
         if self.decollapse:
             # Write the same header data to the decollapsed file
             with open(self._get_decollapsed_filename(), 'w') as f:
-                f.writelines(self._headers)
+                f.writelines(self._header_lines)
 
-        return line
+        return line, lineno
+
+    def _save_header_line(self, headerline: str):
+        # Header lines
+        self._header_lines.append(headerline)
+
+        # Header dict
+        rec_type = headerline[:3]
+        fields = headerline[3:].strip().split('\t')
+
+        if rec_type is "@CO":
+            self._header_dict[rec_type] = fields[0]
+        else:
+            self._header_dict[rec_type] = \
+                {field[:2]: field[3:].strip() for field in fields}
+
+    def _validate_collapsed_input(self, first_aln_line):
+        if re.match(_re_fastx, first_aln_line) is not None:
+            sort_order = self._header_dict.get('@HD', {}).get('SO', None)
+            if sort_order is None or sort_order != "queryname":
+                raise ValueError("SAM files from fastx collapsed outputs must be sorted by queryname\n"
+                                 "(and the @HD [...] SO header must be set accordingly).")
+
+            self.collapser_type = "fastx"
+
+        elif re.match(r"\d+_count=\d+", first_aln_line) is None:
+            raise ValueError("SAM files produced outside of the tinyRNA pipeline must be derived\n"
+                             "from either a tiny-collapse or fastx_collapser output, and sorted\n"
+                             "by queryname.")
+        else:
+            self.collapser_type = "tiny-collapse"
 
     def _write_decollapsed_sam(self):
         aln_out, prevname, seq_count = [], None, 0
+        token = self.get_counts_split_token()
         for name, line in self._decollapsed_reads:
             # Parse count just once per multi-alignment
             if name != prevname:
-                seq_count = int(name.split(b"=")[1])
+                seq_count = int(name.split(token)[1])
 
             aln_out.extend([line] * seq_count)
             prevname = name
@@ -126,6 +164,12 @@ class SAM_reader:
         with open(self._get_decollapsed_filename(), 'ab') as sam_o:
             sam_o.writelines(aln_out)
             self._decollapsed_reads.clear()
+
+    def get_counts_split_token(self):
+        if self.collapser_type is "tiny-collapse":
+            return b"="
+        elif self.collapser_type is "fastx":
+            return b"_x"
 
 
 def infer_strandedness(sam_file: str, intervals: dict) -> str:

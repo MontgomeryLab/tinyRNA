@@ -509,7 +509,7 @@ class MyTestCase(unittest.TestCase):
         ]
 
         sam_out.assert_has_calls(expected_writelines)
-        self.assertTrue(len(reader._headers) == 1)
+        self.assertTrue(len(reader._header_lines) == 1)
 
     """Does SAM_reader._write_decollapsed_sam() write the correct number of duplicates to the decollapsed file?"""
 

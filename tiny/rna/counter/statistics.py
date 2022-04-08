@@ -11,9 +11,9 @@ from abc import abstractmethod, ABC
 from typing import Tuple, Optional
 from collections import Counter, defaultdict
 
+from tiny.rna.counter.hts_parsing import _re_fastx
 from ..util import make_filename
 
-_re_fastx = r'seq\d+_x(\d+)$'
 
 class LibraryStats:
 
