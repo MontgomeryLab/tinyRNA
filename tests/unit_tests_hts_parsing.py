@@ -134,10 +134,10 @@ class MyTestCase(unittest.TestCase):
         feature_source = {self.short_gff_file: ["sequence_name"]}
         feature_selector = self.selector_with_template([
             # Fails to match due to Identity selector
-            {'Identity': ("Class", "CSR"), 'Strand': "+", 'Hierarchy': 1, 'nt5end': "N/A", 'Length': "20",
+            {'Identity': ("Class", "CSR"), 'Strand': "sense", 'Hierarchy': 1, 'nt5end': "all", 'Length': "20",
              'Strict': 'full'},
             # Match
-            {'Identity': ("biotype", "snoRNA"), 'Strand': "-", 'Hierarchy': 2, 'nt5end': "N/A", 'Length': "30",
+            {'Identity': ("biotype", "snoRNA"), 'Strand': "antisense", 'Hierarchy': 2, 'nt5end': "all", 'Length': "30",
              'Strict': 'partial'}
         ])
         iv = HTSeq.GenomicInterval("I", 3746, 3909, "-")
@@ -158,10 +158,10 @@ class MyTestCase(unittest.TestCase):
         feature_source = {self.short_gff_file: ["sequence_name"]}
         feature_selector = self.selector_with_template([
             # Fails to match due to Identity selector
-            {'Identity': ("Class", "CSR"), 'Strand': "+", 'Hierarchy': 1, 'nt5end': "N/A", 'Length': "20",
+            {'Identity': ("Class", "CSR"), 'Strand': "sense", 'Hierarchy': 1, 'nt5end': "all", 'Length': "20",
              'Strict': 'full'},
             # Match
-            {'Identity': ("biotype", "snoRNA"), 'Strand': "-", 'Hierarchy': 2, 'nt5end': "N/A", 'Length': "30",
+            {'Identity': ("biotype", "snoRNA"), 'Strand': "antisense", 'Hierarchy': 2, 'nt5end': "all", 'Length': "30",
              'Strict': 'partial'}
         ])
         iv = HTSeq.GenomicInterval("I", 3746, 3909, "-")

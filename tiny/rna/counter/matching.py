@@ -11,6 +11,7 @@ class Wildcard:
     def __contains__(_): return True
     def __repr__(_): return "<all>"
 
+
 class StrandMatch:
     """Evaluates BOTH the alignment's strand and the feature's strand for a match
 
@@ -18,13 +19,20 @@ class StrandMatch:
     If antisense: alignment's strand != feature strand for a match
     """
     def __init__(self, strand):
-        self.strand = strand.lower()
+        strand = strand.lower().strip()
+        self.validate_definition(strand)
+
+        self.strand = strand
         self.select = (self.strand == 'sense')
 
     def __contains__(self, x):
         return self.select == (x[0] == x[1])
 
     def __repr__(self): return str(self.strand)
+
+    @staticmethod
+    def validate_definition(defn: str):
+        assert defn in ("sense", "antisense"), f'Invalid strand selector: "{defn}"'
 
 
 class NtMatch(tuple):
@@ -36,12 +44,20 @@ class NtMatch(tuple):
     """
 
     def __new__(cls, nts):
-        if type(nts) is not tuple:
-            # Supports single or comma separated values
-            nts = map(lambda x: x.strip().upper(), nts.split(','))
+        # Supports single or comma separated values
+        nts = map(lambda x: x.strip().upper(), nts.split(','))
+
+        unique_nts = set(nts)
+        cls.validate_definition(unique_nts)
 
         # Call tuple superclass constructor
-        return super().__new__(cls, nts)
+        return super().__new__(cls, unique_nts)
+
+    @staticmethod
+    def validate_definition(unique_nts: set):
+        non_nt = unique_nts - {'A', 'T', 'G', 'C', 'N'}
+        assert len(non_nt) == 0, f"""Invalid nucleotide selector: {
+            ", ".join(f'"{x}"' for x in non_nt)}"""
 
 
 class NumericalMatch(frozenset):
@@ -53,18 +69,24 @@ class NumericalMatch(frozenset):
     """
 
     def __new__(cls, lengths):
-        if type(lengths) is not list:
-            # Supports intermixed lists and ranges
-            rule, lengths = lengths.split(','), []
-            for piece in rule:
-                if '-' in piece:
-                    for lo, hi in re.findall(r"(\d+)-(\d+)", piece):
-                        lengths.extend([*range(int(lo), int(hi) + 1)])
-                else:
-                    lengths.append(int(piece))
+        cls.validate_definition(lengths)
+
+        # Supports intermixed lists and ranges
+        rule, lengths = lengths.split(','), []
+        for piece in rule:
+            if '-' in piece:
+                for lo, hi in re.findall(r"(\d+)-(\d+)", piece):
+                    lengths.extend([*range(int(lo), int(hi) + 1)])
+            else:
+                lengths.append(int(piece))
 
         # Call frozenset superclass constructor
         return super().__new__(cls, lengths)
+
+    @staticmethod
+    def validate_definition(defn: str):
+        assert re.match(r'(^\d+$)|^(\d+)([\d\-,]|(, +))*(\d|\1)$', defn) is not None, \
+            f'Invalid length selector: "{defn}"'
 
 
 class IntervalSelector:
