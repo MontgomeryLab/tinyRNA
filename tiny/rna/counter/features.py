@@ -173,16 +173,23 @@ class FeatureSelector:
         their corresponding selector classes. Selector evaluation is then performed via
         the membership operator (keyword `in`) which is handled by the selector class'
         __contains__() method.
+
+        Precondition: rules_table preserves original row order
         """
 
         selector_builders = {"Strand": StrandMatch, "nt5end": NtMatch, "Length": NumericalMatch}
-        for row in rules_table:
-            for selector, build_fn in selector_builders.items():
-                defn = row[selector]
-                if type(defn) is str and any([wc in defn.lower() for wc in ['all', 'both']]):
-                    row[selector] = Wildcard()
-                else:
-                    row[selector] = build_fn(defn)
+        for i, row in enumerate(rules_table):
+            try:
+                for selector, build_fn in selector_builders.items():
+                    defn = row[selector]
+                    if type(defn) is str and any([wc in defn.lower() for wc in ['all', 'both']]):
+                        row[selector] = Wildcard()
+                    else:
+                        row[selector] = build_fn(defn)
+            except Exception as e:
+                # Append to error message while preserving exception provenance and traceback
+                e.args = (str(e.args[0]) + '\n' + f"Error occurred while processing rule number {i + 2}",)
+                raise e.with_traceback(sys.exc_info()[2]) from e
 
         return rules_table
 
@@ -218,7 +225,7 @@ class FeatureSelector:
                 selector = built_selectors.setdefault(match[2], selector_factory[match[2]]())
                 match_tuples[i] = (match[0], match[1], selector)
             except KeyError:
-                raise ValueError(f"Unrecognized interval match type: '{match_tuples[i][2]}'")
+                raise ValueError(f'Invalid overlap selector: "{match_tuples[i][2]}"')
 
         return match_tuples
 
