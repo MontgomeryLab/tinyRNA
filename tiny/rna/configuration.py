@@ -339,7 +339,7 @@ class CSVReader(csv.DictReader):
 
     tinyrna_sheet_fields = {
         "Features Sheet": ("Key", "Value", "Name", "Hierarchy", "Strand", "nt5end", "Length", "Strict", "Source"),
-        "Samples Sheet": ("File", "Group", "Replicate", "Control")
+        "Samples Sheet": ("File", "Group", "Replicate", "Control", "Normalization")
     }
 
     def __init__(self, filename: str, fieldnames: str = None):

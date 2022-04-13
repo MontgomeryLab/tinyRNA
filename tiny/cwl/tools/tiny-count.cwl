@@ -92,6 +92,11 @@ outputs:
     outputBinding:
       glob: $(inputs.out_prefix)_feature_counts.csv
 
+  norm_counts:
+    type: File[]?
+    outputBinding:
+      glob: $(inputs.out_prefix)_norm_counts.csv
+
   rule_counts:
     type: File
     outputBinding:
