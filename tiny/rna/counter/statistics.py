@@ -236,11 +236,11 @@ class FeatureCounts(MergedStat):
 
     def write_norm_counts(self, counts: pd.DataFrame):
 
-        if all([norm == '1' for norm in self.norm_prefs.values()]):
+        if all([norm in ['1', "", None] for norm in self.norm_prefs.values()]):
             return
 
         for library, norm in self.norm_prefs.items():
-            if norm in ['1', ""]:
+            if norm in ['1', "", None]:
                 continue
             elif re.match(r'^\s*\d+\s*$', norm):
                 factor = int(norm)

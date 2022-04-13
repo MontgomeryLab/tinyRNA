@@ -103,8 +103,13 @@ def load_samples(samples_csv: str, is_pipeline: bool) -> List[Dict[str, str]]:
     for row in CSVReader(samples_csv, "Samples Sheet").rows():
         library_name = f"{row['Group']}_rep_{row['Replicate']}"
         library_file_name = get_library_filename(row['File'], samples_csv)
-        library_normalization = row.get('Normalization', '1')
-        record = {"Name": library_name, "File": library_file_name, "Norm": library_normalization}
+        library_normalization = row['Normalization']
+
+        record = {
+            "Name": library_name,
+            "File": library_file_name,
+            "Norm": library_normalization
+        }
 
         if record not in inputs: inputs.append(record)
 
