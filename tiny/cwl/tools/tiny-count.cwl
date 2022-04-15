@@ -43,10 +43,10 @@ inputs:
     inputBinding:
       prefix: -tf
 
-  no_normalize:
-    type: boolean?
+  normalize_by_hits:
+    type: string?
     inputBinding:
-      prefix: -nn
+      prefix: -nh
 
   decollapse:
     type: boolean?

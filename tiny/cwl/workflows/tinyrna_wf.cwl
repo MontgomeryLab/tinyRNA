@@ -83,10 +83,10 @@ inputs:
   is_pipeline: boolean?
   counter_diags: boolean?
   counter_decollapse: boolean?
-  counter_no_normalize: boolean?
   counter_all_features: boolean?
   counter_type_filter: string[]?
   counter_source_filter: string[]?
+  counter_normalize_by_hits: boolean?
 
   # deseq inputs
   run_deseq: boolean
@@ -206,7 +206,9 @@ steps:
       out_prefix: run_name
       all_features: counter_all_features
       source_filter: counter_source_filter
-      no_normalize: counter_no_normalize
+      normalize_by_hits:
+        source: counter_normalize_by_hits
+        valueFrom: $(String(self))  # convert boolean -> string
       decollapse: counter_decollapse
       type_filter: counter_type_filter
       is_pipeline: {default: true}
