@@ -21,11 +21,11 @@ class LibraryStats:
                           'Reads Assigned to Single Feature', 'Sequences Assigned to Single Feature',
                           'Reads Assigned to Multiple Features', 'Sequences Assigned to Multiple Features']
 
-    def __init__(self, out_prefix: str = None, report_diags: bool = False, normalize=True, **kwargs):
+    def __init__(self, out_prefix: str = None, report_diags: bool = False, **prefs):
         self.library = {'Name': 'Unassigned', 'File': 'Unassigned', 'Norm': '1'}
         self.out_prefix = out_prefix
         self.diags = Diagnostics(out_prefix) if report_diags else None
-        self.norm = normalize
+        self.norm = prefs['normalize_by_hits'].lower() in ['t', 'true']
 
         self.feat_counts = Counter()
         self.rule_counts = Counter()
