@@ -63,6 +63,9 @@ class plotterlib:
         # Retrieve axis and styles for this plot type
         fig, ax = self.reuse_subplot("len_dist")
 
+        # Ensure xaxis tick labels won't be too crowded
+        font_size = self.shrink_xtick_labelsize_to_tick_space(ax.xaxis, size_df.index)
+
         # Convert reads to proportion
         size_prop = size_df / size_df.sum().sum()
 
@@ -73,11 +76,11 @@ class plotterlib:
         with plt.style.context(colors):
             plt.sca(ax)
             sizeb = size_prop.plot(kind='bar', stacked=True, reuse_plot=True, **kwargs)
+            sizeb.tick_params(axis='x', labelsize=font_size, rotation=0)
+            sizeb.set_ylim(0, np.max(np.sum(size_prop, axis=1)) + 0.025)
             sizeb.set_title(f'Distribution of {subtype} Reads')
-            sizeb.set_ylim(0,np.max(np.sum(size_prop, axis=1))+0.025)
             sizeb.set_ylabel('Proportion of Reads')
             sizeb.set_xlabel('Length of Sequence')
-            sizeb.set_xticklabels(sizeb.get_xticklabels(), rotation=0)
 
         return sizeb
 
@@ -491,6 +494,34 @@ class plotterlib:
 
         return val / co  # Units: data * pts/data = pts
 
+    @staticmethod
+    def shrink_xtick_labelsize_to_tick_space(axis: mpl.axis.XAxis, index: pd.Index) -> int:
+        """Calculates a new labelsize for the xaxis if the default size will cause crowding
+
+        Args:
+            axis: The xaxis to fit
+            index: The index representing plotted xaxis values
+
+        Returns: an adjusted fontsize if necessary, otherwise the default font size
+        """
+
+        # Get width of axis in points
+        length = Bbox.from_bounds(0, 0, 1, 1) \
+                     .transformed(axis.axes.transAxes - axis.figure.dpi_scale_trans) \
+                     .width * 72
+
+        # Get current xtick labelsize in points
+        font_size = int(axis._get_tick_label_size('x'))
+
+        # Assume text for values <100 will have aspect ratio of 1.1:1
+        while len(index) >= int(np.floor(length / (font_size * 1.1))):
+            font_size -= 1
+            if font_size < 5:
+                print("WARNING: minimum font size reached while attempting to "
+                      "reduce xaxis tick label crowding.", file=sys.stderr)
+                break
+
+        return font_size
 
     @staticmethod
     def draw_bbox_rectangle(ax: plt.Axes, box: Bbox):

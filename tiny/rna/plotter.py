@@ -15,7 +15,7 @@ import csv
 import re
 
 from collections import defaultdict
-from typing import Optional, Dict, Union, Tuple
+from typing import Optional, Dict, Union, Tuple, DefaultDict
 from pkg_resources import resource_filename
 
 from tiny.rna.configuration import timestamp_format
@@ -61,6 +61,11 @@ def get_args():
                                help='Produce scatter plots with vectorized points (slower).\n'
                                'Note: only the points on scatter plots will be raster if '
                                'this option is not provided.')
+    optional_args.add_argument('-ldi', '--len-dist-min', metavar='VALUE', type=int,
+                               help='len_dist plots will start at this value')
+    optional_args.add_argument('-lda', '--len-dist-max', metavar='VALUE', type=int,
+                               help='len_dist plots will end at this value')
+
 
     # Required arguments
     required_args.add_argument('-p', '--plots', metavar='PLOT', required=True, nargs='+',
@@ -78,19 +83,58 @@ def get_args():
     return parser.parse_args()
 
 
-def len_dist_plots(files_list: list, out_prefix:str, **kwargs):
+def len_dist_plots(matrices: dict, out_prefix:str, vmin: int = None, vmax: int = None, **kwargs):
     """Create a PDF of size and 5'nt distribution plot for a sample.
 
+    Lengths are plotted as a continuous closed interval from vmin to vmax. If either are
+    unspecified, min and/or max are calculated across libraries. When this happens,
+    bounds are determined separately per plot subtype (i.e. the min/max of Assigned
+    len_dists does not determine the min/max of Mapped len_dists)
+
     Args:
-        files_list: A list of files containing size + 5p-nt counts per library
+        matrices: A dictionary of size + 5p-nt counts per library per subtype
         out_prefix: The prefix to use when naming output PDF plots
+        vmin: The optional first length to plot in the range
+        vmax: The optional last length to plot in the range
         kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
     """
 
-    for size_file in files_list:
+    orig_vmin, orig_vmax = vmin, vmax
 
-        # Parse the "sample_rep_N" string from the input filename to avoid duplicate out_prefix's in the basename
-        basename = os.path.splitext(os.path.basename(size_file))[0]
+    for subtype, libraries in matrices.items():
+        if orig_vmin is None: vmin = min([l.index.min() for l in libraries.values()])
+        if orig_vmax is None: vmax = max([l.index.max() for l in libraries.values()])
+        if vmin > vmax:
+            print(f'ERROR: len_dist min > max. Skipping "{subtype}" plot subtype', file=sys.stderr)
+            continue
+
+        for condition_and_rep, len_dist_df in libraries.items():
+            # Ensure that there are no gaps & close range's half-open interval
+            len_dist_df = len_dist_df.reindex(range(vmin, vmax + 1)).fillna(0)
+
+            # Create the plot
+            plot = aqplt.len_dist_bar(len_dist_df, subtype, **kwargs)
+
+            # Save plot
+            pdf_name = make_filename([out_prefix, condition_and_rep, "len_dist"], ext='.pdf')
+            plot.figure.savefig(pdf_name)
+
+
+def get_len_dist_dict(files_list: list) -> DefaultDict[str, Dict[str, pd.DataFrame]]:
+    """Reads 5' nt/len matrices into a dictionary of DataFrames
+
+    Args:
+        files_list: a list of 5' nt/len matrices which follow the naming convention
+            {sample}_rep_{replicate}_{subtype}_nt_len_dist.csv
+
+    Returns: A dictionary of size + 5p-nt counts per library per subtype
+    """
+
+    matrices = defaultdict(dict)
+
+    for file in sorted(files_list):
+        # Parse the "sample_rep_N" string from the input filename to avoid duplicate out_prefixes in the basename
+        basename = os.path.splitext(os.path.basename(file))[0]
         date_prefix_pos = re.search(timestamp_format, basename).span()
 
         if date_prefix_pos is not None:
@@ -102,15 +146,10 @@ def len_dist_plots(files_list: list, out_prefix:str, **kwargs):
             # File does not appear to have been produced by the pipeline
             condition_and_rep = basename
 
-        # Read the size_dist file
-        size_dist = pd.read_csv(size_file, index_col=0)
-
-        # Create the plot
         subtype = "Assigned" if "assigned" in condition_and_rep else "Mapped"
-        plot = aqplt.len_dist_bar(size_dist, subtype, **kwargs)
+        matrices[subtype][condition_and_rep] = pd.read_csv(file, index_col=0)
 
-        pdf_name = make_filename([out_prefix, condition_and_rep, "len_dist"], ext='.pdf')
-        plot.figure.savefig(pdf_name)
+    return matrices
 
 
 def class_charts(raw_class_counts: pd.DataFrame, mapped_reads: pd.Series, out_prefix: str, scale=2, **kwargs):
@@ -462,7 +501,8 @@ def setup(args: argparse.Namespace) -> dict:
     """
 
     required_inputs = {
-        'len_dist': [],
+        'len_dist':
+            ["ld_matrices_dict"],
         'rule_charts':
             ["rule_counts_df"],
         'class_charts':
@@ -479,6 +519,7 @@ def setup(args: argparse.Namespace) -> dict:
 
     fetched: Dict[str, Union[pd.DataFrame, pd.Series, dict, None]] = {}
     input_getters = {
+        'ld_matrices_dict': lambda: get_len_dist_dict(args.len_dist),
         'raw_counts_df': lambda: load_raw_counts(args.raw_counts),
         'mapped_reads_ds': lambda: load_mapped_reads(args.summary_stats),
         'norm_counts_df': lambda: load_norm_counts(args.norm_counts),
@@ -520,7 +561,7 @@ def main():
     for plot in args.plots:
         if plot == 'len_dist':
             func = len_dist_plots
-            arg = (args.len_dist, args.out_prefix)
+            arg = (inputs["ld_matrices_dict"], args.out_prefix, args.len_dist_min, args.len_dist_max)
             kwd = {}
         elif plot == 'class_charts':
             func = class_charts
@@ -528,7 +569,7 @@ def main():
             kwd = {}
         elif plot == 'rule_charts':
             func = rule_charts
-            arg = (inputs['rule_counts_df'], args.out_prefix)
+            arg = (inputs["rule_counts_df"], args.out_prefix)
             kwd = {}
         elif plot == 'replicate_scatter':
             func = scatter_replicates

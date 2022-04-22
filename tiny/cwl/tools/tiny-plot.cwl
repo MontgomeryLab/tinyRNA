@@ -62,6 +62,18 @@ inputs:
       prefix: -v
     doc: "If provided, scatter plots will have vectorized points (slower)"
 
+  len_dist_min:
+    type: int?
+    inputBinding:
+      prefix: -ldi
+    doc: "The first length to plot in the range for len_dist plots"
+
+  len_dist_max:
+    type: int?
+    inputBinding:
+      prefix: -lda
+    doc: "The last length to plot in the range for len_dist plots"
+
   out_prefix:
     type: string?
     inputBinding:
