@@ -516,9 +516,9 @@ class plotterlib:
         # Assume text for values <100 will have aspect ratio of 1.1:1
         while len(index) >= int(np.floor(length / (font_size * 1.1))):
             font_size -= 1
-            if font_size < 5:
-                print("WARNING: minimum font size reached while attempting to "
-                      "reduce xaxis tick label crowding.", file=sys.stderr)
+            if font_size <= 5:
+                print(f"WARNING: minimum font size ({font_size}) reached while attempting "
+                      "to reduce xaxis tick label crowding.", file=sys.stderr)
                 break
 
         return font_size
