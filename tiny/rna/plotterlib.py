@@ -48,11 +48,11 @@ class plotterlib:
         self.subplot_cache = {}
         self.dge_scatter_tick_cache = {}
 
-    def len_dist_bar(self, size_df: pd.DataFrame, subtype: str, **kwargs) -> plt.Axes:
+    def len_dist_bar(self, size_prop: pd.DataFrame, subtype: str, **kwargs) -> plt.Axes:
         """Creates a stacked barplot of 5' end nucleotides by read length
 
         Args:
-            size_df: A dataframe containing the size x 5'nt raw counts
+            size_prop: A dataframe of size x 5'nt read count proportions
             subtype: The subtype of this len_dist plot so the title can be properly set
             kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
 
@@ -64,10 +64,7 @@ class plotterlib:
         fig, ax = self.reuse_subplot("len_dist")
 
         # Ensure xaxis tick labels won't be too crowded
-        font_size = self.shrink_xtick_labelsize_to_tick_space(ax.xaxis, size_df.index)
-
-        # Convert reads to proportion
-        size_prop = size_df / size_df.sum().sum()
+        font_size = self.get_xtick_labelsize_for_axis(ax.xaxis, size_prop.index)
 
         # Override default colors. User may override with kwargs. (Orange, Yellow-green, Blue, Pink)
         colors = {'axes.prop_cycle': mpl.cycler(color=['#F78E2D', '#CBDC3F', '#4D8AC8', '#E06EAA'])}
@@ -495,33 +492,37 @@ class plotterlib:
         return val / co  # Units: data * pts/data = pts
 
     @staticmethod
-    def shrink_xtick_labelsize_to_tick_space(axis: mpl.axis.XAxis, index: pd.Index) -> int:
+    def get_xtick_labelsize_for_axis(axis: mpl.axis.XAxis, index: pd.Index, min_size=5) -> int:
         """Calculates a new labelsize for the xaxis if the default size will cause crowding
 
         Args:
             axis: The xaxis to fit
             index: The index representing plotted xaxis values
+            min_size: The minimum acceptable font size
 
         Returns: an adjusted fontsize if necessary, otherwise the default font size
         """
 
         # Get width of axis in points
-        length = Bbox.from_bounds(0, 0, 1, 1) \
-                     .transformed(axis.axes.transAxes - axis.figure.dpi_scale_trans) \
-                     .width * 72
+        ax_length = Bbox.from_bounds(0, 0, 1, 1) \
+                        .transformed(axis.axes.transAxes - axis.figure.dpi_scale_trans) \
+                        .width * 72
 
         # Get current xtick labelsize in points
-        font_size = int(axis._get_tick_label_size('x'))
+        default_size = int(axis._get_tick_label_size('x'))
 
         # Assume text for values <100 will have aspect ratio of 1.1:1
-        while len(index) >= int(np.floor(length / (font_size * 1.1))):
-            font_size -= 1
-            if font_size <= 5:
-                print(f"WARNING: minimum font size ({font_size}) reached while attempting "
-                      "to reduce xaxis tick label crowding.", file=sys.stderr)
-                break
+        # Solve for size: len(index) = ax_length / (size * 1.1)
+        size = int(np.floor(ax_length / (len(index) * 1.1)))
 
-        return font_size
+        if size > default_size:
+            size = default_size
+        elif size < min_size:
+            size = min_size
+            print(f"WARNING: minimum font size ({min_size}) reached while attempting "
+                  "to reduce xaxis tick label crowding.", file=sys.stderr)
+
+        return size
 
     @staticmethod
     def draw_bbox_rectangle(ax: plt.Axes, box: Bbox):
