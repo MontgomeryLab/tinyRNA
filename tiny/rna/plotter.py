@@ -109,11 +109,14 @@ def len_dist_plots(matrices: dict, out_prefix:str, vmin: int = None, vmax: int =
             continue
 
         for condition_and_rep, len_dist_df in libraries.items():
+            # Convert reads to proportion
+            size_prop = len_dist_df / len_dist_df.sum().sum()
+
             # Ensure that there are no gaps & close range's half-open interval
-            len_dist_df = len_dist_df.reindex(range(vmin, vmax + 1)).fillna(0)
+            size_prop = size_prop.reindex(range(vmin, vmax + 1)).fillna(0)
 
             # Create the plot
-            plot = aqplt.len_dist_bar(len_dist_df, subtype, **kwargs)
+            plot = aqplt.len_dist_bar(size_prop, subtype, **kwargs)
 
             # Save plot
             pdf_name = make_filename([out_prefix, condition_and_rep, "len_dist"], ext='.pdf')
