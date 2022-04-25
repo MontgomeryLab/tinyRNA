@@ -143,10 +143,10 @@ compression: 4
 #
 ######-------------------------------------------------------------------------------######
 
-##-- Trim the specified number of bases from the 5' end of each sequence --#
+##-- Trim the specified number of bases from the 5' end of each sequence --##
 5p_trim: 0
 
-##-- Trim the specified number of bases from the 3' end of each sequence --#
+##-- Trim the specified number of bases from the 3' end of each sequence --##
 3p_trim: 0
 
 ##-- Sequences with count <= threshold will be placed in a separate low_counts fasta --##
@@ -288,6 +288,10 @@ plot_pval: ~
 
 ##-- If True: scatter plot points will be vectorized. If False, only points are raster --##
 plot_vector_points: False
+
+##-- Optionally set the min and/or max lengths for len_dist plots; auto if unset --##
+plot_len_dist_min:
+plot_len_dist_max:
 
 
 ######----------------------------- OUTPUT DIRECTORIES ------------------------------######

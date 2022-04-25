@@ -97,6 +97,8 @@ inputs:
   # plotter options
   plot_requests: string[]
   plot_vector_points: boolean?
+  plot_len_dist_min: int?
+  plot_len_dist_max: int?
   plot_style_sheet: File?
   plot_pval: float?
 
@@ -240,6 +242,16 @@ steps:
       len_dist:
         source: [ counter/mapped_nt_len_dist, counter/assigned_nt_len_dist ]
         linkMerge: merge_flattened
+      len_dist_min:
+        source: [ plot_len_dist_min, length_required ]
+        pickValue: all_non_null
+        valueFrom: |
+          $(self.length ? self[0] : null)
+      len_dist_max:
+        source: [ plot_len_dist_max, length_limit ]
+        pickValue: all_non_null
+        valueFrom: |
+          $(self.length ? self[0] : null)
       dge_pval: plot_pval
       style_sheet: plot_style_sheet
       out_prefix: run_name

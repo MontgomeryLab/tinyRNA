@@ -209,7 +209,7 @@ class ResumePlotterConfig(ResumeConfig):
         if not self.dge_ran:
             prune = set()
             for input_var, value in plotter_inputs.items():
-                if value.startswith('dge/'):
+                if type(value) is str and value.startswith('dge/'):
                     prune.add(input_var)
             for input_var in prune:
                 del plotter_inputs[input_var]
