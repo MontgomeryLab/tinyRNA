@@ -4,7 +4,7 @@ import sys
 import re
 
 from collections import Counter, defaultdict, namedtuple
-from typing import Tuple, List, Dict, Iterator, Optional
+from typing import Tuple, List, Dict, Iterator, Optional, DefaultDict
 from inspect import stack
 
 from tiny.rna.util import report_execution_time, make_filename
@@ -349,9 +349,9 @@ class ReferenceTables:
                             self.exclude_row(row)
                             continue
                         # Add feature data to root ancestor in the reference tables
-                        root_id = self.add_feature(feature_id, row, matches, classes)
+                        roots = self.add_feature(feature_id, row, matches, classes)
                         # Add alias to root ancestor if it is unique
-                        self.add_alias(root_id, alias_keys, row.attr)
+                        self.add_alias(roots, alias_keys, row.attr)
                     except KeyError as ke:
                         raise ValueError(f"Feature {row.name} does not contain a {ke} attribute.")
             except Exception as e:
@@ -381,43 +381,55 @@ class ReferenceTables:
             if ancestor in self.matches or ancestor == feature_id:
                 return ancestor
 
-    def add_feature(self, feature_id: str, row, matches: set, classes: set) -> str:
+    def add_feature(self, feature_id: str, row, tagged_matches: defaultdict, classes: set) -> List[tuple]:
         """Adds the feature and its interval under the root ancestor's ID"""
 
         root_id = self.get_root_feature(feature_id, row.attr)
-        self.classes[root_id] |= classes
-        self.matches[root_id] |= matches
+        roots = []
 
-        # Optimization opportunity: only append intervals for features that have matches.
-        # This is skipped to make testing more succinct; if users routinely use --all-features,
-        # it would be wise to add this check here, but at the cost of rewriting many unit tests.
-        if row.iv not in self.intervals[root_id]:
-            self.intervals[root_id].append(row.iv)
+        for suffix, matches in tagged_matches.items():
+            if suffix is not None:
+                tagged_id = (root_id, suffix)
+            else:
+                tagged_id = (root_id,)
 
-        return root_id
+            roots.append(tagged_id)
+            self.classes[tagged_id] |= classes
+            self.matches[tagged_id] |= matches
 
-    def add_alias(self, root_id: str, alias_keys: List[str], row_attrs: CaseInsensitiveAttrs) -> None:
+            # Optimization opportunity: only append intervals for features that have matches.
+            # This is skipped to make testing more succinct; if users routinely use --all-features,
+            # it would be wise to add this check here, but at the cost of rewriting many unit tests.
+            if row.iv not in self.intervals[tagged_id]:
+                self.intervals[tagged_id].append(row.iv)
+
+        return roots
+
+    def add_alias(self, roots: List[str], alias_keys: List[str], row_attrs: CaseInsensitiveAttrs) -> None:
         """Add feature's aliases to the root ancestor's alias set"""
 
         for alias_key in alias_keys:
             for row_val in row_attrs[alias_key]:
-                self.alias[root_id].add(row_val)
+                for root_id in roots:
+                    self.alias[root_id].add(row_val)
 
-    def get_matches_and_classes(self, row_attrs: CaseInsensitiveAttrs) -> Tuple[set, set]:
+    def get_matches_and_classes(self, row_attrs: CaseInsensitiveAttrs) -> Tuple[DefaultDict, set]:
         """Grabs classes and match tuples from attributes that match identity rules"""
 
         row_attrs.setdefault("Class", ("_UNKNOWN_",))
         classes = {c for c in row_attrs["Class"]}
 
-        identity_matches = set()
+        identity_matches = defaultdict(set)
         for ident, rule_indexes in self.selector.inv_ident.items():
             if row_attrs.contains_ident(ident):
-                identity_matches.update(
-                    (r,
-                     self.selector.rules_table[r]['Hierarchy'],
-                     self.selector.rules_table[r]['Strict']
-                     ) for r in rule_indexes
-                )
+                for index in rule_indexes:
+                    # Non-suffixed rule matches will be pooled under None
+                    suffix = self.selector.rules_table[index]['Suffix']
+                    identity_matches[suffix].add((
+                         index,
+                         self.selector.rules_table[index]['Hierarchy'],
+                         self.selector.rules_table[index]['Strict']
+                    ))
         # -> identity_matches: {(rule, rank, strict), ...}
         return identity_matches, classes
 
@@ -539,3 +551,10 @@ class ReferenceTables:
         if len(cls.type_filter):
             select &= row.type in cls.type_filter
         return select
+
+class Feature:
+    def __init__(self, gff_row):
+        self.id = gff_row.attr["ID"][0]
+        self.root_id = self.id
+        self.suffixes = defaultdict(set)
+        self.aliases = []

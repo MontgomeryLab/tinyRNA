@@ -90,7 +90,8 @@ class LibraryStats:
     def finalize_bundle(self, bundle: dict) -> None:
         """Called at the conclusion of processing each multiple-alignment bundle"""
 
-        assigned_feat_count = len(bundle['assigned_feats'])
+        # assigned_feat_count = len(bundle['assigned_feats'])
+        assigned_feat_count = len({feat[0] for feat in bundle['assigned_feats']})
 
         if assigned_feat_count == 0:
             self.library_stats['Total Unassigned Sequences'] += 1
@@ -222,7 +223,7 @@ class FeatureCounts(MergedStat):
         feat_class_map = lambda feat: ', '.join(self.classes[feat])
         summary.insert(1, "Feature Class", summary.index.map(feat_class_map))
         # Sort by index, make index its own column, and rename it to Feature ID
-        summary = summary.sort_index().reset_index().rename(columns={"index": "Feature ID"})
+        summary = summary.sort_index().reset_index().rename(columns={"level_0": "Feature ID", "level_1": "Tag"})
 
         summary.to_csv(self.prefix + '_feature_counts.csv', index=False)
 
