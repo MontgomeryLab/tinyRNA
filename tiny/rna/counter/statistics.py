@@ -247,7 +247,8 @@ class FeatureCounts(MergedStat):
             elif re.match(r'^\s*[\d.]+\s*$', norm):
                 factor = float(norm)
             elif norm.upper().strip() == "RPM":
-                factor = counts[library].sum() / 1_000_000
+                mapped_reads = SummaryStats.pipeline_stats_df.loc['Mapped Reads', library]
+                factor = mapped_reads / 1_000_000
             else:
                 raise ValueError(f'Invalid normalization value for {library}: "{norm}"\n'
                                  "Please check your Samples Sheet.")
