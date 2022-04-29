@@ -295,10 +295,9 @@ class AlignmentStats(MergedStat):
 
 class SummaryStats(MergedStat):
 
-
-    constant_categories = ["Mapped Sequences", "Mapped Reads", "Assigned Reads"]
-    conditional_categories = ["Total Reads", "Retained Reads", "Unique Sequences"]
-    summary_categories = constant_categories + conditional_categories
+    constant_categories     = ["Mapped Sequences", "Mapped Reads", "Assigned Reads"]
+    conditional_categories  = ["Total Reads", "Retained Reads", "Unique Sequences"]
+    summary_categories      = constant_categories + conditional_categories
 
     pipeline_stats_df = pd.DataFrame(index=summary_categories)
 
@@ -348,19 +347,6 @@ class SummaryStats(MergedStat):
 
         self.pipeline_stats_df.drop(empty_categories, inplace=True)
         self.df_to_csv(self.pipeline_stats_df, "Summary Statistics", self.prefix, "summary_stats")
-
-    def get_mapped_seqs(self, other: LibraryStats):
-        return sum([other.library_stats[stat] for stat in [
-            "Total Assigned Sequences",
-            "Total Unassigned Sequences"
-        ]])
-
-    def get_mapped_reads(self, other: LibraryStats):
-        return sum([other.library_stats[stat] for stat in [
-            'Reads Assigned to Multiple Features',
-            'Reads Assigned to Single Feature',
-            'Total Unassigned Reads'
-        ]])
 
     def library_has_collapser_outputs(self, other: LibraryStats) -> bool:
         collapsed_fa = other.library['basename'] + "_collapsed.fa"
@@ -416,6 +402,21 @@ class SummaryStats(MergedStat):
         sam_basename = os.path.splitext(os.path.basename(other.library['File']))[0]
         lib_basename = sam_basename.replace("_aligned_seqs", "")
         return lib_basename
+
+    @staticmethod
+    def get_mapped_seqs(other: LibraryStats):
+        return sum([other.library_stats[stat] for stat in [
+            "Total Assigned Sequences",
+            "Total Unassigned Sequences"
+        ]])
+
+    @staticmethod
+    def get_mapped_reads(other: LibraryStats):
+        return sum([other.library_stats[stat] for stat in [
+            'Reads Assigned to Multiple Features',
+            'Reads Assigned to Single Feature',
+            'Total Unassigned Reads'
+        ]])
 
 
 class Diagnostics:
