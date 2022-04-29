@@ -297,7 +297,7 @@ class SummaryStats(MergedStat):
 
     constant_categories     = ["Mapped Sequences", "Mapped Reads", "Assigned Reads"]
     conditional_categories  = ["Total Reads", "Retained Reads", "Unique Sequences"]
-    summary_categories      = constant_categories + conditional_categories
+    summary_categories      = conditional_categories + constant_categories
 
     pipeline_stats_df = pd.DataFrame(index=summary_categories)
 
