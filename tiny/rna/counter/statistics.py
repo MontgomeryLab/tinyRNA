@@ -338,14 +338,9 @@ class SummaryStats(MergedStat):
             self.add_warning("The Unique Sequences stat could not be determined for the following libraries because "
                              "their Collapser outputs were not found in the working directory:\n\t" + missing)
 
-        # Only display conditional categories if they were able
-        # to be collected for at least one library
-        empty_categories = []
-        for stat in self.conditional_categories:
-            if self.pipeline_stats_df.loc[stat].isna().all():
-                empty_categories.append(stat)
+        # Only display conditional categories if they were collected for at least one library
+        self.pipeline_stats_df.dropna(inplace=True)
 
-        self.pipeline_stats_df.drop(empty_categories, inplace=True)
         self.df_to_csv(self.pipeline_stats_df, "Summary Statistics", self.prefix, "summary_stats")
 
     def library_has_collapser_outputs(self, other: LibraryStats) -> bool:
