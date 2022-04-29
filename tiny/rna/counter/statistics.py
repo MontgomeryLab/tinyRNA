@@ -250,12 +250,7 @@ class RuleCounts(MergedStat):
         order = ["Rule String"] + self.rule_counts_df.columns.to_list()
 
         self.rule_counts_df = self.rule_counts_df.join(pd.Series(rules, name="Rule String"), how="outer")[order].fillna(0)
-        self.rule_counts_df.loc["Mapped Reads"] = mapped_reads = SummaryStats.pipeline_stats_df.loc["Mapped Reads"]
-
-        if mapped_reads.empty:
-            # Row will be empty if Summary Stats were not gathered
-            # Todo: Mapped Reads can be calculated without pipeline outputs
-            self.rule_counts_df.drop("Mapped Reads", axis=0, inplace=True)
+        self.rule_counts_df.loc["Mapped Reads"] = SummaryStats.pipeline_stats_df.loc["Mapped Reads"]
 
         self.df_to_csv(self.rule_counts_df, "Rule Index", self.prefix, 'counts_by_rule', sort_axis=None)
 
