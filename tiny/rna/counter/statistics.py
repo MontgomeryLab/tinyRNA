@@ -339,7 +339,8 @@ class SummaryStats(MergedStat):
                              "their Collapser outputs were not found in the working directory:\n\t" + missing)
 
         # Only display conditional categories if they were collected for at least one library
-        self.pipeline_stats_df.dropna(inplace=True)
+        empty_rows = self.pipeline_stats_df.loc[self.conditional_categories].isna().all(axis='columns')
+        self.pipeline_stats_df.drop(empty_rows.index[empty_rows], inplace=True)
 
         self.df_to_csv(self.pipeline_stats_df, "Summary Statistics", self.prefix, "summary_stats")
 
