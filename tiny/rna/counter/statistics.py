@@ -289,12 +289,10 @@ class NtLenMatrices(MergedStat):
         assigned_nt_len_df = pd.DataFrame(matrix).sort_index().round(decimals=2)
 
         # Drop non-nucleotide columns if they don't contain counts
-        empty_non_base_columns = {
-            col for col in
-            set(assigned_nt_len_df.columns) - {'A', 'T', 'G', 'C'}
-            if assigned_nt_len_df[col].isna().all()
-        } # Todo: likely a better way
-        assigned_nt_len_df.drop(empty_non_base_columns, axis='columns', inplace=True)
+        assigned_nt_len_df.drop([
+            col for col, values in assigned_nt_len_df.iteritems()
+            if col not in ['A', 'T', 'G', 'C'] and values.isna().all()
+        ], axis='columns', inplace=True)
 
         # Assign default count of 0 for remaining cases
         assigned_nt_len_df.fillna(0, inplace=True)
