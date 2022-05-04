@@ -43,9 +43,9 @@ def get_args():
     arg_parser.add_argument('-tf', '--type-filter', metavar='TYPE', nargs='*', default=[],
                         help='Only produce counts for features whose '
                              'GFF column 3 matches the type(s) listed')
-    arg_parser.add_argument('-nn', '--no-normalize', action='store_true',
-                        help='Do not normalize counts by (selected) '
-                             'overlapping feature counts.')
+    arg_parser.add_argument('-nh', '--normalize-by-hits', metavar='T/F', default='T',
+                        help='If T/true, normalize counts by (selected) '
+                             'overlapping feature counts. Default: true.')
     arg_parser.add_argument('-dc', '--decollapse', action='store_true',
                         help='Create a decollapsed copy of all SAM '
                              'files listed in your Samples Sheet.')
@@ -103,7 +103,13 @@ def load_samples(samples_csv: str, is_pipeline: bool) -> List[Dict[str, str]]:
     for row in CSVReader(samples_csv, "Samples Sheet").rows():
         library_name = f"{row['Group']}_rep_{row['Replicate']}"
         library_file_name = get_library_filename(row['File'], samples_csv)
-        record = {"Name": library_name, "File": library_file_name}
+        library_normalization = row['Normalization']
+
+        record = {
+            "Name": library_name,
+            "File": library_file_name,
+            "Norm": library_normalization
+        }
 
         if record not in inputs: inputs.append(record)
 

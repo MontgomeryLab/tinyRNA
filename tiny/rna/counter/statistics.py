@@ -4,6 +4,7 @@ import json
 import csv
 import sys
 import os
+import re
 
 from abc import abstractmethod, ABC
 from typing import Tuple, Optional, Union
@@ -20,11 +21,11 @@ class LibraryStats:
                           'Reads Assigned to Single Feature', 'Sequences Assigned to Single Feature',
                           'Reads Assigned to Multiple Features', 'Sequences Assigned to Multiple Features']
 
-    def __init__(self, out_prefix: str = None, report_diags: bool = False, normalize=True, **kwargs):
-        self.library = {'Name': 'Unassigned', 'File': 'Unassigned'}
+    def __init__(self, out_prefix: str = None, report_diags: bool = False, **prefs):
+        self.library = {'Name': 'Unassigned', 'File': 'Unassigned', 'Norm': '1'}
         self.out_prefix = out_prefix
         self.diags = Diagnostics(out_prefix) if report_diags else None
-        self.norm = normalize
+        self.norm = prefs['normalize_by_hits'].lower() in ['t', 'true']
 
         self.feat_counts = Counter()
         self.rule_counts = Counter()
@@ -189,11 +190,17 @@ class FeatureCounts(MergedStat):
         self.feat_counts_df = pd.DataFrame(index=Features_obj.classes.keys())
         self.classes = Features_obj.classes
         self.aliases = Features_obj.aliases
+        self.norm_prefs = {}
 
     def add_library(self, other: LibraryStats) -> None:
         self.feat_counts_df[other.library["Name"]] = self.feat_counts_df.index.map(other.feat_counts)
+        self.norm_prefs[other.library["Name"]] = other.library['Norm']
 
     def write_output_logfile(self) -> None:
+        fc = self.write_feature_counts()
+        self.write_norm_counts(fc)
+
+    def write_feature_counts(self) -> pd.DataFrame:
         """Writes selected features and their associated counts to {prefix}_out_feature_counts.csv
 
         Only the features in display_index will be listed in the output table, regardless of count, even
@@ -225,6 +232,30 @@ class FeatureCounts(MergedStat):
         summary = summary.sort_index().reset_index().rename(columns={"index": "Feature ID"})
 
         summary.to_csv(self.prefix + '_feature_counts.csv', index=False)
+        return summary
+
+    def write_norm_counts(self, counts: pd.DataFrame):
+
+        if all([norm in ['1', "", None] for norm in self.norm_prefs.values()]):
+            return
+
+        for library, norm in self.norm_prefs.items():
+            if norm in ['1', "", None]:
+                continue
+            elif re.match(r'^\s*\d+\s*$', norm):
+                factor = int(norm)
+            elif re.match(r'^\s*[\d.]+\s*$', norm):
+                factor = float(norm)
+            elif norm.upper().strip() == "RPM":
+                mapped_reads = SummaryStats.pipeline_stats_df.loc['Mapped Reads', library]
+                factor = mapped_reads / 1_000_000
+            else:
+                raise ValueError(f'Invalid normalization value for {library}: "{norm}"\n'
+                                 "Please check your Samples Sheet.")
+
+            counts[library] = counts[library] / factor
+
+        counts.to_csv(self.prefix + '_norm_counts.csv', index=False)
 
 
 class RuleCounts(MergedStat):

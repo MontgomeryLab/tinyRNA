@@ -83,10 +83,10 @@ inputs:
   is_pipeline: boolean?
   counter_diags: boolean?
   counter_decollapse: boolean?
-  counter_no_normalize: boolean?
   counter_all_features: boolean?
   counter_type_filter: string[]?
   counter_source_filter: string[]?
+  counter_normalize_by_hits: boolean?
 
   # deseq inputs
   run_deseq: boolean
@@ -208,14 +208,16 @@ steps:
       out_prefix: run_name
       all_features: counter_all_features
       source_filter: counter_source_filter
-      no_normalize: counter_no_normalize
+      normalize_by_hits:
+        source: counter_normalize_by_hits
+        valueFrom: $(String(self))  # convert boolean -> string
       decollapse: counter_decollapse
       type_filter: counter_type_filter
       is_pipeline: {default: true}
       diagnostics: counter_diags
       fastp_logs: preprocessing/json_report_file
       collapsed_fa: preprocessing/uniq_seqs
-    out: [ feature_counts, rule_counts, mapped_nt_len_dist, assigned_nt_len_dist,
+    out: [ feature_counts, rule_counts, norm_counts, mapped_nt_len_dist, assigned_nt_len_dist,
            alignment_stats, summary_stats, console_output, decollapsed_sams,
            intermed_out_files, alignment_diags, selection_diags ]
 
@@ -299,9 +301,9 @@ steps:
     run: ../tools/make-subdir.cwl
     in:
       dir_files:
-        source: [ counter/feature_counts, counter/rule_counts, counter/mapped_nt_len_dist, counter/assigned_nt_len_dist,
-                  counter/alignment_stats, counter/summary_stats, counter/console_output, counter/decollapsed_sams,
-                  counter/intermed_out_files, counter/alignment_diags, counter/selection_diags,
+        source: [ counter/feature_counts, counter/rule_counts, counter/norm_counts, counter/mapped_nt_len_dist,
+                  counter/assigned_nt_len_dist, counter/alignment_stats, counter/summary_stats, counter/console_output,
+                  counter/decollapsed_sams, counter/intermed_out_files, counter/alignment_diags, counter/selection_diags,
                   features_csv ]
       dir_name: dir_name_counter
     out: [ subdir ]
