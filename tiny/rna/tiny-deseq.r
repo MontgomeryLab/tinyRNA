@@ -27,7 +27,8 @@ usage <- "The following arguments are accepted:
               rows/features which have a zero count in all samples."
 
 # Increase max error string length by the length of the usage string
-options(warning.length = getOption("warning.length") + nchar(usage))
+# 8170: https://github.com/wch/r-source/blob/tags/R-4-1-1/src/main/options.c#L626
+options(warning.length = min(getOption("warning.length") + nchar(usage), 8170))
 
 ## Returns the provided data as a dataframe with corresponding metadata columns, regardless of order
 df_with_metadata <- function(classless_df){
@@ -36,6 +37,20 @@ df_with_metadata <- function(classless_df){
     row.names = "Row.names",
     check.names = FALSE
   ))
+}
+
+restore_multiindex <- function(base_df){
+  base_matrix <- as.matrix(base_df)
+
+  # Parse row names back to "MultiIndex" comprised of Feature.ID and Tag
+  split_rn <- lapply(rownames(base_matrix), function(x) eval(parse(text=x)))
+  split_mx <- do.call(rbind, split_rn)
+
+  # Assign the MultiIndex
+  multiidx_mx <- cbind(Tag=split_mx[ , "Tag"], base_matrix)
+  rownames(multiidx_mx) <- split_mx[ , "Feature.ID"]
+
+  return(multiidx_mx)
 }
 
 ## Throw an error if an unexpected number of arguments is provided
@@ -71,14 +86,18 @@ if (count_file %in% all_args[all_args != '--input-file']){
 ## Resolve relative paths and perform tilde expansion for input file path
 count_file <- normalizePath(count_file)
 
-## DESeq2 prefers R-safe column names. We want to preserve the original col names to use in final outputs
-orig_sample_names <- colnames(read.csv(count_file, check.names = FALSE, row.names = 1, nrows = 1))[0:-2]
+## DESeq2 prefers R-safe column names. We want to preserve original sample names to use in final outputs
+orig_sample_names <- colnames(read.csv(count_file, check.names = FALSE, row.names = 1, nrows = 1))[0:-3]
 
 ## Read counts CSV with sanitized column names for handling. Subset classes and aliases.
-counts <- read.csv(count_file, row.names = 1)
-metadata <- data.frame("Feature Name" = counts[[1]], "Feature Class" = counts[[2]], row.names = rownames(counts), check.names = FALSE)
+counts <- read.csv(count_file)
 
-## Subset counts table to drop Feature Name and Feature Class columns before integer sapply
+## Set rownames to concatenated Feature ID and Tag, then drop these columns
+rownames(counts) <- split(counts[, c('Feature.ID', 'Tag')], seq(nrow(counts)))
+counts <- subset(counts, select = -c(Feature.ID, Tag))
+
+## Subset counts table to drop Feature Name and Feature Class columns
+metadata <- data.frame("Feature Name" = counts[[1]], "Feature Class" = counts[[2]], row.names = rownames(counts), check.names = FALSE)
 counts <- data.frame(sapply(counts[0:-2], as.integer), row.names = rownames(counts))
 
 ## Remove rows containing all zeros if user requests
@@ -128,9 +147,9 @@ if (plot_pca){
 }
 
 ## Get normalized counts and write them to CSV with original sample names in header
-deseq_counts <- df_with_metadata(counts(deseq_run, normalized=TRUE))
+deseq_counts <- df_with_metadata(DESeq2::counts(deseq_run, normalized=TRUE))
 colnames(deseq_counts)[0:-2] <- orig_sample_names
-write.csv(deseq_counts, paste(out_pref, "norm_counts.csv", sep="_"))
+write.csv(restore_multiindex(deseq_counts), paste(out_pref, "norm_counts.csv", sep="_"))
 
 if (has_control){
   # Comparison is the cartesian product of control and experimental conditions
@@ -145,7 +164,8 @@ if (has_control){
 }
 
 write_dge_table <- function (dge_df, cond1, cond2){
-  write.csv(dge_df,
+  write.csv(
+    restore_multiindex(dge_df),
     paste(out_pref,
           "cond1", cond1,
           "cond2", cond2,
@@ -168,8 +188,7 @@ for (i in seq_len(nrow(all_comparisons))){
   if (!has_control){
     # Save DGE table for reverse comparison
     flip_sign <- c("log2FoldChange", "stat")
-    result_df <- result_df[flip_sign] * -1
+    result_df[flip_sign] <- result_df[flip_sign] * -1
     write_dge_table(result_df, cond2, cond1)
   }
 }
-
