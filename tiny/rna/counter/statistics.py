@@ -6,7 +6,7 @@ import sys
 import os
 
 from abc import abstractmethod, ABC
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Union
 from collections import Counter, defaultdict
 
 from ..util import make_filename
@@ -160,9 +160,9 @@ class MergedStatsManager:
             self.merged_stats.append(MergedDiags())
 
     def write_report_files(self) -> None:
-        self.print_warnings()
         for output_stat in self.merged_stats:
             output_stat.write_output_logfile()
+        self.print_warnings()
 
     def add_library(self, other: LibraryStats) -> None:
         for merger in self.merged_stats:
@@ -250,12 +250,7 @@ class RuleCounts(MergedStat):
         order = ["Rule String"] + self.rule_counts_df.columns.to_list()
 
         self.rule_counts_df = self.rule_counts_df.join(pd.Series(rules, name="Rule String"), how="outer")[order].fillna(0)
-        self.rule_counts_df.loc["Mapped Reads"] = mapped_reads = SummaryStats.pipeline_stats_df.loc["Mapped Reads"]
-
-        if mapped_reads.empty:
-            # Row will be empty if Summary Stats were not gathered
-            # Todo: Mapped Reads can be calculated without pipeline outputs
-            self.rule_counts_df.drop("Mapped Reads", axis=0, inplace=True)
+        self.rule_counts_df.loc["Mapped Reads"] = SummaryStats.pipeline_stats_df.loc["Mapped Reads"]
 
         self.df_to_csv(self.rule_counts_df, "Rule Index", self.prefix, 'counts_by_rule', sort_axis=None)
 
@@ -300,65 +295,74 @@ class AlignmentStats(MergedStat):
 
 class SummaryStats(MergedStat):
 
-    summary_categories = ["Total Reads", "Retained Reads", "Unique Sequences",
-                          "Mapped Sequences", "Mapped Reads", "Assigned Reads"]
+    constant_categories     = ["Mapped Sequences", "Mapped Reads", "Assigned Reads"]
+    conditional_categories  = ["Total Reads", "Retained Reads", "Unique Sequences"]
+    summary_categories      = conditional_categories + constant_categories
 
     pipeline_stats_df = pd.DataFrame(index=summary_categories)
 
     def __init__(self):
-        # Will become False if an added library lacks its corresponding Collapser and Bowtie outputs
-        self.report_summary_statistics = True
+        self.missing_fastp_outputs = []
+        self.missing_collapser_outputs = []
 
     def add_library(self, other: LibraryStats):
         """Add incoming summary stats as new column in the master table"""
 
-        if not self.report_summary_statistics or not self.library_has_pipeline_outputs(other):
-            return
-
-        mapped_seqs = sum([other.library_stats[stat] for stat in
-                           ["Total Assigned Sequences",
-                            "Total Unassigned Sequences"]])
-        mapped_reads = sum([other.library_stats[stat] for stat in
-                            ['Reads Assigned to Multiple Features',
-                             'Reads Assigned to Single Feature',
-                             'Total Unassigned Reads']])
-        assigned_reads = other.library_stats["Total Assigned Reads"]
-        total_reads, retained_reads = self.get_fastp_stats(other)
-        unique_seqs = self.get_collapser_stats(other)
-
+        other.library['basename'] = self.get_library_basename(other)
         other_summary = {
-            "Total Reads": total_reads,
-            "Retained Reads": retained_reads,
-            "Unique Sequences": unique_seqs,
-            "Mapped Sequences": mapped_seqs,
-            "Mapped Reads": mapped_reads,
-            "Assigned Reads": assigned_reads
+            "Mapped Sequences": self.get_mapped_seqs(other),
+            "Mapped Reads": self.get_mapped_reads(other),
+            "Assigned Reads": other.library_stats["Total Assigned Reads"]
         }
+
+        if self.library_has_fastp_outputs(other):
+            total_reads, retained_reads = self.get_fastp_stats(other)
+            other_summary.update({
+                "Total Reads": total_reads,
+                "Retained Reads": retained_reads
+            })
+
+        if self.library_has_collapser_outputs(other):
+            unique_seqs = self.get_collapser_stats(other)
+            other_summary["Unique Sequences"] = unique_seqs
 
         self.pipeline_stats_df[other.library["Name"]] = self.pipeline_stats_df.index.map(other_summary)
 
     def write_output_logfile(self):
-        if self.report_summary_statistics:
-            self.df_to_csv(self.pipeline_stats_df, "Summary Statistics", self.prefix, "summary_stats")
+        if len(self.missing_fastp_outputs):
+            missing = '\n\t'.join(self.missing_fastp_outputs)
+            self.add_warning("Total Reads and Retained Reads could not be determined for the following libraries "
+                             "because their fastp outputs were not found in the working directory:\n\t" + missing)
+        if len(self.missing_collapser_outputs):
+            missing = '\n\t'.join(self.missing_collapser_outputs)
+            self.add_warning("The Unique Sequences stat could not be determined for the following libraries because "
+                             "their Collapser outputs were not found in the working directory:\n\t" + missing)
 
-    def library_has_pipeline_outputs(self, other: LibraryStats) -> bool:
-        """Check working directory for pipeline outputs from previous steps"""
+        # Only display conditional categories if they were collected for at least one library
+        empty_rows = self.pipeline_stats_df.loc[self.conditional_categories].isna().all(axis='columns')
+        self.pipeline_stats_df.drop(empty_rows.index[empty_rows], inplace=True)
 
-        sam_basename = os.path.splitext(os.path.basename(other.library['File']))[0]
-        lib_basename = sam_basename.replace("_aligned_seqs", "")
-        fastp_logfile = lib_basename + "_qc.json"
-        collapsed_fa = lib_basename + "_collapsed.fa"
+        self.df_to_csv(self.pipeline_stats_df, "Summary Statistics", self.prefix, "summary_stats")
 
-        if not os.path.isfile(fastp_logfile) or not os.path.isfile(collapsed_fa):
-            self.add_warning(f"Pipeline output for {lib_basename} not found. Summary Statistics were skipped.")
-            self.report_summary_statistics = False
-            return False
-        else:
-            other.library['fastp_log'] = fastp_logfile
+    def library_has_collapser_outputs(self, other: LibraryStats) -> bool:
+        collapsed_fa = other.library['basename'] + "_collapsed.fa"
+        if os.path.isfile(collapsed_fa):
             other.library['collapsed'] = collapsed_fa
             return True
+        else:
+            self.missing_collapser_outputs.append(other.library['basename'])
+            return False
 
-    def get_fastp_stats(self, other: LibraryStats) -> Optional[Tuple[int, int]]:
+    def library_has_fastp_outputs(self, other: LibraryStats) -> bool:
+        fastp_logfile = other.library['basename'] + "_qc.json"
+        if os.path.isfile(fastp_logfile):
+            other.library['fastp_log'] = fastp_logfile
+            return True
+        else:
+            self.missing_fastp_outputs.append(other.library['basename'])
+            return False
+
+    def get_fastp_stats(self, other: LibraryStats) -> Union[Tuple[int, int], Tuple[None, None]]:
         """Determine the total number of reads for this library, and the total number retained by fastp"""
 
         try:
@@ -368,9 +372,8 @@ class SummaryStats(MergedStat):
             total_reads = fastp_summary['before_filtering']['total_reads']
             retained_reads = fastp_summary['after_filtering']['total_reads']
         except (KeyError, json.JSONDecodeError):
-            self.add_warning("Unable to parse fastp json logs for Summary Statistics.")
-            self.add_warning("Associated file: " + other.library['File'])
-            return None
+            self.add_warning(f"Unable to parse {other.library['fastp_log']} for Summary Statistics.")
+            return None, None
 
         return total_reads, retained_reads
 
@@ -389,6 +392,27 @@ class SummaryStats(MergedStat):
         except ValueError:
             self.add_warning(f"Unable to parse {other.library['collapsed']} for Summary Statistics.")
             return None
+
+    @staticmethod
+    def get_library_basename(other: LibraryStats) -> str:
+        sam_basename = os.path.splitext(os.path.basename(other.library['File']))[0]
+        lib_basename = sam_basename.replace("_aligned_seqs", "")
+        return lib_basename
+
+    @staticmethod
+    def get_mapped_seqs(other: LibraryStats):
+        return sum([other.library_stats[stat] for stat in [
+            "Total Assigned Sequences",
+            "Total Unassigned Sequences"
+        ]])
+
+    @staticmethod
+    def get_mapped_reads(other: LibraryStats):
+        return sum([other.library_stats[stat] for stat in [
+            'Reads Assigned to Multiple Features',
+            'Reads Assigned to Single Feature',
+            'Total Unassigned Reads'
+        ]])
 
 
 class Diagnostics:
