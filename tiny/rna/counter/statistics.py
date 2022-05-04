@@ -30,8 +30,8 @@ class LibraryStats:
         self.feat_counts = Counter()
         self.rule_counts = Counter()
         self.chrom_misses = Counter()
-        self.mapped_nt_len = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
-        self.assigned_nt_len = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
+        self.mapped_nt_len = defaultdict(Counter, {nt: Counter() for nt in ['A', 'T', 'G', 'C']})
+        self.assigned_nt_len = defaultdict(Counter, {nt: Counter() for nt in ['A', 'T', 'G', 'C']})
         self.library_stats = {stat: 0 for stat in LibraryStats.summary_categories}
 
     def assign_library(self, library: dict):
@@ -302,14 +302,27 @@ class NtLenMatrices(MergedStat):
 
         for lib_name, matrices in self.nt_len_matrices.items():
             sanitized_lib_name = lib_name.replace('/', '_')
+            self.write_mapped_len_dist(matrices[0], sanitized_lib_name)
+            self.write_assigned_len_dist(matrices[1], sanitized_lib_name)
 
-            # Whole number counts because number of reads mapped is always integer
-            mapped_nt_len_df = pd.DataFrame(matrices[0]).sort_index().fillna(0)
-            mapped_nt_len_df.to_csv(f'{self.prefix}_{sanitized_lib_name}_mapped_nt_len_dist.csv')
+    def write_mapped_len_dist(self, matrix, sanitized_lib_name):
+        # Whole number counts because number of reads mapped is always integer
+        mapped_nt_len_df = pd.DataFrame(matrix).sort_index().fillna(0)
+        mapped_nt_len_df.to_csv(f'{self.prefix}_{sanitized_lib_name}_mapped_nt_len_dist.csv')
 
-            # Fractional counts due to (loci count) and/or (assigned feature count) normalization
-            assigned_nt_len_df = pd.DataFrame(matrices[1]).sort_index().round(decimals=2).fillna(0)
-            assigned_nt_len_df.to_csv(f'{self.prefix}_{sanitized_lib_name}_assigned_nt_len_dist.csv')
+    def write_assigned_len_dist(self, matrix, sanitized_lib_name):
+        # Fractional counts due to (loci count) and/or (assigned feature count) normalization
+        assigned_nt_len_df = pd.DataFrame(matrix).sort_index().round(decimals=2)
+
+        # Drop non-nucleotide columns if they don't contain counts
+        assigned_nt_len_df.drop([
+            col for col, values in assigned_nt_len_df.iteritems()
+            if col not in ['A', 'T', 'G', 'C'] and values.isna().all()
+        ], axis='columns', inplace=True)
+
+        # Assign default count of 0 for remaining cases
+        assigned_nt_len_df.fillna(0, inplace=True)
+        assigned_nt_len_df.to_csv(f'{self.prefix}_{sanitized_lib_name}_assigned_nt_len_dist.csv')
 
 
 class AlignmentStats(MergedStat):

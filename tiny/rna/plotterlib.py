@@ -66,8 +66,8 @@ class plotterlib:
         # Ensure xaxis tick labels won't be too crowded
         font_size = self.get_xtick_labelsize_for_axis(ax.xaxis, size_prop.index)
 
-        # Override default colors. User may override with kwargs. (Orange, Yellow-green, Blue, Pink)
-        colors = {'axes.prop_cycle': mpl.cycler(color=['#F78E2D', '#CBDC3F', '#4D8AC8', '#E06EAA'])}
+        # Override default colors. User may override with kwargs. (Orange, Yellow-green, Blue, Pink, Gray)
+        colors = {'axes.prop_cycle': mpl.cycler(color=['#F78E2D', '#CBDC3F', '#4D8AC8', '#E06EAA', '#B3B3B3'])}
 
         # The style context allows us to use temporary styles
         with plt.style.context(colors):

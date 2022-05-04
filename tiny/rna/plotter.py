@@ -138,11 +138,11 @@ def get_len_dist_dict(files_list: list) -> DefaultDict[str, Dict[str, pd.DataFra
     for file in sorted(files_list):
         # Parse the "sample_rep_N" string from the input filename to avoid duplicate out_prefixes in the basename
         basename = os.path.splitext(os.path.basename(file))[0]
-        date_prefix_pos = re.search(timestamp_format, basename).span()
+        date_prefix_pos = re.search(timestamp_format, basename)
 
         if date_prefix_pos is not None:
             # File is a pipeline product
-            begin = date_prefix_pos[1] + 1
+            begin = date_prefix_pos.end() + 1
             end = basename.rfind("_nt_len_dist")
             condition_and_rep = basename[begin:end]
         else:
