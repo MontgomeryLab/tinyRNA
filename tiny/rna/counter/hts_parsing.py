@@ -72,7 +72,10 @@ class SAM_reader:
                 # Note: we assume sRNA sequencing data is NOT reversely stranded
                 if (int(cols[1]) & 16):
                     strand = '-'
-                    nt5 = complement[seq[-1]]
+                    try:
+                        nt5 = complement[seq[-1]]
+                    except KeyError:
+                        nt5 = chr(seq[-1])
                 else:
                     strand = '+'
                     nt5 = chr(seq[0])

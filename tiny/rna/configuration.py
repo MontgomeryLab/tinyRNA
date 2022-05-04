@@ -337,8 +337,8 @@ class CSVReader(csv.DictReader):
     This makes field labels consistent across the project and simplifies the code
     """
 
+    # user-facing name -> internal short name
     tinyrna_sheet_fields = {
-        # user-facing name: internal name
         "Features Sheet": {
            "Select for...":     "Key",
            "with value...":     "Value",
@@ -356,7 +356,7 @@ class CSVReader(csv.DictReader):
             "Sample/Group Name":    "Group",
             "Replicate number":     "Replicate",
             "Control":              "Control",
-            #"Normalization":       "Normalization"
+            "Normalization":       "Normalization"
         }
     }
 
