@@ -149,7 +149,7 @@ if (plot_pca){
 ## Get normalized counts and write them to CSV with original sample names in header
 deseq_counts <- df_with_metadata(DESeq2::counts(deseq_run, normalized=TRUE))
 colnames(deseq_counts)[0:-2] <- orig_sample_names
-write.csv(restore_multiindex(deseq_counts), paste(out_pref, "norm_counts.csv", sep="_"))
+write.csv(restore_multiindex(deseq_counts), paste(out_pref, "norm_counts.csv", sep="_"), quote=c(2,3))
 
 if (has_control){
   # Comparison is the cartesian product of control and experimental conditions
@@ -169,7 +169,8 @@ write_dge_table <- function (dge_df, cond1, cond2){
     paste(out_pref,
           "cond1", cond1,
           "cond2", cond2,
-          "deseq_table.csv", sep="_")
+          "deseq_table.csv", sep="_"),
+    quote=c(2,3)
   )
 }
 
