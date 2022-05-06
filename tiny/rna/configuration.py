@@ -343,7 +343,7 @@ class CSVReader(csv.DictReader):
            "Select for...":     "Key",
            "with value...":     "Value",
            "Alias by...":       "Name",
-           "Suffix":            "Suffix",
+           "Tag":               "Tag",
            "Hierarchy":         "Hierarchy",
            "Strand":            "Strand",
            "5' End Nucleotide": "nt5end",
@@ -356,7 +356,7 @@ class CSVReader(csv.DictReader):
             "Sample/Group Name":    "Group",
             "Replicate number":     "Replicate",
             "Control":              "Control",
-            "Normalization":       "Normalization"
+            "Normalization":        "Normalization"
         }
     }
 
@@ -381,11 +381,11 @@ class CSVReader(csv.DictReader):
                 yield row
 
     def validate_csv_header(self, header: OrderedDict):
-        expected = self.tinyrna_sheet_fields[self.doctype].keys()
-        header_vals = header.values()
+        expected = {key.lower() for key in self.tinyrna_sheet_fields[self.doctype].keys()}
+        read_vals = {val.lower() for val in header.values()}
 
-        unknown = {col for col in header_vals if col not in expected}
-        missing = expected - header_vals
+        unknown = {col_name for col_name in read_vals if col_name not in expected}
+        missing = expected - read_vals
 
         if len(missing):
             raise ValueError('\n\t'.join([f"The following columns are missing from your {self.doctype}:",

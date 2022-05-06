@@ -390,9 +390,9 @@ class ReferenceTables:
         root_id = self.get_root_feature(feature_id, row.attr)
         roots = []
 
-        for suffix, matches in tagged_matches.items():
-            if suffix is not None:
-                tagged_id = (root_id, suffix)
+        for tag, matches in tagged_matches.items():
+            if tag is not None:
+                tagged_id = (root_id, tag)
             else:
                 tagged_id = (root_id,)
 
@@ -426,9 +426,9 @@ class ReferenceTables:
         for ident, rule_indexes in self.selector.inv_ident.items():
             if row_attrs.contains_ident(ident):
                 for index in rule_indexes:
-                    # Non-suffixed rule matches will be pooled under None
-                    suffix = self.selector.rules_table[index]['Suffix']
-                    identity_matches[suffix].add((
+                    # Non-tagged rule matches will be pooled under None
+                    tag = self.selector.rules_table[index]['Tag']
+                    identity_matches[tag].add((
                          index,
                          self.selector.rules_table[index]['Hierarchy'],
                          self.selector.rules_table[index]['Strict']
@@ -559,5 +559,5 @@ class Feature:
     def __init__(self, gff_row):
         self.id = gff_row.attr["ID"][0]
         self.root_id = self.id
-        self.suffixes = defaultdict(set)
+        self.tags = defaultdict(set)
         self.aliases = []
