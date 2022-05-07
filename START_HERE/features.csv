@@ -1,4 +1,4 @@
-Select for...,with value...,Alias by...,Suffix,Hierarchy,Strand,5' End Nucleotide,Length,Match,Feature Source
+Select for...,with value...,Alias by...,Tag,Hierarchy,Strand,5' End Nucleotide,Length,Match,Feature Source
 Class,miRNA,ID,tag1,1,sense,all,18-24,Partial,./reference_data/c_elegans_WS279_chr1.gff3
 Class,piRNA,ID,tag2,1,sense,U,19-21,Partial,./reference_data/c_elegans_WS279_chr1.gff3
 Class,CSR,ID,tag3,2,antisense,G,21-23,Partial,./reference_data/c_elegans_WS279_chr1.gff3

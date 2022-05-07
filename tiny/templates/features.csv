@@ -1,7 +1,7 @@
-Select for...,with value...,Alias by...,Hierarchy,Strand,5' End Nucleotide,Length,Match,Feature Source
-Class,miRNA,ID,1,sense,all,18-24,Partial,../../START_HERE/reference_data/c_elegans_WS279_chr1.gff3
-Class,piRNA,ID,1,sense,U,19-21,Partial,../../START_HERE/reference_data/c_elegans_WS279_chr1.gff3
-Class,CSR,ID,2,anstisense,G,21-23,Partial,../../START_HERE/reference_data/c_elegans_WS279_chr1.gff3
-Class,WAGO,ID,2,anstisense,G,21-23,Partial,../../START_HERE/reference_data/c_elegans_WS279_chr1.gff3
-Class,ALG,ID,2,anstisense,G,26,Partial,../../START_HERE/reference_data/c_elegans_WS279_chr1.gff3
-biotype,transposon,ID,3,both,all,18-28,Full,../../START_HERE/reference_data/c_elegans_WS279_chr1.gff3
+Select for...,with value...,Alias by...,Tag,Hierarchy,Strand,5' End Nucleotide,Length,Match,Feature Source
+Class,miRNA,ID,,1,sense,all,18-24,Partial,../../START_HERE/reference_data/c_elegans_WS279_chr1.gff3
+Class,piRNA,ID,,1,sense,U,19-21,Partial,../../START_HERE/reference_data/c_elegans_WS279_chr1.gff3
+Class,CSR,ID,,2,anstisense,G,21-23,Partial,../../START_HERE/reference_data/c_elegans_WS279_chr1.gff3
+Class,WAGO,ID,,2,anstisense,G,21-23,Partial,../../START_HERE/reference_data/c_elegans_WS279_chr1.gff3
+Class,ALG,ID,,2,anstisense,G,26,Partial,../../START_HERE/reference_data/c_elegans_WS279_chr1.gff3
+biotype,transposon,ID,,3,both,all,18-28,Full,../../START_HERE/reference_data/c_elegans_WS279_chr1.gff3
