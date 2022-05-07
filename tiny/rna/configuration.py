@@ -382,7 +382,7 @@ class CSVReader(csv.DictReader):
 
     def validate_csv_header(self, header: OrderedDict):
         expected = {key.lower() for key in self.tinyrna_sheet_fields[self.doctype].keys()}
-        read_vals = {val.lower() for val in header.values()}
+        read_vals = {val.lower() for val in header.values() if val is not None}
 
         unknown = {col_name for col_name in read_vals if col_name not in expected}
         missing = expected - read_vals
