@@ -384,29 +384,43 @@ class ReferenceTables:
             if ancestor in self.matches or ancestor == feature_id:
                 return ancestor
 
-    def add_feature(self, feature_id: str, row, tagged_matches: defaultdict, classes: set) -> List[tuple]:
-        """Adds the feature and its interval under the root ancestor's ID"""
+    def add_feature(self, feature_id: str, row, matches: defaultdict, classes: set) -> List[tuple]:
+        """Adds the feature and its interval under the root ancestor's (optionally tagged) ID
+        This method should not be called if the feature lacks identity matches and self.all_features is False."""
 
         root_id = self.get_root_feature(feature_id, row.attr)
+        root_id = (root_id,)
         roots = []
 
-        for tag, matches in tagged_matches.items():
-            if tag is not None:
-                tagged_id = (root_id, tag)
-            else:
-                tagged_id = (root_id,)
+        if len(matches):
+            for tag, matches in matches.items():
+                if tag is not None:
+                    tagged_id = root_id + (tag,)
+                else:
+                    tagged_id = root_id
 
-            roots.append(tagged_id)
-            self.classes[tagged_id] |= classes
-            self.matches[tagged_id] |= matches
+                self._add_feature_to_tables(tagged_id, classes, matches, row.iv)
+                roots.append(tagged_id)
+        else:
+            # Features without identity matches are saved if self.all_features
+            assert self.all_features is True, "Feat. without identity matches was saved but self.all_features is False"
+            self._add_feature_to_tables(root_id, classes, set(), row.iv)
+            roots.append(root_id)
 
-            # Optimization opportunity: only append intervals for features that have matches.
-            # This is skipped to make testing more succinct; if users routinely use --all-features,
-            # it would be wise to add this check here, but at the cost of rewriting many unit tests.
-            if row.iv not in self.intervals[tagged_id]:
-                self.intervals[tagged_id].append(row.iv)
-
+        # Multiple roots returned if multi-tagged OR both tagged and untagged matches
         return roots
+
+    def _add_feature_to_tables(self, root_id, classes, matches, iv):
+        """Records the feature's classes, matches, and intervals under the specified root ID"""
+
+        self.classes[root_id] |= classes
+        self.matches[root_id] |= matches
+
+        # Optimization opportunity: only append intervals for features that have matches.
+        # This is skipped to make testing more succinct; if users routinely use --all-features,
+        # it would be wise to add this check here, but at the cost of rewriting many unit tests.
+        if iv not in self.intervals[root_id]:
+            self.intervals[root_id].append(iv)
 
     def add_alias(self, roots: List[str], alias_keys: List[str], row_attrs: CaseInsensitiveAttrs) -> None:
         """Add feature's aliases to the root ancestor's alias set"""
@@ -433,7 +447,7 @@ class ReferenceTables:
                          self.selector.rules_table[index]['Hierarchy'],
                          self.selector.rules_table[index]['Strict']
                     ))
-        # -> identity_matches: {(rule, rank, strict), ...}
+        # -> identity_matches: {tag: (rule, rank, strict), ...}
         return identity_matches, classes
 
     def get_row_parent(self, feature_id: str, row_attrs: CaseInsensitiveAttrs) -> str:
