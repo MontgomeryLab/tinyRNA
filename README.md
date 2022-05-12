@@ -27,27 +27,21 @@
 
 tinyRNA is a set of tools to simplify the analysis of next-generation sequencing data. The goal of this specific repository is to provide an entire workflow for processing small RNA sequencing data with options for advanced hierarchical feature selection.
 
-The current workflow is as follows:
+### The Current Workflow
 
 ![tinyRNA basic pipeline](images/tinyrna-workflow_current.png)
 
 ## Installation
 
-A setup script has been provided for easy installation of tinyRNA. The project and its dependencies will be installed in a conda environment called `tinyrna`.
+A setup script has been provided for easy installation of tinyRNA. The project and its dependencies will be installed in a conda environment named `tinyrna` after running the following commands in your terminal:
 
-```
+```shell
 # Clone the repository into a local directory
  git clone https://github.com/MontgomeryLab/tinyrna.git
  cd tinyrna
 
 # Install the tinyrna environment and dependencies
  ./setup.sh
-
-# Activate the tinyrna environment
- conda activate tinyrna
-
-# When you are done running tinyRNA, you can deactivate the conda environment
- conda deactivate
 ```
 
 If the installation script runs the Miniconda installer:
@@ -55,38 +49,48 @@ If the installation script runs the Miniconda installer:
 - We recommend answering "yes" to running `conda init`
 
 ## Usage
+
+The `tinyrna` conda environment must be activated before use.
+```shell
+# Activate the tinyrna environment
+ conda activate tinyrna
+ 
+## (your commands here: tiny run, tiny-count, etc.)
+
+# When you are done running tinyRNA, you can deactivate the conda environment
+ conda deactivate
+```
 If you'd like to jump right in and start using tinyRNA, see our [tutorial](./START_HERE/TUTORIAL.md).
 
-You can execute the workflow in its entirety for a full end-to-end analysis pipeline, or you can execute individual steps on their own. In most cases you will use the command `tiny` for pipeline level operations, including running the pipeline.
+You can execute the workflow in its entirety for a full end-to-end analysis pipeline, or you can execute individual steps on their own. In most cases you will use the command `tiny` for pipeline operations.
 
 ### Configuration Files
 The pipeline requires that you identify:
-- Your preferences for the pipeline and its steps via the *Run Config*
-- The location of your config files and other file inputs via the *Paths File*
-- Your selection preferences for feature counting via the *Features Sheet*
-- Your samples via the *Samples Sheet*
+- Your preferences for the pipeline and its steps via the **Run Config**
+- The location of your config files and other file inputs via the **Paths File**
+- Your selection preferences for feature counting via the **Features Sheet**
+- Your samples via the **Samples Sheet**
 
 <img src="images/config-files.png" width="50%" alt="[Configuration File Diagram]">
 
-The `START_HERE` directory demonstrates a working configuration using these files. You can also get a copy of them (and other optional template files) with:
-```
+For more information, please see the [configuration file documentation](./doc/Configuration.md). The `START_HERE` directory demonstrates a working configuration using these files. You can also get a copy of them by running the command:
+```shell
 tiny get-template
 ```
 
-### User-Provided Input File Requirements
 
-  1. A GFF3 / GFF2 / GTF formatted file with genomic coordinates for your features of interest, such as miRNAs (see c_elegans_WS279_chr1.gff3 in the reference_data folder for an example)
-     - Each feature must have an attributes column (column 9) which defines its `ID`.
-       - For example: `chrI	.	miRNA	100	121	.	+	.	ID=miR-1;...`
-     - All features must be stranded.
-     - Attribute values which contain commas will be parsed as lists.
-  2. FASTQ(.gz) <sup>*</sup> formatted files with your small RNA high-throughput sequencing data (files must be demultiplexed).
-  3. A reference genome file in FASTA format (be sure that chromosome identifiers are identical between your reference annotations and genome sequence files).
-  4. Optional: Bowtie indexes (must be small indexes (.ebwt)). Bowtie indexes will be created if the `ebwt` setting is empty in your Paths File.
+### Requirements for User-Provided Input Files
 
-*`tiny-count` accepts SAM files in your Samples Sheet only when invoked as an individual step. Because genome alignments are done after collapsing reads, the pipeline does not currently support SAM files from other sources.
+| Input Type                                                                                 | File Extension          | Requirements                                                                                                                                                                            |
+|--------------------------------------------------------------------------------------------|-------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Reference annotations<br/>[(example)](START_HERE/reference_data/c_elegans_WS279_chr1.gff3) | GFF3 / GFF2 / GTF       | <ul><li>An attributes column (col. 9) which defines each feature's `ID`</li><li>Attribute values containing commas must represent lists</li><li>All features must be stranded</li></ul> |
+| Sequencing data<br/>[(example)](START_HERE/fastq_files)                                    | FASTQ(.gz) <sup>1</sup> | Files must be demultiplexed.                                                                                                                                                            |
+| Reference genome<br/>[(example)](START_HERE/reference_data/chr1.fa)                        | FASTA                   | Chromosome identifiers: <ul><li>Must match your reference annotation files</li><li>Are case sensitive</li></ul>                                                                         |
+| Bowtie indexes (optional) <sup>2</sup>                                                     | ebwt                    | Must be small indexes (.ebwtl indexes are not supported)                                                                                                                                |
+<br/><sup>1</sup> `tiny-count` accepts SAM files via your **Samples Sheet** when invoked as an individual step, but they must have been produced by the pipeline. SAM files from other sources are not currently supported. 
+<br/><sup>2</sup> Bowtie indexes can be created for you. See the [Paths File documentation](./doc/Configuration.md#in-depth-paths-file).
 
-### Running the End-to-End Analysis
+### Running an End-to-End Analysis
 In most cases you will use this toolset as an end-to-end pipeline. This will run a full, standard small RNA sequencing data analysis according to your configuration file. Before starting, you will need the following:
 
 1. High-throughput sequencing data in fastq format. 
@@ -94,19 +98,32 @@ In most cases you will use this toolset as an end-to-end pipeline. This will run
 3. Genome coordinates of small RNA features of interest in GFF format.
 4. A completed Samples Sheet (`samples.csv`) with paths to the fastq files.
 5. A completed Features Sheet (`features.csv`) with paths to the GFF file(s).
-6. An updated Paths File (`paths.yml`) with the path to the genome sequence.
+6. An updated Paths File (`paths.yml`) with the path to the genome sequence and/or your bowtie index prefix.
 7. A Run Config file (`run_config.yml`) located in your working directory or the path to the file. The template provided does not need to be updated if you wish to use the default settings.
 
-To run an end-to-end analysis, be sure that you're working within the conda tinyrna environment (instructions above) in your terminal and optionally set your working directory that contains the Run Config file. Then, simply enter the following code into your terminal (if you are not working in the directory containing `run_config.yml`, provide the path before the name of the file - `path/to/run_config.yml`:
+To run an end-to-end analysis, be sure that you're working within the conda tinyrna environment ([instructions above](#usage)) in your terminal and optionally navigate to the location of your Run Config file. Then, simply run the following in your terminal:
 
 ```
 tiny run --config run_config.yml
 ```
 
-### Running Individual Steps
-The process for running individual steps differs depending on whether the step is a tinyRNA Python component, or a CWL wrapped third party tool.
+### Resuming an End-to-End Analysis
 
-The following steps are Python components that can be run from the command line within the tinyRNA conda environment:
+The Counter and Plotter steps offer a wide variety of options for refining your analysis. You might find that repeat analyses are required while tuning these options to your goals. To save time and skip redundant compute-heavy preprocessing steps, you can resume a prior analysis using its outputs from the early pipeline steps.
+
+```shell
+# Resume a prior analysis at the Counter step
+tiny recount --config processed_run_config.yml
+
+# Resume a prior analysis at the Plotter step
+tiny replot --config processed_run_config.yml
+```
+For more information and prerequesites, see the [pipeline resume documentation](./doc/Pipeline.md#resume).
+
+### Running Individual Steps
+The process for running individual steps differs depending on whether the step is a tinyRNA Python component (outlined in yellow in the [workflow diagram](#the-current-workflow)), or a CWL-wrapped third party tool.
+
+The following steps are Python components which can be run from the command line within the tinyRNA conda environment:
 ##### Create Workflow
 ```
 tiny-config -i CONFIG
