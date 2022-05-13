@@ -70,9 +70,9 @@ def get_args():
     # Required arguments
     required_args.add_argument('-p', '--plots', metavar='PLOT', required=True, nargs='+',
                                help="R|List of plots to create. Options: \n"
-                               "• len_dist: A stacked barplot showing size & 5' nucleotide distribution.\n"
-                               "• rule_charts: A pie and barchart showing proportions of counts by matched rule.\n"
-                               "• class_charts: A pie and barchart showing proportions of counts by Class attribute.\n"
+                               "• len_dist: A stacked barchart showing size & 5' nucleotide distribution.\n"
+                               "• rule_charts: A barchart showing percentages of counts by matched rule.\n"
+                               "• class_charts: A barchart showing percentages of counts by Class attribute.\n"
                                "• replicate_scatter: A scatter plot comparing replicates for all count files given.\n"
                                "• sample_avg_scatter_by_dge: A scatter plot comparing all sample groups, with "
                                "significantly different genes highlighted. P-value can be set using --p-value. "

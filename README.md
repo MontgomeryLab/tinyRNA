@@ -6,18 +6,14 @@
 - [Installation](#installation)
 - [Usage](#usage)
   - [Configuration Files](#configuration-files)
-  - [User-Provided Input Files](#user-provided-input-file-requirements)
-  - [Running the End-to-End Analysis](#running-the-end-to-end-analysis)
+  - [User-Provided Input Files](#requirements-for-user-provided-input-files)
+  - [Running the End-to-End Analysis](#running-an-end-to-end-analysis)
+  - [Resuming an End-to-End Analysis](#resuming-an-end-to-end-analysis)
   - [Running Individual Steps](#running-individual-steps)
-  - [Using a Different Workflow Runner](#using-a-different-workflow-runner)
 - [Outputs](#outputs)
   - [Data Pre-Processing](#data-pre-processing)
   - [Collapsed FASTA files](#collapsed-fasta-files)
   - [Counts and Pipeline Statistics](#counts-and-pipeline-statistics)
-    - [Feature Counts](#feature-counts)
-    - [Alignment Statistics](#alignment-statistics)
-    - [Summary Statistics](#summary-statistics)
-    - [5'nt vs. Length Matrix](#5nt-vs-length-matrix)
   - [Differential Expression Analysis](#differential-expression-analysis)
   - [Plots](#plots)
 - [Contributing](#contributing)
@@ -60,7 +56,7 @@ The `tinyrna` conda environment must be activated before use.
 # When you are done running tinyRNA, you can deactivate the conda environment
  conda deactivate
 ```
-If you'd like to jump right in and start using tinyRNA, see our [tutorial](./START_HERE/TUTORIAL.md).
+If you'd like to jump right in and start using tinyRNA, see our [tutorial](START_HERE/TUTORIAL.md).
 
 You can execute the workflow in its entirety for a full end-to-end analysis pipeline, or you can execute individual steps on their own. In most cases you will use the command `tiny` for pipeline operations.
 
@@ -73,7 +69,7 @@ The pipeline requires that you identify:
 
 <img src="images/config-files.png" width="50%" alt="[Configuration File Diagram]">
 
-For more information, please see the [configuration file documentation](./doc/Configuration.md). The `START_HERE` directory demonstrates a working configuration using these files. You can also get a copy of them by running the command:
+For more information, please see the [configuration file documentation](doc/Configuration.md). The `START_HERE` directory demonstrates a working configuration using these files. You can also get a copy of them by running the command:
 ```shell
 tiny get-template
 ```
@@ -88,7 +84,7 @@ tiny get-template
 | Reference genome<br/>[(example)](START_HERE/reference_data/chr1.fa)                        | FASTA                   | Chromosome identifiers: <ul><li>Must match your reference annotation files</li><li>Are case sensitive</li></ul>                                                                         |
 | Bowtie indexes (optional) <sup>2</sup>                                                     | ebwt                    | Must be small indexes (.ebwtl indexes are not supported)                                                                                                                                |
 <br/><sup>1</sup> `tiny-count` accepts SAM files via your **Samples Sheet** when invoked as an individual step, but they must have been produced by the pipeline. SAM files from other sources are not currently supported. 
-<br/><sup>2</sup> Bowtie indexes can be created for you. See the [Paths File documentation](./doc/Configuration.md#in-depth-paths-file).
+<br/><sup>2</sup> Bowtie indexes can be created for you. See the [Paths File documentation](doc/Configuration.md#paths-file-details).
 
 ### Running an End-to-End Analysis
 In most cases you will use this toolset as an end-to-end pipeline. This will run a full, standard small RNA sequencing data analysis according to your configuration file. Before starting, you will need the following:
@@ -118,7 +114,7 @@ tiny recount --config processed_run_config.yml
 # Resume a prior analysis at the Plotter step
 tiny replot --config processed_run_config.yml
 ```
-For more information and prerequesites, see the [pipeline resume documentation](./doc/Pipeline.md#resume).
+For more information and prerequesites, see the [pipeline resume documentation](doc/Pipeline.md#resuming-a-prior-analysis).
 
 ### Running Individual Steps
 The process for running individual steps differs depending on whether the step is a tinyRNA Python component (outlined in yellow in the [workflow diagram](#the-current-workflow)), or a CWL-wrapped third party tool.
@@ -171,8 +167,9 @@ optional arguments:
   -tf [TYPE [TYPE ...]], --type-filter [TYPE [TYPE ...]]
                         Only produce counts for features whose GFF column 3
                         matches the type(s) listed
-  -nn, --no-normalize   Do not normalize counts by genomic hits and (selected)
-                        overlapping feature counts.
+  -nh T/F, --normalize-by-hits T/F
+                        If T/true, normalize counts by (selected) overlapping
+                        feature counts. Default: true.
   -dc, --decollapse     Create a decollapsed copy of all SAM files listed in
                         your Samples Sheet.
   -a, --all-features    Represent all features in output counts table,
@@ -232,9 +229,11 @@ instead run `tiny replot` within that run directory.
 Required arguments:
   -p PLOT [PLOT ...], --plots PLOT [PLOT ...]
                         List of plots to create. Options:
-                        • len_dist: A stacked barplot showing size & 5'
+                        • len_dist: A stacked barchart showing size & 5'
                           nucleotide distribution.
-                        • class_charts: A pie and barchart showing proportions
+                        • rule_charts: A barchart showing percentages
+                          of counts by matched rule.
+                        • class_charts: A barchart showing percentages
                           of counts per class.
                         • replicate_scatter: A scatter plot comparing
                           replicates for all count files given.
@@ -249,6 +248,8 @@ Required arguments:
 Input files produced by Counter:
   -rc RAW_COUNTS, --raw-counts RAW_COUNTS
                         The ...feature_counts.csv file
+  -uc RULE_COUNTS, --rule-counts RULE_COUNTS
+                        The ...counts-by-rule.csv file
   -ss STAT, --summary-stats STAT
                         The ...summary_stats.csv file
   -len 5P_LEN [5P_LEN ...], --len-dist 5P_LEN [5P_LEN ...]
@@ -271,28 +272,14 @@ Optional arguments:
   -v, --vector-scatter  Produce scatter plots with vectorized points (slower).
                         Note: only the points on scatter plots will be raster
                         if this option is not provided.
+  -ldi VALUE, --len-dist-min VALUE
+                        len_dist plots will start at this value
+  -lda VALUE, --len-dist-max VALUE
+                        len_dist plots will end at this value
 ```
 
-##### fastp, bowtie-build, and bowtie
-These are CWL wrapped third party tools.
-1. Copy the workflow CWL folder to your current working directory with the command `tiny setup-cwl --config none`
-2. Within `./CWL/tools` find the file for the step you wish to run. Navigate to this folder in terminal (or copy your target .cwl file to a more convenient location)
-3. Run `cwltool --make-template step-file.cwl > step-config.YML`. This will produce a `YML` configuration file specific to this step. Optional arguments will be indicated as such; if you do not wish to set a value for an optional argument, best practice is to remove it from the file
-4. Fill in your preferences and inputs in this step configuration file and save it
-5. Execute the tool with the command `cwltool step-file.cwl step-config.YML`
-
-### Using a Different Workflow Runner
-
-We have used CWL to define the workflow for scalability and interoperability. The default runner, or interpreter, utilized by tinyRNA is `cwltool`. You may use a different CWL runner if you would like, and in order to do so you will need the workflow CWL and your **processed** Run Config file. The following will copy these files to your current working directory:
-
-```
-tiny setup-cwl --config <path/to/Run_Config.yml>
-```
-
-If you don't have a Run Config file or do not wish to obtain a processed copy, you may instead use "None" or "none" in the `--config` argument:
-```
-tiny setup-cwl --config none
-```
+##### CWL-Wrapped Third Party Tools.
+fastp, bowtie-build, and bowtie can be run from the terminal (within the tinyRNA conda environment) just as you would if they were installed in the host environment. Commandline arguments for these tools can be lengthy, but with a little setup you can make things easier for yourself by using our CWL wrappers and a configuration file for each tool. This allows you to more easily set commandline parameters from a text editor and reuse configuration files. See the [pipeline documentation](doc/Pipeline.md#cwl-wrapped-third-party-tools) for details.
 
 ## Outputs
 
@@ -311,39 +298,49 @@ The counter step produces a variety of outputs
 #### Feature Counts
 Custom Python scripts and HTSeq are used to generate a single table of feature counts that includes columns for each library analyzed. A feature's _Feature ID_ and _Feature Class_ are simply the values of its `ID` and `Class` attributes. Features lacking a Class attribute will be assigned class `_UNKNOWN_`. We have also included a _Feature Name_ column which displays aliases of your choice, as specified in the _Alias by..._ column of the Features Sheet. If _Alias by..._ is set to`ID`, the _Feature Name_ column is left empty.
 
-For example, if your Features Sheet has a rule which specifies an ID Attribute of `sequence_name` and the GFF entry for this feature has the following attributes column:
+For example, if your Features Sheet has a rule which specifies _Alias by..._ `sequence_name` and the GFF entry for this feature has the following attributes column:
 ```
 ... ID=406904;sequence_name=mir-1,hsa-miR-1;Class=miRNA; ...
 ```
 The row for this feature in the feature counts table would read:
 
-| Feature ID | Feature Name | Feature Class | Group1_rep_1 | Group1_rep_2 | ... |
-|------------|--------------|---------------|-----------|-----------|-----|
-| 406904 | mir-1,hsa-miR-1 | miRNA | 1234 | 999 | ... |
+| Feature ID | Feature Name     | Feature Class | Group1_rep_1 | Group1_rep_2 | ... |
+|------------|------------------|---------------|--------------|--------------|-----|
+| 406904     | mir-1, hsa-miR-1 | miRNA         | 1234         | 999          | ... |
+
+#### Normalized Counts
+If your Samples Sheet has settings for Normalization, an additional copy of the Feature Counts table is produced with the specified per-library normalizations applied.
 
 #### Counts by Rule
-This output table shows the same assigned counts as those in the Feature Counts table, but instead breaks them down by the rule which led to the assignment. A Mapped Reads row is added (available only during pipeline runs) which represents each library's total read counts which were available for assignment prior to counting.
+This table shows the counts assigned by each rule on a per-library basis. It is indexed by the rule's corresponding row number in the Features Sheet, where the first non-header row is considered row 0. For convenience a Rule String column is added which contains a human friendly concatenation of each rule. Finally, a Mapped Reads row is added which represents each library's total read counts which were available for assignment prior to counting/selection.
 
 #### Alignment Statistics
-A single table of alignment statistics includes columns for each library and the following rows:
-- Total Assigned Reads (i.e. counts from sequences that aligned to at least one feature in your Features Sheet)
-- Total Assigned Sequences (i.e. unique sequences that aligned to at least one feature in your Features Sheet)
-- Assigned Single-Mapping Reads (i.e. counts from sequences mapping to a single genomic locus and aligning to at least one feature in your Features Sheet)
-- Assigned Multi-Mapping Reads (i.e. counts from sequences mapping to multiple genomic loci that aligned to at leats one feature in your Features Sheet)
-- Reads Assigned to Single Feature (i.e. counts from sequences that aligned to a single feature in your Features Sheet)
-- Sequences Assigned to Single Feature (i.e. unique sequences that aligned to a single feature in your Features Sheet)
-- Reads Assigned to Multiple Features (i.e. counts from sequences that aligned to multiple features in your Features Sheet)
-- Sequences Assigned to Multiple Features (i.e. unique sequences that aligned to multiple features in your Features Sheet)
-- Total Unassigned Reads (i.e. total counts for sequences that didn't align to any features in your Features Sheet)
-- Total Unassigned Sequences (i.e. total unique sequences that didn't align to any features in your Features Sheet)
+A single table of alignment statistics includes columns for each library and the following stats:
+
+| Stat                                                 | Description                                                                                                         |
+|------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------|
+| Total Assigned Reads                                 | Counts from sequences that aligned to at least one feature in your Features Sheet                                   |
+| Total Unassigned Reads                               | Total counts for sequences that didn't align to any features in your Features Sheet                                 |
+| Total Assigned Sequences                             | Unique sequences that aligned to at least one feature in your Features Sheet                                        |
+| Total Unassigned Sequences                           | Total unique sequences that didn't align to any features in your Features Sheet                                     |
+| Assigned Single-Mapping Reads                        | Counts from sequences mapping to a single genomic locus and aligning to at least one feature in your Features Sheet |
+| Assigned Multi-Mapping Reads                         | Counts from sequences mapping to multiple genomic loci that aligned to at leats one feature in your Features Sheet  |
+| Reads Assigned to Single Feature                     | Counts from sequences that aligned to a single feature in your Features Sheet                                       |
+| Sequences Assigned to Single Feature                 | Unique sequences that aligned to a single feature in your Features Sheet                                            |
+| Reads Assigned to Multiple Features                  | Counts from sequences that aligned to multiple features in your Features Sheet                                      |
+| <nobr>Sequences Assigned to Multiple Features</nobr> | Unique sequences that aligned to multiple features in your Features Sheet                                           |
 
 #### Summary Statistics
-A single table of summary statistics includes columns for each library and the following rows:
-- Total Reads (i.e. total reads represented in FASTQ input files)
-- Retained Reads (i.e. total reads passing quality filtering)
-- Unique Sequences (i.e. total unique sequences passing quality filtering)
-- Mapped Sequences (i.e. total genome-mapping sequences passing quality filtering)
-- Assigned Reads (i.e. total genome-mapping reads passing quality filtering that were aligned to at least one feature in your Features Sheet)
+A single table of summary statistics includes columns for each library and the following stats:
+
+| Stat                          | Description                                                                                                                                |
+|-------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------|
+| Total Reads                   | Total reads represented in FASTQ input files                                                                                               |
+| Retained Reads                | Total reads passing quality filtering                                                                                                      |
+| Unique Sequences              | Total unique sequences passing quality filtering                                                                                           |
+| <nobr>Mapped Sequences</nobr> | Total genome-mapping sequences passing quality filtering                                                                                   |
+| Mapped Reads                  | Total genome-mapping reads passing quality filtering prior to counting/selection                                                           |                                                          |
+| Assigned Reads                | Total genome-mapping reads passing quality filtering that were assigned to at least one feature due to a rule match in your Features Sheet |
 
 #### 5'nt vs. Length Matrix
 
@@ -357,13 +354,15 @@ Two tables are produced:
 DGE is performed using the `DESeq2` R package. It reports differential expression tables for your experiment design, and a table of normalized feature counts. If your control condition is indicated in your Samples Sheet then pairwise comparisons will be  made against the control. If a control condition is not indicated then all possible bidirectional pairwise comparisons are made. 
 
 ### Plots
-Simple static plots are generated from the outputs of Counter and Deseq2. These plots are useful for assessing the quality of your experiment design and the quality of your libraries. The available plots are:
-- len_dist: A stacked barplot showing size & 5' nucleotide distribution; one output for mapped reads and one for assigned reads.
-- class_charts: A pie, barchart, and table showing proportions of counts per class.
-- replicate_scatter: A scatter plot comparing replicates for all count files given.
-- sample_avg_scatter_by_dge: A scatter plot comparing all sample groups, with significantly different genes highlighted.
-- sample_avg_scatter_by_dge_class: A scatter plot comparing all sample groups, with classes and significantly different genes highlighted.
-- PCA plot: a standard PCA plot from variance stabilizing transformed feature counts (produced during the DGE step)
+Simple static plots are generated from the outputs of Counter and DESeq2. These plots are useful for assessing the quality of your experiment design and the quality of your libraries. The available plots are:
+- **len_dist**: A stacked barchart showing size & 5' nucleotide distribution; one output for mapped reads and one for assigned reads.
+- **rule_charts**: A barchart showing percentages of counts per rule.
+- **class_charts**: A barchart showing percentages of counts per class.
+- **replicate_scatter**: A scatter plot comparing replicates for all count files given.
+- **sample_avg_scatter_by_dge**: A scatter plot comparing all sample groups, with significantly different genes highlighted.
+- **sample_avg_scatter_by_dge_class**: A scatter plot comparing all sample groups, with classes and significantly different genes highlighted.
+
+DESeq2 can also produce a standard **PCA plot** from variance stabilizing transformed feature counts. This output is controlled by the `dge_pca_plot` key in the Run Config.
 
 
 ## Contributing
