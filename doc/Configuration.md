@@ -1,12 +1,12 @@
 Shortcuts:
-- [In-depth: Run Config](#in-depth-run-config)
+- [Run Config](#run-config-details)
   - [The Processed Run Config](#the-processed-run-config)
-- [In-depth: Paths File](#in-depth-paths-file)
+- [Paths File](#paths-file-details)
   - [Building Bowtie Indexes](#building-bowtie-indexes)
-- [In-depth: Samples Sheet](#in-depth-samples-sheet)
+- [Samples Sheet](#samples-sheet-details)
   - [Assigning the Control Group](#assigning-the-control-group)
   - [Applying Custom Normalization](#applying-custom-normalization)
-- [In-depth: Features Sheet](#in-depth-features-sheet)
+- [Features Sheet](#features-sheet-details)
 
 # Configuration Files
 The pipeline requires that you identify:
@@ -46,15 +46,15 @@ Small RNAs can often be classified by sequence characteristics, such as length, 
 
 Matplotlib styles can be optionally overridden using a matplotlib stylesheet. The stylesheet provided by `tiny get-template` contains the defaults utilized by Plotter. Please keep in mind that Plotter overrides these defaults for a few specific elements of certain plots. Feel free to reach out if there is a plot style you wish to override but find you are unable to.
 
-## In-depth: Run Config
+## Run Config Details
 
 ### The processed Run Config
 When the pipeline starts up, tinyRNA will process the Run Config based on the contents of it and your other configuration files, and the processed copy will be saved to your run directory. The processed configuration is what ultimately determines the behavior of the workflow. This provides auto-documentation for all of your pipeline runs.
 
-## In-depth: Paths File
+## Paths File Details
 
 ### Building Bowtie Indexes
-If you don't have bowtie indexes already built for your reference genome, tinyRNA can build them for you at the beginning of an end-to-end run and reuse them on subsequent runs using the same Paths File.
+If you don't have bowtie indexes already built for your reference genome, tinyRNA can build them for you at the beginning of an end-to-end run and reuse them on subsequent runs with the same Paths File.
 
 To build bowtie indexes:
 1. Open your Run Config in a text editor and find the `run_bowtie_build` key. Set its value to `true` and save it.
@@ -64,7 +64,7 @@ To build bowtie indexes:
 
 Once your indexes have been built, your Paths File will be modified such that `ebwt` points to their location (prefix) within your Run Directory. This means that indexes will not be unnecessarily rebuilt on subsequent runs as long as the same Paths File is used. If you need them rebuilt, simply repeat steps 3 and 4 above.
 
-## In-depth: Samples Sheet
+## Samples Sheet Details
 
 ### Assigning the Control Group
 Assigning the control group allows the proper DGE comparisons to be made and plotted. The Control column is where you'll make this indication by writing `true` on any corresponding row. Regardless of the number of replicates in each group, only one associated row needs to have this indication. Do not write `false` or anything else for the other groups; this column should only be used to indicate the affirmative.
@@ -79,7 +79,7 @@ Supported values are:
 
 >**NOTE**: These normalizations operate independently of Counter's --normalize-by-hits commandline option. The former is concerned with per-library normalization, whereas the latter is concerned with normalization by selected feature count at each locus ([more info](Counter.md#count-normalization)). The commandline option does not enable or disable the normalizations detailed above.
 
-## In-depth: Features Sheet
+## Features Sheet Details
 The Features Sheet allows you to define selection rules that determine how features are chosen when multiple features are found overlap an alignment locus. Selected features are "assigned" a portion of the reads associated with the alignment.
 
 Rules apply to features parsed from **all** Feature Sources, with the exception of "Alias by..." which only applies to the Feature Source on the same row. Selection first takes place against feature attributes (GFF column 9), and is directed by defining the attribute you want to be considered (Select for...) and the acceptable values for that attribute (with value...). 
