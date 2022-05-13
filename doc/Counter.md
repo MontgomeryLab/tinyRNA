@@ -10,7 +10,7 @@ Selection occurs in three stages, with the output of each stage as input to the 
 
 ## Stage 1: Feature Attribute Parameters
 | features.csv columns: | Select for... | with value... |
-|-----------------------|---------------| --- |
+|-----------------------|---------------|---------------|
 
 Each feature's column 9 attributes are searched for the key-value combinations defined in the `Select for...` and `with value...` columns. Features, and the rules they matched, are retained for overlap evaluation at alignment loci. Attribute keys are allowed to have multiple comma separated values, and these values are treated as a list; only one of the listed values needs to match the `with value...` to be considered a valid match to the rule.
 
@@ -20,7 +20,7 @@ For example, if a rule contained `Class` and `WAGO` in these columns, then a fea
 
 ## Stage 2: Hierarchy and Overlap Parameters
 | features.csv columns: | Hierarchy | Match |
-|-----------------------|-----------| --- |
+|-----------------------|-----------|-------|
 
 This stage of selection is concerned with the interval overlap between alignments and features. **Overlap is determined in a strandless fashion.** See the `Strand` section in Stage 3 for refinement of selections by strand.
 
@@ -51,7 +51,7 @@ The following diagrams demonstrate the strand semantics of these interval select
 
 ## Stage 3: Alignment Attribute Parameters
 | features.csv columns: | Strand | 5' End Nucleotide | Length |
-|-----------------------|--------| --- | --- |
+|-----------------------|--------|-------------------|--------|
 
 The final stage of selection is concerned with attributes of the alignment to which features are being assigned.
 
@@ -62,10 +62,10 @@ The final stage of selection is concerned with attributes of the alignment to wh
 
 
 ### 5' End Nucleotide and Length
-| Parameter | Single | List | Range | Wildcard |
-| --- |:------:|:----:|:-----:|:--------:|
-| 5' end nt |   ✓    |  ✓   |       |    ✓     |
-| Length |    ✓    |   ✓   |   ✓    |     ✓     |
+| Parameter  | Single | List | Range | Wildcard |
+|------------|:------:|:----:|:-----:|:--------:|
+| 5' end nt  |   ✓    |  ✓   |       |    ✓     |
+| Length     |   ✓    |  ✓   |   ✓   |    ✓     |
 
 Examples:
 - **Single**: `G` or `22`
@@ -74,13 +74,11 @@ Examples:
 - **Wildcard**: `all`
 - **Mixed**: `19, 21-23, 25-30`
 
->**Tip:** these parameters are **not** case sensitive.
-
->**Tip:** you may specify U and T bases in your rules. Uracil bases will be converted to thymine when your Features Sheet is loaded.
+>**Tip:** you may specify U and T bases in your rules. Uracil bases will be converted to thymine when your Features Sheet is loaded. N bases are also allowed.
 
 ### Misc
 | features.csv columns: | Alias by... | Feature Source |
-| --- |-------------| --- |
+|-----------------------|-------------|----------------|
 
 You may specify an **Alias by...** which is a GFF column 9 attribute key you wish to represent each feature. The intention of this column is to provide a human-friendly name for each feature. The value associated with each feature's **Alias by...** attribute will be shown in the `Feature Name` column of the Feature Counts output table.  For example, if one of your rules specifies an alias of `sequence_name` and gene1's `sequence_name` attribute is "abc123", then gene1's `Feature Name` column in the Feature Counts table will read "abc123".
 
