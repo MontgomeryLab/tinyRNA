@@ -83,6 +83,7 @@ tiny get-template
 | Sequencing data<br/>[(example)](START_HERE/fastq_files)                                    | FASTQ(.gz) <sup>1</sup> | Files must be demultiplexed.                                                                                                                                                            |
 | Reference genome<br/>[(example)](START_HERE/reference_data/chr1.fa)                        | FASTA                   | Chromosome identifiers: <ul><li>Must match your reference annotation files</li><li>Are case sensitive</li></ul>                                                                         |
 | Bowtie indexes (optional) <sup>2</sup>                                                     | ebwt                    | Must be small indexes (.ebwtl indexes are not supported)                                                                                                                                |
+
 <br/><sup>1</sup> `tiny-count` accepts SAM files via your **Samples Sheet** when invoked as an individual step, but they must have been produced by the pipeline. SAM files from other sources are not currently supported. 
 <br/><sup>2</sup> Bowtie indexes can be created for you. See the [Paths File documentation](doc/Configuration.md#paths-file-details).
 
