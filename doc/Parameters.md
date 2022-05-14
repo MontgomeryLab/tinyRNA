@@ -71,17 +71,7 @@ This commandline argument tells Counter that it is running as a workflow step ra
 |----------------|----------------------|
 | counter_diags: | `--report-diags`     |
 
-Diagnostic information will include intermediate alignment files for each library and an additional stats table with information about counts that were not assigned to a feature. Intermediate alignment files include the following information about each alignment:
-
-- The alignment's SEQ field, reverse complemented for the - strand
-- Sequence count normalized by its multi-alignment locus count
-- Feature IDs of all features assigned to the alignment
-- Strand, start, and end
-
-The unassigned counts table includes the following, with a column per library:
-- **Uncounted alignments (+) / (-)**: the number of alignments that did not receive any feature assignments, broken down by strand
-- **No feature counts**: the total unassigned counts due to alignments that failed to overlap any features
-- **Eliminated counts**: the total unassigned counts due to alignments whose candidate features were _ALL_ eliminated because they failed to match any selection rules.
+Diagnostic information will include intermediate alignment files for each library and an additional stats table with information about counts that were not assigned to a feature. See [the description of these outputs](../README.md#Diagnostics) for details.
 
 ## Plotter
 Todo

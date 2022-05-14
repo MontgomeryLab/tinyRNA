@@ -353,6 +353,23 @@ Two tables are produced:
 - **... mapped_nt_len_dist.csv**: full counts from all mapped sequences regardless of feature assignment
 - **... assigned_nt_len_dist.csv**: only the assigned counts for sequences receiving feature assignment
 
+#### Diagnostics
+
+Diagnostic information will include intermediate alignment files for each library and an additional stats table with information about counts that were not assigned to a feature. Intermediate alignment files include the following information about each alignment, regardless of feature assignment status:
+
+- The alignment's SEQ field, reverse complemented for the - strand
+- The sequence's count normalized by its multi-alignment locus count
+- Feature IDs of all features assigned to the alignment
+- Strand, start, and end position
+
+The unassigned counts table includes the following, with a column per library:
+
+| Stat                              | Description                                                                                                                                   |
+|-----------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| <nobr>Uncounted alignments</nobr> | The number of alignments that did not receive any feature assignments. This stat has two entries, one for each strand.                        |
+| No feature counts                 | The total unassigned counts due to alignments that failed to overlap any features                                                             |
+| Eliminated counts                 | The total unassigned counts due to alignments whose candidate features were _ALL_ eliminated because they failed to match any selection rules |
+
 ### Differential Expression Analysis
 DGE is performed using the `DESeq2` R package. It reports differential expression tables for your experiment design, and a table of normalized feature counts. If your control condition is indicated in your Samples Sheet then pairwise comparisons will be  made against the control. If a control condition is not indicated then all possible bidirectional pairwise comparisons are made. 
 
