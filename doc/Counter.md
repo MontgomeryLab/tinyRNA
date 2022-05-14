@@ -1,3 +1,18 @@
+# Operation Details
+
+## Parameters
+For an explanation of Counter's parameters in the Run Config and by commandline, see [the parameters documentation](Parameters.md#counter).
+
+## Resuming an End-to-End Analysis
+Counter offers a variety of options for refining your analysis. You might find that repeat analyses are required while tuning these options to your goals. However, the earlier pipeline steps are resource and time intensive, so it is inconvenient to rerun an end-to-end analysis to test new selection rules. Using the command `tiny recount`, tinyRNA will run the workflow starting at the Counter step using inputs from a prior end-to-end run. See the [pipeline resume documentation](Pipeline.md#resuming-a-prior-analysis) for details and prerequesites.
+
+## Running as a Standalone Tool
+If would like to run Counter as a standalone tool, not as part of an end-to-end or resumed analysis, you can do so with the command `tiny-count`. The command requires that you specify the paths to your Samples Sheet and Features Sheet, and a filename prefix for outputs. [All other arguments are optional](../README.md#counter). You will need to make a copy of your Samples Sheet and modify it so that the `Input FastQ Files` column instead contains paths to the corresponding SAM files from a prior end-to-end run. SAM files from non-tinyRNA sources are not currently supported as the Collapser step is critical to its function.
+
+>**Important:** reusing the same output filename prefix between standalone runs will result in prior outputs being overwritten.
+
+
+
 # Feature Selection
 We provide a Features Sheet (`features.csv`) in which you can define selection rules to more accurately capture counts for the small RNAs of interest. The parameters for these rules include attributes commonly used in the classification of small RNAs, such as length, strandedness, and 5' nucleotide. They are utilized at each alignment locus to determine which overlapping features should be assigned a portion of the read counts for the given sequence.
 
@@ -89,7 +104,7 @@ Small RNA reads passing selection will receive a normalized count increment. By 
 1. By the number of loci it aligns to in the genome.
 2. By the number of _selected_ features for each of its alignments.
 
-### The Details
+## The Details
 You may encounter the following cases when you have more than one unique GFF file listed in your **Feature Source**s:
 - If a feature is defined in one GFF file, then again in another but with differing attributes, rule and alias matches will be merged for the feature
 - If a feature is defined in one GFF file, then again but under a different **Alias by...**, then both aliases are retained and treated as a list. All aliases will be present in the `Feature Name` column of the Feature Counts output table. They will be comma separated.
