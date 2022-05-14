@@ -140,6 +140,8 @@ tiny-collapse [-h] -i FASTQFILE -o OUTPREFIX [-t THRESHOLD] [-c]
                           {prefix}_collapsed.fa and will instead be placed in
                           {prefix}_collapsed_lowcounts.fa
     -c, --compress        Use gzip compression when writing fasta outputs
+    --5p-trim LENGTH      Trim LENGTH bases from the 5' end of each sequence
+    --3p-trim LENGTH      Trim LENGTH bases from the 3' end of each sequence
   
   required arguments:
     -i FASTQFILE, --input-file FASTQFILE
