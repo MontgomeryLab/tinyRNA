@@ -20,9 +20,9 @@ tinyRNA automatically handles file inputs when Plotter is called as a step in a 
 ## len_dist
 The distributions of 5' end nucleotides vs. sequence lengths can be used to assess the overall quality of your libraries. This can also be used for analyzing small RNA distributions in non-model organisms without annotations.
 
-<p float="left" align="middle">
-    <img src="../images/plots/len_dist_short.jpeg" width="50%" alt="len_dist lengths 20-30"/>
-    <img src="../images/plots/len_dist_long.jpeg" width="50%" alt="len_dist lengths 15-60"/>
+<p float="left" align="center">
+    <img src="../images/plots/len_dist_short.jpeg" width="40%" alt="len_dist lengths 20-30"/>
+    <img src="../images/plots/len_dist_long.jpeg" width="40%" alt="len_dist lengths 15-60"/>
 </p>
 
 
@@ -47,7 +47,9 @@ Placeholder bases, e.g. N, will be reported if they are encountered at the 5' en
 ## rule_charts
 Counts are assigned only to the features that meet selection criteria at each alignment locus. It is useful to see how each selection rule contributed to the overall assignment of counts. The rule_charts plot type shows the percentage of _mapped reads_ that each rule contributed to the total _assigned reads_.
 
-<center><img src="../images/plots/rule_charts.jpeg" width="60%" alt="rule_chart with 10 rules"/></center>
+<p float="left" align="center">
+    <img src="../images/plots/rule_charts.jpeg" width="60%" alt="rule_chart with 10 rules"/>
+</p>
 
 #### Rule Number
 Rules are referred to by their row number in the Features Sheet and the first non-header row is considered rule 0. Rule **N** represents the percentage of mapped reads that were unassigned. Sources of unassigned reads include:
@@ -62,7 +64,9 @@ Percentage label darkness and bar colors reflect the magnitude of the rule's con
 ## class_charts
 Features can have multiple classes associated with them, so it is useful to see the proportions of counts by class. The class_charts plot type shows the percentage of _mapped_ reads that were assigned to features by class. Each feature's associated classes are determined by the `Class=` attribute in your GFF files.
 
-<center><img src="../images/plots/class_charts.jpeg" width="60%" alt="rule_chart with 10 rules"/></center>
+<p float="left" align="center">
+    <img src="../images/plots/class_charts.jpeg" width="60%" alt="rule_chart with 10 rules"/>
+</p>
 
 #### Class N
 Class **N** represents the percentage of mapped reads that were unassigned. Sources of unassigned reads include:
