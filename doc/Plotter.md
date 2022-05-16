@@ -39,6 +39,8 @@ When Plotter is called as a step in a pipeline run, min and max bounds are deter
 2. The corresponding _optional_ entries for fastp (`length_required` and `length_limit`) in the Run Config
 3. Automatic assignment from the data. Bounds are determined by considering the min/max lengths across all libraries such that all plots have the same bounds. This determination is performed separately for each plot subtype.
 
+When Plotter is called as a standalone step, orders 1 and 3 are used. Manual assignment is performed via the equivalent commandline arguments in order 1.
+
 #### Non-Nucleotide Bases
 Placeholder bases, e.g. N, will be reported if they are encountered at the 5' end. Otherwise only the 4 standard bases are reported.
 
@@ -74,7 +76,7 @@ Class **N** represents the percentage of mapped reads that were unassigned. Sour
 - Alignments which do not overlap with any features
 
 #### Count Normalization
-Features with multiple associated classes will have their counts split evenly across these classes before being grouped and summed.
+A feature with multiple associated classes will have its counts split evenly across these classes before being grouped and summed.
 
 #### Class Chart Styles
 Proportions in rule_charts and class_charts are plotted using the same function. Styles are the same between the two. See [rule chart styles](#rule-chart-styles) for more info.

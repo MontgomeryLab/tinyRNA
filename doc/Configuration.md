@@ -36,6 +36,54 @@ Small RNAs can often be classified by sequence characteristics, such as length, 
 
 Plot styles can be optionally overridden using a matplotlibrc stylesheet. [More info](#plot-stylesheet-details).
 
+## Editing YAML Files
+The Run Config and Paths File are YAML formatted files that can be edited with a text editor. Changing values in these files is pretty straight forward, but it is useful to know a little about YAML syntax.
+
+#### Comments
+```yaml
+# Lines beginning with a # are comments.
+# We've used block comments to designate sections
+# and to provide documentation locality
+```
+
+#### Key-Value Pairs
+```yaml
+this-is-a-key: "and this is the key's value"
+```
+
+#### Empty / Unassigned Values
+```yaml
+empty-1:
+empty-2: ''
+empty-3: ""
+empty-4: ~
+```
+
+#### Lists
+```yaml
+# Notice: dashes are at the same indentation level; each item begins with dash space
+reference_genome_files:
+- ../relative/path/genome1.fasta
+- /absolute/path/genome2.fasta
+
+# Brackets can be used for more compact lists
+source_filter: [source1, source2, source3]
+```
+
+#### Strings
+```yaml
+quoted-string-key: "this is a string"
+unquoted-scalar: this is also a valid string
+# Beware: unquoted scalars cannot contain a colon followed by a space
+```
+
+#### Booleans
+```yaml
+valid-1: true
+valid-2: TrUe
+invalid: 'true'  # <-- This is a string, not a boolean
+```
+
 ## Run Config Details
 
 ### The processed Run Config
