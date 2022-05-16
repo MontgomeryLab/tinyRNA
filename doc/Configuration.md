@@ -1,13 +1,3 @@
-Shortcuts:
-- [Run Config](#run-config-details)
-  - [The Processed Run Config](#the-processed-run-config)
-- [Paths File](#paths-file-details)
-  - [Building Bowtie Indexes](#building-bowtie-indexes)
-- [Samples Sheet](#samples-sheet-details)
-  - [Assigning the Control Group](#assigning-the-control-group)
-  - [Applying Custom Normalization](#applying-custom-normalization)
-- [Features Sheet](#features-sheet-details)
-
 # Configuration Files
 The pipeline requires that you identify:
 - Your preferences for the pipeline and its steps via the *Run Config*
@@ -28,23 +18,23 @@ tiny get-template
 
 #### Run Config
 
-The overall behavior of the pipeline and its steps is determined by the Run Config file (`run_config.yml`). This YAML file can be edited using a simple text editor. Within it you must specify the location of your Paths file (`paths.yml`). All other settings are optional.
+The overall behavior of the pipeline and its steps is determined by the Run Config file (`run_config.yml`). This YAML file can be edited using a simple text editor. Within it you must specify the location of your Paths file (`paths.yml`). All other settings are optional. [More info](#run-config-details).
 
 #### Paths File
 
-The locations of pipeline file inputs are defined in the Paths file (`paths.yml`). This YAML file includes paths to your Samples and Features Sheets, in addition to your bowtie index prefix (optional) and the final run directory name. The final run directory will contain all pipeline outputs. The directory name is prepended with the `run_name` and current date and time to keep outputs separate.
+The locations of pipeline file inputs are defined in the Paths file (`paths.yml`). This YAML file includes paths to your Samples and Features Sheets, in addition to your bowtie index prefix (optional) and the final run directory name. The final run directory will contain all pipeline outputs. The directory name is prepended with the `run_name` and current date and time to keep outputs separate. [More info](#paths-file-details).
 
 #### Samples Sheet
 
-To make it simple to specify your fastq files and their locations, along with associated sample names and replicate numbers, we provide a CSV file (`samples.csv`) which can be modified in a spreadsheet editor such as Microsoft Excel or LibreOffice Calc.
+To make it simple to specify your fastq files and their locations, along with associated sample names and replicate numbers, we provide a CSV file (`samples.csv`) which can be modified in a spreadsheet editor such as Microsoft Excel or LibreOffice Calc. [More info](#samples-sheet-details).
 
 #### Features Sheet
 
-Small RNAs can often be classified by sequence characteristics, such as length, strandedness, and 5' nucleotide. We provide a Features Sheet (`features.csv`) in which you can define selection rules to more accurately capture counts for the small RNAs of interest.
+Small RNAs can often be classified by sequence characteristics, such as length, strandedness, and 5' nucleotide. We provide a Features Sheet (`features.csv`) in which you can define selection rules to more accurately capture counts for the small RNAs of interest. [More info](#features-sheet-details).
 
 #### Plot Stylesheet
 
-Matplotlib styles can be optionally overridden using a matplotlib stylesheet. The stylesheet provided by `tiny get-template` contains the defaults utilized by Plotter. Please keep in mind that Plotter overrides these defaults for a few specific elements of certain plots. Feel free to reach out if there is a plot style you wish to override but find you are unable to.
+Plot styles can be optionally overridden using a matplotlibrc stylesheet. [More info](#plot-stylesheet-details).
 
 ## Run Config Details
 
@@ -89,3 +79,6 @@ Rules that match features in the first stage of selection will be used in a seco
 Since this configuration file is primarily used by Counter, we recommend you see [Counter's documentation](Counter.md) for a more thorough explanation.
 
 >**Tip**: Don't worry about having duplicate Feature Source entries. Each GFF file is parsed only once.
+
+## Plot Stylesheet Details
+Matplotlib uses key-value "rc parameters" to allow for customization of its properties and styles, and one way these parameters can be specified is with a [matplotlibrc file](https://matplotlib.org/3.4.3/tutorials/introductory/customizing.html#a-sample-matplotlibrc-file), which we simply refer to as the Plot Stylesheet. You can obtain a copy of the default stylesheet used by Plotter with the command `tiny get-template`. Please keep in mind that Plotter overrides these defaults for a few specific elements of certain plots. Feel free to reach out if there is a plot style you wish to override but find you are unable to.
