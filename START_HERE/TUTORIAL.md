@@ -43,7 +43,7 @@ Bowtie indexes were built during this run because paths.yml didn't define an `eb
 
 ## Running Your Data
 Expected runtime: ~15-30 minutes
-1. Edit your GFF or GTF file so that it meets the requirements outlined in [the README](../README.md#user-provided-input-file-requirements)
+1. Edit your GFF or GTF file so that it meets the requirements outlined in [the README](../README.md#requirements-for-user-provided-input-files)
 2. Move your GFF and genome sequence files into the reference_data directory.
 3. Edit features.csv and samples.csv file for your datasets and selection parameters.
 4. Edit paths.yml as follows:
