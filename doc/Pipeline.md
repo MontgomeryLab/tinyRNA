@@ -20,7 +20,15 @@ The `tiny run` command performs a comprehensive analysis of your [input files](.
 ## Resuming a Prior Analysis
 The Counter and Plotter steps offer a wide variety of options for refining your analysis. You might find that repeat analyses are required while tuning these options to your goals. However, the earlier pipeline steps (fastp, Collapser, and bowtie) handle the largest volume of data and are resource intensive, so you can save time by reusing their outputs for subsequent analyses. One could do so by running the later steps individually (e.g. `tiny-count`, `tiny-deseq.r`, and `tiny-plot`), but assembling their commandline inputs by hand is labor-intensive and prone to spelling mistakes.
 
-The commands `tiny recount` and `tiny replot` seek to solve this problem. As discussed in the [Run Config documentation](Configuration.md#the-processed-run-config), the Run Directory for each end-to-end analysis will contain a processed Run Config, and this is the file that determines the behavior of a resume run. 
+The commands `tiny recount` and `tiny replot` seek to solve this problem. As discussed in the [Run Config documentation](Configuration.md#the-processed-run-config), the Run Directory for each end-to-end analysis will contain a processed Run Config, and this is the file that determines the behavior of a resume run.
+
+<figure align="center">
+    <figcaption><b>tiny recount</b></figcaption>
+    <img src="../images/recount.png" width="90%" alt="recount"/>
+    <figcaption><b>tiny replot</b></figcaption>
+    <img src="../images/replot.png" width="65%" alt="replot"/>
+</figure>
+
 
 You can modify the behavior of a resume run by changing settings in:
 - The **processed** Run Config
