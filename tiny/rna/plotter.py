@@ -6,12 +6,12 @@ directory, you may find it easier to instead run `tiny replot` within that run d
 """
 import multiprocessing as mp
 import pandas as pd
+import numpy as np
 import itertools
 import traceback
 import argparse
 import os.path
 import sys
-import csv
 import re
 
 from collections import defaultdict
@@ -351,12 +351,14 @@ def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, show_un
             dge_list = list(dges.index[dges[pair] < pval])
             class_dges = classes.loc[dge_list]
 
-            grp_args = []
-            for cls in uniq_classes:
-                grp_args.append(list(class_dges.index[class_dges == cls]))
+            grp_args = [class_dges.index[class_dges == cls].tolist() for cls in uniq_classes]
 
-            labels = ['p ≥ %g' % pval] + uniq_classes
-            sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2], view_lims, *grp_args,
+            layer_order = np.argsort([len(grp) for grp in grp_args])[::-1]
+            sorted_grps = np.array(grp_args, dtype=object)[layer_order].tolist()
+            sorted_clss = np.array(uniq_classes, dtype=object)[layer_order].tolist()
+
+            labels = ['p ≥ %g' % pval] + sorted_clss
+            sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2], view_lims, *sorted_grps,
                                           log_norm=True, labels=labels, rasterized=RASTER)
             sscat.set_title('%s vs %s' % (p1, p2))
             sscat.set_xlabel("Log$_{2}$ normalized reads in " + p1)
