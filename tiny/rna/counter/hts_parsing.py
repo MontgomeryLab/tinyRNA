@@ -286,6 +286,12 @@ class CaseInsensitiveAttrs(Dict[str, tuple]):
         raise NotImplementedError(f"CaseInsensitiveAttrs does not support {stack()[1].function}")
 
 
+# Type aliases for human readability
+TaggedFeature = Tuple[str, Optional[str]]
+ClassTable = AliasTable = DefaultDict[TaggedFeature, Tuple[str]]
+StepVector = HTSeq.GenomicArrayOfSets
+
+
 class ReferenceTables:
     """A GFF parser which builds feature, alias, and class reference tables
 
@@ -325,12 +331,13 @@ class ReferenceTables:
         self.matches = defaultdict(set)
         self.classes = defaultdict(set)
         self.alias = defaultdict(set)
+        self.tags = defaultdict(set)
 
         # Patch the GFF attribute parser to support comma separated attribute value lists
         setattr(HTSeq.features, 'parse_GFF_attribute_string', parse_GFF_attribute_string)
 
     @report_execution_time("GFF parsing")
-    def get(self) -> Tuple['HTSeq.GenomicArray', Dict[str, tuple], Dict[str, tuple]]:
+    def get(self) -> Tuple[StepVector, AliasTable, ClassTable]:
         """Initiates GFF parsing and returns the resulting reference tables"""
 
         for file, alias_keys in self.gff_files.items():
@@ -381,7 +388,7 @@ class ReferenceTables:
         # Descend tree until the descendent is found in the matches table
         # This is because ancestor feature(s) may have been filtered
         for ancestor in tree[::-1]:
-            if ancestor in self.matches or ancestor == feature_id:
+            if self.was_matched(ancestor) or ancestor == feature_id:
                 return ancestor
 
     def add_feature(self, feature_id: str, row, matches: defaultdict, classes: set) -> List[tuple]:
@@ -415,6 +422,7 @@ class ReferenceTables:
 
         self.classes[root_id] |= classes
         self.matches[root_id] |= matches
+        self.tags[root_id[0]].add(root_id)
 
         # Optimization opportunity: only append intervals for features that have matches.
         # This is skipped to make testing more succinct; if users routinely use --all-features,
@@ -422,7 +430,7 @@ class ReferenceTables:
         if iv not in self.intervals[root_id]:
             self.intervals[root_id].append(iv)
 
-    def add_alias(self, roots: List[str], alias_keys: List[str], row_attrs: CaseInsensitiveAttrs) -> None:
+    def add_alias(self, roots: List[tuple], alias_keys: List[str], row_attrs: CaseInsensitiveAttrs) -> None:
         """Add feature's aliases to the root ancestor's alias set"""
 
         for alias_key in alias_keys:
@@ -460,7 +468,7 @@ class ReferenceTables:
             raise ValueError(f"{feature_id} defines multiple parents which is unsupported at this time.")
         if len(parent_attr) == 0 or parent is None:
             return feature_id
-        if (parent not in self.matches              # If parent is not a root feature
+        if (not self.was_matched(parent)            # If parent is not a root feature
                 and parent not in self.parents      # If parent doesn't have a parent itself
                 and parent not in self.filtered):   # If parent was not a filtered root feature
             raise ValueError(f"Feature ID {parent} is referenced as a parent before being defined. Please "
@@ -484,7 +492,7 @@ class ReferenceTables:
         if row.iv.chrom not in self.feats.chrom_vectors:
             self.feats.add_chrom(row.iv.chrom)
 
-    def finalize_tables(self) -> Tuple['HTSeq.GenomicArray', Dict[str, tuple], Dict[str, tuple]]:
+    def finalize_tables(self) -> Tuple[StepVector, AliasTable, ClassTable]:
         """Convert sets to sorted tuples for performance, hashability, and deterministic outputs"""
 
         self._finalize_classes()
@@ -549,6 +557,13 @@ class ReferenceTables:
 
         return total_feats
 
+    def was_matched(self, untagged_id):
+        """Checks if the feature ID previously matched on identity, regardless of whether
+        the matching rule was tagged or untagged."""
+
+        # any() will short circuit on first match when provided a generator function
+        return any(tagged_id in self.matches for tagged_id in self.tags[untagged_id])
+
     @classmethod
     def _set_filters(cls, **kwargs):
         """Assigns inclusive filter values"""
@@ -568,10 +583,3 @@ class ReferenceTables:
         if len(cls.type_filter):
             select &= row.type in cls.type_filter
         return select
-
-class Feature:
-    def __init__(self, gff_row):
-        self.id = gff_row.attr["ID"][0]
-        self.root_id = self.id
-        self.tags = defaultdict(set)
-        self.aliases = []
