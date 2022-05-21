@@ -25,7 +25,7 @@ class LibraryStats:
         self.library = {'Name': 'Unassigned', 'File': 'Unassigned', 'Norm': '1'}
         self.out_prefix = out_prefix
         self.diags = Diagnostics(out_prefix) if report_diags else None
-        self.norm = prefs['normalize_by_hits'].lower() in ['t', 'true']
+        self.norm = prefs['normalize_by_hits']
 
         self.feat_counts = Counter()
         self.rule_counts = Counter()
@@ -52,10 +52,9 @@ class LibraryStats:
         self.mapped_nt_len[nt5][seqlen] += read_counts
 
         return {
-            'loci_count': loci_counts,
             'read_count': read_counts,
             'corr_count': corr_counts,
-            'assigned_feats': set(),
+            'assigned_ftags': set(),
             'assigned_reads': 0,
             'nt5_counts': self.assigned_nt_len[nt5],
             'seq_length': seqlen,
@@ -68,18 +67,18 @@ class LibraryStats:
     def count_bundle_assignments(self, bundle: dict, aln: dict, assignments: dict, n_candidates: int) -> None:
         """Called for each alignment for each read"""
 
-        feat_count = len(assignments)
+        asgn_count = len(assignments)
         corr_count = bundle['corr_count']
 
-        if feat_count == 0:
+        if asgn_count == 0:
             self.library_stats['Total Unassigned Reads'] += corr_count
         else:
-            fcorr_count = corr_count / feat_count if self.norm else corr_count
-            bundle['assigned_reads'] += fcorr_count * feat_count
-            bundle['assigned_feats'] |= assignments.keys()
+            fcorr_count = corr_count / asgn_count if self.norm else corr_count
+            bundle['assigned_reads'] += fcorr_count * asgn_count
+            bundle['assigned_ftags'] |= assignments.keys()
 
-            for feat, matched_rules in assignments.items():
-                self.feat_counts[feat] += fcorr_count
+            for ftag, matched_rules in assignments.items():
+                self.feat_counts[ftag] += fcorr_count
                 rcorr_count = fcorr_count / len(matched_rules)
                 for rule in matched_rules:
                     self.rule_counts[rule] += rcorr_count
@@ -91,8 +90,7 @@ class LibraryStats:
     def finalize_bundle(self, bundle: dict) -> None:
         """Called at the conclusion of processing each multiple-alignment bundle"""
 
-        # assigned_feat_count = len(bundle['assigned_feats'])
-        assigned_feat_count = len({feat[0] for feat in bundle['assigned_feats']})
+        assigned_feat_count = len({feat[0] for feat in bundle['assigned_ftags']})
 
         if assigned_feat_count == 0:
             self.library_stats['Total Unassigned Sequences'] += 1

@@ -59,7 +59,10 @@ def get_args():
                         help='Produce diagnostic information about uncounted/eliminated '
                              'selection elements.')
 
-    return arg_parser.parse_args()
+    args = arg_parser.parse_args()
+    setattr(args, 'normalize_by_hits', args.normalize_by_hits.lower() in ['t', 'true'])
+
+    return args
 
 
 def load_samples(samples_csv: str, is_pipeline: bool) -> List[Dict[str, str]]:
