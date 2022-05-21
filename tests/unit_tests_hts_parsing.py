@@ -134,11 +134,11 @@ class MyTestCase(unittest.TestCase):
         feature_source = {self.short_gff_file: ["sequence_name"]}
         feature_selector = self.selector_with_template([
             # Fails to match due to Identity selector
-            {'Identity': ("Class", "CSR"), 'Strand': "sense", 'Hierarchy': 1, 'nt5end': "all", 'Length': "20",
-             'Strict': 'full'},
+            {'Identity': ("Class", "CSR"), 'Strand': "sense", 'Hierarchy': 1, 'Tag': '', 'nt5end': "all",
+             'Strict': 'full', 'Length': "20"},
             # Match
-            {'Identity': ("biotype", "snoRNA"), 'Strand': "antisense", 'Hierarchy': 2, 'nt5end': "all", 'Length': "30",
-             'Strict': 'partial'}
+            {'Identity': ("biotype", "snoRNA"), 'Strand': "antisense", 'Hierarchy': 2, 'Tag': '', 'nt5end': "all",
+             'Strict': 'partial', 'Length': "30"}
         ])
         iv = HTSeq.GenomicInterval("I", 3746, 3909, "-")
         kwargs = {'all_features': True}
@@ -146,10 +146,11 @@ class MyTestCase(unittest.TestCase):
         feats, alias, classes = ReferenceTables(feature_source, feature_selector, **kwargs).get()
         steps = list(feats[iv].array[iv.start:iv.end].get_steps(values_only=True))
 
+        tagged_feat_id = ("Gene:WBGene00023193", '')
         self.assertEqual((type(feats), type(alias), type(classes)), (HTSeq.GenomicArrayOfSets, dict, dict))
-        self.assertEqual(steps, [{("Gene:WBGene00023193", '-', ((1, 2, IntervalPartialMatch(iv)),))}])
-        self.assertEqual(alias, {'Gene:WBGene00023193': ('Y74C9A.6',)})
-        self.assertEqual(classes, {'Gene:WBGene00023193': ('additional_class', 'unknown')})
+        self.assertEqual(steps, [{(tagged_feat_id, '-', ((1, 2, IntervalPartialMatch(iv)),))}])
+        self.assertEqual(alias, {tagged_feat_id: ('Y74C9A.6',)})
+        self.assertEqual(classes, {tagged_feat_id: ('additional_class', 'unknown')})
 
     """Repeating the previous test with all_features=False should produce the same result for this test."""
 
@@ -158,21 +159,22 @@ class MyTestCase(unittest.TestCase):
         feature_source = {self.short_gff_file: ["sequence_name"]}
         feature_selector = self.selector_with_template([
             # Fails to match due to Identity selector
-            {'Identity': ("Class", "CSR"), 'Strand': "sense", 'Hierarchy': 1, 'nt5end': "all", 'Length': "20",
+            {'Identity': ("Class", "CSR"), 'Strand': "sense", 'Hierarchy': 1, 'Tag': '', 'nt5end': "all", 'Length': "20",
              'Strict': 'full'},
             # Match
-            {'Identity': ("biotype", "snoRNA"), 'Strand': "antisense", 'Hierarchy': 2, 'nt5end': "all", 'Length': "30",
-             'Strict': 'partial'}
+            {'Identity': ("biotype", "snoRNA"), 'Strand': "antisense", 'Hierarchy': 2, 'Tag': '', 'nt5end': "all",
+             'Strict': 'partial', 'Length': "30"}
         ])
         iv = HTSeq.GenomicInterval("I", 3746, 3909, "-")
 
         feats, alias, classes = ReferenceTables(feature_source, feature_selector, **kwargs).get()
         steps = list(feats[iv].array[iv.start:iv.end].get_steps(values_only=True))
 
+        tagged_feat_id = ("Gene:WBGene00023193", '')
         self.assertEqual((type(feats), type(alias), type(classes)), (HTSeq.GenomicArrayOfSets, dict, dict))
-        self.assertEqual(steps, [{("Gene:WBGene00023193", '-', ((1, 2, IntervalPartialMatch(iv)),))}])
-        self.assertEqual(alias, {'Gene:WBGene00023193': ('Y74C9A.6',)})
-        self.assertEqual(classes, {'Gene:WBGene00023193': ('additional_class', 'unknown')})
+        self.assertEqual(steps, [{(tagged_feat_id, '-', ((1, 2, IntervalPartialMatch(iv)),))}])
+        self.assertEqual(alias, {tagged_feat_id: ('Y74C9A.6',)})
+        self.assertEqual(classes, {tagged_feat_id: ('additional_class', 'unknown')})
 
     """Does ReferenceTables.get() raise ValueError when a Name Attribute refers to a missing attribute?"""
 
@@ -231,7 +233,7 @@ class MyTestCase(unittest.TestCase):
         kwargs = {'all_features': True}
 
         # Notice: screening for "ID" name attribute happens earlier in counter.load_config()
-        expected_alias = {"Gene:WBGene00023193": ("Gene:WBGene00023193", "additional_class", "unknown")}
+        expected_alias = {("Gene:WBGene00023193",''): ("Gene:WBGene00023193", "additional_class", "unknown")}
         _, alias, _ = ReferenceTables(feature_source, MockFeatureSelector([]), **kwargs).get()
 
         self.assertDictEqual(alias, expected_alias)
@@ -269,7 +271,7 @@ class MyTestCase(unittest.TestCase):
 
         expected_matches = [
             set(),
-            {('Gene:WBGene00023193', '-', ((0, 1, ivm), (1, 2, ivm), (2, 3, ivm)))},
+            {(('Gene:WBGene00023193', ''), '-', ((0, 1, ivm), (1, 2, ivm), (2, 3, ivm)))},
             set()
         ]
 
@@ -287,12 +289,14 @@ class MyTestCase(unittest.TestCase):
 
         _, alias, _ = ReferenceTables(feature_source, mock_selector, **kwargs).get()
 
+        # For tables that store features in tagged form
+        GrandParent, Parent2, Sibling = ('GrandParent', ''), ('Parent2', ''), ('Sibling', '')
         # Ancestor depth of 1, distinct aliases
-        self.assertEqual(alias['Parent2'], ('Child2Name', 'Parent2Name'))
+        self.assertEqual(alias[Parent2], ('Child2Name', 'Parent2Name'))
         # Ancestor depth >1, shared aliases
-        self.assertEqual(alias['GrandParent'], ('SharedName',))
+        self.assertEqual(alias[GrandParent], ('SharedName',))
         # Siblings, distinct aliases
-        self.assertEqual(alias['Sibling'], ('Sibling1', 'Sibling2', 'Sibling3'))
+        self.assertEqual(alias[Sibling], ('Sibling1', 'Sibling2', 'Sibling3'))
 
     """If all_features=False and there are no identity matches, are discontinuous features correctly omitted?"""
 
@@ -326,12 +330,15 @@ class MyTestCase(unittest.TestCase):
         RT_instance = ReferenceTables(feature_source, feature_selector, **kwargs)
         _ = RT_instance.get()
 
+        # For tables that store features in tagged form
+        GrandParent, Parent2, Sibling = ('GrandParent', ''), ('Parent2', ''), ('Sibling', '')
+
         # Ancestor depth of 1
-        self.assertEqual(RT_instance.intervals['GrandParent'], [grandparent_iv, parent_w_p_iv, child_w_gp_iv])
+        self.assertEqual(RT_instance.intervals[GrandParent], [grandparent_iv, parent_w_p_iv, child_w_gp_iv])
         # Ancestor depth >1
-        self.assertEqual(RT_instance.intervals['Parent2'], [parent_2, child_2])
+        self.assertEqual(RT_instance.intervals[Parent2], [parent_2, child_2])
         # Siblings
-        self.assertEqual(RT_instance.intervals['Sibling'], [sib_1, sib_2, sib_3])
+        self.assertEqual(RT_instance.intervals[Sibling], [sib_1, sib_2, sib_3])
 
     """Does ReferenceTables.get() properly merge identity matches of discontinuous features with the root feature?
     Identity match tuples now also contain the corresponding rule's IntervalSelector, so extra bookkeeping must be
@@ -356,18 +363,21 @@ class MyTestCase(unittest.TestCase):
         rule2_sib = {f"{iv.start}:{iv.end}":    (1, 3, IntervalPartialMatch(iv))    for iv in sib_ivs}
         rule3_sib = {f"{iv.start}:{iv.end}":    (2, 0, IntervalPartialMatch(iv))    for iv in sib_ivs}
 
-        expected = [{('GrandParent', '-', rule1_gp['0:20'])},
-                    {('GrandParent', '-', rule1_gp['0:20']),  ('Parent2',     '-', rule1_p2["19:30"])},
-                    {('Parent2',     '-', rule1_p2["19:30"])},
-                    {('Parent2',     '-', rule1_p2["19:30"]), ('GrandParent', '-', rule1_gp['29:40'])},
-                    {('GrandParent', '-', rule1_gp['29:40'])},
-                    {('GrandParent', '-', rule1_gp['29:40']), ('Parent2',     '-', rule1_p2['39:50'])},
-                    {('Parent2',     '-', rule1_p2['39:50'])},
+        # For tables that store features in tagged form
+        GrandParent, Parent2, Sibling = ('GrandParent',''), ('Parent2',''), ('Sibling','')
+
+        expected = [{(GrandParent, '-', rule1_gp['0:20'])},
+                    {(GrandParent, '-', rule1_gp['0:20']),  (Parent2,     '-', rule1_p2["19:30"])},
+                    {(Parent2,     '-', rule1_p2["19:30"])},
+                    {(Parent2,     '-', rule1_p2["19:30"]), (GrandParent, '-', rule1_gp['29:40'])},
+                    {(GrandParent, '-', rule1_gp['29:40'])},
+                    {(GrandParent, '-', rule1_gp['29:40']), (Parent2,     '-', rule1_p2['39:50'])},
+                    {(Parent2,     '-', rule1_p2['39:50'])},
                     set(),
-                    {('Sibling',     '-', (rule3_sib['99:110'],  rule2_sib['99:110']))},  # Note: sorted by rank, not rule index
-                    {('Sibling',     '-', (rule3_sib['110:120'], rule2_sib['110:120']))},
+                    {(Sibling,     '-', (rule3_sib['99:110'],  rule2_sib['99:110']))},  # Note: sorted by rank, not rule index
+                    {(Sibling,     '-', (rule3_sib['110:120'], rule2_sib['110:120']))},
                     set(),
-                    {('Sibling',     '-', (rule3_sib['139:150'], rule2_sib['139:150']))},
+                    {(Sibling,     '-', (rule3_sib['139:150'], rule2_sib['139:150']))},
                     set()]
 
         feats, _, _ = ReferenceTables(feature_source, feature_selector, **rt_kwargs).get()
@@ -382,17 +392,20 @@ class MyTestCase(unittest.TestCase):
         feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
         feature_selector = self.selector_with_template(helpers.rules_template)
 
-        expected = [{('GrandParent', '-', ())},
-                    {('Parent2', '-', ()), ('GrandParent', '-', ())},
-                    {('Parent2', '-', ())},
-                    {('Parent2', '-', ()), ('GrandParent', '-', ())},
-                    {('GrandParent', '-', ())},
-                    {('Parent2', '-', ()), ('GrandParent', '-', ())},
-                    {('Parent2', '-', ())},
+        # For tables that store features in tagged form
+        GrandParent, Parent2, Sibling = ('GrandParent', ''), ('Parent2', ''), ('Sibling', '')
+
+        expected = [{(GrandParent, '-', ())},
+                    {(Parent2, '-', ()), (GrandParent, '-', ())},
+                    {(Parent2, '-', ())},
+                    {(Parent2, '-', ()), (GrandParent, '-', ())},
+                    {(GrandParent, '-', ())},
+                    {(Parent2, '-', ()), (GrandParent, '-', ())},
+                    {(Parent2, '-', ())},
                     set(),
-                    {('Sibling', '-', ())},
+                    {(Sibling, '-', ())},
                     set(),
-                    {('Sibling', '-', ())},
+                    {(Sibling, '-', ())},
                     set()]
 
         feats, _, _, = ReferenceTables(feature_source, feature_selector, **kwargs).get()
@@ -410,12 +423,14 @@ class MyTestCase(unittest.TestCase):
         feature_selector = self.selector_with_template([selection_rule])
 
         child2_iv = HTSeq.GenomicInterval('I', 39, 50, '-')
-        exp_alias = {'Child2': ('Child2Name',)}
-        exp_feats = [set(), {('Child2', '-', ((0, 0, IntervalPartialMatch(child2_iv)),))}, set()]
-        exp_intervals = {'Child2': [child2_iv]}
-        exp_classes = {'Child2': ('NA',)}
-        exp_filtered = {"GrandParent", "ParentWithGrandparent", "Parent2", "Child1", "Sibling"}
-        exp_parents = {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'}
+        child2_tagged_id = ('Child2', '')
+
+        exp_alias =     {child2_tagged_id: ('Child2Name',)}
+        exp_feats =     [set(), {(child2_tagged_id, '-', ((0, 0, IntervalPartialMatch(child2_iv)),))}, set()]
+        exp_intervals = {child2_tagged_id: [child2_iv]}
+        exp_classes =   {child2_tagged_id: ('NA',)}
+        exp_filtered =  {"GrandParent", "ParentWithGrandparent", "Parent2", "Child1", "Sibling"}
+        exp_parents =   {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'}
 
         rt = ReferenceTables(feature_source, feature_selector, **kwargs)
         feats, alias, classes = rt.get()
@@ -438,12 +453,14 @@ class MyTestCase(unittest.TestCase):
         feature_selector = self.selector_with_template([selection_rule])
 
         child1_iv = HTSeq.GenomicInterval('I', 29, 40, '-')
-        exp_alias = {'Child1': ('SharedName',)}
-        exp_feats = [set(), {('Child1', '-', ((0, 0, IntervalPartialMatch(child1_iv)),))}, set()]
-        exp_intervals = {'Child1': [child1_iv]}
-        exp_classes = {'Child1': ('NA',)}
-        exp_filtered = {"GrandParent", "ParentWithGrandparent", "Parent2", "Child2", "Sibling"}
-        exp_parents = {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'}
+        child1_tagged_id = ('Child1', '')
+
+        exp_alias =     {child1_tagged_id: ('SharedName',)}
+        exp_feats =     [set(), {(child1_tagged_id, '-', ((0, 0, IntervalPartialMatch(child1_iv)),))}, set()]
+        exp_intervals = {child1_tagged_id: [child1_iv]}
+        exp_classes =   {child1_tagged_id: ('NA',)}
+        exp_filtered =  {"GrandParent", "ParentWithGrandparent", "Parent2", "Child2", "Sibling"}
+        exp_parents =   {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'}
 
         rt = ReferenceTables(feature_source, feature_selector, **kwargs)
         feats, alias, classes = rt.get()
@@ -467,10 +484,13 @@ class MyTestCase(unittest.TestCase):
         rt = ReferenceTables(feature_source, feature_selector, **kwargs)
         feats, alias, classes = rt.get()
 
+        # For tables that store features in their tagged form
+        GrandParent, Parent2, Sibling = ('GrandParent', ''), ('Parent2', ''), ('Sibling', '')
+
         self.assertEqual(rt.filtered, {'Child1', 'Child2'})
         self.assertEqual(rt.parents, {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'})
-        self.assertEqual(list(classes.keys()), ['GrandParent', 'Parent2', 'Sibling'])
-        self.assertEqual(list(alias.keys()), ['GrandParent', 'Parent2', 'Sibling'])
+        self.assertEqual(list(classes.keys()), [GrandParent, Parent2, Sibling])
+        self.assertEqual(list(alias.keys()), [GrandParent, Parent2, Sibling])
         self.assertEqual(len(list(feats.chrom_vectors['I']['.'].array.get_steps(values_only=True))), 8)
         self.clear_filters()
 
