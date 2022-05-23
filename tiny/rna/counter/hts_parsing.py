@@ -396,23 +396,19 @@ class ReferenceTables:
         This method should not be called if the feature lacks identity matches and self.all_features is False."""
 
         root_id = self.get_root_feature(feature_id, row.attr)
-        root_id = (root_id,)
+        tagged_id = (root_id, '')  # Default is untagged
         roots = []
 
         if len(matches):
             for tag, matches in matches.items():
-                if tag is not None:
-                    tagged_id = root_id + (tag,)
-                else:
-                    tagged_id = root_id
-
+                tagged_id = (root_id, tag)
                 self._add_feature_to_tables(tagged_id, classes, matches, row.iv)
                 roots.append(tagged_id)
         else:
             # Features without identity matches are saved if self.all_features
             assert self.all_features is True, "Feat. without identity matches was saved but self.all_features is False"
-            self._add_feature_to_tables(root_id, classes, set(), row.iv)
-            roots.append(root_id)
+            self._add_feature_to_tables(tagged_id, classes, set(), row.iv)
+            roots.append(tagged_id)
 
         # Multiple roots returned if multi-tagged OR both tagged and untagged matches
         return roots
@@ -448,7 +444,7 @@ class ReferenceTables:
         for ident, rule_indexes in self.selector.inv_ident.items():
             if row_attrs.contains_ident(ident):
                 for index in rule_indexes:
-                    # Non-tagged rule matches will be pooled under None
+                    # Non-tagged matches are pooled under '' empty string
                     tag = self.selector.rules_table[index]['Tag']
                     identity_matches[tag].add((
                          index,
