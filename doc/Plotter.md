@@ -97,7 +97,7 @@ Differential gene expression between sample groups can be visualized with this p
 </p>
 
 #### Customization
-The p value cutoff can be changed using the [Run Config or commandline arguments](Parameters.md#p-value). The control condition is plotted on the x-axis, but it must be specified in your Samples Sheet prior to running an end-to-end or `tiny recount` analysis. If using `tiny replot`, is not possible to change a no-control experiment to a control experiment and have these changes reflected in these plots. This is because the pipeline's DGE step must be aware of the control condition in order to perform the proper directional comparisons.
+The P value cutoff can be changed using the [Run Config or commandline arguments](Parameters.md#p-value). The control condition is plotted on the x-axis, but it must be specified in your Samples Sheet prior to running an end-to-end or `tiny recount` analysis. If using `tiny replot`, is not possible to change a no-control experiment to a control experiment and have these changes reflected in these plots. This is because the pipeline's DGE step must be aware of the control condition in order to perform the proper directional comparisons.
 
 ## sample_avg_scatter_by_dge_class
 The previous plot type can be extended to group and color differentially expressed features by class. Classes are sorted by abundance before plotting to maximize representation.
@@ -106,4 +106,4 @@ The previous plot type can be extended to group and color differentially express
     <img src="../images/plots/scatter_dge_class.jpeg" width="80%" alt="sample_avg_scatter_by_dge_class"/>
 </p>
 
->**Tip**: if you find that two groups of interest share proximity and are too similar in color, you can change the group's color with a modified Plot Stylesheet. The groups will be colored in the same order they are listed in the legend (not including p value outgroup), e.g. changing the color of the ERGO group means changing the 5th color in the `axes.prop_cycle` color cycler.
+>**Tip**: if you find that two groups of interest share proximity and are too similar in color, you can change the group's color with a modified Plot Stylesheet. The groups will be colored in the same order they are listed in the legend (not including P value outgroup), e.g. changing the color of the ERGO group means changing the 5th color in the `axes.prop_cycle` color cycler. See the [config file documentation](Configuration.md#plot-stylesheet-details) for more info about the Plot Stylesheet.

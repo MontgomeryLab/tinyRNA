@@ -245,12 +245,12 @@ Required arguments:
                         • replicate_scatter: A scatter plot comparing
                           replicates for all count files given.
                         • sample_avg_scatter_by_dge: A scatter plot comparing
-                          all sample groups, with significantly different
-                          genes highlighted. P-value can be set using
-                          --p-value. Default: 0.05.
+                          all sample groups, with differentially expressed
+                          small RNAs highlighted based on P value cutoff.
                         • sample_avg_scatter_by_dge_class: A scatter plot
-                          comparing all sample groups, with classes and
-                          significantly different genes highlighted.
+                          comparing all sample groups, with classes
+                          highlighted for differentially expressed small RNAs
+                          based on P value cutoff.
 
 Input files produced by Counter:
   -rc RAW_COUNTS, --raw-counts RAW_COUNTS
@@ -273,7 +273,7 @@ Optional arguments:
   -o PREFIX, --out-prefix PREFIX
                         Prefix to use for output filenames.
   -pv VALUE, --p-value VALUE
-                        P-value to use in DGE scatter plots.
+                        P value to use in DGE scatter plots.
   -s MPLSTYLE, --style-sheet MPLSTYLE
                         Optional matplotlib style sheet to use for plots.
   -v, --vector-scatter  Produce scatter plots with vectorized points (slower).
@@ -383,8 +383,8 @@ Simple static plots are generated from the outputs of Counter and DESeq2. These 
 - **rule_charts**: A barchart showing percentages of counts per rule.
 - **class_charts**: A barchart showing percentages of counts per class.
 - **replicate_scatter**: A scatter plot comparing replicates for all count files given.
-- **sample_avg_scatter_by_dge**: A scatter plot comparing all sample groups, with significantly different genes highlighted.
-- **sample_avg_scatter_by_dge_class**: A scatter plot comparing all sample groups, with classes and significantly different genes highlighted.
+- **sample_avg_scatter_by_dge**: A scatter plot comparing all sample groups, with differentially expressed small RNAs highlighted based on P value cutoff.
+- **sample_avg_scatter_by_dge_class**: A scatter plot comparing all sample groups, with classes highlighted for differentially expressed small RNAs based on P value cutoff.
 
 |                                                                                                    |                                                                                       |
 |:--------------------------------------------------------------------------------------------------:|:-------------------------------------------------------------------------------------:|

@@ -53,7 +53,7 @@ def get_args():
     optional_args.add_argument('-o', '--out-prefix', metavar='PREFIX',
                                help='Prefix to use for output filenames.')
     optional_args.add_argument('-pv', '--p-value', metavar='VALUE', default=0.05, type=float,
-                               help='P-value to use in DGE scatter plots.')
+                               help='P value to use in DGE scatter plots.')
     optional_args.add_argument('-s', '--style-sheet', metavar='MPLSTYLE',
                                default=resource_filename('tiny', 'templates/tinyrna-light.mplstyle'),
                                help='Optional matplotlib style sheet to use for plots.')
@@ -75,10 +75,10 @@ def get_args():
                                "• class_charts: A barchart showing percentages of counts by Class attribute.\n"
                                "• replicate_scatter: A scatter plot comparing replicates for all count files given.\n"
                                "• sample_avg_scatter_by_dge: A scatter plot comparing all sample groups, with "
-                               "significantly different genes highlighted. P-value can be set using --p-value. "
-                               "Default: 0.05.\n"
-                               "• sample_avg_scatter_by_dge_class: A scatter plot comparing all sample groups, with "
-                               "classes and significantly different genes highlighted.")
+                                    "differentially expressed small RNAs highlighted based on P value cutoff.\n"
+                               "• sample_avg_scatter_by_dge_class: A scatter plot comparing all sample groups, "
+                                    "with classes highlighted for differentially expressed small RNAs "
+                                    "based on P value cutoff.")
 
     return parser.parse_args()
 
