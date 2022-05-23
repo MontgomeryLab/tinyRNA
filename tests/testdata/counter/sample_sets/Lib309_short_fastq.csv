@@ -1,2 +1,2 @@
-Input FASTQ Files,Sample/Group Name,Replicate number,Control,Normalization
+Input FASTQ Files,Sample/Group Name,Replicate Number,Control,Normalization
 ../../../../START_HERE/fastq_files/Lib309_test.fastq,mut-16(pk710),1,true,

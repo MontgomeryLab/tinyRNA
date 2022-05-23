@@ -89,7 +89,7 @@ Plotter will only produce the list of plots requested.
 |----------------|----------------------|
 | plot_pval:     | `--p-value VALUE`    |
 
-Feature expression levels are considered significant if their p value is less than this value, with a default of 0.05. Non-differentially expressed features are plotted as gray points, and in `sample_avg_scatter_by_dge_class`, these points are not colored by feature class.
+Feature expression levels are considered significant if their P value is less than this value, with a default of 0.05. Non-differentially expressed features are plotted as gray points, and in `sample_avg_scatter_by_dge_class`, these points are not colored by feature class.
 
 ### Style Sheet
  | Run Config Key | Paths File Key    | Commandline Argument     |

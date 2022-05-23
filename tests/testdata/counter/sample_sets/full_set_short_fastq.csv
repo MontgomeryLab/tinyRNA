@@ -1,4 +1,4 @@
-Input FASTQ Files,Sample/Group Name,Replicate number,Control,Normalization
+Input FASTQ Files,Sample/Group Name,Replicate Number,Control,Normalization
 ../../../../START_HERE/fastq_files/Lib303_test.fastq,N2,1,true,
 ../../../../START_HERE/fastq_files/Lib304_test.fastq,N2,2,,
 ../../../../START_HERE/fastq_files/Lib305_test.fastq,N2,3,,

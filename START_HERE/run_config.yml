@@ -284,7 +284,7 @@ plot_requests:
   - 'sample_avg_scatter_by_dge'
   - 'sample_avg_scatter_by_dge_class'
 
-##-- You can set a custom p-value to use in DGE scatter plots. Default: 0.05 --##
+##-- You can set a custom P value to use in DGE scatter plots. Default: 0.05 --##
 plot_pval: ~
 
 ##-- If True: scatter plot points will be vectorized. If False, only points are raster --##
