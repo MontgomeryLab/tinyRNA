@@ -85,7 +85,7 @@ tiny get-template
 | Bowtie indexes (optional) <sup>2</sup>                                                     | ebwt                    | Must be small indexes (.ebwtl indexes are not supported)                                                                                                                                |
 
 <br/><sup>1</sup> `tiny-count` accepts SAM files via your **Samples Sheet** when invoked as an individual step, but they must have been produced by the pipeline. SAM files from other sources are not currently supported. 
-<br/><sup>2</sup> Bowtie indexes can be created for you. See the [Paths File documentation](doc/Configuration.md#paths-file-details).
+<br/><sup>2</sup> Bowtie indexes can be created for you. See the [Paths File documentation](doc/Configuration.md#building-bowtie-indexes).
 
 ### Running an End-to-End Analysis
 In most cases you will use this toolset as an end-to-end pipeline. This will run a full, standard small RNA sequencing data analysis according to your configuration file. Before starting, you will need the following:
@@ -152,6 +152,8 @@ tiny-collapse [-h] -i FASTQFILE -o OUTPREFIX [-t THRESHOLD] [-c]
                           {prefix}_collapsed_lowcounts.fa
 ```
 ##### Counter
+[Full documentation for Counter can be found here](doc/Counter.md).
+
 ```
 tiny-count [-h] -i SAMPLES -c CONFIGFILE -o OUTPUTPREFIX
                   [-sf [SOURCE [SOURCE ...]]] [-tf [TYPE [TYPE ...]]] [-nn]
@@ -218,6 +220,8 @@ tiny-deseq.r --input-file COUNTFILE --outfile-prefix PREFIX [--control CONDITION
           rows/features which have a zero count in all samples."
 ```
 ##### Plotter
+[Full documentation for Plotter can be found here](doc/Plotter.md).
+
 ```
 tiny-plot [-rc RAW_COUNTS] [-nc NORM_COUNTS] [-ss STAT]
           [-dge COMPARISON [COMPARISON ...]] [-len 5P_LEN [5P_LEN ...]]
@@ -241,12 +245,12 @@ Required arguments:
                         • replicate_scatter: A scatter plot comparing
                           replicates for all count files given.
                         • sample_avg_scatter_by_dge: A scatter plot comparing
-                          all sample groups, with significantly different
-                          genes highlighted. P-value can be set using
-                          --p-value. Default: 0.05.
+                          all sample groups, with differentially expressed
+                          small RNAs highlighted based on P value cutoff.
                         • sample_avg_scatter_by_dge_class: A scatter plot
-                          comparing all sample groups, with classes and
-                          significantly different genes highlighted.
+                          comparing all sample groups, with classes
+                          highlighted for differentially expressed small RNAs
+                          based on P value cutoff.
 
 Input files produced by Counter:
   -rc RAW_COUNTS, --raw-counts RAW_COUNTS
@@ -269,7 +273,7 @@ Optional arguments:
   -o PREFIX, --out-prefix PREFIX
                         Prefix to use for output filenames.
   -pv VALUE, --p-value VALUE
-                        P-value to use in DGE scatter plots.
+                        P value to use in DGE scatter plots.
   -s MPLSTYLE, --style-sheet MPLSTYLE
                         Optional matplotlib style sheet to use for plots.
   -v, --vector-scatter  Produce scatter plots with vectorized points (slower).
@@ -379,8 +383,15 @@ Simple static plots are generated from the outputs of Counter and DESeq2. These 
 - **rule_charts**: A barchart showing percentages of counts per rule.
 - **class_charts**: A barchart showing percentages of counts per class.
 - **replicate_scatter**: A scatter plot comparing replicates for all count files given.
-- **sample_avg_scatter_by_dge**: A scatter plot comparing all sample groups, with significantly different genes highlighted.
-- **sample_avg_scatter_by_dge_class**: A scatter plot comparing all sample groups, with classes and significantly different genes highlighted.
+- **sample_avg_scatter_by_dge**: A scatter plot comparing all sample groups, with differentially expressed small RNAs highlighted based on P value cutoff.
+- **sample_avg_scatter_by_dge_class**: A scatter plot comparing all sample groups, with classes highlighted for differentially expressed small RNAs based on P value cutoff.
+
+|                                                                                                    |                                                                                       |
+|:--------------------------------------------------------------------------------------------------:|:-------------------------------------------------------------------------------------:|
+| <img src="images/plots/scatter_dge_class.jpeg" width="90%" alt="sample_avg_scatter_by_dge_class"/> | <img src="images/plots/scatter_dge.jpeg" width="90%" alt="rule_chart with 10 rules"/> |
+|      <img src="images/plots/class_charts.jpeg" width="90%" alt="sample_avg_scatter_by_dge"/>       |       <img src="images/plots/rule_charts.jpeg" width="90%" alt="rule_charts"/>        |
+|           <img src="images/plots/len_dist_short.jpeg" width="90%" alt="len_dist 20-30"/>           |     <img src="images/plots/len_dist_long.jpeg" width="90%" alt="len_dist 15-60"/>     |
+
 
 DESeq2 can also produce a standard **PCA plot** from variance stabilizing transformed feature counts. This output is controlled by the `dge_pca_plot` key in the Run Config.
 

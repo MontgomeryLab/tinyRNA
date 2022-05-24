@@ -6,12 +6,12 @@ directory, you may find it easier to instead run `tiny replot` within that run d
 """
 import multiprocessing as mp
 import pandas as pd
+import numpy as np
 import itertools
 import traceback
 import argparse
 import os.path
 import sys
-import csv
 import re
 
 from collections import defaultdict
@@ -53,7 +53,7 @@ def get_args():
     optional_args.add_argument('-o', '--out-prefix', metavar='PREFIX',
                                help='Prefix to use for output filenames.')
     optional_args.add_argument('-pv', '--p-value', metavar='VALUE', default=0.05, type=float,
-                               help='P-value to use in DGE scatter plots.')
+                               help='P value to use in DGE scatter plots.')
     optional_args.add_argument('-s', '--style-sheet', metavar='MPLSTYLE',
                                default=resource_filename('tiny', 'templates/tinyrna-light.mplstyle'),
                                help='Optional matplotlib style sheet to use for plots.')
@@ -75,10 +75,10 @@ def get_args():
                                "• class_charts: A barchart showing percentages of counts by Class attribute.\n"
                                "• replicate_scatter: A scatter plot comparing replicates for all count files given.\n"
                                "• sample_avg_scatter_by_dge: A scatter plot comparing all sample groups, with "
-                               "significantly different genes highlighted. P-value can be set using --p-value. "
-                               "Default: 0.05.\n"
-                               "• sample_avg_scatter_by_dge_class: A scatter plot comparing all sample groups, with "
-                               "classes and significantly different genes highlighted.")
+                                    "differentially expressed small RNAs highlighted based on P value cutoff.\n"
+                               "• sample_avg_scatter_by_dge_class: A scatter plot comparing all sample groups, "
+                                    "with classes highlighted for differentially expressed small RNAs "
+                                    "based on P value cutoff.")
 
     return parser.parse_args()
 
@@ -351,12 +351,14 @@ def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, show_un
             dge_list = list(dges.index[dges[pair] < pval])
             class_dges = classes.loc[dge_list]
 
-            grp_args = []
-            for cls in uniq_classes:
-                grp_args.append(list(class_dges.index[class_dges == cls]))
+            grp_args = [class_dges.index[class_dges == cls].tolist() for cls in uniq_classes]
 
-            labels = ['p ≥ %g' % pval] + uniq_classes
-            sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2], view_lims, *grp_args,
+            layer_order = np.argsort([len(grp) for grp in grp_args])[::-1]
+            sorted_grps = np.array(grp_args, dtype=object)[layer_order].tolist()
+            sorted_clss = np.array(uniq_classes, dtype=object)[layer_order].tolist()
+
+            labels = ['p ≥ %g' % pval] + sorted_clss
+            sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2], view_lims, *sorted_grps,
                                           log_norm=True, labels=labels, rasterized=RASTER)
             sscat.set_title('%s vs %s' % (p1, p2))
             sscat.set_xlabel("Log$_{2}$ normalized reads in " + p1)
