@@ -20,11 +20,12 @@ class Features:
 
     _instance = None  # Singleton
 
-    def __init__(self, features: HTSeq.GenomicArrayOfSets, aliases: dict, classes: dict):
+    def __init__(self, features: HTSeq.GenomicArrayOfSets, aliases: dict, classes: dict, tags: dict):
         if Features._instance is None:
-            Features.chrom_vectors = features.chrom_vectors  # For interval -> feature ID lookups
+            Features.chrom_vectors = features.chrom_vectors  # For interval -> feature record tuple lookups
             Features.aliases = aliases                       # For feature ID -> preferred feature name lookups
             Features.classes = classes                       # For feature ID -> class lookups
+            Features.tags = tags                             # For feature ID -> match IDs
             Features._instance = self
 
 

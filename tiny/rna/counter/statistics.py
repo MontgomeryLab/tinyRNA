@@ -25,7 +25,7 @@ class LibraryStats:
         self.library = {'Name': 'Unassigned', 'File': 'Unassigned', 'Norm': '1'}
         self.out_prefix = out_prefix
         self.diags = Diagnostics(out_prefix) if report_diags else None
-        self.norm = prefs['normalize_by_hits']
+        self.norm = prefs.get('normalize_by_hits', True)
 
         self.feat_counts = Counter()
         self.rule_counts = Counter()
@@ -186,7 +186,7 @@ class MergedStatsManager:
 
 class FeatureCounts(MergedStat):
     def __init__(self, Features_obj):
-        self.feat_counts_df = pd.DataFrame(index=Features_obj.classes.keys())
+        self.feat_counts_df = pd.DataFrame(index=set.union(*Features_obj.tags.values()))
         self.classes = Features_obj.classes
         self.aliases = Features_obj.aliases
         self.norm_prefs = {}
@@ -223,9 +223,9 @@ class FeatureCounts(MergedStat):
         # Sort columns by title and round all counts to 2 decimal places
         summary = self.sort_cols_and_round(self.feat_counts_df)
         # Add Feature Name column, which is the feature alias (default is Feature ID if no alias exists)
-        summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(self.aliases.get(feat, ''))))
+        summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(self.aliases.get(feat[0], ''))))
         # Add Classes column for classes associated with the given feature
-        feat_class_map = lambda feat: ', '.join(self.classes[feat])
+        feat_class_map = lambda feat: ', '.join(self.classes[feat[0]])
         summary.insert(1, "Feature Class", summary.index.map(feat_class_map))
         # Sort by index, make index its own column, and rename it to Feature ID
         summary = summary.sort_index().reset_index().rename(columns={"level_0": "Feature ID", "level_1": "Tag"})

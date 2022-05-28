@@ -51,7 +51,7 @@ def get_args():
                              'files listed in your Samples Sheet.')
     arg_parser.add_argument('-a', '--all-features', action='store_true',
                         help='Represent all features in output counts table, '
-                             'regardless of counts or identity rules.')
+                             'even if they did not match a Select for / with value.')
     arg_parser.add_argument('-p', '--is-pipeline', action='store_true',
                         help='Indicates that counter was invoked as part of a pipeline run '
                              'and that input files should be sourced as such.')

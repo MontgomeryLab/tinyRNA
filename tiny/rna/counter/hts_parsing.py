@@ -4,7 +4,7 @@ import sys
 import re
 
 from collections import Counter, defaultdict, namedtuple
-from typing import Tuple, List, Dict, Iterator, Optional, DefaultDict
+from typing import Tuple, List, Dict, Iterator, Optional, DefaultDict, Set
 from inspect import stack
 
 from tiny.rna.util import report_execution_time, make_filename
@@ -287,9 +287,9 @@ class CaseInsensitiveAttrs(Dict[str, tuple]):
 
 
 # Type aliases for human readability
-TaggedFeature = Tuple[str, Optional[str]]
-ClassTable = AliasTable = DefaultDict[TaggedFeature, Tuple[str]]
+ClassTable = AliasTable = DefaultDict[str, Tuple[str]]
 StepVector = HTSeq.GenomicArrayOfSets
+Tags = DefaultDict[str, Set[str]]
 
 
 class ReferenceTables:
@@ -324,20 +324,20 @@ class ReferenceTables:
         self.selector = feature_selector
         self._set_filters(**kwargs)
         self.gff_files = gff_files
-
-        self.feats = HTSeq.GenomicArrayOfSets("auto", stranded=False)
-        self.parents, self.filtered = {}, set()
-        self.intervals = defaultdict(list)
-        self.matches = defaultdict(set)
-        self.classes = defaultdict(set)
-        self.alias = defaultdict(set)
-        self.tags = defaultdict(set)
+        # ----------------------------------------------------------- Primary Key:
+        self.feats = HTSeq.GenomicArrayOfSets("auto", stranded=False)   # Root Match ID
+        self.parents, self.filtered = {}, set()                         # Original Feature ID
+        self.intervals = defaultdict(list)                              # Root Feature ID
+        self.matches = defaultdict(set)                                 # Root Match ID
+        self.classes = defaultdict(set)                                 # Root Feature ID
+        self.alias = defaultdict(set)                                   # Root Feature ID
+        self.tags = defaultdict(set)                                    # Root Feature ID -> Root Match ID
 
         # Patch the GFF attribute parser to support comma separated attribute value lists
         setattr(HTSeq.features, 'parse_GFF_attribute_string', parse_GFF_attribute_string)
 
     @report_execution_time("GFF parsing")
-    def get(self) -> Tuple[StepVector, AliasTable, ClassTable]:
+    def get(self) -> Tuple[StepVector, AliasTable, ClassTable, dict]:
         """Initiates GFF parsing and returns the resulting reference tables"""
 
         for file, alias_keys in self.gff_files.items():
@@ -351,7 +351,7 @@ class ReferenceTables:
                         continue
                     try:
                         # Grab the primary key for this feature
-                        feature_id = row.attr["ID"][0]
+                        feature_id = self.get_feature_id(row)
                         # Get feature's classes and identity match tuples
                         matches, classes = self.get_matches_and_classes(row.attr)
                         # Only add features with identity matches if all_features is False
@@ -359,9 +359,9 @@ class ReferenceTables:
                             self.exclude_row(row)
                             continue
                         # Add feature data to root ancestor in the reference tables
-                        roots = self.add_feature(feature_id, row, matches, classes)
+                        root_id = self.add_feature(feature_id, row, matches, classes)
                         # Add alias to root ancestor if it is unique
-                        self.add_alias(roots, alias_keys, row.attr)
+                        self.add_alias(root_id, alias_keys, row.attr)
                     except KeyError as ke:
                         raise ValueError(f"Feature {row.name} does not contain a {ke} attribute.")
             except Exception as e:
@@ -371,68 +371,62 @@ class ReferenceTables:
 
         return self.finalize_tables()
 
-    def get_root_feature(self, feature_id: str, row_attrs: CaseInsensitiveAttrs) -> str:
-        """Returns the ID of the feature's root parent if one exists. Otherwise the original ID is returned."""
+    def get_root_feature(self, lineage: list) -> str:
+        """Returns the highest feature ID in the ancestral tree which passed stage 1 selection.
+        The original feature ID is returned if there are no valid ancestors."""
 
+        # Descend tree until the descendent is found in the matches table
+        # This is because ancestor feature(s) may have been filtered
+        for ancestor in lineage[::-1]:
+            if self.was_matched(ancestor):
+                return ancestor
+        else:
+            return lineage[0]  # Default: the original feature_id
+
+    def get_feature_ancestors(self, feature_id: str, row_attrs: CaseInsensitiveAttrs):
         if "Parent" not in row_attrs:
-            return feature_id
+            return [feature_id]
 
         parent_id = self.get_row_parent(feature_id, row_attrs)
-        tree = [feature_id, parent_id]
+        lineage = [feature_id, parent_id]
 
         # Climb ancestral tree until the root parent is found
         while parent_id in self.parents:
             parent_id = self.parents[parent_id]
-            tree.append(parent_id)
+            lineage.append(parent_id)
 
-        # Descend tree until the descendent is found in the matches table
-        # This is because ancestor feature(s) may have been filtered
-        for ancestor in tree[::-1]:
-            if self.was_matched(ancestor) or ancestor == feature_id:
-                return ancestor
+        return lineage
 
-    def add_feature(self, feature_id: str, row, matches: defaultdict, classes: set) -> List[tuple]:
-        """Adds the feature and its interval under the root ancestor's (optionally tagged) ID
-        This method should not be called if the feature lacks identity matches and self.all_features is False."""
+    def add_feature(self, feature_id: str, row, matches: defaultdict, classes: set) -> str:
+        """Adds the feature to classes and intervals tables under its root ID, and to the matches table
+        under its tagged ID. Note: matches are later assigned to intervals in _finalize_features()"""
 
-        root_id = self.get_root_feature(feature_id, row.attr)
-        tagged_id = (root_id, '')  # Default is untagged
-        roots = []
+        lineage = self.get_feature_ancestors(feature_id, row.attr)
+        root_id = self.get_root_feature(lineage)
 
-        if len(matches):
+        self.classes[root_id] |= classes
+        if row.iv not in self.intervals[root_id]:
+            self.intervals[root_id].append(row.iv)
+
+        if matches:
             for tag, matches in matches.items():
                 tagged_id = (root_id, tag)
-                self._add_feature_to_tables(tagged_id, classes, matches, row.iv)
-                roots.append(tagged_id)
+                self.tags[root_id].add(tagged_id)
+                self.matches[tagged_id] |= matches
         else:
             # Features without identity matches are saved if self.all_features
             assert self.all_features is True, "Feat. without identity matches was saved but self.all_features is False"
-            self._add_feature_to_tables(tagged_id, classes, set(), row.iv)
-            roots.append(tagged_id)
+            self.tags[root_id].add((root_id, ''))
+            self.matches[(root_id, '')] |= set()
 
-        # Multiple roots returned if multi-tagged OR both tagged and untagged matches
-        return roots
+        return root_id
 
-    def _add_feature_to_tables(self, root_id, classes, matches, iv):
-        """Records the feature's classes, matches, and intervals under the specified root ID"""
-
-        self.classes[root_id] |= classes
-        self.matches[root_id] |= matches
-        self.tags[root_id[0]].add(root_id)
-
-        # Optimization opportunity: only append intervals for features that have matches.
-        # This is skipped to make testing more succinct; if users routinely use --all-features,
-        # it would be wise to add this check here, but at the cost of rewriting many unit tests.
-        if iv not in self.intervals[root_id]:
-            self.intervals[root_id].append(iv)
-
-    def add_alias(self, roots: List[tuple], alias_keys: List[str], row_attrs: CaseInsensitiveAttrs) -> None:
+    def add_alias(self, root_id: str, alias_keys: List[str], row_attrs: CaseInsensitiveAttrs) -> None:
         """Add feature's aliases to the root ancestor's alias set"""
 
         for alias_key in alias_keys:
             for row_val in row_attrs[alias_key]:
-                for root_id in roots:
-                    self.alias[root_id].add(row_val)
+                self.alias[root_id].add(row_val)
 
     def get_matches_and_classes(self, row_attrs: CaseInsensitiveAttrs) -> Tuple[DefaultDict, set]:
         """Grabs classes and match tuples from attributes that match identity rules"""
@@ -447,9 +441,9 @@ class ReferenceTables:
                     # Non-tagged matches are pooled under '' empty string
                     tag = self.selector.rules_table[index]['Tag']
                     identity_matches[tag].add((
-                         index,
-                         self.selector.rules_table[index]['Hierarchy'],
-                         self.selector.rules_table[index]['Strict']
+                        index,
+                        self.selector.rules_table[index]['Hierarchy'],
+                        self.selector.rules_table[index]['Strict']
                     ))
         # -> identity_matches: {tag: (rule, rank, strict), ...}
         return identity_matches, classes
@@ -464,7 +458,7 @@ class ReferenceTables:
             raise ValueError(f"{feature_id} defines multiple parents which is unsupported at this time.")
         if len(parent_attr) == 0 or parent is None:
             return feature_id
-        if (not self.was_matched(parent)            # If parent is not a root feature
+        if (parent not in self.tags                 # If parent is not a root feature
                 and parent not in self.parents      # If parent doesn't have a parent itself
                 and parent not in self.filtered):   # If parent was not a filtered root feature
             raise ValueError(f"Feature ID {parent} is referenced as a parent before being defined. Please "
@@ -485,41 +479,48 @@ class ReferenceTables:
         self.filtered.add(feature_id)
         if "Parent" in row.attr:
             self.parents[feature_id] = self.get_row_parent(feature_id, row.attr)
-        if row.iv.chrom not in self.feats.chrom_vectors:
-            self.feats.add_chrom(row.iv.chrom)
+        self.chrom_vector_setdefault(row.iv.chrom)
 
-    def finalize_tables(self) -> Tuple[StepVector, AliasTable, ClassTable]:
-        """Convert sets to sorted tuples for performance, hashability, and deterministic outputs"""
+    def finalize_tables(self) -> Tuple[StepVector, AliasTable, ClassTable, dict]:
+        """Convert sets to sorted tuples for performance, hashability, and deterministic outputs
+        Matches must also be assigned to intervals now that all intervals are known"""
 
         self._finalize_classes()
         self._finalize_aliases()
         self._finalize_features()
 
-        if self.get_feats_table_size() == 0 or len(self.classes) == 0:
-            raise ValueError("No features or classes were retained while parsing your GFF file.\n"
+        if self.get_feats_table_size() == 0 and self.all_features is False:
+            raise ValueError("No features were retained while parsing your GFF file.\n"
                              "This may be due to a lack of features matching 'Select for...with value...'")
 
-        return self.feats, self.alias, self.classes
+        return self.feats, self.alias, self.classes, self.tags
 
     def _finalize_features(self):
-        """Performs final accounting of discontinuous features and adds feature records to the StepVector"""
+        """Assigns matches to their corresponding intervals by populating StepVector with match tuples"""
 
         for root_id, unmerged_sub_ivs in self.intervals.items():
             merged_sub_ivs = self._merge_adjacent_subintervals(unmerged_sub_ivs)
 
-            # Optimization opportunity: for features whose interval selectors are all "partial",
-            # eliminate all but the highest ranking match in each feature family to reduce
-            # loop count in phase 1 selection.
+            for tagged_id in self.tags[root_id]:
+                # Optimization opportunity: for features whose interval selectors are all "partial",
+                # eliminate all but the highest ranking match in each feature family to reduce
+                # loop count in stage 2 selection.
 
-            # Sort match tuples by rank for more efficient feature selection
-            sorted_matches = sorted(self.matches[root_id], key=lambda x: x[1])
+                # Non-matching feature IDs are tagged if all_features = True
+                if not self.matches[tagged_id]:
+                    self.chrom_vector_setdefault(merged_sub_ivs[0].chrom)
+                    continue
 
-            for sub_iv in merged_sub_ivs:
-                finalized_match_tuples = self.selector.build_interval_selectors(sub_iv, sorted_matches.copy())
-                self.feats[sub_iv] += (root_id, sub_iv.strand, tuple(finalized_match_tuples))
+                # Sort match tuples by rank for more efficient feature selection
+                sorted_matches = sorted(self.matches[tagged_id], key=lambda x: x[1])
+
+                for sub_iv in merged_sub_ivs:
+                    finalized_match_tuples = self.selector.build_interval_selectors(sub_iv, sorted_matches.copy())
+                    self.feats[sub_iv] += (tagged_id, sub_iv.strand, tuple(finalized_match_tuples))
 
     @staticmethod
-    def _merge_adjacent_subintervals(unmerged_sub_ivs):
+    def _merge_adjacent_subintervals(unmerged_sub_ivs: List[HTSeq.GenomicInterval]) -> list:
+        """Combines overlapping and adjacent elements in the provided list of subintervals"""
 
         # Sort intervals so that adjacencies are adjacent by index
         unmerged_sub_ivs = iter(sorted(unmerged_sub_ivs, key=lambda x: x.start))
@@ -538,18 +539,19 @@ class ReferenceTables:
         return merged_ivs
 
     def _finalize_aliases(self):
-        self.alias = {feat: tuple(sorted(aliases)) for feat, aliases in self.alias.items()}
+        self.alias = {feat: tuple(sorted(aliases, key=str.lower)) for feat, aliases in self.alias.items()}
 
     def _finalize_classes(self):
-        self.classes = {feat: tuple(sorted(classes)) for feat, classes in self.classes.items()}
+        self.classes = {feat: tuple(sorted(classes, key=str.lower)) for feat, classes in self.classes.items()}
 
     def get_feats_table_size(self) -> int:
         """Returns the sum of features across all chromosomes and strands"""
 
         total_feats = 0
+        empty_size = 3  # steps: start, empty set, end
         for chrom in self.feats.chrom_vectors:
             for strand in self.feats.chrom_vectors[chrom]:
-                total_feats += self.feats.chrom_vectors[chrom][strand].array.num_steps()
+                total_feats += self.feats.chrom_vectors[chrom][strand].array.num_steps() - empty_size
 
         return total_feats
 
@@ -558,7 +560,26 @@ class ReferenceTables:
         the matching rule was tagged or untagged."""
 
         # any() will short circuit on first match when provided a generator function
-        return any(tagged_id in self.matches for tagged_id in self.tags[untagged_id])
+        return any(tagged_id in self.matches for tagged_id in self.tags.get(untagged_id, ()))
+
+    def chrom_vector_setdefault(self, chrom):
+        """Behaves like dict.setdefault() for chrom_vectors. Even though chrom_vectors are
+        dictionaries themselves, calling setdefault on them will break the GenomicArrayOfSets"""
+
+        if chrom not in self.feats.chrom_vectors:
+            self.feats.add_chrom(chrom)
+
+    @staticmethod
+    def get_feature_id(row):
+        id_collection = row.attr["ID"]
+
+        if len(id_collection) == 0:
+            raise ValueError("A feature's ID attribute cannot be empty. This value is required.")
+        if len(id_collection) > 1:
+            err_msg = "A feature's ID attribute cannot contain multiple values. Only one ID per feature is allowed."
+            raise ValueError(err_msg)
+
+        return id_collection[0]
 
     @classmethod
     def _set_filters(cls, **kwargs):
