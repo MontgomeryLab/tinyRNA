@@ -58,7 +58,7 @@ class CounterTests(unittest.TestCase):
         # Represents an unparsed Samples Sheet row
         # Key is the user-facing column header
         self.csv_samp_row_dict = {
-            'Input FastQ Files': "test_file.fastq",
+            'Input FASTQ Files': "test_file.fastq",
             'Sample/Group Name': "test_group",
             'Replicate Number':  "0",
             'Control':           "",
@@ -69,7 +69,7 @@ class CounterTests(unittest.TestCase):
         # It does NOT represent the parsed result of loading the Samples Sheet
         _row = self.csv_samp_row_dict
         self.parsed_samp_rule = {
-            'File':          _row['Input FastQ Files'],
+            'File':          _row['Input FASTQ Files'],
             'Group':         _row['Sample/Group Name'],
             'Replicate':     _row['Replicate Number'],
             'Control':       _row['Control'],
@@ -84,7 +84,7 @@ class CounterTests(unittest.TestCase):
             header = ['Select for...', 'with value...', 'Alias by...', 'Tag', 'Hierarchy',
                       'Strand', "5' End Nucleotide", 'Length', 'Match', 'Feature Source']
         elif type == "samples.csv":
-            header = ['Input FastQ Files', 'Sample/Group Name', 'Replicate Number', 'Control', 'Normalization']
+            header = ['Input FASTQ Files', 'Sample/Group Name', 'Replicate Number', 'Control', 'Normalization']
 
         csv_string = io.StringIO()
         writer = csv.DictWriter(csv_string, fieldnames=header)
@@ -109,7 +109,7 @@ class CounterTests(unittest.TestCase):
         inp_file = "test.fastq"
         exp_file = from_here(mock_samp_sheet_path, "test_aligned_seqs.sam")
 
-        row = dict(self.csv_samp_row_dict, **{'Input FastQ Files': inp_file})
+        row = dict(self.csv_samp_row_dict, **{'Input FASTQ Files': inp_file})
         csv = self.csv("samples.csv", [row])
 
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
@@ -125,7 +125,7 @@ class CounterTests(unittest.TestCase):
         inp_file = "test.fastq"
         exp_file = "test_aligned_seqs.sam"
 
-        row = dict(self.csv_samp_row_dict, **{'Input FastQ Files': inp_file})
+        row = dict(self.csv_samp_row_dict, **{'Input FASTQ Files': inp_file})
         csv = self.csv("samples.csv", [row])
 
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
@@ -150,7 +150,7 @@ class CounterTests(unittest.TestCase):
 
     def test_load_samples_sam(self):
         sam_filename = "/fake/absolute/path/sample.sam"
-        row = dict(self.csv_samp_row_dict, **{'Input FastQ Files': sam_filename})
+        row = dict(self.csv_samp_row_dict, **{'Input FASTQ Files': sam_filename})
         csv = self.csv("samples.csv", [row])
 
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
@@ -164,7 +164,7 @@ class CounterTests(unittest.TestCase):
 
     def test_load_samples_nonabs_path(self):
         bad = "./dne.sam"
-        row = dict(self.csv_samp_row_dict, **{'Input FastQ Files': bad})
+        row = dict(self.csv_samp_row_dict, **{'Input FASTQ Files': bad})
         csv = self.csv("samples.csv", [row])
 
         expected_error = "The following file must be expressed as an absolute path:\n" + bad
@@ -178,7 +178,7 @@ class CounterTests(unittest.TestCase):
 
     def test_load_samples_bad_extension(self):
         bad = "./bad_extension.xyz"
-        row = dict(self.csv_samp_row_dict, **{'Input FastQ Files': bad})
+        row = dict(self.csv_samp_row_dict, **{'Input FASTQ Files': bad})
         csv = self.csv("samples.csv", [row])
 
         expected_error = r"The filenames defined in your Samples Sheet must have a \.fastq\(\.gz\) or \.sam extension\.\n" \
