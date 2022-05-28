@@ -165,7 +165,7 @@ def class_charts(raw_class_counts: pd.DataFrame, mapped_reads: pd.Series, out_pr
         kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
     """
 
-    class_props = get_proportions_df(raw_class_counts, mapped_reads, scale)
+    class_props = get_proportions_df(raw_class_counts, mapped_reads, "_UNASSIGNED_", scale)
     max_prop = class_props.max().max()
 
     for library in raw_class_counts:
@@ -193,7 +193,7 @@ def rule_charts(rule_counts: pd.DataFrame, out_prefix: str, scale=2, **kwargs):
     mapped_reads = rule_counts.loc['Mapped Reads']
     rule_counts.drop('Mapped Reads', inplace=True)
 
-    rule_props = get_proportions_df(rule_counts, mapped_reads, scale)
+    rule_props = get_proportions_df(rule_counts, mapped_reads, "N", scale)
     max_prop = rule_props.max().max()
 
     for library, prop_df in rule_props.items():
@@ -206,20 +206,21 @@ def rule_charts(rule_counts: pd.DataFrame, out_prefix: str, scale=2, **kwargs):
         chart.figure.savefig(pdf_name)
 
 
-def get_proportions_df(counts_df: pd.DataFrame, mapped_totals: pd.Series, scale=2):
+def get_proportions_df(counts_df: pd.DataFrame, mapped_totals: pd.Series, un: str, scale=2):
     """Calculates proportions and unassigned counts, rounded according to scale
     Unassigned counts below scale threshold will be replaced with NaNs
 
     Args:
         counts_df: A dataframe of counts with library columns
         mapped_totals: A series of mapped totals indexed by library
+        un: The name to use for the unassigned counts proportion
         scale: The desired number of *percentage* decimal places"""
 
     scale += 2  # Convert percentage scale to decimal scale
     props = (counts_df / mapped_totals).round(scale)
 
     unassigned_threshold = round(10 ** (-1 * scale), scale)
-    un_ds = (1 - props.sum()).round(scale).rename('N')
+    un_ds = (1 - props.sum()).round(scale).rename(un)
     un_ds = un_ds.mask(un_ds < unassigned_threshold)
     return pd.concat([pd.DataFrame(un_ds).T, props])
 
@@ -349,6 +350,7 @@ def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, show_un
 
     if classes is not None:
         uniq_classes = sorted(list(pd.unique(classes)))
+        aqplt.set_dge_class_legend_style()
 
         if not show_unknown and 'unknown' in uniq_classes:
             uniq_classes.remove('unknown')
@@ -368,6 +370,7 @@ def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, show_un
             sscat.set_title('%s vs %s' % (p1, p2))
             sscat.set_xlabel("Log$_{2}$ normalized reads in " + p1)
             sscat.set_ylabel("Log$_{2}$ normalized reads in " + p2)
+            sscat.get_legend().set_bbox_to_anchor((1, 1))
             pdf_name = make_filename([output_prefix, pair, 'scatter_by_dge_class'], ext='.pdf')
             sscat.figure.savefig(pdf_name)
 
