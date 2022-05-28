@@ -251,8 +251,20 @@ class plotterlib:
 
         self.set_square_scatter_view_lims(gscat, view_lims)
         self.set_scatter_ticks(gscat)
-        gscat.legend(labels=labels)
+        gscat.legend(labels=labels, bbox_to_anchor=(1, 1))
         return gscat
+
+    def set_dge_class_legend_style(self):
+        expand_width_inches = 3
+
+        fig, scatter = self.reuse_subplot("scatter")
+        transFigure = fig.transFigure
+        orig_axes_pos = scatter.get_position().transformed(transFigure)
+        orig_fig_size = fig.get_size_inches()
+
+        # Expand the figure and move the plot back to its original position at left
+        fig.set_size_inches(orig_fig_size[0] + expand_width_inches, orig_fig_size[1])
+        scatter.set_position(orig_axes_pos.transformed(transFigure.inverted()))
 
     @staticmethod
     def get_scatter_view_lims(counts_df: pd.DataFrame) -> Tuple[float, float]:
@@ -583,6 +595,7 @@ class LenDistCache(CacheBase):
 class ScatterCache(CacheBase):
     def __init__(self):
         self.fig, self.ax = plt.subplots(figsize=(8, 8), tight_layout=False)
+        self.ax.set_aspect('equal')
 
     def get(self) -> Tuple[plt.Figure, plt.Axes]:
         if len(self.ax.collections): self.ax.collections.clear()
