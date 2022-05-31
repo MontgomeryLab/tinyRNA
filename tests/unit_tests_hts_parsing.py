@@ -134,11 +134,11 @@ class MyTestCase(unittest.TestCase):
         feature_source = {self.short_gff_file: ["sequence_name"]}
         feature_selector = self.selector_with_template([
             # Fails to match due to Identity selector
-            {'Identity': ("Class", "CSR"), 'Strand': "sense", 'Hierarchy': 1, 'nt5end': "all", 'Length': "20",
-             'Strict': 'full'},
+            {'Identity': ("Class", "CSR"), 'Strand': "sense", 'Hierarchy': 1, 'Tag': '', 'nt5end': "all",
+             'Strict': 'full', 'Length': "20"},
             # Match
-            {'Identity': ("biotype", "snoRNA"), 'Strand': "antisense", 'Hierarchy': 2, 'nt5end': "all", 'Length': "30",
-             'Strict': 'partial'}
+            {'Identity': ("biotype", "snoRNA"), 'Strand': "antisense", 'Hierarchy': 2, 'Tag': '', 'nt5end': "all",
+             'Strict': 'partial', 'Length': "30"}
         ])
         iv = HTSeq.GenomicInterval("I", 3746, 3909, "-")
         kwargs = {'all_features': True}
@@ -146,10 +146,11 @@ class MyTestCase(unittest.TestCase):
         feats, alias, classes = ReferenceTables(feature_source, feature_selector, **kwargs).get()
         steps = list(feats[iv].array[iv.start:iv.end].get_steps(values_only=True))
 
+        tagged_feat_id = ("Gene:WBGene00023193", '')
         self.assertEqual((type(feats), type(alias), type(classes)), (HTSeq.GenomicArrayOfSets, dict, dict))
-        self.assertEqual(steps, [{("Gene:WBGene00023193", '-', ((1, 2, IntervalPartialMatch(iv)),))}])
-        self.assertEqual(alias, {'Gene:WBGene00023193': ('Y74C9A.6',)})
-        self.assertEqual(classes, {'Gene:WBGene00023193': ('additional_class', 'unknown')})
+        self.assertEqual(steps, [{(("Gene:WBGene00023193", ''), '-', ((1, 2, IntervalPartialMatch(iv)),))}])
+        self.assertEqual(alias, {"Gene:WBGene00023193": ('Y74C9A.6',)})
+        self.assertEqual(classes, {"Gene:WBGene00023193": ('additional_class', 'unknown')})
 
     """Repeating the previous test with all_features=False should produce the same result for this test."""
 
@@ -158,11 +159,11 @@ class MyTestCase(unittest.TestCase):
         feature_source = {self.short_gff_file: ["sequence_name"]}
         feature_selector = self.selector_with_template([
             # Fails to match due to Identity selector
-            {'Identity': ("Class", "CSR"), 'Strand': "sense", 'Hierarchy': 1, 'nt5end': "all", 'Length': "20",
+            {'Identity': ("Class", "CSR"), 'Strand': "sense", 'Hierarchy': 1, 'Tag': '', 'nt5end': "all", 'Length': "20",
              'Strict': 'full'},
             # Match
-            {'Identity': ("biotype", "snoRNA"), 'Strand': "antisense", 'Hierarchy': 2, 'nt5end': "all", 'Length': "30",
-             'Strict': 'partial'}
+            {'Identity': ("biotype", "snoRNA"), 'Strand': "antisense", 'Hierarchy': 2, 'Tag': '', 'nt5end': "all",
+             'Strict': 'partial', 'Length': "30"}
         ])
         iv = HTSeq.GenomicInterval("I", 3746, 3909, "-")
 
@@ -170,9 +171,9 @@ class MyTestCase(unittest.TestCase):
         steps = list(feats[iv].array[iv.start:iv.end].get_steps(values_only=True))
 
         self.assertEqual((type(feats), type(alias), type(classes)), (HTSeq.GenomicArrayOfSets, dict, dict))
-        self.assertEqual(steps, [{("Gene:WBGene00023193", '-', ((1, 2, IntervalPartialMatch(iv)),))}])
-        self.assertEqual(alias, {'Gene:WBGene00023193': ('Y74C9A.6',)})
-        self.assertEqual(classes, {'Gene:WBGene00023193': ('additional_class', 'unknown')})
+        self.assertEqual(steps, [{(("Gene:WBGene00023193", ''), '-', ((1, 2, IntervalPartialMatch(iv)),))}])
+        self.assertEqual(alias, {"Gene:WBGene00023193": ('Y74C9A.6',)})
+        self.assertEqual(classes, {"Gene:WBGene00023193": ('additional_class', 'unknown')})
 
     """Does ReferenceTables.get() raise ValueError when a Name Attribute refers to a missing attribute?"""
 
@@ -196,7 +197,7 @@ class MyTestCase(unittest.TestCase):
         feature_source = {self.short_gff_file: [bad]}
         feature_selector = MockFeatureSelector([])
 
-        expected_err = "No features or classes were retained while parsing your GFF file.\n" \
+        expected_err = "No features were retained while parsing your GFF file.\n" \
                        "This may be due to a lack of features matching 'Select for...with value...'"
 
         # Since all_features is False and there are no identity matches, the main loop in
@@ -231,7 +232,7 @@ class MyTestCase(unittest.TestCase):
         kwargs = {'all_features': True}
 
         # Notice: screening for "ID" name attribute happens earlier in counter.load_config()
-        expected_alias = {"Gene:WBGene00023193": ("Gene:WBGene00023193", "additional_class", "unknown")}
+        expected_alias = {"Gene:WBGene00023193": ("additional_class", "Gene:WBGene00023193", "unknown")}
         _, alias, _ = ReferenceTables(feature_source, MockFeatureSelector([]), **kwargs).get()
 
         self.assertDictEqual(alias, expected_alias)
@@ -242,7 +243,7 @@ class MyTestCase(unittest.TestCase):
         feature_source = {self.short_gff_file: ["ID", "Class"]}
         kwargs = {'all_features': False}
 
-        expected_err = "No features or classes were retained while parsing your GFF file.\n" \
+        expected_err = "No features were retained while parsing your GFF file.\n" \
                        "This may be due to a lack of features matching 'Select for...with value...'"
 
         with self.assertRaisesRegex(ValueError, expected_err):
@@ -269,7 +270,7 @@ class MyTestCase(unittest.TestCase):
 
         expected_matches = [
             set(),
-            {('Gene:WBGene00023193', '-', ((0, 1, ivm), (1, 2, ivm), (2, 3, ivm)))},
+            {(('Gene:WBGene00023193', ''), '-', ((0, 1, ivm), (1, 2, ivm), (2, 3, ivm)))},
             set()
         ]
 
@@ -301,7 +302,7 @@ class MyTestCase(unittest.TestCase):
         feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
         mock_selector = self.selector_with_template(helpers.rules_template)
 
-        expected_err = "No features or classes were retained while parsing your GFF file.\n" \
+        expected_err = "No features were retained while parsing your GFF file.\n" \
                        "This may be due to a lack of features matching 'Select for...with value...'"
 
         with self.assertRaisesRegex(ValueError, expected_err):
@@ -351,23 +352,26 @@ class MyTestCase(unittest.TestCase):
         sib_ivs = [HTSeq.GenomicInterval('I', 99, 110, '-'), HTSeq.GenomicInterval('I', 110, 120, '-'),
                    HTSeq.GenomicInterval('I', 139, 150, '-')]
 
-        rule1_gp =  {f"{iv.start}:{iv.end}":    ((0, 2, IntervalPartialMatch(iv)),) for iv in gp_ivs}
-        rule1_p2 =  {f"{iv.start}:{iv.end}":    ((0, 2, IntervalPartialMatch(iv)),) for iv in p2_ivs}
-        rule2_sib = {f"{iv.start}:{iv.end}":    (1, 3, IntervalPartialMatch(iv))    for iv in sib_ivs}
-        rule3_sib = {f"{iv.start}:{iv.end}":    (2, 0, IntervalPartialMatch(iv))    for iv in sib_ivs}
+        rule1_gp =  {f"{iv.start}:{iv.end}": ((0, 2, IntervalPartialMatch(iv)),) for iv in gp_ivs}
+        rule1_p2 =  {f"{iv.start}:{iv.end}": ((0, 2, IntervalPartialMatch(iv)),) for iv in p2_ivs}
+        rule2_sib = {f"{iv.start}:{iv.end}": (1, 3, IntervalPartialMatch(iv))    for iv in sib_ivs}
+        rule3_sib = {f"{iv.start}:{iv.end}": (2, 0, IntervalPartialMatch(iv))    for iv in sib_ivs}
 
-        expected = [{('GrandParent', '-', rule1_gp['0:20'])},
-                    {('GrandParent', '-', rule1_gp['0:20']),  ('Parent2',     '-', rule1_p2["19:30"])},
-                    {('Parent2',     '-', rule1_p2["19:30"])},
-                    {('Parent2',     '-', rule1_p2["19:30"]), ('GrandParent', '-', rule1_gp['29:40'])},
-                    {('GrandParent', '-', rule1_gp['29:40'])},
-                    {('GrandParent', '-', rule1_gp['29:40']), ('Parent2',     '-', rule1_p2['39:50'])},
-                    {('Parent2',     '-', rule1_p2['39:50'])},
+        # For tables that store features in tagged form
+        GrandParent, Parent2, Sibling = ('GrandParent',''), ('Parent2',''), ('Sibling','')
+
+        expected = [{(GrandParent, '-', rule1_gp['0:20'])},
+                    {(GrandParent, '-', rule1_gp['0:20']),  (Parent2,     '-', rule1_p2["19:30"])},
+                    {(Parent2,     '-', rule1_p2["19:30"])},
+                    {(Parent2,     '-', rule1_p2["19:30"]), (GrandParent, '-', rule1_gp['29:40'])},
+                    {(GrandParent, '-', rule1_gp['29:40'])},
+                    {(GrandParent, '-', rule1_gp['29:40']), (Parent2,     '-', rule1_p2['39:50'])},
+                    {(Parent2,     '-', rule1_p2['39:50'])},
                     set(),
-                    {('Sibling',     '-', (rule3_sib['99:110'],  rule2_sib['99:110']))},  # Note: sorted by rank, not rule index
-                    {('Sibling',     '-', (rule3_sib['110:120'], rule2_sib['110:120']))},
+                    {(Sibling,     '-', (rule3_sib['99:110'],  rule2_sib['99:110']))},  # Note: sorted by rank, not rule index
+                    {(Sibling,     '-', (rule3_sib['110:120'], rule2_sib['110:120']))},
                     set(),
-                    {('Sibling',     '-', (rule3_sib['139:150'], rule2_sib['139:150']))},
+                    {(Sibling,     '-', (rule3_sib['139:150'], rule2_sib['139:150']))},
                     set()]
 
         feats, _, _ = ReferenceTables(feature_source, feature_selector, **rt_kwargs).get()
@@ -382,18 +386,10 @@ class MyTestCase(unittest.TestCase):
         feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
         feature_selector = self.selector_with_template(helpers.rules_template)
 
-        expected = [{('GrandParent', '-', ())},
-                    {('Parent2', '-', ()), ('GrandParent', '-', ())},
-                    {('Parent2', '-', ())},
-                    {('Parent2', '-', ()), ('GrandParent', '-', ())},
-                    {('GrandParent', '-', ())},
-                    {('Parent2', '-', ()), ('GrandParent', '-', ())},
-                    {('Parent2', '-', ())},
-                    set(),
-                    {('Sibling', '-', ())},
-                    set(),
-                    {('Sibling', '-', ())},
-                    set()]
+        # Features that fail to match on identity are not added to the StepVector,
+        # EVEN if all_features = True. This is to prevent non-matching intervals from
+        # being evaluated during stage 2 selection.
+        expected = [set()]
 
         feats, _, _, = ReferenceTables(feature_source, feature_selector, **kwargs).get()
         actual = list(feats.chrom_vectors["I"]["."].array.get_steps(values_only=True))
@@ -409,13 +405,13 @@ class MyTestCase(unittest.TestCase):
         selection_rule = dict(helpers.rules_template[0], Identity=('Parent', 'Parent2'))
         feature_selector = self.selector_with_template([selection_rule])
 
-        child2_iv = HTSeq.GenomicInterval('I', 39, 50, '-')
-        exp_alias = {'Child2': ('Child2Name',)}
-        exp_feats = [set(), {('Child2', '-', ((0, 0, IntervalPartialMatch(child2_iv)),))}, set()]
+        child2_iv =     HTSeq.GenomicInterval('I', 39, 50, '-')
+        exp_alias =     {'Child2': ('Child2Name',)}
+        exp_feats =     [set(), {(('Child2', ''), '-', ((0, 0, IntervalPartialMatch(child2_iv)),))}, set()]
         exp_intervals = {'Child2': [child2_iv]}
-        exp_classes = {'Child2': ('NA',)}
-        exp_filtered = {"GrandParent", "ParentWithGrandparent", "Parent2", "Child1", "Sibling"}
-        exp_parents = {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'}
+        exp_classes =   {'Child2': ('NA',)}
+        exp_filtered =  {"GrandParent", "ParentWithGrandparent", "Parent2", "Child1", "Sibling"}
+        exp_parents =   {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'}
 
         rt = ReferenceTables(feature_source, feature_selector, **kwargs)
         feats, alias, classes = rt.get()
@@ -437,13 +433,13 @@ class MyTestCase(unittest.TestCase):
         selection_rule = dict(helpers.rules_template[0], Identity=('Parent', 'ParentWithGrandparent'))
         feature_selector = self.selector_with_template([selection_rule])
 
-        child1_iv = HTSeq.GenomicInterval('I', 29, 40, '-')
-        exp_alias = {'Child1': ('SharedName',)}
-        exp_feats = [set(), {('Child1', '-', ((0, 0, IntervalPartialMatch(child1_iv)),))}, set()]
+        child1_iv =     HTSeq.GenomicInterval('I', 29, 40, '-')
+        exp_alias =     {'Child1': ('SharedName',)}
+        exp_feats =     [set(), {(('Child1', ''), '-', ((0, 0, IntervalPartialMatch(child1_iv)),))}, set()]
         exp_intervals = {'Child1': [child1_iv]}
-        exp_classes = {'Child1': ('NA',)}
-        exp_filtered = {"GrandParent", "ParentWithGrandparent", "Parent2", "Child2", "Sibling"}
-        exp_parents = {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'}
+        exp_classes =   {'Child1': ('NA',)}
+        exp_filtered =  {"GrandParent", "ParentWithGrandparent", "Parent2", "Child2", "Sibling"}
+        exp_parents =   {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'}
 
         rt = ReferenceTables(feature_source, feature_selector, **kwargs)
         feats, alias, classes = rt.get()
@@ -471,7 +467,7 @@ class MyTestCase(unittest.TestCase):
         self.assertEqual(rt.parents, {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'})
         self.assertEqual(list(classes.keys()), ['GrandParent', 'Parent2', 'Sibling'])
         self.assertEqual(list(alias.keys()), ['GrandParent', 'Parent2', 'Sibling'])
-        self.assertEqual(len(list(feats.chrom_vectors['I']['.'].array.get_steps(values_only=True))), 8)
+        self.assertEqual(len(list(feats.chrom_vectors['I']['.'].array.get_steps(values_only=True))), 1)  # single empty set
         self.clear_filters()
 
     def clear_filters(self):
@@ -480,6 +476,72 @@ class MyTestCase(unittest.TestCase):
 
         ReferenceTables.source_filter = []
         ReferenceTables.type_filter = []
+
+    """Does ReferenceTables.get() maintain correct records for a single feature matching tagged rules?"""
+
+    def test_ref_tables_tagged_match_single(self):
+        kwargs = {'all_features': False}
+        feat_id = "Gene:WBGene00023193"
+        feature_source = {f"{resources}/single.gff3": ["sequence_name"]}
+        feature_selector = self.selector_with_template([
+            {'Identity': ("ID", feat_id), 'Tag': "tagged_match", 'Hierarchy': 1},
+            {'Identity': ("ID", feat_id), 'Tag': "",             'Hierarchy': 2}
+        ])
+
+        expected_aliases = {feat_id: ('Y74C9A.6',)}
+        expected_classes = {feat_id: ('additional_class', 'unknown')}
+        iv = IntervalPartialMatch(HTSeq.GenomicInterval('n/a', 3746, 3909))
+        expected_feats = [
+            set(), {
+                ((feat_id, 'tagged_match'), '-', ((0, 1, iv),)),
+                ((feat_id, ''),             '-', ((1, 2, iv),))
+            },
+            set()
+        ]
+
+        feats, aliases, classes = ReferenceTables(feature_source, feature_selector, **kwargs).get()
+
+        actual_feats = list(feats.chrom_vectors['I']['.'].array.get_steps(values_only=True))
+        self.assertListEqual(actual_feats, expected_feats)
+        self.assertDictEqual(aliases, expected_aliases)
+        self.assertDictEqual(classes, expected_classes)
+
+    """Does ReferenceTables.get() correctly merge records for discontinuous features matching multiple tagged rules?"""
+
+    def test_ref_tables_tagged_match_merging(self):
+        feature_source = {f"{resources}/discontinuous.gff3": ['Name']}
+
+        # All rules match the same root feature
+        feature_selector = self.selector_with_template([
+            {'Identity': ("UniqueAttr", "child2"), 'Tag': "shared", 'Hierarchy': 1},
+            {'Identity': ("ID", "Parent2"),        'Tag': "shared", 'Hierarchy': 2},
+            {'Identity': ("ID", "Child2"),         'Tag': "",       'Hierarchy': 3}
+        ])
+
+        expected_aliases = {'Parent2': ('Child2Name', 'Parent2Name')}
+
+        expected_classes = {'Parent2': ('NA',)}
+
+        Parent2_iv = IntervalPartialMatch(HTSeq.GenomicInterval('n/a', 19, 30))
+        Child2_iv = IntervalPartialMatch(HTSeq.GenomicInterval('n/a', 39, 50))
+        expected_feats = [
+            set(), {
+                (('Parent2', 'shared'), '-', ((0, 1, Parent2_iv), (1, 2, Parent2_iv))),
+                (('Parent2', ''),       '-', ((2, 3, Parent2_iv),)),
+            },
+            set(), {
+                (('Parent2', 'shared'), '-', ((0, 1, Child2_iv), (1, 2, Child2_iv))),
+                (('Parent2', ''),       '-', ((2, 3, Child2_iv),))
+            },
+            set()
+        ]
+
+        feats, aliases, classes = ReferenceTables(feature_source, feature_selector).get()
+
+        stepvec = list(feats.chrom_vectors['I']['.'].array.get_steps(values_only=True))
+        self.assertListEqual(stepvec, expected_feats)
+        self.assertDictEqual(aliases, expected_aliases)
+        self.assertDictEqual(classes, expected_classes)
 
     """Does SAM_reader._get_decollapsed_filename() create an appropriate filename?"""
 

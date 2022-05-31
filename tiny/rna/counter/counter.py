@@ -51,7 +51,7 @@ def get_args():
                              'files listed in your Samples Sheet.')
     arg_parser.add_argument('-a', '--all-features', action='store_true',
                         help='Represent all features in output counts table, '
-                             'regardless of counts or identity rules.')
+                             'even if they did not match a Select for / with value.')
     arg_parser.add_argument('-p', '--is-pipeline', action='store_true',
                         help='Indicates that counter was invoked as part of a pipeline run '
                              'and that input files should be sourced as such.')
@@ -59,7 +59,10 @@ def get_args():
                         help='Produce diagnostic information about uncounted/eliminated '
                              'selection elements.')
 
-    return arg_parser.parse_args()
+    args = arg_parser.parse_args()
+    setattr(args, 'normalize_by_hits', args.normalize_by_hits.lower() in ['t', 'true'])
+
+    return args
 
 
 def load_samples(samples_csv: str, is_pipeline: bool) -> List[Dict[str, str]]:
@@ -134,7 +137,7 @@ def load_config(features_csv: str, is_pipeline: bool) -> Tuple[List[dict], Dict[
     rules, gff_files = list(), defaultdict(list)
 
     for row in CSVReader(features_csv, "Features Sheet").rows():
-        rule = {col: row[col] for col in ["Strand", "Hierarchy", "nt5end", "Length", "Strict"]}
+        rule = {col: row[col] for col in ["Tag", "Hierarchy", "Strand", "nt5end", "Length", "Strict"]}
         rule['nt5end'] = rule['nt5end'].upper().translate({ord('U'): 'T'})  # Convert RNA base to cDNA base
         rule['Identity'] = (row['Key'], row['Value'])                       # Create identity tuple
         rule['Hierarchy'] = int(rule['Hierarchy'])                          # Convert hierarchy to number

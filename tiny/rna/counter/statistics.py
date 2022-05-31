@@ -25,7 +25,7 @@ class LibraryStats:
         self.library = {'Name': 'Unassigned', 'File': 'Unassigned', 'Norm': '1'}
         self.out_prefix = out_prefix
         self.diags = Diagnostics(out_prefix) if report_diags else None
-        self.norm = prefs['normalize_by_hits'].lower() in ['t', 'true']
+        self.norm = prefs.get('normalize_by_hits', True)
 
         self.feat_counts = Counter()
         self.rule_counts = Counter()
@@ -52,10 +52,9 @@ class LibraryStats:
         self.mapped_nt_len[nt5][seqlen] += read_counts
 
         return {
-            'loci_count': loci_counts,
             'read_count': read_counts,
             'corr_count': corr_counts,
-            'assigned_feats': set(),
+            'assigned_ftags': set(),
             'assigned_reads': 0,
             'nt5_counts': self.assigned_nt_len[nt5],
             'seq_length': seqlen,
@@ -68,18 +67,18 @@ class LibraryStats:
     def count_bundle_assignments(self, bundle: dict, aln: dict, assignments: dict, n_candidates: int) -> None:
         """Called for each alignment for each read"""
 
-        feat_count = len(assignments)
+        asgn_count = len(assignments)
         corr_count = bundle['corr_count']
 
-        if feat_count == 0:
+        if asgn_count == 0:
             self.library_stats['Total Unassigned Reads'] += corr_count
         else:
-            fcorr_count = corr_count / feat_count if self.norm else corr_count
-            bundle['assigned_reads'] += fcorr_count * feat_count
-            bundle['assigned_feats'] |= assignments.keys()
+            fcorr_count = corr_count / asgn_count if self.norm else corr_count
+            bundle['assigned_reads'] += fcorr_count * asgn_count
+            bundle['assigned_ftags'] |= assignments.keys()
 
-            for feat, matched_rules in assignments.items():
-                self.feat_counts[feat] += fcorr_count
+            for ftag, matched_rules in assignments.items():
+                self.feat_counts[ftag] += fcorr_count
                 rcorr_count = fcorr_count / len(matched_rules)
                 for rule in matched_rules:
                     self.rule_counts[rule] += rcorr_count
@@ -91,7 +90,7 @@ class LibraryStats:
     def finalize_bundle(self, bundle: dict) -> None:
         """Called at the conclusion of processing each multiple-alignment bundle"""
 
-        assigned_feat_count = len(bundle['assigned_feats'])
+        assigned_feat_count = len({feat[0] for feat in bundle['assigned_ftags']})
 
         if assigned_feat_count == 0:
             self.library_stats['Total Unassigned Sequences'] += 1
@@ -187,7 +186,7 @@ class MergedStatsManager:
 
 class FeatureCounts(MergedStat):
     def __init__(self, Features_obj):
-        self.feat_counts_df = pd.DataFrame(index=Features_obj.classes.keys())
+        self.feat_counts_df = pd.DataFrame(index=set.union(*Features_obj.tags.values()))
         self.classes = Features_obj.classes
         self.aliases = Features_obj.aliases
         self.norm_prefs = {}
@@ -224,12 +223,12 @@ class FeatureCounts(MergedStat):
         # Sort columns by title and round all counts to 2 decimal places
         summary = self.sort_cols_and_round(self.feat_counts_df)
         # Add Feature Name column, which is the feature alias (default is Feature ID if no alias exists)
-        summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(self.aliases.get(feat, ''))))
+        summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(self.aliases.get(feat[0], ''))))
         # Add Classes column for classes associated with the given feature
-        feat_class_map = lambda feat: ', '.join(self.classes[feat])
+        feat_class_map = lambda feat: ', '.join(self.classes[feat[0]])
         summary.insert(1, "Feature Class", summary.index.map(feat_class_map))
         # Sort by index, make index its own column, and rename it to Feature ID
-        summary = summary.sort_index().reset_index().rename(columns={"index": "Feature ID"})
+        summary = summary.sort_index().reset_index().rename(columns={"level_0": "Feature ID", "level_1": "Tag"})
 
         summary.to_csv(self.prefix + '_feature_counts.csv', index=False)
         return summary

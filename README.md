@@ -197,6 +197,8 @@ required arguments:
 ```
 tiny-deseq.r --input-file COUNTFILE --outfile-prefix PREFIX [--control CONDITION] [--pca] [--drop-zero]
 
+Required arguments:
+
     --input-file <count_file>
           A text file containing a table of features x samples of the run to
           process by DESeq2. The [...]feature_counts.csv output of tinyrna-count is expected here.
@@ -206,6 +208,8 @@ tiny-deseq.r --input-file COUNTFILE --outfile-prefix PREFIX [--control CONDITION
               1. Normalized count table of all samples
               2. Differential gene expression table per comparison
               3. A PCA plot per comparison, if --pca is also provided.
+
+Optional arguments:
 
     --control <control_condition>
           Opional. If the control condition is specified, comparisons will

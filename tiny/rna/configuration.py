@@ -8,7 +8,7 @@ import os
 import re
 
 from pkg_resources import resource_filename
-from collections import Counter
+from collections import Counter, OrderedDict
 from datetime import datetime
 from typing import Union, Any
 
@@ -337,21 +337,62 @@ class CSVReader(csv.DictReader):
     This makes field labels consistent across the project and simplifies the code
     """
 
+    # user-facing name -> internal short name
     tinyrna_sheet_fields = {
-        "Features Sheet": ("Key", "Value", "Name", "Hierarchy", "Strand", "nt5end", "Length", "Strict", "Source"),
-        "Samples Sheet": ("File", "Group", "Replicate", "Control", "Normalization")
+        "Features Sheet": {
+           "Select for...":     "Key",
+           "with value...":     "Value",
+           "Alias by...":       "Name",
+           "Tag":               "Tag",
+           "Hierarchy":         "Hierarchy",
+           "Strand":            "Strand",
+           "5' End Nucleotide": "nt5end",
+           "Length":            "Length",
+           "Match":             "Strict",
+           "Feature Source":    "Source"
+        },
+        "Samples Sheet": {
+            "Input FastQ Files":    "File",
+            "Sample/Group Name":    "Group",
+            "Replicate number":     "Replicate",
+            "Control":              "Control",
+            "Normalization":        "Normalization"
+        }
     }
 
-    def __init__(self, filename: str, fieldnames: str = None):
-        self.tinyrna_fields = CSVReader.tinyrna_sheet_fields.get(fieldnames, None)
+    def __init__(self, filename: str, doctype: str = None):
+        self.doctype = doctype
         self.tinyrna_file = filename
+        try:
+            self.tinyrna_fields = tuple(CSVReader.tinyrna_sheet_fields[doctype].values())
+        except KeyError as ke:
+            raise ValueError("w-HH-at 'n t'heck are you doin")
 
     def rows(self):
         with open(os.path.expanduser(self.tinyrna_file), 'r', encoding='utf-8-sig') as f:
             super().__init__(f, fieldnames=self.tinyrna_fields, delimiter=',')
-            next(self)  # Skip header line
+            header = next(self)
+
+            # Compatibility check. Column headers are still often changed at this stage
+            # and it doesn't make sense to infer column identity
+            self.validate_csv_header(header)
+
             for row in self:
                 yield row
+
+    def validate_csv_header(self, header: OrderedDict):
+        expected = {key.lower() for key in self.tinyrna_sheet_fields[self.doctype].keys()}
+        read_vals = {val.lower() for val in header.values() if val is not None}
+
+        unknown = {col_name for col_name in read_vals if col_name not in expected}
+        missing = expected - read_vals
+
+        if len(missing):
+            raise ValueError('\n\t'.join([f"The following columns are missing from your {self.doctype}:",
+                             *missing]))
+        if len(unknown):
+            raise ValueError('\n\t'.join([f"The following columns in your {self.doctype} are unrecognized:",
+                             *unknown]))
 
 
 if __name__ == '__main__':
