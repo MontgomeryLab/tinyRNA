@@ -1,4 +1,4 @@
-Name Attribute,Attribute Key,Attribute Value,Hierarchy,Strand (sense/antisense/both),5' End Nucleotide,Length,Match,Feature Source
+Name Attribute,Attribute Key,Attribute Value,Hierarchy,Strand (sense/antisense/both),5' End Nucleotide,Length,Overlap,Feature Source
 ID,Class,CSR,1,antisense,G,30,Partial,../../../START_HERE/reference_data/c_elegans_WS279_chr1.gff3
 Alias,Class,WAGO,2,antisense,all,16-35,Partial,../../../START_HERE/reference_data/c_elegans_WS279_chr1.gff3
 ID,Class,miRNA,7,sense,"C,G,U",all,Full,../../../START_HERE/reference_data/c_elegans_WS279_chr1.gff3

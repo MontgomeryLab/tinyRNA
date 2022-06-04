@@ -1,0 +1,16 @@
+## Simulated features from the random DNA sequence ram1 (ram1.fa).
+## Prepared by Tai Montgomery, 1/18/2022
+# biotype specifies gene classification: ncRNA;coding_gene;pseudogene;repeat;miRNA
+# Alias specifies gene common name (can be multiple)
+# Class specifies class of small RNAs (can be multiple): miRNA;piRNA;siRNA;unk(classification unknown);mask(reads to mask from other features)
+#
+ram1	tinyRNA	miRNA	1000	1021	.	+	.	ID=CSU01;biotype=miRNA;Alias=miRNA1-1;Class=miRNA
+ram1	tinyRNA	miRNA	2000	2021	.	+	.	ID=CSU02;biotype=miRNA;Alias=miRNA1-2;Class=miRNA
+ram1	tinyRNA	pseudogene	2900	3100	.	+	.	ID=CSU03;biotype=pseudogene;Alias=pseudogene1;Class=siRNA
+ram1	tinyRNA	ncRNA	3900	4100	.	-	.	ID=CSU04;biotype=ncRNA;Alias=ncRNA1;Class=siRNA
+ram1	tinyRNA	miRNA	5000	5021	.	+	.	ID=CSU05;biotype=miRNA;Alias=miRNA2;Class=miRNA
+ram1	tinyRNA	miRNA	7000	7021	.	+	.	ID=CSU06;biotype=miRNA;Alias=miRNA3;Class=miRNA
+ram1	tinyRNA	miRNA	8000	8021	.	+	.	ID=CSU07;biotype=miRNA;Alias=miRNA4;Class=miRNA
+ram1	tinyRNA	repeat	9000	9300	.	+	.	ID=CSU08;biotype=repeat;Alias=repeat1;Class=piRNA
+ram1	tinyRNA	ncRNA	9115	9164	.	+	.	ID=CSU09;biotype=structural_rna;Alias=structural_rna1;Class=mask
+ram1	tinyRNA	coding_gene	9500	9700	.	-	.	ID=CSU10;biotype=coding_gene;Alias=gene1;Class=unk
