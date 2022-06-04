@@ -24,7 +24,7 @@ class FeaturesTests(unittest.TestCase):
     def make_feature_for_interval_test(self, iv_rule, feat_id, chrom, strand, start, stop):
         feat_iv = HTSeq.GenomicInterval(chrom, start, stop, strand)
         rules = [
-            dict(deepcopy(rules_template[0]), Strict=iv_rule, Identity=('N/A', 'N/A'), nt5end='all', Length='all')]
+            dict(deepcopy(rules_template[0]), Overlap=iv_rule, Identity=('N/A', 'N/A'), nt5end='all', Length='all')]
         fs = FeatureSelector(rules, LibraryStats(normalize_by_hits=True))
 
         # Feature with specified coordinates, matching rule 0 with hierarchy 0 and the appropriate selector for iv_rule
@@ -182,7 +182,7 @@ class FeaturesTests(unittest.TestCase):
     def test_feature_selector_full_interval(self):
         iv_rule = 'full'
         chrom, strand, start, stop = "n/a", ".", 5, 10
-        feat, fs = self.make_feature_for_interval_test(iv_rule, "Strict Overlap", chrom, strand, start, stop)
+        feat, fs = self.make_feature_for_interval_test(iv_rule, "Full Overlap", chrom, strand, start, stop)
 
         aln_base = {'seq': 'ATGC', 'chrom': chrom, 'strand': strand}
         aln_spill_lo = make_parsed_sam_record(**dict(aln_base, start=start - 1, name="spill"))
@@ -203,9 +203,9 @@ class FeaturesTests(unittest.TestCase):
 
         self.assertEqual(fs.choose(feat, aln_spill_lo), {})
         self.assertEqual(fs.choose(feat, aln_spill_hi), {})
-        self.assertEqual(fs.choose(feat, aln_contained), {"Strict Overlap": {0}})
-        self.assertEqual(fs.choose(feat, aln_contained_lo), {"Strict Overlap": {0}})
-        self.assertEqual(fs.choose(feat, aln_contained_hi), {"Strict Overlap": {0}})
+        self.assertEqual(fs.choose(feat, aln_contained), {"Full Overlap": {0}})
+        self.assertEqual(fs.choose(feat, aln_contained_lo), {"Full Overlap": {0}})
+        self.assertEqual(fs.choose(feat, aln_contained_hi), {"Full Overlap": {0}})
 
     """Does FeatureSelector.choose() correctly select features with `partial` interval matching rules?"""
 

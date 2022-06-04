@@ -339,7 +339,7 @@ class CSVReader(csv.DictReader):
 
     # user-facing name -> internal short name
     tinyrna_sheet_fields = {
-        "Features Sheet": {
+        "Features Sheet": OrderedDict({
            "Select for...":     "Key",
            "with value...":     "Value",
            "Alias by...":       "Name",
@@ -348,16 +348,16 @@ class CSVReader(csv.DictReader):
            "Strand":            "Strand",
            "5' End Nucleotide": "nt5end",
            "Length":            "Length",
-           "Match":             "Strict",
+           "Overlap":           "Overlap",
            "Feature Source":    "Source"
-        },
-        "Samples Sheet": {
-            "Input FastQ Files":    "File",
-            "Sample/Group Name":    "Group",
-            "Replicate number":     "Replicate",
-            "Control":              "Control",
-            "Normalization":        "Normalization"
-        }
+        }),
+        "Samples Sheet": OrderedDict({
+            "Input FastQ Files": "File",
+            "Sample/Group Name": "Group",
+            "Replicate number":  "Replicate",
+            "Control":           "Control",
+            "Normalization":     "Normalization"
+        })
     }
 
     def __init__(self, filename: str, doctype: str = None):

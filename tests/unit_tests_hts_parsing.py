@@ -135,10 +135,10 @@ class MyTestCase(unittest.TestCase):
         feature_selector = self.selector_with_template([
             # Fails to match due to Identity selector
             {'Identity': ("Class", "CSR"), 'Strand': "sense", 'Hierarchy': 1, 'Tag': '', 'nt5end': "all",
-             'Strict': 'full', 'Length': "20"},
+             'Overlap': 'full', 'Length': "20"},
             # Match
             {'Identity': ("biotype", "snoRNA"), 'Strand': "antisense", 'Hierarchy': 2, 'Tag': '', 'nt5end': "all",
-             'Strict': 'partial', 'Length': "30"}
+             'Overlap': 'partial', 'Length': "30"}
         ])
         iv = HTSeq.GenomicInterval("I", 3746, 3909, "-")
         kwargs = {'all_features': True}
@@ -160,10 +160,10 @@ class MyTestCase(unittest.TestCase):
         feature_selector = self.selector_with_template([
             # Fails to match due to Identity selector
             {'Identity': ("Class", "CSR"), 'Strand': "sense", 'Hierarchy': 1, 'Tag': '', 'nt5end': "all", 'Length': "20",
-             'Strict': 'full'},
+             'Overlap': 'full'},
             # Match
             {'Identity': ("biotype", "snoRNA"), 'Strand': "antisense", 'Hierarchy': 2, 'Tag': '', 'nt5end': "all",
-             'Strict': 'partial', 'Length': "30"}
+             'Overlap': 'partial', 'Length': "30"}
         ])
         iv = HTSeq.GenomicInterval("I", 3746, 3909, "-")
 

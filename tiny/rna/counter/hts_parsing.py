@@ -305,9 +305,9 @@ class ReferenceTables:
     Children of the root ancestor are otherwise not stored in the reference tables.
 
     Match-tuples are created for each Features Sheet rule which matches a feature's attributes.
-    They are structured as (rank, rule, strict). "Rank" is the heirarchy value of the matching
-    rule, "rule" is the index of that rule in FeatureSelector's rules table, and "strict" is a
-    boolean representing whether a strict alignment overlap is required for a match.
+    They are structured as (rank, rule, overlap). "Rank" is the heirarchy value of the matching
+    rule, "rule" is the index of that rule in FeatureSelector's rules table, and "overlap" is the
+    IntervalSelector per the rule's overlap requirements.
 
     Source and type filters allow the user to define acceptable values for columns 2 and 3 of the
     GFF, respectively. These filters are inclusive (only rows with matching values are parsed),
@@ -443,9 +443,9 @@ class ReferenceTables:
                     identity_matches[tag].add((
                         index,
                         self.selector.rules_table[index]['Hierarchy'],
-                        self.selector.rules_table[index]['Strict']
+                        self.selector.rules_table[index]['Overlap']
                     ))
-        # -> identity_matches: {tag: (rule, rank, strict), ...}
+        # -> identity_matches: {tag: (rule, rank, overlap), ...}
         return identity_matches, classes
 
     def get_row_parent(self, feature_id: str, row_attrs: CaseInsensitiveAttrs) -> str:
