@@ -349,21 +349,19 @@ class ReferenceTables:
                     if not self.filter_match(row):
                         self.exclude_row(row)
                         continue
-                    try:
-                        # Grab the primary key for this feature
-                        feature_id = self.get_feature_id(row)
-                        # Get feature's classes and identity match tuples
-                        matches, classes = self.get_matches_and_classes(row.attr)
-                        # Only add features with identity matches if all_features is False
-                        if not self.all_features and not len(matches):
-                            self.exclude_row(row)
-                            continue
-                        # Add feature data to root ancestor in the reference tables
-                        root_id = self.add_feature(feature_id, row, matches, classes)
-                        # Add alias to root ancestor if it is unique
-                        self.add_alias(root_id, alias_keys, row.attr)
-                    except KeyError as ke:
-                        raise ValueError(f"Feature {row.name} does not contain a {ke} attribute.")
+
+                    # Grab the primary key for this feature
+                    feature_id = self.get_feature_id(row)
+                    # Get feature's classes and identity match tuples
+                    matches, classes = self.get_matches_and_classes(row.attr)
+                    # Only add features with identity matches if all_features is False
+                    if not self.all_features and not len(matches):
+                        self.exclude_row(row)
+                        continue
+                    # Add feature data to root ancestor in the reference tables
+                    root_id = self.add_feature(feature_id, row, matches, classes)
+                    # Add alias to root ancestor if it is unique
+                    self.add_alias(root_id, alias_keys, row.attr)
             except Exception as e:
                 # Append to error message while preserving exception provenance and traceback
                 e.args = (str(e.args[0]) + "\nError occurred on line %d of %s" % (gff.line_no, file),)
@@ -425,7 +423,7 @@ class ReferenceTables:
         """Add feature's aliases to the root ancestor's alias set"""
 
         for alias_key in alias_keys:
-            for row_val in row_attrs[alias_key]:
+            for row_val in row_attrs.get(alias_key, ()):
                 self.alias[root_id].add(row_val)
 
     def get_matches_and_classes(self, row_attrs: CaseInsensitiveAttrs) -> Tuple[DefaultDict, set]:
@@ -475,7 +473,7 @@ class ReferenceTables:
         gaps in the ancestral tree. This allows us to maintain a path to the tree's
         root."""
 
-        feature_id = row.attr['ID'][0]
+        feature_id = self.get_feature_id(row)
         self.filtered.add(feature_id)
         if "Parent" in row.attr:
             self.parents[feature_id] = self.get_row_parent(feature_id, row.attr)
@@ -571,8 +569,10 @@ class ReferenceTables:
 
     @staticmethod
     def get_feature_id(row):
-        id_collection = row.attr["ID"]
+        id_collection = row.attr.get("ID", None)
 
+        if id_collection is None:
+            raise ValueError(f"Feature {row.name} does not contain an ID attribute.")
         if len(id_collection) == 0:
             raise ValueError("A feature's ID attribute cannot be empty. This value is required.")
         if len(id_collection) > 1:

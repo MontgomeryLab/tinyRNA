@@ -202,16 +202,13 @@ class FeatureCounts(MergedStat):
     def write_feature_counts(self) -> pd.DataFrame:
         """Writes selected features and their associated counts to {prefix}_out_feature_counts.csv
 
-        Only the features in display_index will be listed in the output table, regardless of count, even
-        if the features had no associated alignments.
-
-        If a features.csv rule defined a Name Attribute other than "ID", then the associated features will
-        be aliased to their corresponding Name Attribute value and displayed in the Feature Name column, and
+        If a features.csv rule defined an 'Alias by...' other than "ID", then the associated features will
+        be aliased to the value associated with this key and displayed in the Feature Name column, and
         the feature's true "ID" will be indicated in the Feature ID column. If multiple aliases exist for
         a feature then they will be joined by ", " in the Feature Name column. A Feature Class column also
         follows.
 
-        For example, if the rule contained a Name Attribute which aliases gene1 to abc123,def456,123.456
+        For example, if the rule contained an 'Alias by...' which aliases gene1 to abc123,def456,123.456
         and is both ALG and CSR class, then the Feature ID, Feature Name, and Feature Class column of the
         output file for this feature will read:
             gene1, "abc123,def456,123.456", "ALG,CSR"
@@ -222,7 +219,7 @@ class FeatureCounts(MergedStat):
 
         # Sort columns by title and round all counts to 2 decimal places
         summary = self.sort_cols_and_round(self.feat_counts_df)
-        # Add Feature Name column, which is the feature alias (default is Feature ID if no alias exists)
+        # Add Feature Name column, which is the feature alias (default is blank if no alias exists)
         summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(self.aliases.get(feat[0], ''))))
         # Add Classes column for classes associated with the given feature
         feat_class_map = lambda feat: ', '.join(self.classes[feat[0]])
