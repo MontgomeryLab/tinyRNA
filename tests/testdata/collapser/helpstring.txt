@@ -1,4 +1,5 @@
 usage: tiny-collapse [-h] -i FASTQFILE -o OUTPREFIX [-t THRESHOLD] [-c]
+                     [--5p-trim LENGTH] [--3p-trim LENGTH]
 
 Collapse sequences from a fastq file to a fasta file. Headers in the output
 fasta file will contain the number of times each sequence occurred in the
@@ -13,6 +14,8 @@ optional arguments:
                         {prefix}_collapsed.fa and will instead be placed in
                         {prefix}_collapsed_lowcounts.fa
   -c, --compress        Use gzip compression when writing fasta outputs
+  --5p-trim LENGTH      Trim LENGTH bases from the 5' end of each sequence
+  --3p-trim LENGTH      Trim LENGTH bases from the 3' end of each sequence
 
 required arguments:
   -i FASTQFILE, --input-file FASTQFILE
