@@ -681,8 +681,12 @@ def main():
 
 def err(e):
     """Allows us to print errors from a MP worker without discarding the other results"""
-    print("An error occurred. See console log for details.", file=sys.stderr)
     print(''.join(traceback.format_exception(type(e), e, e.__traceback__)))
+    print("\n\nPlotter encountered an error. Don't worry! You don't have to start over.\n"
+              "You can resume the pipeline at Plotter. To do so:\n\t"
+              "1. cd into your Run Directory\n\t"
+              '2. Run "tiny replot --config your_run_config.yml"\n\t'
+              '   (that\'s the processed run config) ^^^\n\n', file=sys.stderr)
 
 if __name__ == '__main__':
     main()
