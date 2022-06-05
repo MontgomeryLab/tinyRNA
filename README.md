@@ -406,7 +406,7 @@ Simple static plots are generated from the outputs of Counter and DESeq2. These 
 |           <img src="images/plots/len_dist_short.jpeg" width="90%" alt="len_dist 20-30"/>           |     <img src="images/plots/len_dist_long.jpeg" width="90%" alt="len_dist 15-60"/>     |
 
 
-DESeq2 can also produce a standard **PCA plot** from variance stabilizing transformed feature counts. This output is controlled by the `dge_pca_plot` key in the Run Config.
+DESeq2 will produce a standard **PCA plot** from variance stabilizing transformed feature counts. This output is controlled by the `dge_pca_plot` key in the Run Config and by your experiment design. DGE outputs, including the PCA plot, will not be produced for experiments with less than 1 degree of freedom.
 
 
 ## Contributing
