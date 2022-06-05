@@ -1,4 +1,0 @@
-ls_dir:
-    class: Directory
-    path: ../../run_directory
-outdir_name: "test2"
