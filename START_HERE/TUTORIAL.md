@@ -1,8 +1,6 @@
 # Getting Started
 
-This folder (`START_HERE`) contains a working minimal configuration and a sample input dataset derived from C. elegans chromosome 1 of Wormbase WS279. We've assembled this configuration to make it easy to start using tinyRNA, and to provide a basis for your own project configuration.
-
-Complete reference data for C. elegans WS279 can be found here: https://www.montgomerylab.org/resources.html
+This folder (`START_HERE`) contains a working minimal configuration and a generated/simulated sample dataset. We've assembled this configuration to make it easy to start using tinyRNA, and to provide a basis for your own project configuration.
 
 ## Installation
 
@@ -11,12 +9,12 @@ See the [README](../README.md#installation) for installation instructions and ti
 ## This folder
 
 Here's what you'll find:
-- **fastq_files**: contains library fastq files (10k line arbitrary subset)
-- **reference_data**: contains reference annotation and genome files for chromosome 1
+- **fastq_files**: contains generated sample FASTQ files
+- **reference_data**: contains a reference genome file with random DNA sequences, and a reference annotation file with simulated features selected from the genome
 - **features.csv**: spreadsheet of selection rules for counting features
-- **paths.yml**: configuration file for defining pipeline file inputs
-- **run_config.yml**: configuration file for defining pipeline preferences for each step and for the overall pipeline run
-- **samples.csv**: spreadsheet for defining library files and their associated group and replicate numbers
+- **paths.yml**: configuration file for defining the pipeline's main file inputs
+- **run_config.yml**: configuration file for defining preferences for each pipeline step and the overall pipeline run
+- **samples.csv**: spreadsheet for defining the group name, replicate number, etc. for each input FASTQ file
 
 ## First run
 The configuration is tied together with `run_config.yml`, so this is what you will pass to the pipeline. Since we already have a working configuration let's run an end-to-end analysis on our sample data using the command:
