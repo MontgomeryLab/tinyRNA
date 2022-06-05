@@ -39,7 +39,7 @@ class CounterTests(unittest.TestCase):
             "5' End Nucleotide": '"C,G,U"',  # Needs to be double-quoted due to commas
             'Length':            "all",
             'Overlap':           "Partial",
-            'Feature Source':    "./testdata/cel_ws279/c_elegans_WS279_chr1.gff3"
+            'Feature Source':    "test_file.gff3"
         }
 
         # Represents the parsed Features Sheet row above

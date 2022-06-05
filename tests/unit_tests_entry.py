@@ -24,18 +24,13 @@ test covers both environments.
 class test_entry(unittest.TestCase):
     @classmethod
     def setUpClass(self):
-        # For post-install tests
-        if os.environ.get('GITHUB_ACTIONS', None) != 'true':
-            print("Tests are being run locally, refreshing installation...")
-            os.system("pip install -e ../ > /dev/null")
-            print("Done.")
 
         # For pre-install tests
         self.cwl_path = '../tiny/cwl'
         self.templates_path = '../tiny/templates'
 
         # For both pre and post install
-        self.config_file = './testdata/run_config_template.yml'
+        self.config_file = f'{self.templates_path}/run_config_template.yml'
         self.expected_cwl_dir_tree = {
             'cwl': {
                 'files': set(),
@@ -198,6 +193,10 @@ class test_entry(unittest.TestCase):
                     self.assertIn('node', sub_names,
                                   f"The cwltool subprocess does not appear to have started. Function: "
                                   f"{test_context.__class__.__name__}")
+            except:
+                print("Captured stdout:\n" + f'"{test.get_stdout()}"')
+                print('\n\n')
+                print("Captured stderr:\n" + f'"{test.get_stderr()}"')
             finally:
                 run_dirs = glob("./testdata/entry_test_*_run_directory")
                 for dir in run_dirs:
