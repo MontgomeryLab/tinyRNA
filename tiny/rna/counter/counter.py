@@ -25,39 +25,41 @@ counter: FeatureCounter
 def get_args():
     """Get input arguments from the user/command line."""
 
-    arg_parser = argparse.ArgumentParser(description=__doc__)
-    required_group = arg_parser.add_argument_group("required arguments")
+    arg_parser = argparse.ArgumentParser(description=__doc__, add_help=False)
+    required_args = arg_parser.add_argument_group("Required arguments")
+    optional_args = arg_parser.add_argument_group("Optional arguments")
 
     # Required arguments
-    required_group.add_argument('-i', '--input-csv', metavar='SAMPLES', required=True,
-                        help='your Samples Sheet')
-    required_group.add_argument('-c', '--config', metavar='CONFIGFILE', required=True,
-                        help='your Features Sheet')
-    required_group.add_argument('-o', '--out-prefix', metavar='OUTPUTPREFIX', required=True,
-                        help='output prefix to use for file names')
+    required_args.add_argument('-i', '--input-csv', metavar='SAMPLES', required=True,
+                               help='your Samples Sheet')
+    required_args.add_argument('-c', '--config', metavar='CONFIGFILE', required=True,
+                               help='your Features Sheet')
+    required_args.add_argument('-o', '--out-prefix', metavar='OUTPUTPREFIX', required=True,
+                               help='output prefix to use for file names')
 
     # Optional arguments
-    arg_parser.add_argument('-sf', '--source-filter', metavar='SOURCE', nargs='*', default=[],
-                        help='Only produce counts for features whose '
-                             'GFF column 2 matches the source(s) listed')
-    arg_parser.add_argument('-tf', '--type-filter', metavar='TYPE', nargs='*', default=[],
-                        help='Only produce counts for features whose '
-                             'GFF column 3 matches the type(s) listed')
-    arg_parser.add_argument('-nh', '--normalize-by-hits', metavar='T/F', default='T',
-                        help='If T/true, normalize counts by (selected) '
-                             'overlapping feature counts. Default: true.')
-    arg_parser.add_argument('-dc', '--decollapse', action='store_true',
-                        help='Create a decollapsed copy of all SAM '
-                             'files listed in your Samples Sheet.')
-    arg_parser.add_argument('-a', '--all-features', action='store_true',
-                        help='Represent all features in output counts table, '
-                             'even if they did not match a Select for / with value.')
-    arg_parser.add_argument('-p', '--is-pipeline', action='store_true',
-                        help='Indicates that counter was invoked as part of a pipeline run '
-                             'and that input files should be sourced as such.')
-    arg_parser.add_argument('-d', '--report-diags', action='store_true',
-                        help='Produce diagnostic information about uncounted/eliminated '
-                             'selection elements.')
+    optional_args.add_argument('-h', '--help', action="help", help="show this help message and exit")
+    optional_args.add_argument('-sf', '--source-filter', metavar='SOURCE', nargs='*', default=[],
+                               help='Only produce counts for features whose '
+                                    'GFF column 2 matches the source(s) listed')
+    optional_args.add_argument('-tf', '--type-filter', metavar='TYPE', nargs='*', default=[],
+                               help='Only produce counts for features whose '
+                                    'GFF column 3 matches the type(s) listed')
+    optional_args.add_argument('-nh', '--normalize-by-hits', metavar='T/F', default='T',
+                               help='If T/true, normalize counts by (selected) '
+                                    'overlapping feature counts. Default: true.')
+    optional_args.add_argument('-dc', '--decollapse', action='store_true',
+                               help='Create a decollapsed copy of all SAM '
+                                    'files listed in your Samples Sheet.')
+    optional_args.add_argument('-a', '--all-features', action='store_true',
+                               help='Represent all features in output counts table, '
+                                    'even if they did not match a Select for / with value.')
+    optional_args.add_argument('-p', '--is-pipeline', action='store_true',
+                               help='Indicates that counter was invoked as part of a pipeline run '
+                                    'and that input files should be sourced as such.')
+    optional_args.add_argument('-d', '--report-diags', action='store_true',
+                               help='Produce diagnostic information about uncounted/eliminated '
+                                    'selection elements.')
 
     args = arg_parser.parse_args()
     setattr(args, 'normalize_by_hits', args.normalize_by_hits.lower() in ['t', 'true'])
