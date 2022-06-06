@@ -103,7 +103,7 @@ def seq_counter(fastq_file: str, file_reader: callable, trim: dict = None) -> 'C
         if f.read(2) == b'\x1F\x8B': return seq_counter(fastq_file, gz_f, trim)
 
         # Count occurrences of unique sequences while maintaining insertion order
-        counts = Counter(sequences() if trim is None else trim_seqs(sequences(), trim))
+        counts = Counter(sequences() if not trim else trim_seqs(sequences(), trim))
 
     counts.pop("", None)  # Remove blank line counts from the dictionary
     return counts

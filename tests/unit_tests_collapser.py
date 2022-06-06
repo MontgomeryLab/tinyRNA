@@ -410,31 +410,30 @@ class MyTestCase(unittest.TestCase):
         # Compression test
         [os.path.isfile.configure_mock(side_effect=self.prefix_exists_fn) for os in [os_aq, os_gz]]
         with patch('builtins.open', new=mock_open(read_data=self.min_fastq_gz)) as builtins_open, \
-                patch('tiny.rna.collapser.open', new_callable=mock_open) as seq2fasta_open:
+                patch('tiny.rna.collapser.open', new_callable=mock_open) as seq2fasta_open, \
+                    patch('tiny.rna.collapser.gz_f', new_callable=mock_open) as gzip_open:
 
-            expected_read = [
-                call('min_gz', 'rb'), call().__enter__(), call().read(2),  # builtins.open, exploratory read
-                call('min_gz', 'rb'), *[call().read(s) for s in [2, 8, 8192]], call().close()  # gzip read
-            ]
+            expected_read = [call('min_gz', 'rb')]
 
             # Without compression (no -c flag)
             no_compression_args = f"tiny-collapse -i min_gz -o min_gz".split(" ")
             with patch('sys.argv', no_compression_args):
                 collapser_main()
                 expected_write = [call('min_gz_collapsed.fa', 'w')]
-                self.assertListEqual(builtins_open.mock_calls[:8], expected_read)
-                self.assertEqual(seq2fasta_open.call_args_list, expected_write)
-                builtins_open.reset_mock(), seq2fasta_open.reset_mock()
+                self.assertListEqual(gzip_open.call_args_list, expected_read)       # File read
+                self.assertListEqual(builtins_open.call_args_list, expected_read)   # Exploratory read before switching to gzip
+                self.assertEqual(seq2fasta_open.call_args_list, expected_write)     # Non-gzip file write
+                gzip_open.reset_mock(), builtins_open.reset_mock(), seq2fasta_open.reset_mock()
+
+            expected_gzip = expected_read + [call('min_gz_collapsed.fa.gz', 'wb')]
 
             # With compression (with -c flag)
             compression_args = f"tiny-collapse -i min_gz -o min_gz -c".split(" ")
             with patch('sys.argv', compression_args):
                 collapser_main()
-                expected_write = call('min_gz_collapsed.fa.gz', 'wb')
-                self.assertListEqual(builtins_open.mock_calls[:8], expected_read)
-                self.assertEqual(builtins_open.call_args_list[-1], expected_write)
-                # Since output is handled by gzip module, builtins.open is used for file writing
-                self.assertEqual(seq2fasta_open.call_args_list, [])
+                self.assertListEqual(gzip_open.call_args_list, expected_gzip)       # File read and write
+                self.assertListEqual(builtins_open.call_args_list, expected_read)   # Exploratory read before switching to gzip
+                self.assertEqual(seq2fasta_open.call_args_list, [])                 # Only gzip writes
 
 
 if __name__ == '__main__':
