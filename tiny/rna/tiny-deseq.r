@@ -128,7 +128,7 @@ restore_multiindex <- function(base_df){
 
   # Assign the MultiIndex columns and drop rownames
   multiidx_mx <- cbind(split_mx, base_matrix)
-  colnames(multiidx_mx) <- c("Feature ID", "Tag", colnames(multiidx_mx))
+  colnames(multiidx_mx) <- c("Feature ID", "Tag", colnames(base_matrix))
   rownames(multiidx_mx) <- NULL
 
   return(multiidx_mx)
