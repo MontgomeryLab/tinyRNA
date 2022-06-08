@@ -17,7 +17,7 @@ rules_template = [{'Identity': ("Name", "N/A"),
                    'Tag': '',
                    'nt5end': "all",
                    'Length': "all",   # A string is expected by FeatureSelector due to support for lists and ranges
-                   'Strict': "partial"}]
+                   'Overlap': "partial"}]
 
 
 def get_dir_tree(root_path: str) -> dict:

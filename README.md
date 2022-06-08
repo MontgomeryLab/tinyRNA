@@ -1,7 +1,7 @@
-# tinyRNA: comprehensive analysis of small RNA high-throughput sequencing data
+# tinyRNA: precision analysis of small RNA high-throughput sequencing data
 :warning: **Under Development & Testing** :warning:
 
-*This repository is being actively developed and tested, and is thus incomplete and only recommended for testing until a release is made. Feedback, suggestions, and bug reports are welcome under the [issues tab](https://github.com/MontgomeryLab/tinyrna/issues). See our [changelog](CHANGELOG.md) for recent updates. Thank you!*
+*This repository is being actively developed and tested, and is thus incomplete and only recommended for testing until a release is made. Feedback, suggestions, and bug reports are welcome under the [issues tab](https://github.com/MontgomeryLab/tinyrna/issues). Thank you!*
 
 - [Installation](#installation)
 - [Usage](#usage)
@@ -131,40 +131,55 @@ tiny-config -i CONFIG
 ```
 ##### Collapser
 ```
-tiny-collapse [-h] -i FASTQFILE -o OUTPREFIX [-t THRESHOLD] [-c]
+tiny-collapse -i FASTQFILE -o OUTPREFIX [-h] [-t THRESHOLD] [-c]
+              [--5p-trim LENGTH] [--3p-trim LENGTH]
 
-  optional arguments:
-    -h, --help            show this help message and exit
-    -t THRESHOLD, --threshold THRESHOLD
-                          Sequences <= THRESHOLD will be omitted from
-                          {prefix}_collapsed.fa and will instead be placed in
-                          {prefix}_collapsed_lowcounts.fa
-    -c, --compress        Use gzip compression when writing fasta outputs
-    --5p-trim LENGTH      Trim LENGTH bases from the 5' end of each sequence
-    --3p-trim LENGTH      Trim LENGTH bases from the 3' end of each sequence
-  
-  required arguments:
-    -i FASTQFILE, --input-file FASTQFILE
-                          The input fastq(.gz) file to collapse
-    -o OUTPREFIX, --out-prefix OUTPREFIX
-                          The prefix for output files {prefix}_collapsed.fa and,
-                          if counts fall below threshold,
-                          {prefix}_collapsed_lowcounts.fa
+Collapse sequences from a fastq file to a fasta file. Headers in the output
+fasta file will contain the number of times each sequence occurred in the
+input fastq file, and an ID which indicates the relative order in which each
+sequence was first encountered. Gzipped files are automatically supported for
+fastq inputs, and compressed fasta outputs are available by request.
+
+Required arguments:
+  -i FASTQFILE, --input-file FASTQFILE
+                        The input fastq(.gz) file to collapse
+  -o OUTPREFIX, --out-prefix OUTPREFIX
+                        The prefix for output files {prefix}_collapsed.fa and,
+                        if counts fall below threshold,
+                        {prefix}_collapsed_lowcounts.fa
+
+Optional arguments:
+  -h, --help            show this help message and exit
+  -t THRESHOLD, --threshold THRESHOLD
+                        Sequences <= THRESHOLD will be omitted from
+                        {prefix}_collapsed.fa and will instead be placed in
+                        {prefix}_collapsed_lowcounts.fa
+  -c, --compress        Use gzip compression when writing fasta outputs
+  --5p-trim LENGTH      Trim LENGTH bases from the 5' end of each sequence
+  --3p-trim LENGTH      Trim LENGTH bases from the 3' end of each sequence
 ```
 ##### Counter
 [Full documentation for Counter can be found here](doc/Counter.md).
 
 ```
-tiny-count [-h] -i SAMPLES -c CONFIGFILE -o OUTPUTPREFIX
-                  [-sf [SOURCE [SOURCE ...]]] [-tf [TYPE [TYPE ...]]] [-nn]
-                  [-dc] [-a] [-p] [-d]
+tiny-count -i SAMPLES -c CONFIGFILE -o OUTPUTPREFIX [-h]
+           [-sf [SOURCE [SOURCE ...]]] [-tf [TYPE [TYPE ...]]]
+           [-nh T/F] [-dc] [-a] [-p] [-d]
 
 This submodule assigns feature counts for SAM alignments using a Feature Sheet
-ruleset. If you find that you are sourcing all of your input files from a prior
-run, we recommend that you instead run `tiny recount` within that run's
+ruleset. If you find that you are sourcing all of your input files from a
+prior run, we recommend that you instead run `tiny recount` within that run's
 directory.
 
-optional arguments:
+Required arguments:
+  -i SAMPLES, --input-csv SAMPLES
+                        your Samples Sheet
+  -c CONFIGFILE, --config CONFIGFILE
+                        your Features Sheet
+  -o OUTPUTPREFIX, --out-prefix OUTPUTPREFIX
+                        output prefix to use for file names
+
+Optional arguments:
   -h, --help            show this help message and exit
   -sf [SOURCE [SOURCE ...]], --source-filter [SOURCE [SOURCE ...]]
                         Only produce counts for features whose GFF column 2
@@ -177,21 +192,13 @@ optional arguments:
                         feature counts. Default: true.
   -dc, --decollapse     Create a decollapsed copy of all SAM files listed in
                         your Samples Sheet.
-  -a, --all-features    Represent all features in output counts table,
-                        regardless of counts or identity rules.
+  -a, --all-features    Represent all features in output counts table, even if
+                        they did not match a Select for / with value.
   -p, --is-pipeline     Indicates that counter was invoked as part of a
                         pipeline run and that input files should be sourced as
                         such.
   -d, --report-diags    Produce diagnostic information about
                         uncounted/eliminated selection elements.
-
-required arguments:
-  -i SAMPLES, --input-csv SAMPLES
-                        your Samples Sheet
-  -c CONFIGFILE, --config CONFIGFILE
-                        your Features Sheet
-  -o OUTPUTPREFIX, --out-prefix OUTPUTPREFIX
-                        output prefix to use for file names
 ```
 ##### Deseq2
 ```
@@ -227,9 +234,11 @@ Optional arguments:
 [Full documentation for Plotter can be found here](doc/Plotter.md).
 
 ```
-tiny-plot [-rc RAW_COUNTS] [-nc NORM_COUNTS] [-ss STAT]
-          [-dge COMPARISON [COMPARISON ...]] [-len 5P_LEN [5P_LEN ...]]
-          [-h] [-o PREFIX] [-pv VALUE] [-s MPLSTYLE] [-v] -p PLOT [PLOT ...]
+tiny-plot [-rc RAW_COUNTS] [-nc NORM_COUNTS] [-uc RULE_COUNTS]
+          [-ss STAT] [-dge COMPARISON [COMPARISON ...]]
+          [-len 5P_LEN [5P_LEN ...]] [-h] [-o PREFIX] [-pv VALUE]
+          [-s MPLSTYLE] [-v] [-ldi VALUE] [-lda VALUE] -p PLOT
+          [PLOT ...]
 
 This script produces basic static plots for publication as part of the tinyRNA
 workflow. Input file requirements vary by plot type and you are free to supply
@@ -397,7 +406,7 @@ Simple static plots are generated from the outputs of Counter and DESeq2. These 
 |           <img src="images/plots/len_dist_short.jpeg" width="90%" alt="len_dist 20-30"/>           |     <img src="images/plots/len_dist_long.jpeg" width="90%" alt="len_dist 15-60"/>     |
 
 
-DESeq2 can also produce a standard **PCA plot** from variance stabilizing transformed feature counts. This output is controlled by the `dge_pca_plot` key in the Run Config.
+DESeq2 will produce a standard **PCA plot** from variance stabilizing transformed feature counts. This output is controlled by the `dge_pca_plot` key in the Run Config and by your experiment design. DGE outputs, including the PCA plot, will not be produced for experiments with less than 1 degree of freedom.
 
 
 ## Contributing

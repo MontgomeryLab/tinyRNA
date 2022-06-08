@@ -34,10 +34,10 @@ For example, if a rule contained `Class` and `WAGO` in these columns, then a fea
 >**Tip**: The rules defined in your Features Sheet are case-insensitive. You do not need to match the capitalization of your target attributes.
 
 ## Stage 2: Hierarchy and Overlap Parameters
-| features.csv columns: | Hierarchy | Match |
-|-----------------------|-----------|-------|
+| features.csv columns: | Hierarchy | Overlap |
+|-----------------------|-----------|---------|
 
-This stage of selection is concerned with the interval overlap between alignments and features. **Overlap is determined in a strandless fashion.** See the `Strand` section in Stage 3 for refinement of selections by strand.
+This stage of selection is concerned with the interval overlap between alignments and features. **Overlap is determined in a strandless fashion.** See the [Strand](#strand) section in Stage 3 for refinement of selections by strand.
 
 ### Hierarchy
 Each rule must be assigned a hierarchy value. This value is used to perform elimination when multiple features, or multiple feature-rule pairs, overlap an alignment locus.
@@ -52,8 +52,8 @@ You can use higher hierarchy values to exclude features that are not of interest
 
 >**Example:** suppose you have a miRNA locus embedded within a coding gene locus (within an intron for example). By assigning a hierarchy of 1 to miRNA and a hierarchy of 2 to coding genes, all small RNA counts from sequences matching to the miRNA would be excluded from total counts for the coding gene. Reversing the hierarchy such that miRNA had a hierarchy of 2 and coding genes had a hierarchy of 1 would instead exclude reads from sequences matching to the coding gene from total counts for the miRNA. If a hierarchy of 1 was assigned to both miRNAs and coding genes, counts for sequences matching both features would be split between them.
 
-### Match
-The match column allows you to specify which read alignments should be assigned based on how their start and end points overlap with candidate features. Candidates for each matched rule can be selected using the following options:
+### Overlap
+This column allows you to specify which read alignments should be assigned based on how their start and end points overlap with candidate features. Candidates for each matched rule can be selected using the following options:
 - `partial`: alignment overlaps feature by at least one base
 - `full`: alignment does not extend beyond either terminus of the feature
 - `exact`: alignment termini are equal to the feature's
@@ -111,5 +111,5 @@ You may encounter the following cases when you have more than one unique GFF fil
 
 Discontinuous features and feature filtering support:
 - Discontinuous features are supported (as defined by the `Parent` attribute key, or by a shared `ID` attribute value). Rule and alias matches of descendents are merged with the root parent's.
-- Features can be filtered during GFF parsing by on their `source` and/or `type` columns, and these preferences can be specified in the Run Config file. These are inclusive filters. Only features matching the values specified will be retained for selection. An empty list allows all values.
-- If a filtered feature breaks a feature lineage (that is, features chained via the `Parent` attribute), then the highest non-filtered ancestor is still considered to be the root parent. The lineage is maintained transparently but the filtered feature does not contribute to the domains of selection.
+- Features can be filtered during GFF parsing by their `source` and/or `type` columns, and these preferences can be specified in the Run Config file. These are inclusive filters. Only features matching the values specified will be retained for selection and listed in the output counts table. An empty list allows all values. See the [parameters documentation](Parameters.md#filters) for information about specifying these filters.
+- If a filtered feature breaks a feature lineage (that is, features chained via the `Parent` attribute), then the highest non-filtered ancestor is designated the root parent. The lineage is maintained transparently but the filtered feature does not contribute to the domains of selection.

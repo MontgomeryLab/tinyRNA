@@ -27,16 +27,17 @@ gz_f = partial(gzip.GzipFile, compresslevel=6, fileobj=None, mtime=0)
 def get_args() -> 'argparse.NameSpace':
     """Get command line arguments"""
 
-    parser = argparse.ArgumentParser(description=__doc__)
-    required_group = parser.add_argument_group("required arguments")
+    parser = argparse.ArgumentParser(description=__doc__, add_help=False)
+    required_args = parser.add_argument_group("Required arguments")
+    optional_args = parser.add_argument_group("Optional arguments")
 
     # Required arguments
-    required_group.add_argument(
+    required_args.add_argument(
         '-i', '--input-file', metavar='FASTQFILE', required=True, help=
         'The input fastq(.gz) file to collapse'
     )
 
-    required_group.add_argument(
+    required_args.add_argument(
         '-o', '--out-prefix', metavar='OUTPREFIX', required=True, help=
         'The prefix for output files {prefix}_collapsed.fa and, if '
         'counts fall below threshold, {prefix}_collapsed_lowcounts.fa'
@@ -49,23 +50,25 @@ def get_args() -> 'argparse.NameSpace':
             raise argparse.ArgumentTypeError("Numerical arguments must be >= 0")
 
     # Optional arguments
-    parser.add_argument(
+    optional_args.add_argument('-h', '--help', action="help", help="show this help message and exit")
+
+    optional_args.add_argument(
         '-t', '--threshold', default=0, required=False, type=positive_number,
         help='Sequences <= THRESHOLD will be omitted from {prefix}_collapsed.fa '
         'and will instead be placed in {prefix}_collapsed_lowcounts.fa'
     )
 
-    parser.add_argument(
+    optional_args.add_argument(
         '-c', '--compress', required=False, action='store_true',
         help='Use gzip compression when writing fasta outputs'
     )
 
-    parser.add_argument(
+    optional_args.add_argument(
         '--5p-trim', metavar='LENGTH', required=False, type=positive_number,
         help="Trim LENGTH bases from the 5' end of each sequence"
     )
 
-    parser.add_argument(
+    optional_args.add_argument(
         '--3p-trim', metavar='LENGTH', required=False, type=positive_number,
         help="Trim LENGTH bases from the 3' end of each sequence"
     )
@@ -100,7 +103,7 @@ def seq_counter(fastq_file: str, file_reader: callable, trim: dict = None) -> 'C
         if f.read(2) == b'\x1F\x8B': return seq_counter(fastq_file, gz_f, trim)
 
         # Count occurrences of unique sequences while maintaining insertion order
-        counts = Counter(sequences() if not len(trim) else trim_seqs(sequences(), trim))
+        counts = Counter(sequences() if not trim else trim_seqs(sequences(), trim))
 
     counts.pop("", None)  # Remove blank line counts from the dictionary
     return counts

@@ -117,6 +117,9 @@ Supported values are:
 
 >**NOTE**: These normalizations operate independently of Counter's --normalize-by-hits commandline option. The former is concerned with per-library normalization, whereas the latter is concerned with normalization by selected feature count at each locus ([more info](Counter.md#count-normalization)). The commandline option does not enable or disable the normalizations detailed above.
 
+### Low DF Experiments
+DESeq2 requires that your experiment design has at least one degree of freedom. If your experiment doesn't include at least one sample group with more than one replicate, DESeq2 will be skipped and DGE related plots will not be produced.
+
 ## Features Sheet Details
 The Features Sheet allows you to define selection rules that determine how features are chosen when multiple features are found overlap an alignment locus. Selected features are "assigned" a portion of the reads associated with the alignment.
 

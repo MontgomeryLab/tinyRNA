@@ -38,8 +38,8 @@ class CounterTests(unittest.TestCase):
             'Strand':            "antisense",
             "5' End Nucleotide": '"C,G,U"',  # Needs to be double-quoted due to commas
             'Length':            "all",
-            'Match':             "Partial",
-            'Feature Source':    "./testdata/cel_ws279/c_elegans_WS279_chr1.gff3"
+            'Overlap':           "Partial",
+            'Feature Source':    "test_file.gff3"
         }
 
         # Represents the parsed Features Sheet row above
@@ -52,7 +52,7 @@ class CounterTests(unittest.TestCase):
             'Strand':    _row['Strand'],
             'nt5end':    _row["5' End Nucleotide"].upper().translate({ord('U'): 'T'}),
             'Length':    _row['Length'],
-            'Strict':    _row['Match'].lower()
+            'Overlap':   _row['Overlap'].lower()
         }]
 
         # Represents an unparsed Samples Sheet row
@@ -82,7 +82,7 @@ class CounterTests(unittest.TestCase):
     def csv(type, rows, header=()):
         if type == "features.csv":
             header = ['Select for...', 'with value...', 'Alias by...', 'Tag', 'Hierarchy',
-                      'Strand', "5' End Nucleotide", 'Length', 'Match', 'Feature Source']
+                      'Strand', "5' End Nucleotide", 'Length', 'Overlap', 'Feature Source']
         elif type == "samples.csv":
             header = ['Input FASTQ Files', 'Sample/Group Name', 'Replicate Number', 'Control', 'Normalization']
 

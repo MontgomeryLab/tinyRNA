@@ -1,3 +1,4 @@
+import builtins
 import unittest
 import json
 import sys
@@ -18,8 +19,8 @@ class MyTestCase(unittest.TestCase):
             os.chdir(f".{os.sep}tests")
 
         # Test-length files
-        self.fastq_file = '../START_HERE/fastq_files/Lib303_test.fastq'
-        self.fastq_gzip = 'testdata/collapser/Lib303_test.fastq.gz'
+        self.fastq_file = 'testdata/collapser/Lib303_test.fastq'
+        self.fastq_gzip = f'{self.fastq_file}.gz'
         self.fastq_counts_dict = json.loads(read('./testdata/collapser/Lib303_counts_reference.json'))
         self.fasta = {
             "thresh=0": read('testdata/collapser/Lib303_thresh_0_collapsed.fa'),
@@ -64,26 +65,26 @@ class MyTestCase(unittest.TestCase):
     """
     def test_seq_counter_min(self):
         # Single record fastq test
-        with patch.object(collapser.seq_counter, '__defaults__', new=(mock_open(read_data=self.min_fastq),)) as mo:
-            min_count = collapser.seq_counter("mockPrefixDNE")
-            mo[0].assert_called_once_with("mockPrefixDNE", "rb")
+        with patch('tiny.rna.collapser.builtins.open', new=mock_open(read_data=self.min_fastq)) as mo:
+            min_count = collapser.seq_counter("mockPrefixDNE", builtins.open)
+            mo.assert_called_once_with("mockPrefixDNE", "rb")
             self.assertDictEqual(min_count, self.min_counts_dict)
-            self.assertEqual([call('mockPrefixDNE', 'rb')], mo[0].call_args_list)
+            self.assertEqual([call('mockPrefixDNE', 'rb')], mo.call_args_list)
         print("seq_counter: passed single record test.", file=sys.stderr)
 
         # Zero length file test
-        with patch.object(collapser.seq_counter, '__defaults__', new=(mock_open(read_data=''),)) as mo:
-            zero_count = collapser.seq_counter("mockPrefixDNE")
-            mo[0].assert_called_once_with("mockPrefixDNE", "rb")
+        with patch('tiny.rna.collapser.builtins.open', new=mock_open(read_data='')) as mo:
+            zero_count = collapser.seq_counter("mockPrefixDNE", builtins.open)
+            mo.assert_called_once_with("mockPrefixDNE", "rb")
             self.assertDictEqual(zero_count, {})
-            self.assertEqual([call('mockPrefixDNE', 'rb')], mo[0].call_args_list)
+            self.assertEqual([call('mockPrefixDNE', 'rb')], mo.call_args_list)
         print("seq_counter: passed zero length input test.", file=sys.stderr)
 
     """
     Testing seq_counter() with test-length library files
     """
     def test_seq_counter_full(self):
-        seq_count_dict = collapser.seq_counter(self.fastq_file)
+        seq_count_dict = collapser.seq_counter(self.fastq_file, builtins.open)
         self.assertDictEqual(seq_count_dict, self.fastq_counts_dict)
         print("seq_counter: counts verified.", file=sys.stderr)
 
@@ -92,16 +93,15 @@ class MyTestCase(unittest.TestCase):
     """
     def test_seq_counter_gzip(self):
         # MIN TEST
-        # Need to patch 1) builtins.open in gzip, 2) file_reader in seq_counter's __defaults__
+        # Need to patch builtins.open in gzip module scope
         with patch('tiny.rna.collapser.gzip.builtins.open', new=mock_open(read_data=self.min_fastq_gz)):
-            with patch.object(collapser.seq_counter, '__defaults__', new=(mock_open(read_data=self.min_fastq_gz),)) as mo:
-                # Read the mock gzipped single record fastq file
-                gz_min_result = collapser.seq_counter("mockPrefixDNE")
-                self.assertEqual(self.min_counts_dict, gz_min_result)
+            # Read the mock gzipped single record fastq file
+            gz_min_result = collapser.seq_counter("mockPrefixDNE", collapser.gz_f)
+            self.assertEqual(self.min_counts_dict, gz_min_result)
 
         # FULL TEST
         # Verify that full-length fastq.gz files can be read and properly counted
-        gz_full_result = collapser.seq_counter(self.fastq_gzip)
+        gz_full_result = collapser.seq_counter(self.fastq_gzip, collapser.gz_f)
         self.assertDictEqual(self.fastq_counts_dict, gz_full_result)
 
     """
@@ -380,7 +380,7 @@ class MyTestCase(unittest.TestCase):
         negative_threshold_args = f"tiny-collapse -i /dev/null -o test -t -1".split(" ")
         with patch('sys.argv', negative_threshold_args) as cm:
             collapser_main()
-            self.assertIn("Threshold must be >= 0", mock_stderr.getvalue())
+            self.assertIn("Numerical arguments must be >= 0", mock_stderr.getvalue())
             reset_stderr()
 
         # Omit prefix test
@@ -408,33 +408,32 @@ class MyTestCase(unittest.TestCase):
             mock_stdout.seek(0)
 
         # Compression test
-        # Lots of patching since we need to mock the file interface for seq_counter default argument,
-        # gzip, and seq2fasta. Also need to mock file existence.
-        no_compression_args = f"tiny-collapse -i min_gz -o min_gz".split(" ")
         [os.path.isfile.configure_mock(side_effect=self.prefix_exists_fn) for os in [os_aq, os_gz]]
-        with patch('tiny.rna.collapser.gzip.builtins.open', new=mock_open(read_data=self.min_fastq_gz)) as gzopen:
-            with patch.object(collapser.seq_counter, '__defaults__',
-                              new=(mock_open(read_data=self.min_fastq_gz),)) as seq_counter_open:
-                with patch('tiny.rna.collapser.open', new_callable=mock_open) as seq2fasta_open:
+        with patch('builtins.open', new=mock_open(read_data=self.min_fastq_gz)) as builtins_open, \
+                patch('tiny.rna.collapser.open', new_callable=mock_open) as seq2fasta_open, \
+                    patch('tiny.rna.collapser.gz_f', new_callable=mock_open) as gzip_open:
 
-                    # Without compression (no -c flag)
-                    with patch('sys.argv', no_compression_args):
-                        collapser_main()
-                        # Both interfaces should read at seq_counter, non-gzip write in seq2fasta
-                        self.assertEqual([call('min_gz', 'rb')], seq_counter_open[0].call_args_list)
-                        self.assertEqual([call('min_gz', 'rb')], gzopen.call_args_list)
-                        self.assertEqual([call('min_gz_collapsed.fa', 'w')], seq2fasta_open.call_args_list)
-                        gzopen.reset_mock(), seq_counter_open[0].reset_mock(), seq2fasta_open.reset_mock()
+            expected_read = [call('min_gz', 'rb')]
 
-                    # With compression (with -c flag)
-                    compression_args = f"tiny-collapse -i min_gz -o min_gz -c".split(" ")
-                    with patch('sys.argv', compression_args):
-                        collapser_main()
-                        # Both interfaces should read at seq_counter, but only gzip should write
-                        self.assertEqual([call('min_gz', 'rb')], seq_counter_open[0].call_args_list)
-                        self.assertEqual([call('min_gz', 'rb'), call('min_gz_collapsed.fa.gz', 'wb')],
-                                         gzopen.call_args_list)
-                        self.assertEqual([], seq2fasta_open.call_args_list)
+            # Without compression (no -c flag)
+            no_compression_args = f"tiny-collapse -i min_gz -o min_gz".split(" ")
+            with patch('sys.argv', no_compression_args):
+                collapser_main()
+                expected_write = [call('min_gz_collapsed.fa', 'w')]
+                self.assertListEqual(gzip_open.call_args_list, expected_read)       # File read
+                self.assertListEqual(builtins_open.call_args_list, expected_read)   # Exploratory read before switching to gzip
+                self.assertEqual(seq2fasta_open.call_args_list, expected_write)     # Non-gzip file write
+                gzip_open.reset_mock(), builtins_open.reset_mock(), seq2fasta_open.reset_mock()
+
+            expected_gzip = expected_read + [call('min_gz_collapsed.fa.gz', 'wb')]
+
+            # With compression (with -c flag)
+            compression_args = f"tiny-collapse -i min_gz -o min_gz -c".split(" ")
+            with patch('sys.argv', compression_args):
+                collapser_main()
+                self.assertListEqual(gzip_open.call_args_list, expected_gzip)       # File read and write
+                self.assertListEqual(builtins_open.call_args_list, expected_read)   # Exploratory read before switching to gzip
+                self.assertEqual(seq2fasta_open.call_args_list, [])                 # Only gzip writes
 
 
 if __name__ == '__main__':

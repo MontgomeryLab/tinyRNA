@@ -38,7 +38,7 @@ ebwt: ''
 ##-- If you do not have a bowtie index, provide your reference genome file(s) here --##
 ##-- One file per line, with "- " at the beginning (think: bulleted list) --##
 reference_genome_files:
-- ./reference_data/chr1.fa
+- ./reference_data/ram1.fa
 
 ######----------------------------------- fastp -------------------------------------######
 # Optional: provide a FASTA file containing the specific adapters you wish to trim

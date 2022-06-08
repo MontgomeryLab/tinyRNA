@@ -251,7 +251,7 @@ class plotterlib:
 
         self.set_square_scatter_view_lims(gscat, view_lims)
         self.set_scatter_ticks(gscat)
-        gscat.legend(labels=labels, bbox_to_anchor=(1, 1))
+        gscat.legend(labels=labels)
         return gscat
 
     def set_dge_class_legend_style(self):
