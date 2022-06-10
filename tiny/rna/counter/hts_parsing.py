@@ -288,8 +288,8 @@ class CaseInsensitiveAttrs(Dict[str, tuple]):
         if key_type is str and val_type is Wildcard:
             return key in self
         if key_type is Wildcard and val_type is str:
-            for v in self.values():
-                if val in v: return True
+            for v in super(CaseInsensitiveAttrs, self).values():
+                if val in v.ci_val: return True
             else: return False
 
     # Dict methods not implemented which are invalid if delegated to dict class

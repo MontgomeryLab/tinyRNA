@@ -168,7 +168,7 @@ class FeatureSelector:
     def build_selectors(rules_table) -> List[dict]:
         """Builds single/list/range/wildcard membership-matching selectors.
 
-        Applies to: strand, 5' end nucleotide, and identities containing wildcards
+        Applies to: strand, 5' end nucleotide, length, and identities containing wildcards
 
         This function replaces text-based selector definitions in the rules_table with
         their corresponding selector classes. Selector evaluation is then performed via
