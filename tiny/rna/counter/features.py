@@ -168,7 +168,7 @@ class FeatureSelector:
     def build_selectors(rules_table) -> List[dict]:
         """Builds single/list/range/wildcard membership-matching selectors.
 
-        Applies to: strand, 5' end nucleotide, and length
+        Applies to: strand, 5' end nucleotide, and identities containing wildcards
 
         This function replaces text-based selector definitions in the rules_table with
         their corresponding selector classes. Selector evaluation is then performed via
@@ -178,13 +178,17 @@ class FeatureSelector:
         Precondition: rules_table preserves original row order
         """
 
-        selector_builders = {"Strand": StrandMatch, "nt5end": NtMatch, "Length": NumericalMatch}
+        selector_builders = {"Strand": StrandMatch, "nt5end": NtMatch, "Length": NumericalMatch, "Identity": lambda x:x}
+
         for i, row in enumerate(rules_table):
             try:
                 for selector, build_fn in selector_builders.items():
                     defn = row[selector]
-                    if type(defn) is str and any([wc in defn.lower() for wc in ['all', 'both']]):
+
+                    if type(defn) is str and defn.lower().strip() in Wildcard.kwds:
                         row[selector] = Wildcard()
+                    elif type(defn) is tuple:
+                        row[selector] = tuple(Wildcard() if x.lower().strip() in Wildcard.kwds else x for x in defn)
                     else:
                         row[selector] = build_fn(defn)
             except Exception as e:

@@ -3,9 +3,11 @@
 import re
 import HTSeq
 
+from tiny.rna.util import Singleton
 
-class Wildcard:
-    __slots__ = ()
+
+class Wildcard(metaclass=Singleton):
+    kwds = ('all', 'both', '*', '')
 
     @staticmethod
     def __contains__(_): return True
