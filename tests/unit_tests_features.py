@@ -360,6 +360,28 @@ class FeaturesTests(unittest.TestCase):
         self.assertEqual(fs.choose(feat_B, aln['aln_exact']), {"3' Anchored Overlap (-)": {0}})
         self.assertEqual(fs.choose(feat_B, aln['aln_short']), {"3' Anchored Overlap (-)": {0}})
 
+    """Are wildcard keywords in identity selectors properly converted to a Wildcard object copy?"""
+
+    def test_wildcard_identities(self):
+        wildcard, non_wild = "all", "Non-wildcard"
+        one = [dict(deepcopy(rules_template[0]), Identity=(wildcard, non_wild)),
+               dict(deepcopy(rules_template[0]), Identity=(non_wild, wildcard))]
+        two = [dict(deepcopy(rules_template[0]), Identity=(wildcard, wildcard))]
+        non = [dict(deepcopy(rules_template[0]), Identity=(non_wild, non_wild))]
+        dup = deepcopy(two)
+
+        rules = [*one, *two, *non, *dup]
+
+        actual = FeatureSelector(rules, LibraryStats(normalize_by_hits=True)).inv_ident
+        expected = {
+            (Wildcard(), non_wild):   [0],
+            (non_wild,   Wildcard()): [1],
+            (Wildcard(), Wildcard()): [2, 4],
+            (non_wild,   non_wild):   [3]
+        }
+
+        self.assertDictEqual(actual, expected)
+
 
 if __name__ == '__main__':
     unittest.main()

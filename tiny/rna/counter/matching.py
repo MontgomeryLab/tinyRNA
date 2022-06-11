@@ -10,7 +10,7 @@ class Wildcard(metaclass=Singleton):
     kwds = ('all', 'both', '*', '')
 
     @staticmethod
-    def __contains__(_): return True
+    def __contains__(*_): return True
     def __repr__(_): return "<all>"
 
 
