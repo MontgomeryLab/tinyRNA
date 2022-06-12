@@ -24,8 +24,8 @@ Selection occurs in three stages, with the output of each stage as input to the 
 3. Remaining feature candidates are then selected based on the small RNA attributes of the alignment to which they are being assigned. These attributes are, again, defined in each feature's matched rules
 
 ## Stage 1: Feature Attribute Parameters
-| features.csv columns: | Select for... | with value... |
-|-----------------------|---------------|---------------|
+| _features.csv columns:_ | Select for... | with value... |
+|-------------------------|---------------|---------------|
 
 Each feature's column 9 attributes are searched for the key-value combinations defined in the `Select for...` and `with value...` columns. Features, and the rules they matched, are retained for overlap evaluation at alignment loci. 
 
@@ -38,8 +38,8 @@ Attribute keys are allowed to have multiple comma separated values, and these va
 Wildcard values (`all`, `*`, or an empty cell) can be used in these fields. With this functionality you can evaluate features for the presence of an attribute key without regarding its values, or you can check all attribute keys for the presence of a specific value, or you can skip Stage 1 selection altogether to permit the evaluation of the complete feature set in Stage 2. In the later case, feature-rule matching pairs still serve as the basis for selection; each rule still applies only to its matching subset from previous Stages.
 
 ## Stage 2: Hierarchy and Overlap Parameters
-| features.csv columns: | Hierarchy | Overlap |
-|-----------------------|-----------|---------|
+| _features.csv columns:_ | Hierarchy | Overlap |
+|-------------------------|-----------|---------|
 
 This stage of selection is concerned with the interval overlap between alignments and features. **Overlap is determined in a strandless fashion.** See the [Strand](#strand) section in Stage 3 for refinement of selections by strand.
 
@@ -69,8 +69,8 @@ The following diagrams demonstrate the strand semantics of these interval select
 ![Full_Exact_Partial](../images/Full_Exact_Partial.png)
 
 ## Stage 3: Alignment Attribute Parameters
-| features.csv columns: | Strand | 5' End Nucleotide | Length |
-|-----------------------|--------|-------------------|--------|
+| _features.csv columns:_ | Strand | 5' End Nucleotide | Length |
+|-------------------------|--------|-------------------|--------|
 
 The final stage of selection is concerned with attributes of the alignment to which features are being assigned.
 

@@ -103,6 +103,9 @@ To build bowtie indexes:
 Once your indexes have been built, your Paths File will be modified such that `ebwt` points to their location (prefix) within your Run Directory. This means that indexes will not be unnecessarily rebuilt on subsequent runs as long as the same Paths File is used. If you need them rebuilt, simply repeat steps 3 and 4 above.
 
 ## Samples Sheet Details
+|  _Column:_ | Input FASTQ Files   | Sample/Group Name | Replicate Number | Control | Normalization |
+|-----------:|---------------------|-------------------|------------------|---------|---------------|
+| _Example:_ | cond1_rep1.fastq.gz | condition1        | 1                | True    | RPM           |
 
 ### Assigning the Control Group
 Assigning the control group allows the proper DGE comparisons to be made and plotted. The Control column is where you'll make this indication by writing `true` on any corresponding row. Regardless of the number of replicates in each group, only one associated row needs to have this indication. Do not write `false` or anything else for the other groups; this column should only be used to indicate the affirmative.
@@ -121,13 +124,17 @@ Supported values are:
 DESeq2 requires that your experiment design has at least one degree of freedom. If your experiment doesn't include at least one sample group with more than one replicate, DESeq2 will be skipped and DGE related plots will not be produced.
 
 ## Features Sheet Details
+| _Column:_ | Select for... | with value... | Alias by... | Tag | Hierarchy | Strand | 5' End Nucleotide | Length | Overlap | Feature Source |
+|--------------| --- | --- |-------------| --- | --- | --- | --- | --- |---------| --- |
+| _Example:_ | Class | CSR | Name        | tag1 | 1 | both | G | 22 | Exact   | ram1.gff3 |
+
 The Features Sheet allows you to define selection rules that determine how features are chosen when multiple features are found overlap an alignment locus. Selected features are "assigned" a portion of the reads associated with the alignment.
 
 Rules apply to features parsed from **all** Feature Sources, with the exception of "Alias by..." which only applies to the Feature Source on the same row. Selection first takes place against feature attributes (GFF column 9), and is directed by defining the attribute you want to be considered (Select for...) and the acceptable values for that attribute (with value...). 
 
 Rules that match features in the first stage of selection will be used in a second stage which performs elimination by hierarchy and interval overlap characteristics. Remaining candidates pass to the third and final stage of selection which examines characteristics of the alignment itself: strand relative to the feature of interest, 5' end nucleotide, and length. 
 
-Since this configuration file is primarily used by Counter, we recommend you see [Counter's documentation](Counter.md) for a more thorough explanation.
+See [Counter's documentation](Counter.md) for an explanation of each column.
 
 >**Tip**: Don't worry about having duplicate Feature Source entries. Each GFF file is parsed only once.
 
