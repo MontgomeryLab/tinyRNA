@@ -675,6 +675,23 @@ class MyTestCase(unittest.TestCase):
         self.assertEqual(cia['otherkey'], ('AtTrVaL2',))
         self.assertEqual(cia['attrkey'], ("AtTrVaL1", "AtTrVaL2"))
 
+    """Does CaseInsensitiveAttrs.contains_ident() properly handle wildcard queries?"""
+
+    def test_CaseInsensitiveAttrs_contains_ident_wildcard(self):
+        cia = CaseInsensitiveAttrs()
+
+        cia["AtTrKeY"] = ("AtTrVaL1", "AtTrVaL2")
+        cia["AtTrKeY2"] = ("AtTrVaL3",)
+        cia["AtTrKeY3"] = ("AtTrVaL4", "AtTrVaL5", "AtTrVaL6")
+
+        self.assertTrue(cia.contains_ident(("attrkey3", "attrval5")))
+        self.assertTrue(cia.contains_ident(("attrkey2", Wildcard())))
+        self.assertTrue(cia.contains_ident((Wildcard(), "attrval6")))
+        self.assertTrue(cia.contains_ident((Wildcard(), Wildcard())))
+
+        self.assertFalse(cia.contains_ident(("attrkey4", "attrval7")))
+        self.assertFalse(cia.contains_ident(("attrkey4", Wildcard())))
+        self.assertFalse(cia.contains_ident((Wildcard(), "attrval7")))
 
 if __name__ == '__main__':
     unittest.main()

@@ -4,9 +4,10 @@ import sys
 import re
 
 from collections import Counter, defaultdict, namedtuple
-from typing import Tuple, List, Dict, Iterator, Optional, DefaultDict, Set
+from typing import Tuple, List, Dict, Iterator, Optional, DefaultDict, Set, Union
 from inspect import stack
 
+from tiny.rna.counter.matching import Wildcard
 from tiny.rna.util import report_execution_time, make_filename
 
 # For parse_GFF_attribute_string()
@@ -269,12 +270,27 @@ class CaseInsensitiveAttrs(Dict[str, tuple]):
         yield from zip(self.keys(), self.values())
 
     # Non-overridden method
-    def contains_ident(self, query: tuple):
-        # Allows case-insensitive membership queries by (key, value)
-        key = query[0].lower()
-        val = query[1].lower()
-        return key in self and \
-               val in super(CaseInsensitiveAttrs, self).__getitem__(key).ci_val
+    def contains_ident(self, query: Tuple[Union[str, Wildcard], Union[str, Wildcard]]):
+        """Checks if the identity tuple is present in the dictionary. Wildcards are supported."""
+
+        key_type = type(query[0])
+        val_type = type(query[1])
+
+        key = query[0].lower() if key_type is str else query[0]
+        val = query[1].lower() if val_type is str else query[1]
+
+        if key_type is val_type is Wildcard:
+            return True
+        if key_type is val_type is str:
+            # Allows case-insensitive membership queries by (key, value)
+            return key in self and \
+                   val in super(CaseInsensitiveAttrs, self).__getitem__(key).ci_val
+        if key_type is str and val_type is Wildcard:
+            return key in self
+        if key_type is Wildcard and val_type is str:
+            for v in super(CaseInsensitiveAttrs, self).values():
+                if val in v.ci_val: return True
+            else: return False
 
     # Dict methods not implemented which are invalid if delegated to dict class
     def update(self, other, **kwargs): self.not_implemented()

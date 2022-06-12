@@ -27,11 +27,15 @@ Selection occurs in three stages, with the output of each stage as input to the 
 | features.csv columns: | Select for... | with value... |
 |-----------------------|---------------|---------------|
 
-Each feature's column 9 attributes are searched for the key-value combinations defined in the `Select for...` and `with value...` columns. Features, and the rules they matched, are retained for overlap evaluation at alignment loci. Attribute keys are allowed to have multiple comma separated values, and these values are treated as a list; only one of the listed values needs to match the `with value...` to be considered a valid match to the rule.
+Each feature's column 9 attributes are searched for the key-value combinations defined in the `Select for...` and `with value...` columns. Features, and the rules they matched, are retained for overlap evaluation at alignment loci. 
 
-For example, if a rule contained `Class` and `WAGO` in these columns, then a feature with attributes<br>`... ;Class=CSR,WAGO; ...` would be considered a match for the rule.
+#### Value Lists
+Attribute keys are allowed to have multiple comma separated values, and these values are treated as a list; only one of the listed values needs to match the `with value...` to be considered a valid match to the rule. For example, if a rule contained `Class` and `WAGO` in these columns, then a feature with attributes `... ;Class=CSR,WAGO; ...` would be considered a match for the rule.
 
 >**Tip**: The rules defined in your Features Sheet are case-insensitive. You do not need to match the capitalization of your target attributes.
+
+#### Wildcard Support
+Wildcard values (`all`, `*`, or an empty cell) can be used in these fields. With this functionality you can evaluate features for the presence of an attribute key without regarding its values, or you can check all attribute keys for the presence of a specific value, or you can skip Stage 1 selection altogether to permit the evaluation of the complete feature set in Stage 2. In the later case, feature-rule matching pairs still serve as the basis for selection; each rule still applies only to its matching subset from previous Stages.
 
 ## Stage 2: Hierarchy and Overlap Parameters
 | features.csv columns: | Hierarchy | Overlap |

@@ -3,12 +3,14 @@
 import re
 import HTSeq
 
+from tiny.rna.util import Singleton
 
-class Wildcard:
-    __slots__ = ()
+
+class Wildcard(metaclass=Singleton):
+    kwds = ('all', 'both', '*', '')
 
     @staticmethod
-    def __contains__(_): return True
+    def __contains__(*_): return True
     def __repr__(_): return "<all>"
 
 
@@ -114,12 +116,14 @@ class IntervalSelector:
                self.end == other.end
 
 
-class IntervalPartialMatch(Wildcard, IntervalSelector):
+class IntervalPartialMatch(IntervalSelector):
     """This is a no-op filter
 
     Since StepVector only returns features that overlap each alignment by
     at least one base, no further evaluation is required when this filter
     is used by FeatureSelector.choose()"""
+
+    __contains__ = Wildcard.__contains__
 
     def __init__(self, iv: HTSeq.GenomicInterval):
         super().__init__(iv)
