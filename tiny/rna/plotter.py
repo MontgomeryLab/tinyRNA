@@ -170,7 +170,7 @@ def class_charts(raw_class_counts: pd.DataFrame, mapped_reads: pd.Series, out_pr
 
     for library in raw_class_counts:
         chart = aqplt.barh_proportion(class_props[library], max_prop, scale, **kwargs)
-        chart.figure.suptitle("Percentage of Small RNAs by Class")
+        chart.set_title("Percentage of Small RNAs by Class")
         chart.set_ylabel("Class")
 
         # Save the plot
@@ -198,7 +198,7 @@ def rule_charts(rule_counts: pd.DataFrame, out_prefix: str, scale=2, **kwargs):
 
     for library, prop_df in rule_props.items():
         chart = aqplt.barh_proportion(prop_df, max_prop, scale, **kwargs)
-        chart.figure.suptitle("Percentage of Small RNAs by Matched Rule")
+        chart.set_title("Percentage of Small RNAs by Matched Rule")
         chart.set_ylabel("Rule")
 
         # Save the plot
@@ -667,17 +667,18 @@ def main():
 
         itinerary.append((func, arg, kwd))
 
-    if len(itinerary) > 1:
+    if len(itinerary) > 1 and not aqplt.is_debug_mode():
         with mp.Pool(len(itinerary)) as pool:
             results = []
             for task, args, kwds in itinerary:
                 results.append(pool.apply_async(task, args, kwds, error_callback=err))
             for result in results:
                 result.wait()
-    elif len(itinerary) == 1:
+    else:
         # Don't use multiprocessing if only one plot type requested
-        task = itinerary.pop()
-        task[0](*task[1], **task[2])
+        # or if in debug mode (matplotlib compatibility)
+        for task, args, kwds in itinerary:
+            task(*args, **kwds)
 
 def err(e):
     """Allows us to print errors from a MP worker without discarding the other results"""
