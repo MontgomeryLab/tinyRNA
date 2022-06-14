@@ -363,8 +363,8 @@ def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, show_un
             grp_args = [class_dges.index[class_dges == cls].tolist() for cls in uniq_classes]
 
             layer_order = np.argsort([len(grp) for grp in grp_args])[::-1]
-            sorted_grps = np.array(grp_args, dtype=object)[layer_order].tolist()
-            sorted_clss = np.array(uniq_classes, dtype=object)[layer_order].tolist()
+            sorted_grps = [grp_args[i] for i in layer_order]
+            sorted_clss = [uniq_classes[i] for i in layer_order]
 
             labels = ['p ≥ %g' % pval] + sorted_clss
             sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2], view_lims, *sorted_grps,
