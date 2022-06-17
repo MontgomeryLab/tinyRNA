@@ -37,7 +37,7 @@ class plotterlib:
 
     def __init__(self, user_style_sheet):
 
-        self.debug = getattr(sys, 'gettrace', lambda: None)() is not None
+        self.debug = self.is_debug_mode()
         if self.debug:
             mpl.use("TkAgg", force=True)
             mpl.rcParams['savefig.dpi'] = 100
@@ -132,14 +132,12 @@ class plotterlib:
         # Create the plot and set plot attributes
         cbar = (prop_ds * 100).plot(kind='barh', ax=ax, color=bar_colors, sort_columns=False, **kwargs)
         cbar.xaxis.set_major_formatter(tix.PercentFormatter())
-        cbar.tick_params(labelsize=10)
         cbar.set_xlabel('Percentage of Reads')
         cbar.set_xlim(0, min([(max_prop * 100) + 10, 100]))
 
         # Remove irrelevant plot attributes
         cbar.legend().set_visible(False)
         cbar.grid(False, axis='y')
-        cbar.set_title('')
 
         # For converting data coordinates to axes fraction coordinates
         frac_tf = cbar.transData + cbar.transAxes.inverted()
@@ -147,13 +145,16 @@ class plotterlib:
         # Place percentage annotations
         for bar in cbar.patches:
             width = bar.get_width()
+            height = bar.get_height()
             axes_frac = frac_tf.transform((width, 0))[0]
-            x_offset = 8 if axes_frac < 0.8 else -5 * 8
+            fontsize = min(self.data_val_to_points(cbar, height), plt.rcParams['axes.labelsize'])
+            x_offset = 0.8 * fontsize if axes_frac < 0.8 else -4 * fontsize
             cbar.annotate(
                 f"{width:.{scale}f}%",
                 (1.0, 0.5), xycoords=bar,  # anchor text to bar
                 xytext=(x_offset, 0), textcoords='offset points',
                 color=text_colors(width / 100 + 0.4),
+                fontproperties={'size': fontsize},
                 va='center_baseline',
             )
 
@@ -545,6 +546,10 @@ class plotterlib:
         rect.set_in_layout(False)
         ax.add_patch(rect)
 
+    @staticmethod
+    def is_debug_mode():
+        return getattr(sys, 'gettrace', lambda: None)() is not None
+
     def reuse_subplot(self, plot_type: str) -> Tuple[plt.Figure, Union[plt.Axes, List[plt.Axes]]]:
         """Retrieves the reusable subplot for this plot type
 
@@ -576,7 +581,7 @@ class CacheBase(ABC):
 
 class ClassChartCache(CacheBase):
     def __init__(self):
-        self.fig, self.ax = plt.subplots(figsize=(5, 4))
+        self.fig, self.ax = plt.subplots(figsize=(8, 6))
 
     def get(self) -> Tuple[plt.Figure, plt.Axes]:
         self.ax.clear()
@@ -585,7 +590,7 @@ class ClassChartCache(CacheBase):
 
 class LenDistCache(CacheBase):
     def __init__(self):
-        self.fig, self.ax = plt.subplots(figsize=(7, 4))
+        self.fig, self.ax = plt.subplots(figsize=(8, 4))
 
     def get(self) -> Tuple[plt.Figure, plt.Axes]:
         self.ax.clear()
