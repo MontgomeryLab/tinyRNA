@@ -328,7 +328,10 @@ class Configuration(ConfigBase):
                             help="The Run Config file to be processed")
 
         args = parser.parse_args()
-        Configuration(args.input_file).write_processed_config()
+
+        file_basename = os.path.basename(args.input_file)
+        config_object = Configuration(args.input_file)
+        config_object.write_processed_config(f"processed_{file_basename}")
 
 
 class CSVReader(csv.DictReader):
