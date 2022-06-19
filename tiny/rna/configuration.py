@@ -355,9 +355,9 @@ class CSVReader(csv.DictReader):
            "Feature Source":    "Source"
         }),
         "Samples Sheet": OrderedDict({
-            "Input FastQ Files": "File",
+            "Input FASTQ Files": "File",
             "Sample/Group Name": "Group",
-            "Replicate number":  "Replicate",
+            "Replicate Number":  "Replicate",
             "Control":           "Control",
             "Normalization":     "Normalization"
         })
@@ -384,7 +384,8 @@ class CSVReader(csv.DictReader):
                 yield row
 
     def validate_csv_header(self, header: OrderedDict):
-        expected = {key.lower() for key in self.tinyrna_sheet_fields[self.doctype].keys()}
+        doc_reference = self.tinyrna_sheet_fields[self.doctype]
+        expected = {key.lower() for key in doc_reference.keys()}
         read_vals = {val.lower() for val in header.values() if val is not None}
 
         unknown = {col_name for col_name in read_vals if col_name not in expected}
@@ -396,6 +397,9 @@ class CSVReader(csv.DictReader):
         if len(unknown):
             raise ValueError('\n\t'.join([f"The following columns in your {self.doctype} are unrecognized:",
                              *unknown]))
+        if header.values() != doc_reference.keys():
+            # Remap column order to match client's
+            self.fieldnames = tuple(doc_reference[key] for key in header.values())
 
 
 if __name__ == '__main__':
