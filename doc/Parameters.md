@@ -4,6 +4,7 @@ This page provides an explanation of the parameters offered by each of our Pytho
 ### Table of Contents
 - [Collapser](#collapser)
 - [Counter](#counter)
+- [DESeq2](#deseq2)
 - [Plotter](#plotter)
 
 ## Collapser
@@ -29,6 +30,36 @@ Bases can be trimmed from the 5' and/or 3' end of each sequence before it is eva
 | compress:      | `--compress`         |
 
 Collapser outputs are often very large. You can save space by switching this option "on" so that outputs are gzipped before being written to disk.
+
+### Full Commandline Help String
+```
+tiny-collapse -i FASTQFILE -o OUTPREFIX [-h] [-t THRESHOLD] [-c]
+              [--5p-trim LENGTH] [--3p-trim LENGTH]
+
+Collapse sequences from a fastq file to a fasta file. Headers in the output
+fasta file will contain the number of times each sequence occurred in the
+input fastq file, and an ID which indicates the relative order in which each
+sequence was first encountered. Gzipped files are automatically supported for
+fastq inputs, and compressed fasta outputs are available by request.
+
+Required arguments:
+  -i FASTQFILE, --input-file FASTQFILE
+                        The input fastq(.gz) file to collapse
+  -o OUTPREFIX, --out-prefix OUTPREFIX
+                        The prefix for output files {prefix}_collapsed.fa and,
+                        if counts fall below threshold,
+                        {prefix}_collapsed_lowcounts.fa
+
+Optional arguments:
+  -h, --help            show this help message and exit
+  -t THRESHOLD, --threshold THRESHOLD
+                        Sequences <= THRESHOLD will be omitted from
+                        {prefix}_collapsed.fa and will instead be placed in
+                        {prefix}_collapsed_lowcounts.fa
+  -c, --compress        Use gzip compression when writing fasta outputs
+  --5p-trim LENGTH      Trim LENGTH bases from the 5' end of each sequence
+  --3p-trim LENGTH      Trim LENGTH bases from the 3' end of each sequence
+```
 
 ## Counter
 
@@ -75,6 +106,94 @@ This commandline argument tells Counter that it is running as a workflow step ra
 
 Diagnostic information will include intermediate alignment files for each library and an additional stats table with information about counts that were not assigned to a feature. See [the description of these outputs](../README.md#Diagnostics) for details.
 
+### Full Commandline Help String
+```
+tiny-count -i SAMPLES -c CONFIGFILE -o OUTPUTPREFIX [-h]
+           [-sf [SOURCE [SOURCE ...]]] [-tf [TYPE [TYPE ...]]]
+           [-nh T/F] [-dc] [-a] [-p] [-d]
+
+This submodule assigns feature counts for SAM alignments using a Feature Sheet
+ruleset. If you find that you are sourcing all of your input files from a
+prior run, we recommend that you instead run `tiny recount` within that run's
+directory.
+
+Required arguments:
+  -i SAMPLES, --input-csv SAMPLES
+                        your Samples Sheet
+  -c CONFIGFILE, --config CONFIGFILE
+                        your Features Sheet
+  -o OUTPUTPREFIX, --out-prefix OUTPUTPREFIX
+                        output prefix to use for file names
+
+Optional arguments:
+  -h, --help            show this help message and exit
+  -sf [SOURCE [SOURCE ...]], --source-filter [SOURCE [SOURCE ...]]
+                        Only produce counts for features whose GFF column 2
+                        matches the source(s) listed
+  -tf [TYPE [TYPE ...]], --type-filter [TYPE [TYPE ...]]
+                        Only produce counts for features whose GFF column 3
+                        matches the type(s) listed
+  -nh T/F, --normalize-by-hits T/F
+                        If T/true, normalize counts by (selected) overlapping
+                        feature counts. Default: true.
+  -dc, --decollapse     Create a decollapsed copy of all SAM files listed in
+                        your Samples Sheet.
+  -a, --all-features    Represent all features in output counts table, even if
+                        they did not match a Select for / with value.
+  -p, --is-pipeline     Indicates that counter was invoked as part of a
+                        pipeline run and that input files should be sourced as
+                        such.
+  -d, --report-diags    Produce diagnostic information about
+                        uncounted/eliminated selection elements.
+```
+## DESeq2 Wrapper
+
+### PCA Plot
+| Run Config Key | Commandline Argument |
+|----------------|----------------------|
+| dge_pca_plot   | `--pca`              |
+
+DESeq2 can produce a PCA plot for your samples if your experiment contains biological replicates. If this option is switched "on", the PCA plot will be produced and placed in the plots subdirectory for each run.
+
+### Drop Zero
+| Run Config Key | Commandline Argument |
+|----------------|----------------------|
+| dge_drop_zero  | `--drop-zero`        |
+
+Features with zero counts across all libraries will be dropped before DGE analysis if this option is switched "on".
+
+
+### Full Commandline Help String
+```
+tiny-deseq.r --input-file COUNTFILE --outfile-prefix PREFIX [--control CONDITION] [--pca] [--drop-zero]
+
+Required arguments:
+
+    --input-file <count_file>
+          A text file containing a table of features x samples of the run to
+          process by DESeq2. The [...]feature_counts.csv output of tinyrna-count is expected here.
+              
+    --outfile-prefix <outfile>
+          Name of the output files to write. These will be created:
+              1. Normalized count table of all samples
+              2. Differential gene expression table per comparison
+              3. A PCA plot per comparison, if --pca is also provided.
+
+Optional arguments:
+
+    --control <control_condition>
+          If the control condition is specified, comparisons will
+          only be made between the control and experimental conditions.
+
+    --pca
+          This will produce principle component analysis plots
+          using the DESeq2 library. Output files are PDF format.
+
+    --drop-zero
+          Prior to performing analysis, this will drop all
+          rows/features which have a zero count in all samples."
+```
+
 ## Plotter
 
 ### Plot Requests
@@ -113,3 +232,69 @@ The scatter plots produced by Plotter have rasterized points by default. This al
 | plot_len_dist_max: | `--len-dist-max VALUE` |
 
 The min and/or max bounds for plotted lengths can be set with this option. See [Plotter's documentation](Plotter.md#length-bounds) for more information about how these values are determined if they aren't set.
+
+### Full Commandline Help String
+```
+tiny-plot [-rc RAW_COUNTS] [-nc NORM_COUNTS] [-uc RULE_COUNTS]
+          [-ss STAT] [-dge COMPARISON [COMPARISON ...]]
+          [-len 5P_LEN [5P_LEN ...]] [-h] [-o PREFIX] [-pv VALUE]
+          [-s MPLSTYLE] [-v] [-ldi VALUE] [-lda VALUE] -p PLOT
+          [PLOT ...]
+
+This script produces basic static plots for publication as part of the tinyRNA
+workflow. Input file requirements vary by plot type and you are free to supply
+only the files necessary for your plot selections. If you are sourcing all of
+your input files from the same run directory, you may find it easier to
+instead run `tiny replot` within that run directory.
+
+Required arguments:
+  -p PLOT [PLOT ...], --plots PLOT [PLOT ...]
+                        List of plots to create. Options:
+                        • len_dist: A stacked barchart showing size & 5'
+                          nucleotide distribution.
+                        • rule_charts: A barchart showing percentages
+                          of counts by matched rule.
+                        • class_charts: A barchart showing percentages
+                          of counts per class.
+                        • replicate_scatter: A scatter plot comparing
+                          replicates for all count files given.
+                        • sample_avg_scatter_by_dge: A scatter plot comparing
+                          all sample groups, with differentially expressed
+                          small RNAs highlighted based on P value cutoff.
+                        • sample_avg_scatter_by_dge_class: A scatter plot
+                          comparing all sample groups, with classes
+                          highlighted for differentially expressed small RNAs
+                          based on P value cutoff.
+
+Input files produced by Counter:
+  -rc RAW_COUNTS, --raw-counts RAW_COUNTS
+                        The ...feature_counts.csv file
+  -uc RULE_COUNTS, --rule-counts RULE_COUNTS
+                        The ...counts-by-rule.csv file
+  -ss STAT, --summary-stats STAT
+                        The ...summary_stats.csv file
+  -len 5P_LEN [5P_LEN ...], --len-dist 5P_LEN [5P_LEN ...]
+                        The ...nt_len_dist.csv files
+
+Input files produced by DGE:
+  -nc NORM_COUNTS, --norm-counts NORM_COUNTS
+                        The ...norm_counts.csv file
+  -dge COMPARISON [COMPARISON ...], --dge-tables COMPARISON [COMPARISON ...]
+                        The ...cond1...cond2...deseq.csv files
+
+Optional arguments:
+  -h, --help            show this help message and exit
+  -o PREFIX, --out-prefix PREFIX
+                        Prefix to use for output filenames.
+  -pv VALUE, --p-value VALUE
+                        P value to use in DGE scatter plots.
+  -s MPLSTYLE, --style-sheet MPLSTYLE
+                        Optional matplotlib style sheet to use for plots.
+  -v, --vector-scatter  Produce scatter plots with vectorized points (slower).
+                        Note: only the points on scatter plots will be raster
+                        if this option is not provided.
+  -ldi VALUE, --len-dist-min VALUE
+                        len_dist plots will start at this value
+  -lda VALUE, --len-dist-max VALUE
+                        len_dist plots will end at this value
+```

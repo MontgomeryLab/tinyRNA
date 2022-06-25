@@ -9,7 +9,7 @@
   - [User-Provided Input Files](#requirements-for-user-provided-input-files)
   - [Running the End-to-End Analysis](#running-an-end-to-end-analysis)
   - [Resuming an End-to-End Analysis](#resuming-an-end-to-end-analysis)
-  - [Running Individual Steps](#running-individual-steps)
+- [Workflow Steps](#workflow-steps)
 - [Outputs](#outputs)
   - [Data Pre-Processing](#data-pre-processing)
   - [Collapsed FASTA files](#collapsed-fasta-files)
@@ -21,7 +21,7 @@
 - [License](#license)
 
 
-tinyRNA is a set of tools to simplify the analysis of next-generation sequencing data. The goal of this specific repository is to provide an entire workflow for processing small RNA sequencing data with options for advanced hierarchical feature selection.
+tinyRNA is a set of tools to simplify the analysis of next-generation sequencing data. The goal of this specific repository is to provide an entire workflow for processing small RNA sequencing data with user-defined hierarchical feature selection rules.
 
 ### The Current Workflow
 
@@ -37,6 +37,7 @@ A setup script has been provided for easy installation of tinyRNA. The project a
  cd tinyrna
 
 # Install the tinyrna environment and dependencies
+# A custom environment name can also be passed as a command line argument
  ./setup.sh
 ```
 
@@ -56,7 +57,8 @@ The `tinyrna` conda environment must be activated before use.
 # When you are done running tinyRNA, you can deactivate the conda environment
  conda deactivate
 ```
-If you'd like to jump right in and start using tinyRNA, see our<br> :point_right: [tutorial](START_HERE/TUTORIAL.md) :point_left:.
+If you'd like to jump right in and start using tinyRNA, see our<br> 
+👉 [tutorial](START_HERE/TUTORIAL.md) 👈
 
 You can execute the workflow in its entirety for a full end-to-end analysis pipeline, or you can execute individual steps on their own. In most cases you will use the command `tiny` for pipeline operations.
 
@@ -77,12 +79,12 @@ tiny get-template
 
 ### Requirements for User-Provided Input Files
 
-| Input Type                                                                 | File Extension          | Requirements                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-|----------------------------------------------------------------------------|-------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Reference annotations<br/>[(example)](START_HERE/reference_data/ram1.gff3) | GFF3 / GFF2 / GTF       | Column 9 attributes (defined as "tag=value" or "tag "):<ul><li>Each feature's `ID` tag is required</li><li>Feature classes can be defined with the `Class` tag. If undefined, the default value \_UNKNOWN\_ will be used.</li><li>Discontinuous features must be defined with the `Parent` tag whose value is the logical parent's `ID`, or by sharing the same `ID`.</li><li>Attribute values containing commas must represent lists</li><li>All features must be stranded</li><li>See the example link (left) for col. 9 formatting</li></ul> |
-| Sequencing data<br/>[(example)](START_HERE/fastq_files)                    | FASTQ(.gz) <sup>1</sup> | Files must be demultiplexed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| Reference genome<br/>[(example)](START_HERE/reference_data/ram1.fa)        | FASTA                   | Chromosome identifiers (e.g. Chr1): <ul><li>Must match your reference annotation file chromosome identifiers</li><li>Are case sensitive</li></ul>                                                                                                                                                                                                                                                                                                                                                                                               |
-| Bowtie indexes (optional) <sup>2</sup>                                     | ebwt                    | Must be small indexes (.ebwtl indexes are not supported)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Input Type                                                                 | File Extension          | Requirements                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+|----------------------------------------------------------------------------|-------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Reference annotations<br/>[(example)](START_HERE/reference_data/ram1.gff3) | GFF3 / GFF2 / GTF       | Column 9 attributes (defined as "tag=value" or "tag "):<ul><li>Each feature's `ID` tag is required</li><li>Feature classes can be defined with the `Class` tag. If undefined, the default value \__UNKNOWN_\_ will be used.</li><li>Discontinuous features must be defined with the `Parent` tag whose value is the logical parent's `ID`, or by sharing the same `ID`.</li><li>Attribute values containing commas must represent lists</li><li>All features must be stranded</li><li>See the example link (left) for col. 9 formatting</li></ul> |
+| Sequencing data<br/>[(example)](START_HERE/fastq_files)                    | FASTQ(.gz) <sup>1</sup> | Files must be demultiplexed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Reference genome<br/>[(example)](START_HERE/reference_data/ram1.fa)        | FASTA                   | Chromosome identifiers (e.g. Chr1): <ul><li>Must match your reference annotation file chromosome identifiers</li><li>Are case sensitive</li></ul>                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Bowtie indexes (optional) <sup>2</sup>                                     | ebwt                    | Must be small indexes (.ebwtl indexes are not supported)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 <br/><sup>1</sup> `tiny-count` accepts SAM files via your **Samples Sheet** when invoked as an individual step, but they must have been produced by the pipeline. SAM files from other sources are not currently supported. 
 <br/><sup>2</sup> Bowtie indexes can be created for you. See the [configuration file documentation](doc/Configuration.md#building-bowtie-indexes).
@@ -117,189 +119,36 @@ tiny replot --config processed_run_config.yml
 ```
 For more information and prerequesites, see the [pipeline resume documentation](doc/Pipeline.md#resuming-a-prior-analysis).
 
-### Running Individual Steps
-The process for running individual steps differs depending on whether the step is a tinyRNA Python component (outlined in yellow in the [workflow diagram](#the-current-workflow)), or a CWL-wrapped third party tool.
+### CWL-Wrapped Third Party Tools.
+fastp, bowtie-build, and bowtie can be run from the terminal (within the tinyRNA conda environment) just as you would if they were installed in the host environment. Normally, tinyRNA will handle the execution of these tools for you, but if you would like to run them as individual steps you may find that their commandline arguments can be lengthy. With a little setup you can make things easier for yourself by using our CWL wrappers and a configuration file for each tool. This allows you to more easily set commandline parameters from a text editor and reuse configuration files. See the [pipeline documentation](doc/Pipeline.md#cwl-wrapped-third-party-tools) for details.
 
-The following steps are Python components which can be run from the command line within the tinyRNA conda environment:
-##### Create Workflow
-```
-tiny-config -i CONFIG
+## Workflow Steps
+See the current [workflow diagram](#the-current-workflow) for a bird's eye view of the workflow. 
 
-  required arguments:
-    -i CONFIG, --input-file CONFIG
-                          The Run Config file to be processed
-```
-##### Collapser
-```
-tiny-collapse -i FASTQFILE -o OUTPREFIX [-h] [-t THRESHOLD] [-c]
-              [--5p-trim LENGTH] [--3p-trim LENGTH]
+### Create Workflow: `tiny-config`
+At the beginning of pipeline execution, tinyRNA digests your configuration files and produces a processed Run Config which determine's how the CWL runner, `cwltool`, directs the workflow. If you would like to produce a processed Run Config without running the rest of the pipeline, you can do so with the command `tiny-config --input-file your_run_config.yml`. This is useful if you wish to use an alternative CWL runner. In most circumstances you will not need to use this command.
 
-Collapse sequences from a fastq file to a fasta file. Headers in the output
-fasta file will contain the number of times each sequence occurred in the
-input fastq file, and an ID which indicates the relative order in which each
-sequence was first encountered. Gzipped files are automatically supported for
-fastq inputs, and compressed fasta outputs are available by request.
+### fastp
+[fastp](https://github.com/OpenGene/fastp) is used to trim adapters and remove poor quality reads from FASTQ input files. Summary and quality statistics reports are generated for each library.
 
-Required arguments:
-  -i FASTQFILE, --input-file FASTQFILE
-                        The input fastq(.gz) file to collapse
-  -o OUTPREFIX, --out-prefix OUTPREFIX
-                        The prefix for output files {prefix}_collapsed.fa and,
-                        if counts fall below threshold,
-                        {prefix}_collapsed_lowcounts.fa
+### Collapser: `tiny-collapse`
+After quality filtering, unique sequences are counted in each library and a FASTA file is produced which contains only these unique sequences and their counts. This "collapsing" process significantly reduces the resource demands of genomic alignment and feature counting. Collapser can also trim the degenerate bases often included in the adapter sequences used in library preparation.
 
-Optional arguments:
-  -h, --help            show this help message and exit
-  -t THRESHOLD, --threshold THRESHOLD
-                        Sequences <= THRESHOLD will be omitted from
-                        {prefix}_collapsed.fa and will instead be placed in
-                        {prefix}_collapsed_lowcounts.fa
-  -c, --compress        Use gzip compression when writing fasta outputs
-  --5p-trim LENGTH      Trim LENGTH bases from the 5' end of each sequence
-  --3p-trim LENGTH      Trim LENGTH bases from the 3' end of each sequence
-```
-##### Counter
-[Full documentation for Counter can be found here](doc/Counter.md).
+### bowtie
+Genomic alignment of collapsed reads is performed by [bowtie](http://bowtie-bio.sourceforge.net/manual.shtml).
 
-```
-tiny-count -i SAMPLES -c CONFIGFILE -o OUTPUTPREFIX [-h]
-           [-sf [SOURCE [SOURCE ...]]] [-tf [TYPE [TYPE ...]]]
-           [-nh T/F] [-dc] [-a] [-p] [-d]
+### Counter: `tiny-count`
+At the core of tinyRNA is Counter, a highly flexible counting utility that allows for hierarchical assignment of small RNA reads to features based on positional information, extent of feature overlap, 5’ nucleotide, length, and strandedness. The parameters of selection are defined in the Features Sheet. 
 
-This submodule assigns feature counts for SAM alignments using a Feature Sheet
-ruleset. If you find that you are sourcing all of your input files from a
-prior run, we recommend that you instead run `tiny recount` within that run's
-directory.
+[Full documentation for Counter can be found here.](doc/Counter.md)
 
-Required arguments:
-  -i SAMPLES, --input-csv SAMPLES
-                        your Samples Sheet
-  -c CONFIGFILE, --config CONFIGFILE
-                        your Features Sheet
-  -o OUTPUTPREFIX, --out-prefix OUTPUTPREFIX
-                        output prefix to use for file names
+### DESeq2: `tiny-deseq.r`
+A wrapper R script for DESeq2 facilitates DGE analysis of counted sample files.
 
-Optional arguments:
-  -h, --help            show this help message and exit
-  -sf [SOURCE [SOURCE ...]], --source-filter [SOURCE [SOURCE ...]]
-                        Only produce counts for features whose GFF column 2
-                        matches the source(s) listed
-  -tf [TYPE [TYPE ...]], --type-filter [TYPE [TYPE ...]]
-                        Only produce counts for features whose GFF column 3
-                        matches the type(s) listed
-  -nh T/F, --normalize-by-hits T/F
-                        If T/true, normalize counts by (selected) overlapping
-                        feature counts. Default: true.
-  -dc, --decollapse     Create a decollapsed copy of all SAM files listed in
-                        your Samples Sheet.
-  -a, --all-features    Represent all features in output counts table, even if
-                        they did not match a Select for / with value.
-  -p, --is-pipeline     Indicates that counter was invoked as part of a
-                        pipeline run and that input files should be sourced as
-                        such.
-  -d, --report-diags    Produce diagnostic information about
-                        uncounted/eliminated selection elements.
-```
-##### Deseq2
-```
-tiny-deseq.r --input-file COUNTFILE --outfile-prefix PREFIX [--control CONDITION] [--pca] [--drop-zero]
+### Plotter: `tiny-plot`
+The results of feature counting and DGE can be visualized with Plotter, which produces high resolution plot PDFs and supports user-defined plot styles via a Matplotlib stylesheet. 
 
-Required arguments:
-
-    --input-file <count_file>
-          A text file containing a table of features x samples of the run to
-          process by DESeq2. The [...]feature_counts.csv output of tinyrna-count is expected here.
-              
-    --outfile-prefix <outfile>
-          Name of the output files to write. These will be created:
-              1. Normalized count table of all samples
-              2. Differential gene expression table per comparison
-              3. A PCA plot per comparison, if --pca is also provided.
-
-Optional arguments:
-
-    --control <control_condition>
-          Opional. If the control condition is specified, comparisons will
-          only be made between the control and experimental conditions.
-
-    --pca
-          Optional. This will produce principle component analysis plots
-          using the DESeq2 library. Output files are PDF format.
-
-    --drop-zero
-          Optional. Prior to performing analysis, this will drop all
-          rows/features which have a zero count in all samples."
-```
-##### Plotter
-[Full documentation for Plotter can be found here](doc/Plotter.md).
-
-```
-tiny-plot [-rc RAW_COUNTS] [-nc NORM_COUNTS] [-uc RULE_COUNTS]
-          [-ss STAT] [-dge COMPARISON [COMPARISON ...]]
-          [-len 5P_LEN [5P_LEN ...]] [-h] [-o PREFIX] [-pv VALUE]
-          [-s MPLSTYLE] [-v] [-ldi VALUE] [-lda VALUE] -p PLOT
-          [PLOT ...]
-
-This script produces basic static plots for publication as part of the tinyRNA
-workflow. Input file requirements vary by plot type and you are free to supply
-only the files necessary for your plot selections. If you are sourcing all of
-your input files from the same run directory, you may find it easier to
-instead run `tiny replot` within that run directory.
-
-Required arguments:
-  -p PLOT [PLOT ...], --plots PLOT [PLOT ...]
-                        List of plots to create. Options:
-                        • len_dist: A stacked barchart showing size & 5'
-                          nucleotide distribution.
-                        • rule_charts: A barchart showing percentages
-                          of counts by matched rule.
-                        • class_charts: A barchart showing percentages
-                          of counts per class.
-                        • replicate_scatter: A scatter plot comparing
-                          replicates for all count files given.
-                        • sample_avg_scatter_by_dge: A scatter plot comparing
-                          all sample groups, with differentially expressed
-                          small RNAs highlighted based on P value cutoff.
-                        • sample_avg_scatter_by_dge_class: A scatter plot
-                          comparing all sample groups, with classes
-                          highlighted for differentially expressed small RNAs
-                          based on P value cutoff.
-
-Input files produced by Counter:
-  -rc RAW_COUNTS, --raw-counts RAW_COUNTS
-                        The ...feature_counts.csv file
-  -uc RULE_COUNTS, --rule-counts RULE_COUNTS
-                        The ...counts-by-rule.csv file
-  -ss STAT, --summary-stats STAT
-                        The ...summary_stats.csv file
-  -len 5P_LEN [5P_LEN ...], --len-dist 5P_LEN [5P_LEN ...]
-                        The ...nt_len_dist.csv files
-
-Input files produced by DGE:
-  -nc NORM_COUNTS, --norm-counts NORM_COUNTS
-                        The ...norm_counts.csv file
-  -dge COMPARISON [COMPARISON ...], --dge-tables COMPARISON [COMPARISON ...]
-                        The ...cond1...cond2...deseq.csv files
-
-Optional arguments:
-  -h, --help            show this help message and exit
-  -o PREFIX, --out-prefix PREFIX
-                        Prefix to use for output filenames.
-  -pv VALUE, --p-value VALUE
-                        P value to use in DGE scatter plots.
-  -s MPLSTYLE, --style-sheet MPLSTYLE
-                        Optional matplotlib style sheet to use for plots.
-  -v, --vector-scatter  Produce scatter plots with vectorized points (slower).
-                        Note: only the points on scatter plots will be raster
-                        if this option is not provided.
-  -ldi VALUE, --len-dist-min VALUE
-                        len_dist plots will start at this value
-  -lda VALUE, --len-dist-max VALUE
-                        len_dist plots will end at this value
-```
-
-##### CWL-Wrapped Third Party Tools.
-fastp, bowtie-build, and bowtie can be run from the terminal (within the tinyRNA conda environment) just as you would if they were installed in the host environment. Commandline arguments for these tools can be lengthy, but with a little setup you can make things easier for yourself by using our CWL wrappers and a configuration file for each tool. This allows you to more easily set commandline parameters from a text editor and reuse configuration files. See the [pipeline documentation](doc/Pipeline.md#cwl-wrapped-third-party-tools) for details.
+[Full documentation for Plotter can be found here.](doc/Plotter.md)
 
 ## Outputs
 

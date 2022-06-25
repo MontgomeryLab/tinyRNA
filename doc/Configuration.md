@@ -134,7 +134,7 @@ Rules apply to features parsed from **all** Feature Sources, with the exception 
 
 Rules that match features in the first stage of selection will be used in a second stage which performs elimination by hierarchy and interval overlap characteristics. Remaining candidates pass to the third and final stage of selection which examines characteristics of the alignment itself: strand relative to the feature of interest, 5' end nucleotide, and length. 
 
-See [Counter's documentation](Counter.md) for an explanation of each column.
+See [Counter's documentation](Counter.md#feature-selection) for an explanation of each column.
 
 >**Tip**: Don't worry about having duplicate Feature Source entries. Each GFF file is parsed only once.
 
