@@ -392,14 +392,16 @@ class CSVReader(csv.DictReader):
         missing = expected - read_vals
 
         if len(missing):
-            raise ValueError('\n\t'.join([f"The following columns are missing from your {self.doctype}:",
-                             *missing]))
+            raise ValueError('\n\t'.join([f"The following columns are missing from your {self.doctype}:", *missing]))
         if len(unknown):
-            raise ValueError('\n\t'.join([f"The following columns in your {self.doctype} are unrecognized:",
-                             *unknown]))
-        if header.values() != doc_reference.keys():
+            raise ValueError('\n\t'.join([f"The following columns in your {self.doctype} are unrecognized:", *unknown]))
+
+        doc_ref_lowercase = {key.lower(): value for key, value in doc_reference.items()}
+        header_lowercase = {key: value.lower() for key, value in header.items()}
+
+        if tuple(header_lowercase.values()) != tuple(doc_ref_lowercase.keys()):
             # Remap column order to match client's
-            self.fieldnames = tuple(doc_reference[key] for key in header.values())
+            self.fieldnames = tuple(doc_ref_lowercase[key] for key in header_lowercase.values())
 
 
 if __name__ == '__main__':
