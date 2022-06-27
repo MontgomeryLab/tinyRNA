@@ -68,8 +68,8 @@ This column allows you to specify which read alignments should be assigned based
 - `3' anchored`: alignment's 3' end is equal to the corresponding terminus of the feature
 
 The following diagrams demonstrate the strand semantics of these interval selectors. The first two options show separate illustrations for features on each strand for emphasis. All matches shown in the remaining three options apply to features on either strand.
-![3'_anchored_5'_anchored](../images/3'_anchored_5'_anchored.png)
-![Full_Exact_Partial](../images/Full_Exact_Partial.png)
+![3'_anchored_5'_anchored](../images/3'_anchored_5'_anchored_interval.png)
+![Full_Exact_Partial](../images/full_exact_partial_interval.png)
 
 ## Stage 3: Alignment Attribute Parameters
 | _features.csv columns:_ | Strand | 5' End Nucleotide | Length |
