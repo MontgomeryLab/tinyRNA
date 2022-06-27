@@ -248,11 +248,11 @@ Simple static plots are generated from the outputs of Counter and DESeq2. These 
 - **sample_avg_scatter_by_dge**: A scatter plot comparing all sample groups, with differentially expressed small RNAs highlighted based on P value cutoff.
 - **sample_avg_scatter_by_dge_class**: A scatter plot comparing all sample groups, with classes highlighted for differentially expressed small RNAs based on P value cutoff.
 
-|                                                                                                    |                                                                                       |
-|:--------------------------------------------------------------------------------------------------:|:-------------------------------------------------------------------------------------:|
-| <img src="images/plots/scatter_dge_class.jpeg" width="90%" alt="sample_avg_scatter_by_dge_class"/> | <img src="images/plots/scatter_dge.jpeg" width="90%" alt="rule_chart with 10 rules"/> |
-|      <img src="images/plots/class_charts.jpeg" width="90%" alt="sample_avg_scatter_by_dge"/>       |       <img src="images/plots/rule_charts.jpeg" width="90%" alt="rule_charts"/>        |
-|           <img src="images/plots/len_dist_short.jpeg" width="90%" alt="len_dist 20-30"/>           |     <img src="images/plots/len_dist_long.jpeg" width="90%" alt="len_dist 15-60"/>     |
+|                                                                                                   |                                                                                        |
+|:-------------------------------------------------------------------------------------------------:|:--------------------------------------------------------------------------------------:|
+|              <img src="images/plots/len_dist.jpg" width="80%" alt="len_dist 15-60"/>              |      <img src="images/plots/pca_plot.jpg" width="90%" alt="PCA plot by DESeq2"/>       |
+|        <img src="images/plots/rule_chart.jpg" width="80%" alt="rule_chart with 10 rules"/>        | <img src="images/plots/class_chart.jpg" width="90%" alt="class_chart with 8 classes"/> |
+| <img src="images/plots/scatter_dge_class.jpg" width="90%" alt="sample_avg_scatter_by_dge_class"/> | <img src="images/plots/scatter_dge.jpg" width="90%" alt="sample_avg_scatter_by_dge"/>  |
 
 
 DESeq2 will produce a standard **PCA plot** from variance stabilizing transformed feature counts. This output is controlled by the `dge_pca_plot` key in the Run Config and by your experiment design. DGE outputs, including the PCA plot, will not be produced for experiments with less than 1 degree of freedom.

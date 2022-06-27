@@ -21,9 +21,9 @@ tinyRNA automatically handles file inputs when Plotter is called as a step in a 
 The distributions of 5' end nucleotides vs. sequence lengths can be used to assess the overall quality of your libraries. This can also be used for analyzing small RNA distributions in non-model organisms without annotations.
 
 <p float="left" align="center">
-    <img src="../images/plots/len_dist_short.jpeg" width="40%" alt="len_dist lengths 20-30"/>
-    <img src="../images/plots/len_dist_long.jpeg" width="40%" alt="len_dist lengths 15-60"/>
+    <img src="../images/plots/len_dist.jpg" width="80%" alt="len_dist lengths 16-32"/>
 </p>
+
 
 
 #### Subtypes
@@ -50,7 +50,7 @@ Placeholder bases, e.g. N, will be reported if they are encountered at the 5' en
 Counts are assigned only to the features that meet selection criteria at each alignment locus. It is useful to see how each selection rule contributed to the overall assignment of counts. The rule_charts plot type shows the percentage of _mapped reads_ that each rule contributed to the total _assigned reads_.
 
 <p float="left" align="center">
-    <img src="../images/plots/rule_charts.jpeg" width="60%" alt="rule_chart with 11 rules"/>
+    <img src="../images/plots/rule_chart.jpg" width="80%" alt="rule_chart with 11 rules"/>
 </p>
 
 #### Rule Number
@@ -67,7 +67,7 @@ Percentage label darkness and bar colors reflect the magnitude of the rule's con
 Features can have multiple classes associated with them, so it is useful to see the proportions of counts by class. The class_charts plot type shows the percentage of _mapped_ reads that were assigned to features by class. Each feature's associated classes are determined by the `Class=` attribute in your GFF files.
 
 <p float="left" align="center">
-    <img src="../images/plots/class_charts.jpeg" width="60%" alt="class_chart with 8 classes"/>
+    <img src="../images/plots/class_chart.jpg" width="80%" alt="class_chart with 8 classes"/>
 </p>
 
 #### Class N
@@ -82,28 +82,35 @@ A feature with multiple associated classes will have its counts split evenly acr
 Proportions in rule_charts and class_charts are plotted using the same function. Styles are the same between the two. See [rule chart styles](#rule-chart-styles) for more info.
 
 
+
 ## replicate_scatter
 Feature count comparisons between replicates can be used to assess the overall quality of your libraries. The replicate_scatter plot type shows these comparisons using DESeq2's normalized counts on Log<sub>2</sub> scale axes. A plot is produced for all replicate combinations in each sample group.
 
 <p float="left" align="center">
-    <img src="../images/plots/replicate_scatter.jpeg" width="80%" alt="replicate_scatter"/>
+    <img src="../images/plots/replicate_scatter.jpg" width="80%" alt="replicate_scatter"/>
 </p>
+
+
+
 
 ## sample_avg_scatter_by_dge
 Differential gene expression between sample groups can be visualized with this plot type. Normalized feature counts from DESeq2 are averaged across replicates for each sample and plotted on Log<sub>2</sub> scale axes. Features with significant expression levels will have their counts plotted with red points.
 
 <p float="left" align="center">
-    <img src="../images/plots/scatter_dge.jpeg" width="80%" alt="sample_avg_scatter_by_dge"/>
+    <img src="../images/plots/scatter_dge.jpg" width="80%" alt="sample_avg_scatter_by_dge"/>
 </p>
 
 #### Customization
 The P value cutoff can be changed using the [Run Config or commandline arguments](Parameters.md#p-value). The control condition is plotted on the x-axis, but it must be specified in your Samples Sheet prior to running an end-to-end or `tiny recount` analysis. If using `tiny replot`, is not possible to change a no-control experiment to a control experiment and have these changes reflected in these plots. This is because the pipeline's DGE step must be aware of the control condition in order to perform the proper directional comparisons.
 
+
+
+
 ## sample_avg_scatter_by_dge_class
 The previous plot type can be extended to group and color differentially expressed features by class. Classes are sorted by abundance before plotting to maximize representation.
 
 <p float="left" align="center">
-    <img src="../images/plots/scatter_dge_class.jpeg" width="80%" alt="sample_avg_scatter_by_dge_class"/>
+    <img src="../images/plots/scatter_dge_class.jpg" width="1000%" alt="sample_avg_scatter_by_dge_class"/>
 </p>
 
 >**Tip**: if you find that two groups of interest share proximity and are too similar in color, you can change the group's color with a modified Plot Stylesheet. The groups will be colored in the same order they are listed in the legend (not including P value outgroup), e.g. changing the color of the ERGO group means changing the 5th color in the `axes.prop_cycle` color cycler. See the [config file documentation](Configuration.md#plot-stylesheet-details) for more info about the Plot Stylesheet.
