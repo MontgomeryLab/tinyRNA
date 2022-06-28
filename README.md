@@ -108,13 +108,13 @@ tiny run --config run_config.yml
 
 ### Resuming an End-to-End Analysis
 
-The Counter and Plotter steps offer a wide variety of options for refining your analysis. You might find that repeat analyses are required while tuning these options to your goals. To save time and skip redundant compute-heavy preprocessing steps, you can resume a prior analysis using its outputs from the early pipeline steps.
+The tiny-count and tiny-plot steps offer a wide variety of options for refining your analysis. You might find that repeat analyses are required while tuning these options to your goals. To save time and skip redundant compute-heavy preprocessing steps, you can resume a prior analysis using its outputs from the early pipeline steps.
 
 ```shell
-# Resume a prior analysis at the Counter step
+# Resume a prior analysis at the tiny-count step
 tiny recount --config processed_run_config.yml
 
-# Resume a prior analysis at the Plotter step
+# Resume a prior analysis at the tiny-plot step
 tiny replot --config processed_run_config.yml
 ```
 For more information and prerequesites, see the [pipeline resume documentation](doc/Pipeline.md#resuming-a-prior-analysis).
@@ -125,30 +125,30 @@ fastp, bowtie-build, and bowtie can be run from the terminal (within the tinyRNA
 ## Workflow Steps
 See the current [workflow diagram](#the-current-workflow) for a bird's eye view of the workflow. 
 
-### Create Workflow: `tiny-config`
+### `tiny-config`
 At the beginning of pipeline execution, tinyRNA digests your configuration files and produces a processed Run Config which determine's how the CWL runner, `cwltool`, directs the workflow. If you would like to produce a processed Run Config without running the rest of the pipeline, you can do so with the command `tiny-config --input-file your_run_config.yml`. This is useful if you wish to use an alternative CWL runner. In most circumstances you will not need to use this command.
 
-### fastp
+### `fastp`
 [fastp](https://github.com/OpenGene/fastp) is used to trim adapters and remove poor quality reads from FASTQ input files. Summary and quality statistics reports are generated for each library.
 
-### Collapser: `tiny-collapse`
-After quality filtering, unique sequences are counted in each library and a FASTA file is produced which contains only these unique sequences and their counts. This "collapsing" process significantly reduces the resource demands of genomic alignment and feature counting. Collapser can also trim the degenerate bases often included in the adapter sequences used in library preparation.
+### `tiny-collapse`
+After quality filtering, unique sequences are counted in each library and a FASTA file is produced which contains only these unique sequences and their counts. This "collapsing" process significantly reduces the resource demands of genomic alignment and feature counting. tiny-collapse can also trim the degenerate bases often included in the adapter sequences used in library preparation.
 
-### bowtie
+### `bowtie`
 Genomic alignment of collapsed reads is performed by [bowtie](http://bowtie-bio.sourceforge.net/manual.shtml).
 
-### Counter: `tiny-count`
-At the core of tinyRNA is Counter, a highly flexible counting utility that allows for hierarchical assignment of small RNA reads to features based on positional information, extent of feature overlap, 5’ nucleotide, length, and strandedness. The parameters of selection are defined in the Features Sheet. 
+### `tiny-count`
+At the core of tinyRNA is tiny-count, a highly flexible counting utility that allows for hierarchical assignment of small RNA reads to features based on positional information, extent of feature overlap, 5’ nucleotide, length, and strandedness. The parameters of selection are defined in the Features Sheet. 
 
-[Full documentation for Counter can be found here.](doc/Counter.md)
+[Full documentation for tiny-count can be found here.](doc/tiny-count.md)
 
-### DESeq2: `tiny-deseq.r`
+### `tiny-deseq.r`
 A wrapper R script for DESeq2 facilitates DGE analysis of counted sample files.
 
-### Plotter: `tiny-plot`
-The results of feature counting and DGE can be visualized with Plotter, which produces high resolution plot PDFs and supports user-defined plot styles via a Matplotlib stylesheet. 
+### `tiny-plot`
+The results of feature counting and DGE are visualized with high resolution plot PDFs. User-defined plot styles are also supported via a Matplotlib stylesheet. 
 
-[Full documentation for Plotter can be found here.](doc/Plotter.md)
+[Full documentation for tiny-plot can be found here.](doc/tiny-plot.md)
 
 ## Outputs
 
@@ -162,7 +162,7 @@ The files produced by each pipeline step will be included in the final run direc
 A "collapsed" FASTA contains unique reads found in fastp's quality filtered FASTQ files. Each header indicates the number of times that sequence occurred in the input. This allows for faster bowtie alignments while preserving counts for downstream analysis.
 
 ### Counts and Pipeline Statistics
-The counter step produces a variety of outputs
+The tiny-count step produces a variety of outputs
 
 #### Feature Counts
 Custom Python scripts and HTSeq are used to generate a single table of feature counts that includes columns for each library analyzed. A feature's _Feature ID_ and _Feature Class_ are simply the values of its `ID` and `Class` attributes. Features lacking a Class attribute will be assigned class `_UNKNOWN_`. We have also included a _Feature Name_ column which displays aliases of your choice, as specified in the _Alias by..._ column of the Features Sheet. If _Alias by..._ is set to`ID`, the _Feature Name_ column is left empty.
@@ -237,10 +237,10 @@ The unassigned counts table includes the following, with a column per library:
 | Eliminated counts                 | The total unassigned counts due to alignments whose candidate features were _ALL_ eliminated because they failed to match any selection rules |
 
 ### Differential Expression Analysis
-DGE is performed using the `DESeq2` R package. It reports differential expression tables for your experiment design, and a table of normalized feature counts. If your control condition is indicated in your Samples Sheet then pairwise comparisons will be  made against the control. If a control condition is not indicated then all possible bidirectional pairwise comparisons are made. 
+DGE is performed using the `DESeq2` R package. Our wrapper script reports differential expression tables for your experiment design, and a table of normalized feature counts. If your control condition is indicated in your Samples Sheet then pairwise comparisons will be  made against the control. If a control condition is not indicated then all possible bidirectional pairwise comparisons are made. 
 
 ### Plots
-Simple static plots are generated from the outputs of Counter and DESeq2. These plots are useful for assessing the quality of your experiment design and the quality of your libraries. The available plots are:
+Simple static plots are generated from the outputs of tiny-count and tiny-deseq.r. These plots are useful for assessing the quality of your experiment design and the quality of your libraries. The available plots are:
 - **len_dist**: A stacked barchart showing size & 5' nucleotide distribution; one output for mapped reads and one for assigned reads.
 - **rule_charts**: A barchart showing percentages of counts per rule.
 - **class_charts**: A barchart showing percentages of counts per class.
@@ -248,14 +248,14 @@ Simple static plots are generated from the outputs of Counter and DESeq2. These 
 - **sample_avg_scatter_by_dge**: A scatter plot comparing all sample groups, with differentially expressed small RNAs highlighted based on P value cutoff.
 - **sample_avg_scatter_by_dge_class**: A scatter plot comparing all sample groups, with classes highlighted for differentially expressed small RNAs based on P value cutoff.
 
-|                                                                                                   |                                                                                        |
-|:-------------------------------------------------------------------------------------------------:|:--------------------------------------------------------------------------------------:|
-|              <img src="images/plots/len_dist.jpg" width="80%" alt="len_dist 15-60"/>              |      <img src="images/plots/pca_plot.jpg" width="90%" alt="PCA plot by DESeq2"/>       |
-|        <img src="images/plots/rule_chart.jpg" width="80%" alt="rule_chart with 10 rules"/>        | <img src="images/plots/class_chart.jpg" width="90%" alt="class_chart with 8 classes"/> |
-| <img src="images/plots/scatter_dge_class.jpg" width="90%" alt="sample_avg_scatter_by_dge_class"/> | <img src="images/plots/scatter_dge.jpg" width="90%" alt="sample_avg_scatter_by_dge"/>  |
+|                                                                                                                                              |                                                                                                                            |
+|:--------------------------------------------------------------------------------------------------------------------------------------------:|:--------------------------------------------------------------------------------------------------------------------------:|
+|                         <img src="images/plots/len_dist.jpg" width="80%" alt="len_dist 16-32"/></br></br>`len_dist`                          |               <img src="images/plots/pca_plot.jpg" width="80%" alt="PCA plot by DESeq2"/><br/>`dge_pca_plot`               |
+|                  <img src="images/plots/rule_chart.jpg" width="80%" alt="rule_chart with 10 rules"/><br/></br>`rule_charts`                  |       <img src="images/plots/class_chart.jpg" width="95%" alt="class_chart with 8 classes"/><br/></br>`class_charts`       |
+| <img src="images/plots/scatter_dge_class.jpg" width="80%" alt="sample_avg_scatter_by_dge_class"/><br/></br>`sample_avg_scatter_by_dge_class` | <img src="images/plots/scatter_dge.jpg" width="83%" alt="sample_avg_scatter_by_dge"/><br/></br>`sample_avg_scatter_by_dge` |
 
 
-DESeq2 will produce a standard **PCA plot** from variance stabilizing transformed feature counts. This output is controlled by the `dge_pca_plot` key in the Run Config and by your experiment design. DGE outputs, including the PCA plot, will not be produced for experiments with less than 1 degree of freedom.
+tiny-deseq.r will produce a standard **PCA plot** from variance stabilizing transformed feature counts. This output is controlled by the `dge_pca_plot` key in the Run Config and by your experiment design. DGE outputs, including the PCA plot, will not be produced for experiments with less than 1 degree of freedom.
 
 
 ## Contributing

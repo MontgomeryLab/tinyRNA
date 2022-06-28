@@ -118,10 +118,10 @@ Supported values are:
 - **Any number**: the corresponding library's counts are divided by this number
 - **RPM or rpm**: the corresponding library's counts are divided by (its mapped read count / 1,000,000)
 
->**NOTE**: These normalizations operate independently of Counter's --normalize-by-hits commandline option. The former is concerned with per-library normalization, whereas the latter is concerned with normalization by selected feature count at each locus ([more info](Counter.md#count-normalization)). The commandline option does not enable or disable the normalizations detailed above.
+>**NOTE**: These normalizations operate independently of tiny-count's --normalize-by-hits commandline option. The former is concerned with per-library normalization, whereas the latter is concerned with normalization by selected feature count at each locus ([more info](tiny-count.md#count-normalization)). The commandline option does not enable or disable the normalizations detailed above.
 
 ### Low DF Experiments
-DESeq2 requires that your experiment design has at least one degree of freedom. If your experiment doesn't include at least one sample group with more than one replicate, DESeq2 will be skipped and DGE related plots will not be produced.
+DESeq2 requires that your experiment design has at least one degree of freedom. If your experiment doesn't include at least one sample group with more than one replicate, tiny-deseq.r will be skipped and DGE related plots will not be produced.
 
 ## Features Sheet Details
 | _Column:_  | Select for... | with value... | Alias by... | Tag | Hierarchy | Strand | 5' End Nucleotide | Length | Overlap     | Feature Source |
@@ -134,9 +134,9 @@ Rules apply to features parsed from **all** Feature Sources, with the exception 
 
 Rules that match features in the first stage of selection will be used in a second stage which performs elimination by hierarchy and interval overlap characteristics. Remaining candidates pass to the third and final stage of selection which examines characteristics of the alignment itself: strand relative to the feature of interest, 5' end nucleotide, and length. 
 
-See [Counter's documentation](Counter.md#feature-selection) for an explanation of each column.
+See [tiny-count's documentation](tiny-count.md#feature-selection) for an explanation of each column.
 
 >**Tip**: Don't worry about having duplicate Feature Source entries. Each GFF file is parsed only once.
 
 ## Plot Stylesheet Details
-Matplotlib uses key-value "rc parameters" to allow for customization of its properties and styles, and one way these parameters can be specified is with a [matplotlibrc file](https://matplotlib.org/3.4.3/tutorials/introductory/customizing.html#a-sample-matplotlibrc-file), which we simply refer to as the Plot Stylesheet. You can obtain a copy of the default stylesheet used by Plotter with the command `tiny get-template`. Please keep in mind that Plotter overrides these defaults for a few specific elements of certain plots. Feel free to reach out if there is a plot style you wish to override but find you are unable to.
+Matplotlib uses key-value "rc parameters" to allow for customization of its properties and styles, and one way these parameters can be specified is with a [matplotlibrc file](https://matplotlib.org/3.4.3/tutorials/introductory/customizing.html#a-sample-matplotlibrc-file), which we simply refer to as the Plot Stylesheet. You can obtain a copy of the default stylesheet used by tiny-plot with the command `tiny get-template`. Please keep in mind that tiny-plot overrides these defaults for a few specific elements of certain plots. Feel free to reach out if there is a plot style you wish to override but find you are unable to.

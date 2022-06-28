@@ -2,12 +2,12 @@
 This page provides an explanation of the parameters offered by each of our Python components. We represent each parameter with its Run Config key and its corresponding commandline argument. When running the tinyRNA pipeline (`tiny run/recount/replot`), you'll use the Run Config key to specify your preferences. The commandline argument is used when you run a tool as an individual, standalone step (`tiny-collapse`, `tiny-count`, or `tiny-plot`)
 
 ### Table of Contents
-- [Collapser](#collapser)
-- [Counter](#counter)
-- [DESeq2](#deseq2)
-- [Plotter](#plotter)
+- [tiny-collapse](#tiny-collapse)
+- [tiny-count](#tiny-count)
+- [tiny-deseq.r](#tiny-deseqr)
+- [tiny-plot](#tiny-plot)
 
-## Collapser
+## tiny-collapse
 
 ### Threshold
 | Run Config Key | Commandline Argument     |
@@ -29,9 +29,9 @@ Bases can be trimmed from the 5' and/or 3' end of each sequence before it is eva
 |----------------|----------------------|
 | compress:      | `--compress`         |
 
-Collapser outputs are often very large. You can save space by switching this option "on" so that outputs are gzipped before being written to disk.
+tiny-collapse outputs are often very large. You can save space by switching this option "on" so that outputs are gzipped before being written to disk.
 
-### Full Commandline Help String
+### Full tiny-collapse Help String
 ```
 tiny-collapse -i FASTQFILE -o OUTPREFIX [-h] [-t THRESHOLD] [-c]
               [--5p-trim LENGTH] [--3p-trim LENGTH]
@@ -61,28 +61,28 @@ Optional arguments:
   --3p-trim LENGTH      Trim LENGTH bases from the 3' end of each sequence
 ```
 
-## Counter
+## tiny-count
 
 ### All-Features
 | Run Config Key         | Commandline Argument   |
 |------------------------|------------------------|
 | counter_all_features:  | `--all-features`       |
 
-By default, Counter will only evaluate alignments to features which match a `Select for...` & `with value...` of at least one rule in your Features Sheet. It is this matching feature set, and only this set, which is included in `feature_counts.csv` and therefore available for analysis by DESeq2 and Plotter. Switching this option "on" will include all features in every input GFF file, regardless of attribute matches, for Counter and downstream steps.
+By default, tiny-count will only evaluate alignments to features which match a `Select for...` & `with value...` of at least one rule in your Features Sheet. It is this matching feature set, and only this set, which is included in `feature_counts.csv` and therefore available for analysis by tiny-deseq.r and tiny-plot. Switching this option "on" will include all features in every input GFF file, regardless of attribute matches, for tiny-count and downstream steps.
 
 ### Normalize-by-Hits
  | Run Config Key             | Commandline Argument      |
 |----------------------------|---------------------------|
 | counter-normalize-by-hits: | `--normalize-by-hits T/F` |
 
-By default, Counter will divide the number of counts associated with each sequence, twice, before they are assigned to a feature. Each unique sequence's count is determined by Collapser and is preserved through the alignment process. The original count is divided first by the number of loci that the sequence aligns to, and second by the number of features passing selection at each locus. Switching this option "off" disables the latter normalization step.
+By default, tiny-count will divide the number of counts associated with each sequence, twice, before they are assigned to a feature. Each unique sequence's count is determined by tiny-collapse and is preserved through the alignment process. The original count is divided first by the number of loci that the sequence aligns to, and second by the number of features passing selection at each locus. Switching this option "off" disables the latter normalization step.
 
 ### Decollapse
  | Run Config Key      | Commandline Argument   |
 |---------------------|------------------------|
 | counter_decollapse: | `--decollapse`         |
 
-The SAM files produced by the tinyRNA pipeline are collapsed by default; alignments sharing a SEQ field are strictly multi-alignments and do not reflect original sequence counts. If this option is switched "on", Counter will produce a decollapsed copy of each input SAM file. Each alignment in the decollapsed SAM will be duplicated by the sequence's original count. This is useful for browsing in IGV.
+The SAM files produced by the tinyRNA pipeline are collapsed by default; alignments sharing a SEQ field are strictly multi-alignments and do not reflect original sequence counts. If this option is switched "on", tiny-count will produce a decollapsed copy of each input SAM file. Each alignment in the decollapsed SAM will be duplicated by the sequence's original count. This is useful for browsing in IGV.
 
 ### Filters
  | Run Config Key                 | Commandline Argument                       |
@@ -97,7 +97,7 @@ You can optionally filter features in your GFF files by specifying sources and/o
 |----------------|----------------------|
 |                | `--is-pipeline`      |
 
-This commandline argument tells Counter that it is running as a workflow step rather than a standalone/manual run. Under these conditions Counter will look for all input files in the current working directory regardless of the paths defined in the Samples Sheet and Features Sheet.
+This commandline argument tells tiny-count that it is running as a workflow step rather than a standalone/manual run. Under these conditions tiny-count will look for all input files in the current working directory regardless of the paths defined in the Samples Sheet and Features Sheet.
 
 ### Report Diags
  | Run Config Key | Commandline Argument |
@@ -106,7 +106,7 @@ This commandline argument tells Counter that it is running as a workflow step ra
 
 Diagnostic information will include intermediate alignment files for each library and an additional stats table with information about counts that were not assigned to a feature. See [the description of these outputs](../README.md#Diagnostics) for details.
 
-### Full Commandline Help String
+### Full tiny-count Help String
 ```
 tiny-count -i SAMPLES -c CONFIGFILE -o OUTPUTPREFIX [-h]
            [-sf [SOURCE [SOURCE ...]]] [-tf [TYPE [TYPE ...]]]
@@ -140,13 +140,13 @@ Optional arguments:
                         your Samples Sheet.
   -a, --all-features    Represent all features in output counts table, even if
                         they did not match a Select for / with value.
-  -p, --is-pipeline     Indicates that counter was invoked as part of a
+  -p, --is-pipeline     Indicates that tiny-count was invoked as part of a
                         pipeline run and that input files should be sourced as
                         such.
   -d, --report-diags    Produce diagnostic information about
                         uncounted/eliminated selection elements.
 ```
-## DESeq2 Wrapper
+## tiny-deseq.r
 
 ### PCA Plot
 | Run Config Key | Commandline Argument |
@@ -163,7 +163,7 @@ DESeq2 can produce a PCA plot for your samples if your experiment contains biolo
 Features with zero counts across all libraries will be dropped before DGE analysis if this option is switched "on".
 
 
-### Full Commandline Help String
+### Full tiny-deseq.r Help String
 ```
 tiny-deseq.r --input-file COUNTFILE --outfile-prefix PREFIX [--control CONDITION] [--pca] [--drop-zero]
 
@@ -194,14 +194,14 @@ Optional arguments:
           rows/features which have a zero count in all samples."
 ```
 
-## Plotter
+## tiny-plot
 
 ### Plot Requests
  | Run Config Key | Commandline Argument         |
 |----------------|------------------------------|
 | plot_requests: | `--plots PLOT PLOT PLOT ...` |
 
-Plotter will only produce the list of plots requested.
+tiny-plot will only produce the list of plots requested.
 
 ### P value
  | Run Config Key | Commandline Argument |
@@ -215,14 +215,14 @@ Feature expression levels are considered significant if their P value is less th
 |----------------|-------------------|--------------------------|
 |                | plot_style_sheet: | `--style-sheet MPLSTYLE` |
 
-The plot style sheet can be used to override the default Matplotlib styles used by Plotter. Unlike the other parameters, this option is found in the Paths File. See the [Plot Stylesheet documentation](Configuration.md#plot-stylesheet-details) for more information.
+The plot style sheet can be used to override the default Matplotlib styles used by tiny-plot. Unlike the other parameters, this option is found in the Paths File. See the [Plot Stylesheet documentation](Configuration.md#plot-stylesheet-details) for more information.
 
 ### Vector Scatter
  | Run Config Key      | Commandline Argument |
 |---------------------|----------------------|
 | plot_vector_points: | `--vector-scatter`   |
 
-The scatter plots produced by Plotter have rasterized points by default. This allows for faster plot generation, smaller file sizes, and files that are more easily handled by PDF readers. Plots are produced in 300 dpi by default, so in most cases this rasterization is seldom noticeable under normal zoom levels. Switching this option "on" will cause points to be vectorized allowing for zooming without pixelation.
+The scatter plots produced by tiny-plot have rasterized points by default. This allows for faster plot generation, smaller file sizes, and files that are more easily handled by PDF readers. Plots are produced in 300 dpi by default, so in most cases this rasterization is seldom noticeable under normal zoom levels. Switching this option "on" will cause points to be vectorized allowing for zooming without pixelation.
 >**Note**: only scatter points are rasterized with this option switched "off"; all other elements are vectorized in every plot type.
 
 ### Bounds for len_dist Charts
@@ -231,9 +231,9 @@ The scatter plots produced by Plotter have rasterized points by default. This al
 | plot_len_dist_min: | `--len-dist-min VALUE` | 
 | plot_len_dist_max: | `--len-dist-max VALUE` |
 
-The min and/or max bounds for plotted lengths can be set with this option. See [Plotter's documentation](Plotter.md#length-bounds) for more information about how these values are determined if they aren't set.
+The min and/or max bounds for plotted lengths can be set with this option. See [tiny-plot's documentation](tiny-plot.md#length-bounds) for more information about how these values are determined if they aren't set.
 
-### Full Commandline Help String
+### Full tiny-plot Help String
 ```
 tiny-plot [-rc RAW_COUNTS] [-nc NORM_COUNTS] [-uc RULE_COUNTS]
           [-ss STAT] [-dge COMPARISON [COMPARISON ...]]
@@ -266,7 +266,7 @@ Required arguments:
                           highlighted for differentially expressed small RNAs
                           based on P value cutoff.
 
-Input files produced by Counter:
+Input files produced by tiny-count:
   -rc RAW_COUNTS, --raw-counts RAW_COUNTS
                         The ...feature_counts.csv file
   -uc RULE_COUNTS, --rule-counts RULE_COUNTS
@@ -276,7 +276,7 @@ Input files produced by Counter:
   -len 5P_LEN [5P_LEN ...], --len-dist 5P_LEN [5P_LEN ...]
                         The ...nt_len_dist.csv files
 
-Input files produced by DGE:
+Input files produced by tiny-deseq.r:
   -nc NORM_COUNTS, --norm-counts NORM_COUNTS
                         The ...norm_counts.csv file
   -dge COMPARISON [COMPARISON ...], --dge-tables COMPARISON [COMPARISON ...]

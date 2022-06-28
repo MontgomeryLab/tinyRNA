@@ -1,19 +1,19 @@
 # Operation Details
 
 ## Parameters
-For an explanation of Plotter's parameters in the Run Config and by commandline, see [the parameters documentation](Parameters.md#plotter).
+For an explanation of tiny-plot's parameters in the Run Config and by commandline, see [the parameters documentation](Parameters.md#tiny-plot).
 
 ## Input Files
-tinyRNA automatically handles file inputs when Plotter is called as a step in a [pipeline run](Pipeline.md). It is necessary to identify these files when running Plotter as a standalone step. The list of possible input files is lengthy, so you are free to specify only the subset of inputs that are required for your desired plot types. The dependencies per plot type are as follows:
+tinyRNA automatically handles file inputs when tiny-plot is called as a step in a [pipeline run](Pipeline.md). It is necessary to identify these files when running tiny-plot as a standalone step. The list of possible input files is lengthy, so you are free to specify only the subset of inputs that are required for your desired plot types. The dependencies per plot type are as follows:
 
-| Plot Type                       | Input File Commandline Argument(s)                         | Source              |
-|---------------------------------|------------------------------------------------------------|---------------------|
-| len_dist                        | `--len-dist FILE FILE FILE ...`                            | Counter             |
-| rule_charts                     | `--rule-counts FILE`                                       | Counter             |
-| class_charts                    | `--raw-counts FILE`</br>`--summary-stats FILE`             | Counter</br>Counter |
-| replicate_scatter               | `--norm-counts FILE`                                       | DESeq2              |
-| sample_avg_scatter_by_dge       | `--norm-counts FILE`</br>`--dge-tables FILE FILE FILE ...` | DESeq2</br>DESeq2   |
-| sample_avg_scatter_by_dge_class | `--norm-counts FILE`</br>`--dge-tables FILE FILE FILE ...` | DESeq2</br>DESeq2   |
+| Plot Type                       | Input File Commandline Argument(s)                         | Source                        |
+|---------------------------------|------------------------------------------------------------|-------------------------------|
+| len_dist                        | `--len-dist FILE FILE FILE ...`                            | tiny-count                    |
+| rule_charts                     | `--rule-counts FILE`                                       | tiny-count                    |
+| class_charts                    | `--raw-counts FILE`</br>`--summary-stats FILE`             | tiny-count</br>tiny-count     |
+| replicate_scatter               | `--norm-counts FILE`                                       | tiny-deseq.r                  |
+| sample_avg_scatter_by_dge       | `--norm-counts FILE`</br>`--dge-tables FILE FILE FILE ...` | tiny-deseq.r</br>tiny-deseq.r |
+| sample_avg_scatter_by_dge_class | `--norm-counts FILE`</br>`--dge-tables FILE FILE FILE ...` | tiny-deseq.r</br>tiny-deseq.r |
 
 # Plot Types
 
@@ -28,18 +28,18 @@ The distributions of 5' end nucleotides vs. sequence lengths can be used to asse
 
 #### Subtypes
 Two plots are produced for each replicate:
-- Distribution of _Mapped Reads_, which are counted for every alignment reported in Counter's input SAM files
+- Distribution of _Mapped Reads_, which are counted for every alignment reported in tiny-count's input SAM files
 - Distribution of _Assigned Reads_, which are counted at each alignment where at least one overlapping feature passed selection and was assigned a portion of the sequence's original counts
 
 #### Length Bounds
 Lengths are plotted over a continuous range, even if an intermediate length was not observed, and the bounds of this range can be assigned automatically or manually. Manual lengths can be assigned using [plot_len_dist_min and plot_len_dist_max](Parameters.md#bounds-for-len_dist-charts).
 
-When Plotter is called as a step in a pipeline run, min and max bounds are determined independently in the following order of priority:
+When tiny-plot is called as a step in a pipeline run, min and max bounds are determined independently in the following order of priority:
 1. Manual assignment in the Run Config
 2. From the corresponding _optional_ entries for fastp (`length_required` and `length_limit`) in the Run Config
 3. Automatic assignment from the data. Bounds are determined by considering the min/max lengths across all libraries such that all plots have the same bounds. This determination is performed separately for each plot subtype.
 
-When Plotter is called as a standalone step, orders 1 and 3 are used. Manual assignment is performed via the equivalent commandline arguments in order 1.
+When tiny-plot is called as a standalone step, orders 1 and 3 are used. Manual assignment is performed via the equivalent commandline arguments in order 1.
 
 #### Non-Nucleotide Bases
 Placeholder bases, e.g. N, will be reported if they are encountered at the 5' end. Otherwise only the 4 standard bases are reported.
@@ -101,7 +101,7 @@ Differential gene expression between sample groups can be visualized with this p
 </p>
 
 #### Customization
-The P value cutoff can be changed using the [Run Config or commandline arguments](Parameters.md#p-value). The control condition is plotted on the x-axis, but it must be specified in your Samples Sheet prior to running an end-to-end or `tiny recount` analysis. If using `tiny replot`, is not possible to change a no-control experiment to a control experiment and have these changes reflected in these plots. This is because the pipeline's DGE step must be aware of the control condition in order to perform the proper directional comparisons.
+The P value cutoff can be changed using the [Run Config or commandline arguments](Parameters.md#p-value). The control condition is plotted on the x-axis, but it must be specified in your Samples Sheet prior to running an end-to-end or `tiny recount` analysis. If using `tiny replot`, is not possible to change a no-control experiment to a control experiment and have these changes reflected in these plots. This is because tiny-deseq.r must be aware of the control condition in order to perform the proper directional comparisons.
 
 
 
@@ -110,7 +110,7 @@ The P value cutoff can be changed using the [Run Config or commandline arguments
 The previous plot type can be extended to group and color differentially expressed features by class. Classes are sorted by abundance before plotting to maximize representation.
 
 <p float="left" align="center">
-    <img src="../images/plots/scatter_dge_class.jpg" width="1000%" alt="sample_avg_scatter_by_dge_class"/>
+    <img src="../images/plots/scatter_dge_class.jpg" width="100%" alt="sample_avg_scatter_by_dge_class"/>
 </p>
 
 >**Tip**: if you find that two groups of interest share proximity and are too similar in color, you can change the group's color with a modified Plot Stylesheet. The groups will be colored in the same order they are listed in the legend (not including P value outgroup), e.g. changing the color of the ERGO group means changing the 5th color in the `axes.prop_cycle` color cycler. See the [config file documentation](Configuration.md#plot-stylesheet-details) for more info about the Plot Stylesheet.
