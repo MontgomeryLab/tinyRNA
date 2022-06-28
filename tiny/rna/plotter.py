@@ -28,8 +28,8 @@ def get_args():
 
     parser = argparse.ArgumentParser(description=__doc__, add_help=False, formatter_class=SmartFormatter)
     required_args = parser.add_argument_group("Required arguments")
-    counter_files = parser.add_argument_group("Input files produced by Counter")
-    diffexp_files = parser.add_argument_group("Input files produced by DGE")
+    counter_files = parser.add_argument_group("Input files produced by tiny-count")
+    diffexp_files = parser.add_argument_group("Input files produced by tiny-deseq.r")
     optional_args = parser.add_argument_group("Optional arguments")
 
     # Single file inputs
@@ -229,7 +229,7 @@ def load_mapped_reads(summary_stats_file: str) -> pd.Series:
     """Produces a Series of mapped reads per library for calculating proportions in class charts.
 
     Args:
-        summary_stats_file: the summary stats csv produced by Counter
+        summary_stats_file: the summary stats csv produced by tiny-count
 
     Returns: a Series containing mapped reads per sample
     """
@@ -394,7 +394,7 @@ def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, show_un
 def load_raw_counts(raw_counts_file: str) -> pd.DataFrame:
     """Loads a raw_counts CSV as a DataFrame
     Args:
-        raw_counts_file: The raw counts CSV produced by Counter
+        raw_counts_file: The raw counts CSV produced by tiny-count
     Returns:
         The raw counts DataFrame (multiindex if it contains a Tag column)
     """
@@ -410,7 +410,7 @@ def load_raw_counts(raw_counts_file: str) -> pd.DataFrame:
 def load_rule_counts(rule_counts_file: str) -> pd.DataFrame:
     """Loads a rule_counts CSV as a DataFrame
     Args:
-        rule_counts_file: The rule counts CSV produced by Counter
+        rule_counts_file: The rule counts CSV produced by tiny-count
     Returns:
         The rule counts DataFrame
     """

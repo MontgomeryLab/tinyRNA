@@ -1,13 +1,13 @@
 # Operation Details
 
 ## Parameters
-For an explanation of Counter's parameters in the Run Config and by commandline, see [the parameters documentation](Parameters.md#counter).
+For an explanation of tiny-count's parameters in the Run Config and by commandline, see [the parameters documentation](Parameters.md#tiny-count).
 
 ## Resuming an End-to-End Analysis
-Counter offers a variety of options for refining your analysis. You might find that repeat analyses are required while tuning these options to your goals. However, the earlier pipeline steps are resource and time intensive, so it is inconvenient to rerun an end-to-end analysis to test new selection rules. Using the command `tiny recount`, tinyRNA will run the workflow starting at the Counter step using inputs from a prior end-to-end run. See the [pipeline resume documentation](Pipeline.md#resuming-a-prior-analysis) for details and prerequesites.
+tiny-count offers a variety of options for refining your analysis. You might find that repeat analyses are required while tuning these options to your goals. However, the earlier pipeline steps are resource and time intensive, so it is inconvenient to rerun an end-to-end analysis to test new selection rules. Using the command `tiny recount`, tinyRNA will run the workflow starting at the tiny-count step using inputs from a prior end-to-end run. See the [pipeline resume documentation](Pipeline.md#resuming-a-prior-analysis) for details and prerequesites.
 
 ## Running as a Standalone Tool
-If you would like to run Counter as a standalone tool, not as part of an end-to-end or resumed analysis, you can do so with the command `tiny-count`. The command requires that you specify the paths to your Samples Sheet and Features Sheet, and a filename prefix for outputs. [All other arguments are optional](../README.md#counter). You will need to make a copy of your Samples Sheet and modify it so that the `Input FASTQ Files` column instead contains paths to the corresponding SAM files from a prior end-to-end run. SAM files from non-tinyRNA sources are not currently supported as the Collapser step is critical to its function.
+If you would like to run tiny-count as a standalone tool, not as part of an end-to-end or resumed analysis, you can do so with the command `tiny-count`. The command requires that you specify the paths to your Samples Sheet and Features Sheet, and a filename prefix for outputs. [All other arguments are optional](Parameters.md#full-tiny-count-help-string). You will need to make a copy of your Samples Sheet and modify it so that the `Input FASTQ Files` column instead contains paths to the corresponding SAM files from a prior end-to-end run. SAM files from non-tinyRNA sources are not currently supported as the tiny-collapse step is critical to its function.
 
 >**Important:** reusing the same output filename prefix between standalone runs will result in prior outputs being overwritten.
 
@@ -24,10 +24,10 @@ Selection occurs in three stages, with the output of each stage as input to the 
 3. Remaining feature candidates are then selected based on the small RNA attributes of the alignment to which they are being assigned. These attributes are, again, defined in each feature's matched rules
 
 ## Stage 1: Feature Attribute Parameters
-| _features.csv columns:_ | Select for... | with value... |
-|-------------------------|---------------|---------------|
+| _features.csv columns:_ | Select for... | with value... | Tag |
+|-------------------------|---------------|---------------|-----|
 
-Each feature's column 9 attributes are searched for the key-value combinations defined in the `Select for...` and `with value...` columns. Features, and the rules they matched, are retained for overlap evaluation at alignment loci. 
+Each feature's column 9 attributes are searched for the key-value combinations defined in the `Select for...` and `with value...` columns. Features, and the rules they matched, are retained for later evaluation at alignment loci in Stages 2 and 3.
 
 #### Value Lists
 Attribute keys are allowed to have multiple comma separated values, and these values are treated as a list; only one of the listed values needs to match the `with value...` to be considered a valid match to the rule. For example, if a rule contained `Class` and `WAGO` in these columns, then a feature with attributes `... ;Class=CSR,WAGO; ...` would be considered a match for the rule.
@@ -35,7 +35,10 @@ Attribute keys are allowed to have multiple comma separated values, and these va
 >**Tip**: The rules defined in your Features Sheet are case-insensitive. You do not need to match the capitalization of your target attributes.
 
 #### Wildcard Support
-Wildcard values (`all`, `*`, or an empty cell) can be used in these fields. With this functionality you can evaluate features for the presence of an attribute key without regarding its values, or you can check all attribute keys for the presence of a specific value, or you can skip Stage 1 selection altogether to permit the evaluation of the complete feature set in Stage 2. In the later case, feature-rule matching pairs still serve as the basis for selection; each rule still applies only to its matching subset from previous Stages.
+Wildcard values (`all`, `*`, or an empty cell) can be used in the `Select for...` / `with value...` fields. With this functionality you can evaluate features for the presence of an attribute key without regarding its values, or you can check all attribute keys for the presence of a specific value, or you can skip Stage 1 selection altogether to permit the evaluation of the complete feature set in Stage 2. In the later case, feature-rule matching pairs still serve as the basis for selection; each rule still applies only to its matching subset from previous Stages.
+
+#### Tagged Counting (advanced)
+You can optionally specify a tag for each rule. Feature assignments resulting from tagged rules will have reads counted separately from those assigned by non-tagged rules. This essentially creates a new "sub-feature" for each feature that a tagged rule matches, and these "sub-features" are treated as distinct during downstream DGE analysis. Additionally, these counts subsets can be pooled across any number of rules by specifying the same tag. We recommend using tag names which _do not_ pertain to the `Select for...` / `with value...` in order to avoid potentially confusing results in class-related plots. 
 
 ## Stage 2: Hierarchy and Overlap Parameters
 | _features.csv columns:_ | Hierarchy | Overlap |
@@ -65,8 +68,8 @@ This column allows you to specify which read alignments should be assigned based
 - `3' anchored`: alignment's 3' end is equal to the corresponding terminus of the feature
 
 The following diagrams demonstrate the strand semantics of these interval selectors. The first two options show separate illustrations for features on each strand for emphasis. All matches shown in the remaining three options apply to features on either strand.
-![3'_anchored_5'_anchored](../images/3'_anchored_5'_anchored.png)
-![Full_Exact_Partial](../images/Full_Exact_Partial.png)
+![3'_anchored_5'_anchored](../images/3'_anchored_5'_anchored_interval.png)
+![Full_Exact_Partial](../images/full_exact_partial_interval.png)
 
 ## Stage 3: Alignment Attribute Parameters
 | _features.csv columns:_ | Strand | 5' End Nucleotide | Length |

@@ -328,7 +328,10 @@ class Configuration(ConfigBase):
                             help="The Run Config file to be processed")
 
         args = parser.parse_args()
-        Configuration(args.input_file).write_processed_config()
+
+        file_basename = os.path.basename(args.input_file)
+        config_object = Configuration(args.input_file)
+        config_object.write_processed_config(f"processed_{file_basename}")
 
 
 class CSVReader(csv.DictReader):
@@ -352,9 +355,9 @@ class CSVReader(csv.DictReader):
            "Feature Source":    "Source"
         }),
         "Samples Sheet": OrderedDict({
-            "Input FastQ Files": "File",
+            "Input FASTQ Files": "File",
             "Sample/Group Name": "Group",
-            "Replicate number":  "Replicate",
+            "Replicate Number":  "Replicate",
             "Control":           "Control",
             "Normalization":     "Normalization"
         })
@@ -381,18 +384,24 @@ class CSVReader(csv.DictReader):
                 yield row
 
     def validate_csv_header(self, header: OrderedDict):
-        expected = {key.lower() for key in self.tinyrna_sheet_fields[self.doctype].keys()}
+        doc_reference = self.tinyrna_sheet_fields[self.doctype]
+        expected = {key.lower() for key in doc_reference.keys()}
         read_vals = {val.lower() for val in header.values() if val is not None}
 
         unknown = {col_name for col_name in read_vals if col_name not in expected}
         missing = expected - read_vals
 
         if len(missing):
-            raise ValueError('\n\t'.join([f"The following columns are missing from your {self.doctype}:",
-                             *missing]))
+            raise ValueError('\n\t'.join([f"The following columns are missing from your {self.doctype}:", *missing]))
         if len(unknown):
-            raise ValueError('\n\t'.join([f"The following columns in your {self.doctype} are unrecognized:",
-                             *unknown]))
+            raise ValueError('\n\t'.join([f"The following columns in your {self.doctype} are unrecognized:", *unknown]))
+
+        doc_ref_lowercase = {key.lower(): value for key, value in doc_reference.items()}
+        header_lowercase = {key: value.lower() for key, value in header.items()}
+
+        if tuple(header_lowercase.values()) != tuple(doc_ref_lowercase.keys()):
+            # Remap column order to match client's
+            self.fieldnames = tuple(doc_ref_lowercase[key] for key in header_lowercase.values())
 
 
 if __name__ == '__main__':

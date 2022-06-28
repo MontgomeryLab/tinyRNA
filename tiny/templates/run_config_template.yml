@@ -39,7 +39,7 @@ threads: 4
 ##-- Control the amount of information printed to terminal: debug, normal, quiet --##
 verbosity: normal
 
-##-- If True: process fastp, collapser, and bowtie in parallel on a per-library basis --##
+##-- If True: process fastp, tiny-collapse, and bowtie in parallel per-library --##
 run_parallel: true
 
 ##-- (EXPERIMENTAL) If True: execute the pipeline using native cwltool Python --##
@@ -133,7 +133,7 @@ compression: 4
 
 ######--------------------------- READ COLLAPSER OPTIONS ----------------------------######
 #
-# We use a custom Python script for collapsing duplicate reads.
+# We use a custom Python utility for collapsing duplicate reads.
 # We recommend using the default (keep all reads, or threshold: 0).
 # Sequences <= threshold will not be included in downstream steps.
 # Trimming takes place prior to counting/collapsing.
@@ -221,8 +221,8 @@ shared_memory: False
 
 ######--------------------------- FEATURE COUNTER OPTIONS ---------------------------######
 #
-# We use a custom Python script that utilizes the HTSeq API to count small RNA reads.
-# Selection rules for feature counting are defined in your Features Sheet.
+# We use a custom Python utility that utilizes HTSeq's Genomic Array of Sets and GFF reader
+# to count small RNA reads. Selection rules are defined in your Features Sheet.
 #
 ######-------------------------------------------------------------------------------######
 
@@ -342,23 +342,23 @@ ebwt: ~
 #
 ######-------------------------------------------------------------------------------######
 
-##-- Utilized by Fastp, Collapser, and Bowtie --##
+##-- Utilized by fastp, tiny-collapse, and bowtie --##
 sample_basenames: [ ]
 
-##-- Utilized by Fastp --##
+##-- Utilized by fastp --##
 # input fastq files
 in_fq: [ ]
 # output reports
 fastp_report_titles: [ ]
 
-###-- Utilized by Bowtie --###
+###-- Utilized by bowtie --###
 # bowtie index files
 bt_index_files: [ ]
 
-##-- Utilized by Deseq --##
+##-- Utilized by tiny-deseq.r --##
 # The control for comparison. If unspecified, all comparisons are made
 control_condition:
-# If the experiment design yeilds less than one degree of freedom, deseq is skipped
+# If the experiment design yields less than one degree of freedom, tiny-deseq.r is skipped
 run_deseq: True
 
 ######------------------------- DERIVED FROM FEATURES SHEET -------------------------######
@@ -367,6 +367,6 @@ run_deseq: True
 #
 ######-------------------------------------------------------------------------------######
 
-###-- Utilized by Counter --###
+###-- Utilized by tiny-count --###
 # a list of only unique GFF files
 gff_files: [ ]
