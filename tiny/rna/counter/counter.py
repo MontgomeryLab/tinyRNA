@@ -55,7 +55,7 @@ def get_args():
                                help='Represent all features in output counts table, '
                                     'even if they did not match a Select for / with value.')
     optional_args.add_argument('-p', '--is-pipeline', action='store_true',
-                               help='Indicates that counter was invoked as part of a pipeline run '
+                               help='Indicates that tiny-count was invoked as part of a pipeline run '
                                     'and that input files should be sourced as such.')
     optional_args.add_argument('-d', '--report-diags', action='store_true',
                                help='Produce diagnostic information about uncounted/eliminated '
@@ -70,8 +70,8 @@ def get_args():
 def load_samples(samples_csv: str, is_pipeline: bool) -> List[Dict[str, str]]:
     """Parses the Samples Sheet to determine library names and alignment files for counting
 
-    Sample files may have a .fastq(.gz) extension (i.e. when Counter is called as part of a
-    pipeline run) or a .sam extension (i.e. when Counter is called as a standalone tool).
+    Sample files may have a .fastq(.gz) extension (i.e. when tiny-count is called as part of a
+    pipeline run) or a .sam extension (i.e. when tiny-count is called as a standalone tool).
 
     Args:
         samples_csv: a csv file which defines sample group, replicate, and file location
@@ -175,7 +175,7 @@ def map_and_reduce(libraries, prefs):
     return summary
 
 
-@report_execution_time("Counter's overall runtime")
+@report_execution_time("tiny-count's overall runtime")
 def main():
     # Get command line arguments.
     args = get_args()
@@ -198,11 +198,12 @@ def main():
         merged_counts.write_report_files()
     except:
         traceback.print_exception(*sys.exc_info())
-        print("\n\nCounter encountered an error. Don't worry! You don't have to start over.\n"
-              "You can resume the pipeline at Counter. To do so:\n\t"
-              "1. cd into your Run Directory\n\t"
-              '2. Run "tiny recount --config your_run_config.yml"\n\t'
-              '   (that\'s the processed run config) ^^^\n\n', file=sys.stderr)
+        if args.is_pipeline:
+            print("\n\ntiny-count encountered an error. Don't worry! You don't have to start over.\n"
+                  "You can resume the pipeline at tiny-count. To do so:\n\t"
+                  "1. cd into your Run Directory\n\t"
+                  '2. Run "tiny recount --config your_run_config.yml"\n\t'
+                  '   (that\'s the processed run config) ^^^\n\n', file=sys.stderr)
 
 
 if __name__ == '__main__':

@@ -46,9 +46,9 @@ reference_genome_files:
 
 adapter_fasta:
 
-######---------------------------------- PLOTTER ------------------------------------######
+######--------------------------------- tiny-plot -----------------------------------######
 #
-# Optional: override the styles used by plotter by providing your own .mplstyle sheet
+# Optional: override the styles used by tiny-plot by providing your own .mplstyle sheet
 # Run "tiny get-template" in your terminal to get a copy of the current style sheet
 #
 ######-------------------------------------------------------------------------------######
