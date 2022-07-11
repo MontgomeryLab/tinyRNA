@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 
+# USAGE: if you would like to install under a different conda environment name,
+# you can pass the preferred name as the first argument to the script:
+#   ./setup.sh preferred_name
+
 [[ $# -eq 1 ]] && env_name=$1 || env_name="tinyrna"
+
+python_version="3.7"
+miniconda_version="4.12.0"
 bioc_version="3.14"
 tested_bioc_versions="3.1[2-4]"
 
@@ -75,12 +82,12 @@ fi
 if [[ "$OSTYPE" == "darwin"* ]]; then
   success "macOS detected"
   shell=$(basename "$(dscl . -read ~/ UserShell | cut -f 2 -d " ")")
-  miniconda_installer="Miniconda3-latest-MacOSX-x86_64.sh"
+  miniconda_installer="Miniconda3-py${python_version/./}_${miniconda_version}-MacOSX-x86_64.sh"
   platform_lock_file="./conda/conda-r-osx-64.lock"
 elif [[ "$OSTYPE" == "linux-gnu" ]]; then
   success "Linux detected"
   shell="$(basename "$SHELL")"
-  miniconda_installer="Miniconda3-latest-Linux-x86_64.sh"
+  miniconda_installer="Miniconda3-py${python_version/./}_${miniconda_version}-Linux-x86_64.sh"
   platform_lock_file="./conda/conda-r-linux-64.lock"
 else
   fail "Unsupported OS"
@@ -90,6 +97,7 @@ fi
 # Check if Conda is installed
 if grep -q "conda init" ~/."$shell"rc ~/."$shell"_profile 2> /dev/null; then
   success "Conda is already installed for $shell"
+  eval "$(conda shell."$shell" hook)"
 else
   status "Downloading Miniconda..."
   curl -O -# https://repo.anaconda.com/miniconda/$miniconda_installer
@@ -106,10 +114,13 @@ else
     exit 1
   fi
 
-  # Cleanup
+  # Finalize installation
+  source ~/."$shell"rc
+  eval "$(conda shell."$shell" hook)"
+  conda config --set auto_activate_base false
+
   success "Miniconda installed"
   rm $miniconda_installer
-  echo "auto_activate_base: false" >> ~/.condarc
 fi
 
 # By default, assume that host environment does not contain an appropriate DESeq2 version
@@ -151,9 +162,6 @@ if [[ $install_R_deseq2 == false ]]; then
   # Switch to using non-R lock file
   platform_lock_file="${platform_lock_file//-r/}"
 fi
-
-# Enable use of Conda through this script
-eval "$(conda shell."$shell" hook)"
 
 # Check if the conda environment $env_name exists
 if conda env list | grep -q "$env_name"; then
