@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 
+# USAGE: if you would like to install under a different conda environment name,
+# you can pass the preferred name as the first argument to the script:
+#   ./setup.sh preferred_name
+
 [[ $# -eq 1 ]] && env_name=$1 || env_name="tinyrna"
+
+python_version="3.7"
+miniconda_version="4.12.0"
 bioc_version="3.14"
 tested_bioc_versions="3.1[2-4]"
 
@@ -75,12 +82,12 @@ fi
 if [[ "$OSTYPE" == "darwin"* ]]; then
   success "macOS detected"
   shell=$(basename "$(dscl . -read ~/ UserShell | cut -f 2 -d " ")")
-  miniconda_installer="Miniconda3-latest-MacOSX-x86_64.sh"
+  miniconda_installer="Miniconda3-py${python_version/./}_${miniconda_version}-MacOSX-x86_64.sh"
   platform_lock_file="./conda/conda-r-osx-64.lock"
 elif [[ "$OSTYPE" == "linux-gnu" ]]; then
   success "Linux detected"
   shell="$(basename "$SHELL")"
-  miniconda_installer="Miniconda3-latest-Linux-x86_64.sh"
+  miniconda_installer="Miniconda3-py${python_version/./}_${miniconda_version}-Linux-x86_64.sh"
   platform_lock_file="./conda/conda-r-linux-64.lock"
 else
   fail "Unsupported OS"
