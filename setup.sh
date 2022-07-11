@@ -90,6 +90,7 @@ fi
 # Check if Conda is installed
 if grep -q "conda init" ~/."$shell"rc ~/."$shell"_profile 2> /dev/null; then
   success "Conda is already installed for $shell"
+  eval "$(conda shell."$shell" hook)"
 else
   status "Downloading Miniconda..."
   curl -O -# https://repo.anaconda.com/miniconda/$miniconda_installer
@@ -106,10 +107,13 @@ else
     exit 1
   fi
 
-  # Cleanup
+  # Finalize installation
+  source ~/."$shell"rc
+  eval "$(conda shell."$shell" hook)"
+  conda config --set auto_activate_base false
+
   success "Miniconda installed"
   rm $miniconda_installer
-  echo "auto_activate_base: false" >> ~/.condarc
 fi
 
 # By default, assume that host environment does not contain an appropriate DESeq2 version
@@ -151,9 +155,6 @@ if [[ $install_R_deseq2 == false ]]; then
   # Switch to using non-R lock file
   platform_lock_file="${platform_lock_file//-r/}"
 fi
-
-# Enable use of Conda through this script
-eval "$(conda shell."$shell" hook)"
 
 # Check if the conda environment $env_name exists
 if conda env list | grep -q "$env_name"; then
