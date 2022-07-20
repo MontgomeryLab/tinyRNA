@@ -13,20 +13,17 @@ match_tuple = Tuple[int, int, IntervalSelector]             # (rank, rule, inter
 feature_record_tuple = Tuple[str, str, Tuple[match_tuple]]  # (feature ID, strand, match tuple)
 
 
-class Features:
+class Features(metaclass=Singleton):
     chrom_vectors: HTSeq.ChromVector
-    classes: dict
     aliases: dict
+    classes: dict
+    tags: dict
 
-    _instance = None  # Singleton
-
-    def __init__(self, features: HTSeq.GenomicArrayOfSets, aliases: dict, classes: dict, tags: dict):
-        if Features._instance is None:
-            Features.chrom_vectors = features.chrom_vectors  # For interval -> feature record tuple lookups
-            Features.aliases = aliases                       # For feature ID -> preferred feature name lookups
-            Features.classes = classes                       # For feature ID -> class lookups
-            Features.tags = tags                             # For feature ID -> match IDs
-            Features._instance = self
+    def __init__(_, features: HTSeq.GenomicArrayOfSets, aliases: dict, classes: dict, tags: dict):
+        Features.chrom_vectors = features.chrom_vectors  # For interval -> feature record tuple lookups
+        Features.aliases = aliases                       # For feature ID -> preferred feature name lookups
+        Features.classes = classes                       # For feature ID -> class lookups
+        Features.tags = tags                             # For feature ID -> match IDs
 
 
 class FeatureCounter:
