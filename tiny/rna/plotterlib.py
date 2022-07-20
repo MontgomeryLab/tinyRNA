@@ -272,7 +272,7 @@ class plotterlib:
         """Calculates scatter view limits for the counts dataframe"""
 
         x0 = counts_df.min(axis='columns').where(lambda x: x != 0).dropna().min()
-        x1 = np.max(counts_df).max()
+        x1 = counts_df.max().max()
         minpos = 1e-300
 
         if not np.isfinite([x0, x1]).all() or not isinstance(x0, np.float) or x1 <= 0:
