@@ -163,6 +163,7 @@ def map_and_reduce(libraries, prefs):
 
     # Use a multiprocessing pool if multiple sam files were provided
     if len(libraries) > 1:
+        mp.set_start_method("fork")
         with mp.Pool(len(libraries)) as pool:
             async_results = pool.imap_unordered(counter.count_reads, libraries)
 

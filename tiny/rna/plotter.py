@@ -668,6 +668,7 @@ def main():
         itinerary.append((func, arg, kwd))
 
     if len(itinerary) > 1 and not aqplt.is_debug_mode():
+        mp.set_start_method('fork')
         with mp.Pool(len(itinerary)) as pool:
             results = []
             for task, args, kwds in itinerary:
