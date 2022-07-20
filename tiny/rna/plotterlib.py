@@ -382,7 +382,7 @@ class plotterlib:
 
         # If the last tick label on the x-axis will extend past the plot space,
         # then hide it and its corresponding tick on the y-axis
-        if axis.__name__ is "xaxis" and axis.get_tick_space() == len(ticks_displayed):
+        if axis.__name__ == "xaxis" and axis.get_tick_space() == len(ticks_displayed):
             major_ticks[last_idx].label1.set_visible(False)
             yaxis = axis.axes.yaxis
             yaxis.get_major_ticks()[last_idx].label1.set_visible(False)
@@ -421,7 +421,7 @@ class plotterlib:
     def restore_ticks(self, ax: plt.Axes, axis: str):
         """Restore tick objects from previous render"""
 
-        axes = [ax.xaxis, ax.yaxis] if axis is "both" else [getattr(ax, axis)]
+        axes = [ax.xaxis, ax.yaxis] if axis == "both" else [getattr(ax, axis)]
         for axis in axes:
             name = axis.__name__
             for type in ["major", "minor"]:

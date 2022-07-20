@@ -184,7 +184,7 @@ class Interval5pMatch(IntervalSelector):
             terminus of this feature's interval.
         """
 
-        if alignment['strand'] is '+':
+        if alignment['strand'] == '+':
             return alignment['start'] == self.start
         else:
             return alignment['end'] == self.end
@@ -221,7 +221,7 @@ class Interval3pMatch(IntervalSelector):
             terminus of this feature's interval.
         """
 
-        if alignment["strand"] is '+':
+        if alignment["strand"] == '+':
             return alignment['end'] == self.end
         else:
             return alignment['start'] == self.start
