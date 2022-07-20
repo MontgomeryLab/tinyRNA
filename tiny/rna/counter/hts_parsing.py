@@ -172,7 +172,7 @@ def infer_strandedness(sam_file: str, intervals: dict) -> str:
     else: return "non-reverse"
 
 
-def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
+def parse_GFF_attribute_string(attrStr, extra_return_first_value=False, gff_version=2):
     """Parses a GFF attribute string and returns it as a dictionary.
 
     This is a slight modification of the same method found in HTSeq.features.
@@ -186,14 +186,24 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
         ID."
     """
 
+    if attrStr.endswith("\n"):
+        attrStr = attrStr[:-1]
+
     # Modification: store attributes in a dict subclass that allows case-insensitive ops
     attribute_dict = CaseInsensitiveAttrs()
     first_val = "_unnamed_"
-    for i, attr in enumerate(HTSeq._HTSeq.quotesafe_split(attrStr.rstrip().encode())):
+
+    if gff_version == 2:
+        iterator = HTSeq._HTSeq.quotesafe_split(attrStr.encode())
+    else:
+        # GFF3 does not care about quotes
+        iterator = attrStr.encode().split(b';')
+
+    for i, attr in enumerate(iterator):
         attr = attr.decode()
         if _re_attr_empty.match(attr):
             continue
-        if attr.count('"') not in (0, 2):
+        if (gff_version == 2) and attr.count('"') not in (0, 2):
             raise ValueError(
                 "The attribute string seems to contain mismatched  quotes.")
         mo = _re_attr_main.match(attr)
@@ -201,10 +211,10 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False):
             raise ValueError("Failure parsing GFF attribute line")
         key = mo.group(1)
         val = mo.group(2)
-        if val.startswith('"') and val.endswith('"'):
+        if (gff_version == 2) and val.startswith('"') and val.endswith('"'):
             val = val[1:-1]
         # Modification: allow for comma separated attribute values
-        attribute_dict[sys.intern(key)] = (sys.intern(val),) \
+        attribute_dict[key] = (val,) \
             if ',' not in val \
             else tuple(c.strip() for c in val.split(','))
         if extra_return_first_value and i == 0:
@@ -350,7 +360,7 @@ class ReferenceTables:
         self.tags = defaultdict(set)                                    # Root Feature ID -> Root Match ID
 
         # Patch the GFF attribute parser to support comma separated attribute value lists
-        setattr(HTSeq.features, 'parse_GFF_attribute_string', parse_GFF_attribute_string)
+        setattr(HTSeq.features.GFF_Reader, 'parse_GFF_attribute_string', staticmethod(parse_GFF_attribute_string))
 
     @report_execution_time("GFF parsing")
     def get(self) -> Tuple[StepVector, AliasTable, ClassTable, dict]:
