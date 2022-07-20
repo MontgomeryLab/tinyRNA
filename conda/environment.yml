@@ -4,19 +4,19 @@ channels:
   - main
 dependencies:
   - python>=3.9
+  - bioconductor-deseq2==1.34.0
+  - bowtie==1.3.1
+  - fastp==0.23.2
+  - htseq==2.0.2
+  - nodejs==16.13.1
   - numpy==1.23.1
   - pandas==1.4.3
-  - conda-forge::matplotlib==3.5.2
-  - htseq==2.0.2
-  - fastp==0.23.2
-  - bowtie==1.3.1
-  - nodejs==17.9.0 # 16.13.1
-  - conda-forge::cwltool==3.1.20220628170238
-  - conda-forge::psutil==5.9.1
-  - conda-forge::mscorefonts==0.0.1
-  - conda-forge::r-base==4.1.3 # 4.1.1
-  - bioconductor-deseq2==1.34.0
-  - setuptools==63.1.0
   - pip==22.1.2
+  - setuptools==63.1.0
+  - conda-forge::cwltool==3.1.20220628170238
+  - conda-forge::matplotlib==3.5.2
+  - conda-forge::mscorefonts==0.0.1
+  - conda-forge::psutil==5.9.1
+  - conda-forge::r-base==4.1.1
   - pip:
     - ../ # Install tinyRNA via setup.py
