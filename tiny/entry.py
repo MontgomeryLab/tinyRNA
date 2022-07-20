@@ -176,7 +176,7 @@ def run_cwltool_subprocess(config_file: str, workflow: str, run_directory=None, 
     """
 
     command = ['cwltool --timestamps --relax-path-checks --on-error continue']
-    if verbosity == 'debug': command.append('--debug --js-console')
+    if verbosity == 'debug': command.append('--debug --js-console --leave-tmpdir')
     if verbosity == 'quiet': command.append('--quiet')
     if run_directory: command.append(f'--outdir {run_directory}')
     if parallel: command.append('--parallel')
