@@ -160,7 +160,7 @@ fi
 
 # Activate environment and set environment variable config for Linux stability
 conda activate $env_name
-conda env config vars set PYTHONNOUSERSITE=1  # FYI: cannot be set by lockfile
+conda env config vars set PYTHONNOUSERSITE=1 > /dev/null  # FYI: cannot be set by lockfile
 
 # Install the tinyRNA codebase
 status "Installing tinyRNA codebase via pip..."
