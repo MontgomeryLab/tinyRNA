@@ -49,6 +49,7 @@ inputs:
   trim_tail1: int?
 
   # collapser inputs
+  run_collapser: boolean
   threshold: int?
   compress: boolean?
   5p_trim: int?
@@ -143,6 +144,7 @@ steps:
       trim_tail1: trim_tail1
 
       # Collapser
+      run_collapser: run_collapser
       threshold: threshold
       compress: compress
       5p_trim: 5p_trim
@@ -168,7 +170,10 @@ steps:
     scatter: [ reads, sample_basename ]
     scatterMethod: dotproduct
     in:
-      reads: preprocessing/uniq_seqs
+      run_collapser: run_collapser
+      reads: preprocessing/fastq_clean
+      fasta: { valueFrom: $(inputs.run_collapser) }
+      fastq: { valueFrom: $(!inputs.run_collapser) }
       sample_basename: sample_basenames
       bt_index_files:
         source: [ bt_build_optional/index_files, bt_index_files ]
@@ -216,7 +221,11 @@ steps:
       is_pipeline: {default: true}
       diagnostics: counter_diags
       fastp_logs: preprocessing/json_report_file
-      collapsed_fa: preprocessing/uniq_seqs
+      run_collapser: run_collapser
+      collapsed_fa:
+        source: [ preprocessing/uniq_seqs, preprocessing/fastq_clean ]
+        valueFrom: |
+          $(inputs.run_collapser ? self[0] : self[1])
     out: [ feature_counts, rule_counts, norm_counts, mapped_nt_len_dist, assigned_nt_len_dist,
            alignment_stats, summary_stats, console_output, decollapsed_sams,
            intermed_out_files, alignment_diags, selection_diags ]
@@ -283,7 +292,9 @@ steps:
 
   organize_collapser:
     run: ../tools/make-subdir.cwl
+    when: $(inputs.run_collapser)
     in:
+      run_collapser: run_collapser
       dir_files:
         source: [ preprocessing/uniq_seqs, preprocessing/uniq_seqs_low, preprocessing/collapser_console ]
       dir_name: dir_name_collapser
@@ -340,7 +351,7 @@ outputs:
     outputSource: organize_fastp/subdir
 
   collapser_out_dir:
-    type: Directory
+    type: Directory?
     outputSource: organize_collapser/subdir
 
   bowtie_out_dir:

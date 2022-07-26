@@ -32,6 +32,8 @@ run_name: my_first_run
 ##-- NOTE: this option may be ignored depending on your Paths file. See Paths file. --##
 run_bowtie_build: True
 
+run_collapser: false
+
 ##-- Number of threads to use when a step supports multi-threading --##
 ##-- For best performance, this should be equal to your computer's processor core count --##
 threads: 4

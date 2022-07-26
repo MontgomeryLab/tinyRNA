@@ -1,11 +1,12 @@
 #!/usr/bin/env cwl-runner
 
-cwlVersion: v1.0
+cwlVersion: v1.2
 class: Workflow
 
 requirements:
  - class: StepInputExpressionRequirement
  - class: InlineJavascriptRequirement
+ - class: MultipleInputFeatureRequirement
 
 inputs:
   # multi input
@@ -36,6 +37,7 @@ inputs:
   trim_tail1: int?
 
   # collapser inputs
+  run_collapser: boolean
   threshold: int?
   compress: boolean?
   5p_trim: int?
@@ -75,7 +77,9 @@ steps:
 
   collapse:
     run: ../tools/tiny-collapse.cwl
+    when: $(inputs.run_collapser)
     in:
+      run_collapser: run_collapser
       input_file: fastp/fastq1
       sample_basename: sample_basename
       out_prefix: { valueFrom: $(inputs.sample_basename) }
@@ -103,15 +107,15 @@ outputs:
     type: File # unscatter
     outputSource: fastp/console_output
 
+  # Optional outputs
   uniq_seqs:
-    type: File # unscatter
+    type: File? # unscatter
     outputSource: collapse/collapsed_fa
 
   collapser_console:
-    type: File # unscatter
+    type: File? # unscatter
     outputSource: collapse/console_output
 
-  # Optional outputs
   uniq_seqs_low:
     type: File? # unscatter
     outputSource: collapse/low_counts_fa
