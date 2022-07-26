@@ -12,8 +12,8 @@ URL = 'https://github.com/MontgomeryLab/tinyrna/'
 EMAIL = 'ajtate@colostate.edu'
 AUTHOR = 'Kristen Brown, Alex Tate'
 PLATFORM = 'Unix'
-REQUIRES_PYTHON = '>=3.7.0'
-VERSION = '0.1'
+REQUIRES_PYTHON = '>=3.9.0'
+VERSION = '1.0'
 
 # Required packages are installed via Conda's environment.yml
 # See PreFlight below...
