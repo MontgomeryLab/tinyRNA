@@ -57,7 +57,7 @@ class SAM_reader:
         """Parses and yields individual SAM alignments from the open file_obj"""
 
         line, line_no = self._read_thru_header(file_obj)
-        self._validate_collapsed_input(line)
+        self._validate_collapsed_input(line.decode())
         decollapse_sam = self.decollapse
 
         try:
@@ -117,6 +117,9 @@ class SAM_reader:
             line = file_obj.readline()
             lineno += 1
 
+        # Todo: this is probably better off in _validate_collapsed_input
+        #  or perhaps part of a slightly larger refactor to group these routines into a prepare() fn
+        #  the problem is if input is non-collapsed and decollapse=True, the header is written before issue is discovered
         if self.decollapse:
             # Write the same header data to the decollapsed file
             with open(self._get_decollapsed_filename(), 'w') as f:
@@ -132,29 +135,32 @@ class SAM_reader:
         rec_type = headerline[:3]
         fields = headerline[3:].strip().split('\t')
 
-        if rec_type is "@CO":
+        if rec_type == "@CO":
             self._header_dict[rec_type] = fields[0]
         else:
             self._header_dict[rec_type] = \
                 {field[:2]: field[3:].strip() for field in fields}
 
     def _validate_collapsed_input(self, first_aln_line):
-        if re.match(_re_fastx, first_aln_line) is not None:
+        if re.match(r"\d+_count=\d+", first_aln_line) is not None:
+            self.collapser_type = "tiny-collapse"
+
+        elif re.match(_re_fastx, first_aln_line) is not None:
+            self.collapser_type = "fastx"
             sort_order = self._header_dict.get('@HD', {}).get('SO', None)
             if sort_order is None or sort_order != "queryname":
                 raise ValueError("SAM files from fastx collapsed outputs must be sorted by queryname\n"
                                  "(and the @HD [...] SO header must be set accordingly).")
 
-            self.collapser_type = "fastx"
-
-        elif re.match(r"\d+_count=\d+", first_aln_line) is None:
-            raise ValueError("SAM files produced outside of the tinyRNA pipeline must be derived\n"
-                             "from either a tiny-collapse or fastx_collapser output, and sorted\n"
-                             "by queryname.")
         else:
-            self.collapser_type = "tiny-collapse"
+            self.collapser_type = None
+            if self.decollapse:
+                self.decollapse = False
+                print("Decollapsed SAM files will not be produced because input alignments are not derived "
+                      "from a tiny-collapse or fastx_collapser output", file=sys.stderr)
 
     def _write_decollapsed_sam(self):
+        assert self.collapser_type is not None
         aln_out, prevname, seq_count = [], None, 0
         token = self.get_counts_split_token()
         for name, line in self._decollapsed_reads:
@@ -170,10 +176,12 @@ class SAM_reader:
             self._decollapsed_reads.clear()
 
     def get_counts_split_token(self):
-        if self.collapser_type is "tiny-collapse":
+        if self.collapser_type == "tiny-collapse":
             return b"="
-        elif self.collapser_type is "fastx":
+        elif self.collapser_type == "fastx":
             return b"_x"
+        elif self.collapser_type is None:
+            return None
 
 
 def infer_strandedness(sam_file: str, intervals: dict) -> str:
