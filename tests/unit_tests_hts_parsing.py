@@ -1,9 +1,11 @@
 import collections
+import contextlib
 import unittest
-from random import randint
-
 import HTSeq
+import io
+
 from copy import deepcopy
+from random import randint
 from unittest.mock import patch, mock_open, call
 
 from tiny.rna.counter.features import FeatureSelector
@@ -560,12 +562,13 @@ class MyTestCase(unittest.TestCase):
         ]
 
         sam_out.assert_has_calls(expected_writelines)
-        self.assertTrue(len(reader._headers) == 1)
+        self.assertTrue(len(reader._header_lines) == 1)
 
     """Does SAM_reader._write_decollapsed_sam() write the correct number of duplicates to the decollapsed file?"""
 
     def test_SAM_reader_write_decollapsed_sam(self):
         reader = SAM_reader(decollapse=True)
+        reader.collapser_type = "tiny-collapse"
         reader._decollapsed_reads = [(b"0_count=5", b"mock line from SAM file")]
         reader._decollapsed_filename = "mock_outfile_name.sam"
 
@@ -600,6 +603,22 @@ class MyTestCase(unittest.TestCase):
                 sam_in.seek(0)
                 self.exhaust_iterator(reader._parse_alignments(sam_in))
                 write_fn.assert_called_once()
+
+    """Are decollapsed outputs skipped when non-collapsed SAM files are supplied?"""
+
+    def test_SAM_reader_no_decollapse_non_collapsed_SAM_files(self):
+        stdout_capture = io.StringIO()
+        with patch.object(SAM_reader, "_write_decollapsed_sam") as write_fn:
+            with contextlib.redirect_stderr(stdout_capture):
+                reader = SAM_reader(decollapse=True)
+                records = reader.bundle_multi_alignments(f"{resources}/non-collapsed.sam")
+                self.exhaust_iterator(records)
+
+        write_fn.assert_not_called()
+        self.assertEqual(reader.collapser_type, None)
+        self.assertEqual(stdout_capture.getvalue(),
+                         "Decollapsed SAM files will not be produced because input alignments "
+                         "are not derived from a tiny-collapse or fastx_collapser output\n")
 
     """Does CaseInsensitiveAttrs correctly store, check membership, and retrieve?"""
 

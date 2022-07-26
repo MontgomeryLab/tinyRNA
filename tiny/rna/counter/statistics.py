@@ -1,3 +1,5 @@
+import re
+
 import pandas as pd
 import mmap
 import json
@@ -10,6 +12,7 @@ from abc import abstractmethod, ABC
 from typing import Tuple, Optional, Union
 from collections import Counter, defaultdict
 
+from tiny.rna.counter.hts_parsing import _re_fastx
 from ..util import make_filename
 
 
@@ -44,8 +47,14 @@ class LibraryStats:
         loci_counts = len(aln_bundle)
         nt5, seqlen = bundle_read['nt5'], len(bundle_read['seq'])
 
+        try:
+            read_counts = int(bundle_read['name'].split('=')[1])
+        except IndexError:
+            # Check if fastx collapsed; default to count=1
+            fastx = re.match(_re_fastx, bundle_read['name'])
+            read_counts = 1 if fastx is None else int(fastx[1])
+
         # Calculate counts for multi-mapping
-        read_counts = int(bundle_read['name'].split('=')[1])
         corr_counts = read_counts / loci_counts
 
         # Fill in 5p nt/length matrix
