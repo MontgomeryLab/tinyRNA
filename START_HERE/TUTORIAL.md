@@ -1,8 +1,6 @@
 # Getting Started
 
-This folder (`START_HERE`) contains a working minimal configuration and a sample input dataset derived from C. elegans chromosome 1 of Wormbase WS279. We've assembled this configuration to make it easy to start using tinyRNA, and to provide a basis for your own project configuration.
-
-Complete reference data for C. elegans WS279 can be found here: https://www.montgomerylab.org/resources.html
+This folder (`START_HERE`) contains a working minimal configuration and a generated/simulated sample dataset. We've assembled this configuration to make it easy to start using tinyRNA, and to provide a basis for your own project configuration.
 
 ## Installation
 
@@ -11,12 +9,12 @@ See the [README](../README.md#installation) for installation instructions and ti
 ## This folder
 
 Here's what you'll find:
-- **fastq_files**: contains library fastq files (10k line arbitrary subset)
-- **reference_data**: contains reference annotation and genome files for chromosome 1
+- **fastq_files**: contains generated sample FASTQ files
+- **reference_data**: contains a reference genome file with random DNA sequences, and a reference annotation file with simulated features selected from the genome
 - **features.csv**: spreadsheet of selection rules for counting features
-- **paths.yml**: configuration file for defining pipeline file inputs
-- **run_config.yml**: configuration file for defining pipeline preferences for each step and for the overall pipeline run
-- **samples.csv**: spreadsheet for defining library files and their associated group and replicate numbers
+- **paths.yml**: configuration file for defining the pipeline's main file inputs
+- **run_config.yml**: configuration file for defining preferences for each pipeline step and the overall pipeline run
+- **samples.csv**: spreadsheet for defining the group name, replicate number, etc. for each input FASTQ file
 
 ## First run
 The configuration is tied together with `run_config.yml`, so this is what you will pass to the pipeline. Since we already have a working configuration let's run an end-to-end analysis on our sample data using the command:
@@ -42,8 +40,8 @@ Bowtie indexes were built during this run because paths.yml didn't define an `eb
 2. Ensure that your Run Config file contains `run_bowtie_build: True`
 
 ## Running Your Data
-Expected runtime: ~15-30 minutes
-1. Edit your GFF or GTF file so that it meets the requirements outlined in [the README](../README.md#user-provided-input-file-requirements)
+Expected runtime: ~10-60 minutes (expect longer runtimes if a bowtie index must be built)
+1. Edit your GFF or GTF file so that it meets the requirements outlined in [the README](../README.md#requirements-for-user-provided-input-files)
 2. Move your GFF and genome sequence files into the reference_data directory.
 3. Edit features.csv and samples.csv file for your datasets and selection parameters.
 4. Edit paths.yml as follows:

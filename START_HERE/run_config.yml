@@ -39,7 +39,7 @@ threads: 4
 ##-- Control the amount of information printed to terminal: debug, normal, quiet --##
 verbosity: normal
 
-##-- If True: process fastp, collapser, and bowtie in parallel on a per-library basis --##
+##-- If True: process fastp, tiny-collapse, and bowtie in parallel per-library --##
 run_parallel: true
 
 ##-- (EXPERIMENTAL) If True: execute the pipeline using native cwltool Python --##
@@ -133,7 +133,7 @@ compression: 4
 
 ######--------------------------- READ COLLAPSER OPTIONS ----------------------------######
 #
-# We use a custom Python script for collapsing duplicate reads.
+# We use a custom Python utility for collapsing duplicate reads.
 # We recommend using the default (keep all reads, or threshold: 0).
 # Sequences <= threshold will not be included in downstream steps.
 # Trimming takes place prior to counting/collapsing.
@@ -143,10 +143,10 @@ compression: 4
 #
 ######-------------------------------------------------------------------------------######
 
-##-- Trim the specified number of bases from the 5' end of each sequence --#
+##-- Trim the specified number of bases from the 5' end of each sequence --##
 5p_trim: 0
 
-##-- Trim the specified number of bases from the 3' end of each sequence --#
+##-- Trim the specified number of bases from the 3' end of each sequence --##
 3p_trim: 0
 
 ##-- Sequences with count <= threshold will be placed in a separate low_counts fasta --##
@@ -221,8 +221,8 @@ shared_memory: False
 
 ######--------------------------- FEATURE COUNTER OPTIONS ---------------------------######
 #
-# We use a custom Python script that utilizes the HTSeq API to count small RNA reads.
-# Selection rules for feature counting are defined in your Features Sheet.
+# We use a custom Python utility that utilizes HTSeq's Genomic Array of Sets and GFF reader
+# to count small RNA reads. Selection rules are defined in your Features Sheet.
 #
 ######-------------------------------------------------------------------------------######
 
@@ -230,8 +230,9 @@ shared_memory: False
 ##-- If True: show all parsed features in the counts csv, regardless of count/identity --##
 counter_all_features: False
 
-##-- If True: counts won't be normalized by genomic hits and (selected) feature count --##
-counter_no_normalize: False
+##-- If True: counts will be normalized by genomic hits AND selected feature count --##
+##-- If False: counts will only be normalized by genomic hits --##
+counter_normalize_by_hits: True
 
 ##-- If True: a decollapsed copy of each SAM file will be produced (useful for IGV) --##
 counter_decollapse: False
@@ -283,11 +284,15 @@ plot_requests:
   - 'sample_avg_scatter_by_dge'
   - 'sample_avg_scatter_by_dge_class'
 
-##-- You can set a custom p-value to use in DGE scatter plots. Default: 0.05 --##
+##-- You can set a custom P value to use in DGE scatter plots. Default: 0.05 --##
 plot_pval: ~
 
 ##-- If True: scatter plot points will be vectorized. If False, only points are raster --##
 plot_vector_points: False
+
+##-- Optionally set the min and/or max lengths for len_dist plots; auto if unset --##
+plot_len_dist_min:
+plot_len_dist_max:
 
 
 ######----------------------------- OUTPUT DIRECTORIES ------------------------------######
@@ -337,23 +342,23 @@ ebwt: ~
 #
 ######-------------------------------------------------------------------------------######
 
-##-- Utilized by Fastp, Collapser, and Bowtie --##
+##-- Utilized by fastp, tiny-collapse, and bowtie --##
 sample_basenames: [ ]
 
-##-- Utilized by Fastp --##
+##-- Utilized by fastp --##
 # input fastq files
 in_fq: [ ]
 # output reports
 fastp_report_titles: [ ]
 
-###-- Utilized by Bowtie --###
+###-- Utilized by bowtie --###
 # bowtie index files
 bt_index_files: [ ]
 
-##-- Utilized by Deseq --##
+##-- Utilized by tiny-deseq.r --##
 # The control for comparison. If unspecified, all comparisons are made
 control_condition:
-# If the experiment design yeilds less than one degree of freedom, deseq is skipped
+# If the experiment design yields less than one degree of freedom, tiny-deseq.r is skipped
 run_deseq: True
 
 ######------------------------- DERIVED FROM FEATURES SHEET -------------------------######
@@ -362,6 +367,6 @@ run_deseq: True
 #
 ######-------------------------------------------------------------------------------######
 
-###-- Utilized by Counter --###
+###-- Utilized by tiny-count --###
 # a list of only unique GFF files
 gff_files: [ ]

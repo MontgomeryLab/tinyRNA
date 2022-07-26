@@ -1,4 +1,5 @@
-usage: tiny-collapse [-h] -i FASTQFILE -o OUTPREFIX [-t THRESHOLD] [-c]
+usage: tiny-collapse -i FASTQFILE -o OUTPREFIX [-h] [-t THRESHOLD] [-c]
+                     [--5p-trim LENGTH] [--3p-trim LENGTH]
 
 Collapse sequences from a fastq file to a fasta file. Headers in the output
 fasta file will contain the number of times each sequence occurred in the
@@ -6,18 +7,20 @@ input fastq file, and an ID which indicates the relative order in which each
 sequence was first encountered. Gzipped files are automatically supported for
 fastq inputs, and compressed fasta outputs are available by request.
 
-optional arguments:
-  -h, --help            show this help message and exit
-  -t THRESHOLD, --threshold THRESHOLD
-                        Sequences <= THRESHOLD will be omitted from
-                        {prefix}_collapsed.fa and will instead be placed in
-                        {prefix}_collapsed_lowcounts.fa
-  -c, --compress        Use gzip compression when writing fasta outputs
-
-required arguments:
+Required arguments:
   -i FASTQFILE, --input-file FASTQFILE
                         The input fastq(.gz) file to collapse
   -o OUTPREFIX, --out-prefix OUTPREFIX
                         The prefix for output files {prefix}_collapsed.fa and,
                         if counts fall below threshold,
                         {prefix}_collapsed_lowcounts.fa
+
+Optional arguments:
+  -h, --help            show this help message and exit
+  -t THRESHOLD, --threshold THRESHOLD
+                        Sequences <= THRESHOLD will be omitted from
+                        {prefix}_collapsed.fa and will instead be placed in
+                        {prefix}_collapsed_lowcounts.fa
+  -c, --compress        Use gzip compression when writing fasta outputs
+  --5p-trim LENGTH      Trim LENGTH bases from the 5' end of each sequence
+  --3p-trim LENGTH      Trim LENGTH bases from the 3' end of each sequence

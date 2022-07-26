@@ -6,9 +6,10 @@ import json
 import csv
 import sys
 import os
+import re
 
 from abc import abstractmethod, ABC
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Union
 from collections import Counter, defaultdict
 
 from tiny.rna.counter.hts_parsing import _re_fastx
@@ -23,17 +24,17 @@ class LibraryStats:
                           'Reads Assigned to Single Feature', 'Sequences Assigned to Single Feature',
                           'Reads Assigned to Multiple Features', 'Sequences Assigned to Multiple Features']
 
-    def __init__(self, out_prefix: str = None, report_diags: bool = False, normalize=True, **kwargs):
-        self.library = {'Name': 'Unassigned', 'File': 'Unassigned'}
+    def __init__(self, out_prefix: str = None, report_diags: bool = False, **prefs):
+        self.library = {'Name': 'Unassigned', 'File': 'Unassigned', 'Norm': '1'}
         self.out_prefix = out_prefix
         self.diags = Diagnostics(out_prefix) if report_diags else None
-        self.norm = normalize
+        self.norm = prefs.get('normalize_by_hits', True)
 
         self.feat_counts = Counter()
         self.rule_counts = Counter()
         self.chrom_misses = Counter()
-        self.mapped_nt_len = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
-        self.assigned_nt_len = {nt: Counter() for nt in ['A', 'T', 'G', 'C']}
+        self.mapped_nt_len = defaultdict(Counter, {nt: Counter() for nt in ['A', 'T', 'G', 'C']})
+        self.assigned_nt_len = defaultdict(Counter, {nt: Counter() for nt in ['A', 'T', 'G', 'C']})
         self.library_stats = {stat: 0 for stat in LibraryStats.summary_categories}
 
     def assign_library(self, library: dict):
@@ -60,10 +61,9 @@ class LibraryStats:
         self.mapped_nt_len[nt5][seqlen] += read_counts
 
         return {
-            'loci_count': loci_counts,
             'read_count': read_counts,
             'corr_count': corr_counts,
-            'assigned_feats': set(),
+            'assigned_ftags': set(),
             'assigned_reads': 0,
             'nt5_counts': self.assigned_nt_len[nt5],
             'seq_length': seqlen,
@@ -76,18 +76,18 @@ class LibraryStats:
     def count_bundle_assignments(self, bundle: dict, aln: dict, assignments: dict, n_candidates: int) -> None:
         """Called for each alignment for each read"""
 
-        feat_count = len(assignments)
+        asgn_count = len(assignments)
         corr_count = bundle['corr_count']
 
-        if feat_count == 0:
+        if asgn_count == 0:
             self.library_stats['Total Unassigned Reads'] += corr_count
         else:
-            fcorr_count = corr_count / feat_count if self.norm else corr_count
-            bundle['assigned_reads'] += fcorr_count * feat_count
-            bundle['assigned_feats'] |= assignments.keys()
+            fcorr_count = corr_count / asgn_count if self.norm else corr_count
+            bundle['assigned_reads'] += fcorr_count * asgn_count
+            bundle['assigned_ftags'] |= assignments.keys()
 
-            for feat, matched_rules in assignments.items():
-                self.feat_counts[feat] += fcorr_count
+            for ftag, matched_rules in assignments.items():
+                self.feat_counts[ftag] += fcorr_count
                 rcorr_count = fcorr_count / len(matched_rules)
                 for rule in matched_rules:
                     self.rule_counts[rule] += rcorr_count
@@ -99,7 +99,7 @@ class LibraryStats:
     def finalize_bundle(self, bundle: dict) -> None:
         """Called at the conclusion of processing each multiple-alignment bundle"""
 
-        assigned_feat_count = len(bundle['assigned_feats'])
+        assigned_feat_count = len({feat[0] for feat in bundle['assigned_ftags']})
 
         if assigned_feat_count == 0:
             self.library_stats['Total Unassigned Sequences'] += 1
@@ -169,9 +169,9 @@ class MergedStatsManager:
             self.merged_stats.append(MergedDiags())
 
     def write_report_files(self) -> None:
-        self.print_warnings()
         for output_stat in self.merged_stats:
             output_stat.write_output_logfile()
+        self.print_warnings()
 
     def add_library(self, other: LibraryStats) -> None:
         for merger in self.merged_stats:
@@ -195,26 +195,29 @@ class MergedStatsManager:
 
 class FeatureCounts(MergedStat):
     def __init__(self, Features_obj):
-        self.feat_counts_df = pd.DataFrame(index=Features_obj.classes.keys())
+        self.feat_counts_df = pd.DataFrame(index=set.union(*Features_obj.tags.values()))
         self.classes = Features_obj.classes
         self.aliases = Features_obj.aliases
+        self.norm_prefs = {}
 
     def add_library(self, other: LibraryStats) -> None:
         self.feat_counts_df[other.library["Name"]] = self.feat_counts_df.index.map(other.feat_counts)
+        self.norm_prefs[other.library["Name"]] = other.library['Norm']
 
     def write_output_logfile(self) -> None:
+        fc = self.write_feature_counts()
+        self.write_norm_counts(fc)
+
+    def write_feature_counts(self) -> pd.DataFrame:
         """Writes selected features and their associated counts to {prefix}_out_feature_counts.csv
 
-        Only the features in display_index will be listed in the output table, regardless of count, even
-        if the features had no associated alignments.
-
-        If a features.csv rule defined a Name Attribute other than "ID", then the associated features will
-        be aliased to their corresponding Name Attribute value and displayed in the Feature Name column, and
+        If a features.csv rule defined an 'Alias by...' other than "ID", then the associated features will
+        be aliased to the value associated with this key and displayed in the Feature Name column, and
         the feature's true "ID" will be indicated in the Feature ID column. If multiple aliases exist for
         a feature then they will be joined by ", " in the Feature Name column. A Feature Class column also
         follows.
 
-        For example, if the rule contained a Name Attribute which aliases gene1 to abc123,def456,123.456
+        For example, if the rule contained an 'Alias by...' which aliases gene1 to abc123,def456,123.456
         and is both ALG and CSR class, then the Feature ID, Feature Name, and Feature Class column of the
         output file for this feature will read:
             gene1, "abc123,def456,123.456", "ALG,CSR"
@@ -225,15 +228,39 @@ class FeatureCounts(MergedStat):
 
         # Sort columns by title and round all counts to 2 decimal places
         summary = self.sort_cols_and_round(self.feat_counts_df)
-        # Add Feature Name column, which is the feature alias (default is Feature ID if no alias exists)
-        summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(self.aliases.get(feat, ''))))
+        # Add Feature Name column, which is the feature alias (default is blank if no alias exists)
+        summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(self.aliases.get(feat[0], ''))))
         # Add Classes column for classes associated with the given feature
-        feat_class_map = lambda feat: ', '.join(self.classes[feat])
+        feat_class_map = lambda feat: ', '.join(self.classes[feat[0]])
         summary.insert(1, "Feature Class", summary.index.map(feat_class_map))
         # Sort by index, make index its own column, and rename it to Feature ID
-        summary = summary.sort_index().reset_index().rename(columns={"index": "Feature ID"})
+        summary = summary.sort_index().reset_index().rename(columns={"level_0": "Feature ID", "level_1": "Tag"})
 
         summary.to_csv(self.prefix + '_feature_counts.csv', index=False)
+        return summary
+
+    def write_norm_counts(self, counts: pd.DataFrame):
+
+        if all([norm in ['1', "", None] for norm in self.norm_prefs.values()]):
+            return
+
+        for library, norm in self.norm_prefs.items():
+            if norm in ['1', "", None]:
+                continue
+            elif re.match(r'^\s*\d+\s*$', norm):
+                factor = int(norm)
+            elif re.match(r'^\s*[\d.]+\s*$', norm):
+                factor = float(norm)
+            elif norm.upper().strip() == "RPM":
+                mapped_reads = SummaryStats.pipeline_stats_df.loc['Mapped Reads', library]
+                factor = mapped_reads / 1_000_000
+            else:
+                raise ValueError(f'Invalid normalization value for {library}: "{norm}"\n'
+                                 "Please check your Samples Sheet.")
+
+            counts[library] = counts[library] / factor
+
+        counts.to_csv(self.prefix + '_norm_counts.csv', index=False)
 
 
 class RuleCounts(MergedStat):
@@ -259,12 +286,7 @@ class RuleCounts(MergedStat):
         order = ["Rule String"] + self.rule_counts_df.columns.to_list()
 
         self.rule_counts_df = self.rule_counts_df.join(pd.Series(rules, name="Rule String"), how="outer")[order].fillna(0)
-        self.rule_counts_df.loc["Mapped Reads"] = mapped_reads = SummaryStats.pipeline_stats_df.loc["Mapped Reads"]
-
-        if mapped_reads.empty:
-            # Row will be empty if Summary Stats were not gathered
-            # Todo: Mapped Reads can be calculated without pipeline outputs
-            self.rule_counts_df.drop("Mapped Reads", axis=0, inplace=True)
+        self.rule_counts_df.loc["Mapped Reads"] = SummaryStats.pipeline_stats_df.loc["Mapped Reads"]
 
         self.df_to_csv(self.rule_counts_df, "Rule Index", self.prefix, 'counts_by_rule', sort_axis=None)
 
@@ -285,14 +307,27 @@ class NtLenMatrices(MergedStat):
 
         for lib_name, matrices in self.nt_len_matrices.items():
             sanitized_lib_name = lib_name.replace('/', '_')
+            self.write_mapped_len_dist(matrices[0], sanitized_lib_name)
+            self.write_assigned_len_dist(matrices[1], sanitized_lib_name)
 
-            # Whole number counts because number of reads mapped is always integer
-            mapped_nt_len_df = pd.DataFrame(matrices[0]).sort_index().fillna(0)
-            mapped_nt_len_df.to_csv(f'{self.prefix}_{sanitized_lib_name}_mapped_nt_len_dist.csv')
+    def write_mapped_len_dist(self, matrix, sanitized_lib_name):
+        # Whole number counts because number of reads mapped is always integer
+        mapped_nt_len_df = pd.DataFrame(matrix).sort_index().fillna(0)
+        mapped_nt_len_df.to_csv(f'{self.prefix}_{sanitized_lib_name}_mapped_nt_len_dist.csv')
 
-            # Fractional counts due to (loci count) and/or (assigned feature count) normalization
-            assigned_nt_len_df = pd.DataFrame(matrices[1]).sort_index().round(decimals=2).fillna(0)
-            assigned_nt_len_df.to_csv(f'{self.prefix}_{sanitized_lib_name}_assigned_nt_len_dist.csv')
+    def write_assigned_len_dist(self, matrix, sanitized_lib_name):
+        # Fractional counts due to (loci count) and/or (assigned feature count) normalization
+        assigned_nt_len_df = pd.DataFrame(matrix).sort_index().round(decimals=2)
+
+        # Drop non-nucleotide columns if they don't contain counts
+        assigned_nt_len_df.drop([
+            col for col, values in assigned_nt_len_df.iteritems()
+            if col not in ['A', 'T', 'G', 'C'] and values.isna().all()
+        ], axis='columns', inplace=True)
+
+        # Assign default count of 0 for remaining cases
+        assigned_nt_len_df.fillna(0, inplace=True)
+        assigned_nt_len_df.to_csv(f'{self.prefix}_{sanitized_lib_name}_assigned_nt_len_dist.csv')
 
 
 class AlignmentStats(MergedStat):
@@ -309,65 +344,74 @@ class AlignmentStats(MergedStat):
 
 class SummaryStats(MergedStat):
 
-    summary_categories = ["Total Reads", "Retained Reads", "Unique Sequences",
-                          "Mapped Sequences", "Mapped Reads", "Assigned Reads"]
+    constant_categories     = ["Mapped Sequences", "Mapped Reads", "Assigned Reads"]
+    conditional_categories  = ["Total Reads", "Retained Reads", "Unique Sequences"]
+    summary_categories      = conditional_categories + constant_categories
 
     pipeline_stats_df = pd.DataFrame(index=summary_categories)
 
     def __init__(self):
-        # Will become False if an added library lacks its corresponding Collapser and Bowtie outputs
-        self.report_summary_statistics = True
+        self.missing_fastp_outputs = []
+        self.missing_collapser_outputs = []
 
     def add_library(self, other: LibraryStats):
         """Add incoming summary stats as new column in the master table"""
 
-        if not self.report_summary_statistics or not self.library_has_pipeline_outputs(other):
-            return
-
-        mapped_seqs = sum([other.library_stats[stat] for stat in
-                           ["Total Assigned Sequences",
-                            "Total Unassigned Sequences"]])
-        mapped_reads = sum([other.library_stats[stat] for stat in
-                            ['Reads Assigned to Multiple Features',
-                             'Reads Assigned to Single Feature',
-                             'Total Unassigned Reads']])
-        assigned_reads = other.library_stats["Total Assigned Reads"]
-        total_reads, retained_reads = self.get_fastp_stats(other)
-        unique_seqs = self.get_collapser_stats(other)
-
+        other.library['basename'] = self.get_library_basename(other)
         other_summary = {
-            "Total Reads": total_reads,
-            "Retained Reads": retained_reads,
-            "Unique Sequences": unique_seqs,
-            "Mapped Sequences": mapped_seqs,
-            "Mapped Reads": mapped_reads,
-            "Assigned Reads": assigned_reads
+            "Mapped Sequences": self.get_mapped_seqs(other),
+            "Mapped Reads": self.get_mapped_reads(other),
+            "Assigned Reads": other.library_stats["Total Assigned Reads"]
         }
+
+        if self.library_has_fastp_outputs(other):
+            total_reads, retained_reads = self.get_fastp_stats(other)
+            other_summary.update({
+                "Total Reads": total_reads,
+                "Retained Reads": retained_reads
+            })
+
+        if self.library_has_collapser_outputs(other):
+            unique_seqs = self.get_collapser_stats(other)
+            other_summary["Unique Sequences"] = unique_seqs
 
         self.pipeline_stats_df[other.library["Name"]] = self.pipeline_stats_df.index.map(other_summary)
 
     def write_output_logfile(self):
-        if self.report_summary_statistics:
-            self.df_to_csv(self.pipeline_stats_df, "Summary Statistics", self.prefix, "summary_stats")
+        if len(self.missing_fastp_outputs):
+            missing = '\n\t'.join(self.missing_fastp_outputs)
+            self.add_warning("Total Reads and Retained Reads could not be determined for the following libraries "
+                             "because their fastp outputs were not found in the working directory:\n\t" + missing)
+        if len(self.missing_collapser_outputs):
+            missing = '\n\t'.join(self.missing_collapser_outputs)
+            self.add_warning("The Unique Sequences stat could not be determined for the following libraries because "
+                             "their Collapser outputs were not found in the working directory:\n\t" + missing)
 
-    def library_has_pipeline_outputs(self, other: LibraryStats) -> bool:
-        """Check working directory for pipeline outputs from previous steps"""
+        # Only display conditional categories if they were collected for at least one library
+        empty_rows = self.pipeline_stats_df.loc[self.conditional_categories].isna().all(axis='columns')
+        self.pipeline_stats_df.drop(empty_rows.index[empty_rows], inplace=True)
 
-        sam_basename = os.path.splitext(os.path.basename(other.library['File']))[0]
-        lib_basename = sam_basename.replace("_aligned_seqs", "")
-        fastp_logfile = lib_basename + "_qc.json"
-        collapsed_fa = lib_basename + "_collapsed.fa"
+        self.df_to_csv(self.pipeline_stats_df, "Summary Statistics", self.prefix, "summary_stats")
 
-        if not os.path.isfile(fastp_logfile) or not os.path.isfile(collapsed_fa):
-            self.add_warning(f"Pipeline output for {lib_basename} not found. Summary Statistics were skipped.")
-            self.report_summary_statistics = False
-            return False
-        else:
-            other.library['fastp_log'] = fastp_logfile
+    def library_has_collapser_outputs(self, other: LibraryStats) -> bool:
+        collapsed_fa = other.library['basename'] + "_collapsed.fa"
+        if os.path.isfile(collapsed_fa):
             other.library['collapsed'] = collapsed_fa
             return True
+        else:
+            self.missing_collapser_outputs.append(other.library['basename'])
+            return False
 
-    def get_fastp_stats(self, other: LibraryStats) -> Optional[Tuple[int, int]]:
+    def library_has_fastp_outputs(self, other: LibraryStats) -> bool:
+        fastp_logfile = other.library['basename'] + "_qc.json"
+        if os.path.isfile(fastp_logfile):
+            other.library['fastp_log'] = fastp_logfile
+            return True
+        else:
+            self.missing_fastp_outputs.append(other.library['basename'])
+            return False
+
+    def get_fastp_stats(self, other: LibraryStats) -> Union[Tuple[int, int], Tuple[None, None]]:
         """Determine the total number of reads for this library, and the total number retained by fastp"""
 
         try:
@@ -377,9 +421,8 @@ class SummaryStats(MergedStat):
             total_reads = fastp_summary['before_filtering']['total_reads']
             retained_reads = fastp_summary['after_filtering']['total_reads']
         except (KeyError, json.JSONDecodeError):
-            self.add_warning("Unable to parse fastp json logs for Summary Statistics.")
-            self.add_warning("Associated file: " + other.library['File'])
-            return None
+            self.add_warning(f"Unable to parse {other.library['fastp_log']} for Summary Statistics.")
+            return None, None
 
         return total_reads, retained_reads
 
@@ -398,6 +441,27 @@ class SummaryStats(MergedStat):
         except ValueError:
             self.add_warning(f"Unable to parse {other.library['collapsed']} for Summary Statistics.")
             return None
+
+    @staticmethod
+    def get_library_basename(other: LibraryStats) -> str:
+        sam_basename = os.path.splitext(os.path.basename(other.library['File']))[0]
+        lib_basename = sam_basename.replace("_aligned_seqs", "")
+        return lib_basename
+
+    @staticmethod
+    def get_mapped_seqs(other: LibraryStats):
+        return sum([other.library_stats[stat] for stat in [
+            "Total Assigned Sequences",
+            "Total Unassigned Sequences"
+        ]])
+
+    @staticmethod
+    def get_mapped_reads(other: LibraryStats):
+        return sum([other.library_stats[stat] for stat in [
+            'Reads Assigned to Multiple Features',
+            'Reads Assigned to Single Feature',
+            'Total Unassigned Reads'
+        ]])
 
 
 class Diagnostics:

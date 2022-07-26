@@ -6,16 +6,16 @@ directory, you may find it easier to instead run `tiny replot` within that run d
 """
 import multiprocessing as mp
 import pandas as pd
+import numpy as np
 import itertools
 import traceback
 import argparse
 import os.path
 import sys
-import csv
 import re
 
 from collections import defaultdict
-from typing import Optional, Dict, Union, Tuple
+from typing import Optional, Dict, Union, Tuple, DefaultDict
 from pkg_resources import resource_filename
 
 from tiny.rna.configuration import timestamp_format
@@ -28,8 +28,8 @@ def get_args():
 
     parser = argparse.ArgumentParser(description=__doc__, add_help=False, formatter_class=SmartFormatter)
     required_args = parser.add_argument_group("Required arguments")
-    counter_files = parser.add_argument_group("Input files produced by Counter")
-    diffexp_files = parser.add_argument_group("Input files produced by DGE")
+    counter_files = parser.add_argument_group("Input files produced by tiny-count")
+    diffexp_files = parser.add_argument_group("Input files produced by tiny-deseq.r")
     optional_args = parser.add_argument_group("Optional arguments")
 
     # Single file inputs
@@ -53,7 +53,7 @@ def get_args():
     optional_args.add_argument('-o', '--out-prefix', metavar='PREFIX',
                                help='Prefix to use for output filenames.')
     optional_args.add_argument('-pv', '--p-value', metavar='VALUE', default=0.05, type=float,
-                               help='P-value to use in DGE scatter plots.')
+                               help='P value to use in DGE scatter plots.')
     optional_args.add_argument('-s', '--style-sheet', metavar='MPLSTYLE',
                                default=resource_filename('tiny', 'templates/tinyrna-light.mplstyle'),
                                help='Optional matplotlib style sheet to use for plots.')
@@ -61,56 +61,98 @@ def get_args():
                                help='Produce scatter plots with vectorized points (slower).\n'
                                'Note: only the points on scatter plots will be raster if '
                                'this option is not provided.')
+    optional_args.add_argument('-ldi', '--len-dist-min', metavar='VALUE', type=int,
+                               help='len_dist plots will start at this value')
+    optional_args.add_argument('-lda', '--len-dist-max', metavar='VALUE', type=int,
+                               help='len_dist plots will end at this value')
+
 
     # Required arguments
     required_args.add_argument('-p', '--plots', metavar='PLOT', required=True, nargs='+',
                                help="R|List of plots to create. Options: \n"
-                               "• len_dist: A stacked barplot showing size & 5' nucleotide distribution.\n"
-                               "• rule_charts: A pie and barchart showing proportions of counts by matched rule.\n"
-                               "• class_charts: A pie and barchart showing proportions of counts by Class attribute.\n"
+                               "• len_dist: A stacked barchart showing size & 5' nucleotide distribution.\n"
+                               "• rule_charts: A barchart showing percentages of counts by matched rule.\n"
+                               "• class_charts: A barchart showing percentages of counts by Class attribute.\n"
                                "• replicate_scatter: A scatter plot comparing replicates for all count files given.\n"
                                "• sample_avg_scatter_by_dge: A scatter plot comparing all sample groups, with "
-                               "significantly different genes highlighted. P-value can be set using --p-value. "
-                               "Default: 0.05.\n"
-                               "• sample_avg_scatter_by_dge_class: A scatter plot comparing all sample groups, with "
-                               "classes and significantly different genes highlighted.")
+                                    "differentially expressed small RNAs highlighted based on P value cutoff.\n"
+                               "• sample_avg_scatter_by_dge_class: A scatter plot comparing all sample groups, "
+                                    "with classes highlighted for differentially expressed small RNAs "
+                                    "based on P value cutoff.")
 
     return parser.parse_args()
 
 
-def len_dist_plots(files_list: list, out_prefix:str, **kwargs):
+def len_dist_plots(matrices: dict, out_prefix:str, vmin: int = None, vmax: int = None, **kwargs):
     """Create a PDF of size and 5'nt distribution plot for a sample.
 
+    Lengths are plotted as a continuous closed interval from vmin to vmax. If either are
+    unspecified, min and/or max are calculated across libraries. When this happens,
+    bounds are determined separately per plot subtype (i.e. the min/max of Assigned
+    len_dists does not determine the min/max of Mapped len_dists)
+
     Args:
-        files_list: A list of files containing size + 5p-nt counts per library
+        matrices: A dictionary of size + 5p-nt counts per library per subtype
         out_prefix: The prefix to use when naming output PDF plots
+        vmin: The optional first length to plot in the range
+        vmax: The optional last length to plot in the range
         kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
     """
 
-    for size_file in files_list:
+    orig_vmin, orig_vmax = vmin, vmax
 
-        # Parse the "sample_rep_N" string from the input filename to avoid duplicate out_prefix's in the basename
-        basename = os.path.splitext(os.path.basename(size_file))[0]
-        date_prefix_pos = re.search(timestamp_format, basename).span()
+    for subtype, libraries in matrices.items():
+        if orig_vmin is None: vmin = min([l.index.min() for l in libraries.values()])
+        if orig_vmax is None: vmax = max([l.index.max() for l in libraries.values()])
+        if vmin > vmax:
+            print(f'ERROR: len_dist min > max. Skipping "{subtype}" plot subtype', file=sys.stderr)
+            continue
+
+        for condition_and_rep, len_dist_df in libraries.items():
+            # Convert reads to proportion
+            size_prop = len_dist_df / len_dist_df.sum().sum()
+
+            # Ensure that there are no gaps & close range's half-open interval
+            size_prop = size_prop.reindex(range(vmin, vmax + 1)).fillna(0)
+
+            # Create the plot
+            plot = aqplt.len_dist_bar(size_prop, subtype, **kwargs)
+
+            # Save plot
+            pdf_name = make_filename([out_prefix, condition_and_rep, "len_dist"], ext='.pdf')
+            plot.figure.savefig(pdf_name)
+
+
+def get_len_dist_dict(files_list: list) -> DefaultDict[str, Dict[str, pd.DataFrame]]:
+    """Reads 5' nt/len matrices into a dictionary of DataFrames
+
+    Args:
+        files_list: a list of 5' nt/len matrices which follow the naming convention
+            {sample}_rep_{replicate}_{subtype}_nt_len_dist.csv
+
+    Returns: A dictionary of size + 5p-nt counts per library per subtype
+    """
+
+    matrices = defaultdict(dict)
+
+    for file in sorted(files_list):
+        # Parse the "sample_rep_N" string from the input filename to avoid duplicate out_prefixes in the basename
+        basename = os.path.splitext(os.path.basename(file))[0]
+        date_prefix_pos = re.search(timestamp_format, basename)
 
         if date_prefix_pos is not None:
             # File is a pipeline product
-            begin = date_prefix_pos[1] + 1
+            begin = date_prefix_pos.end() + 1
             end = basename.rfind("_nt_len_dist")
             condition_and_rep = basename[begin:end]
         else:
             # File does not appear to have been produced by the pipeline
             condition_and_rep = basename
 
-        # Read the size_dist file
-        size_dist = pd.read_csv(size_file, index_col=0)
-
-        # Create the plot
         subtype = "Assigned" if "assigned" in condition_and_rep else "Mapped"
-        plot = aqplt.len_dist_bar(size_dist, subtype, **kwargs)
+        matrices[subtype][condition_and_rep] = pd.read_csv(file, index_col=0)
 
-        pdf_name = make_filename([out_prefix, condition_and_rep, "len_dist"], ext='.pdf')
-        plot.figure.savefig(pdf_name)
+    return matrices
 
 
 def class_charts(raw_class_counts: pd.DataFrame, mapped_reads: pd.Series, out_prefix: str, scale=2, **kwargs):
@@ -123,12 +165,12 @@ def class_charts(raw_class_counts: pd.DataFrame, mapped_reads: pd.Series, out_pr
         kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
     """
 
-    class_props = get_proportions_df(raw_class_counts, mapped_reads, scale)
+    class_props = get_proportions_df(raw_class_counts, mapped_reads, "_UNASSIGNED_", scale)
     max_prop = class_props.max().max()
 
     for library in raw_class_counts:
         chart = aqplt.barh_proportion(class_props[library], max_prop, scale, **kwargs)
-        chart.figure.suptitle("Percentage of Small RNAs by Class")
+        chart.set_title("Percentage of Small RNAs by Class")
         chart.set_ylabel("Class")
 
         # Save the plot
@@ -151,12 +193,12 @@ def rule_charts(rule_counts: pd.DataFrame, out_prefix: str, scale=2, **kwargs):
     mapped_reads = rule_counts.loc['Mapped Reads']
     rule_counts.drop('Mapped Reads', inplace=True)
 
-    rule_props = get_proportions_df(rule_counts, mapped_reads, scale)
+    rule_props = get_proportions_df(rule_counts, mapped_reads, "N", scale)
     max_prop = rule_props.max().max()
 
     for library, prop_df in rule_props.items():
         chart = aqplt.barh_proportion(prop_df, max_prop, scale, **kwargs)
-        chart.figure.suptitle("Percentage of Small RNAs by Matched Rule")
+        chart.set_title("Percentage of Small RNAs by Matched Rule")
         chart.set_ylabel("Rule")
 
         # Save the plot
@@ -164,20 +206,21 @@ def rule_charts(rule_counts: pd.DataFrame, out_prefix: str, scale=2, **kwargs):
         chart.figure.savefig(pdf_name)
 
 
-def get_proportions_df(counts_df: pd.DataFrame, mapped_totals: pd.Series, scale=2):
+def get_proportions_df(counts_df: pd.DataFrame, mapped_totals: pd.Series, un: str, scale=2):
     """Calculates proportions and unassigned counts, rounded according to scale
     Unassigned counts below scale threshold will be replaced with NaNs
 
     Args:
         counts_df: A dataframe of counts with library columns
         mapped_totals: A series of mapped totals indexed by library
+        un: The name to use for the unassigned counts proportion
         scale: The desired number of *percentage* decimal places"""
 
     scale += 2  # Convert percentage scale to decimal scale
     props = (counts_df / mapped_totals).round(scale)
 
     unassigned_threshold = round(10 ** (-1 * scale), scale)
-    un_ds = (1 - props.sum()).round(scale).rename('N')
+    un_ds = (1 - props.sum()).round(scale).rename(un)
     un_ds = un_ds.mask(un_ds < unassigned_threshold)
     return pd.concat([pd.DataFrame(un_ds).T, props])
 
@@ -186,7 +229,7 @@ def load_mapped_reads(summary_stats_file: str) -> pd.Series:
     """Produces a Series of mapped reads per library for calculating proportions in class charts.
 
     Args:
-        summary_stats_file: the summary stats csv produced by Counter
+        summary_stats_file: the summary stats csv produced by tiny-count
 
     Returns: a Series containing mapped reads per sample
     """
@@ -205,9 +248,10 @@ def get_sample_rep_dict(df: pd.DataFrame) -> dict:
     """
 
     sample_dict = defaultdict(list)
+    non_numeric_cols = ["Feature Class", "Feature Name"]
 
     for col in df.columns:
-        if col == "Feature Class": continue
+        if col in non_numeric_cols: continue
         sample = col.split("_rep_")[0]
         sample_dict[sample].append(col)
 
@@ -280,7 +324,14 @@ def load_dge_tables(comparisons: list) -> pd.DataFrame:
             print("Warning: multiple conditions matched in DGE filename. Using first match.")
 
         comparison_name = "_vs_".join(comparison[0])
-        de_table[comparison_name] = pd.read_csv(dgefile, index_col=0)['padj']
+        table = pd.read_csv(dgefile).rename({"Unnamed: 0": "Feature ID"}, axis="columns")
+        table = table.set_index(
+            ["Feature ID", "Tag"]
+            # For backward compatability
+            if "Tag" in table.columns
+            else "Feature ID")
+
+        de_table[comparison_name] = table['padj']
 
     return de_table
 
@@ -299,7 +350,8 @@ def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, show_un
     """
 
     if classes is not None:
-        uniq_classes = list(pd.unique(classes))
+        uniq_classes = sorted(list(pd.unique(classes)))
+        aqplt.set_dge_class_legend_style()
 
         if not show_unknown and 'unknown' in uniq_classes:
             uniq_classes.remove('unknown')
@@ -309,16 +361,19 @@ def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, show_un
             dge_list = list(dges.index[dges[pair] < pval])
             class_dges = classes.loc[dge_list]
 
-            grp_args = []
-            for cls in uniq_classes:
-                grp_args.append(list(class_dges.index[class_dges == cls]))
+            grp_args = [class_dges.index[class_dges == cls].tolist() for cls in uniq_classes]
 
-            labels = ['p ≥ %g' % pval] + uniq_classes
-            sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2], view_lims, *grp_args,
+            layer_order = np.argsort([len(grp) for grp in grp_args])[::-1]
+            sorted_grps = [grp_args[i] for i in layer_order]
+            sorted_clss = [uniq_classes[i] for i in layer_order]
+
+            labels = ['p ≥ %g' % pval] + sorted_clss
+            sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2], view_lims, *sorted_grps,
                                           log_norm=True, labels=labels, rasterized=RASTER)
             sscat.set_title('%s vs %s' % (p1, p2))
             sscat.set_xlabel("Log$_{2}$ normalized reads in " + p1)
             sscat.set_ylabel("Log$_{2}$ normalized reads in " + p2)
+            sscat.get_legend().set_bbox_to_anchor((1, 1))
             pdf_name = make_filename([output_prefix, pair, 'scatter_by_dge_class'], ext='.pdf')
             sscat.figure.savefig(pdf_name)
 
@@ -337,21 +392,26 @@ def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, show_un
             sscat.figure.savefig(pdf_name)
 
 
-def load_raw_counts(raw_counts_file: str) -> Optional[pd.DataFrame]:
+def load_raw_counts(raw_counts_file: str) -> pd.DataFrame:
     """Loads a raw_counts CSV as a DataFrame
     Args:
-        raw_counts_file: The raw counts CSV produced by Counter
+        raw_counts_file: The raw counts CSV produced by tiny-count
     Returns:
-        The raw counts DataFrame
+        The raw counts DataFrame (multiindex if it contains a Tag column)
     """
 
-    return pd.read_csv(raw_counts_file, index_col=0)
+    raw_counts = pd.read_csv(raw_counts_file)
+    return tokenize_feature_classes(raw_counts)\
+        .set_index(["Feature ID", "Tag"]
+                    # For backward compatability
+                    if "Tag" in raw_counts.columns
+                    else "Feature ID")
 
 
 def load_rule_counts(rule_counts_file: str) -> pd.DataFrame:
     """Loads a rule_counts CSV as a DataFrame
     Args:
-        rule_counts_file: The rule counts CSV produced by Counter
+        rule_counts_file: The rule counts CSV produced by tiny-count
     Returns:
         The rule counts DataFrame
     """
@@ -359,30 +419,71 @@ def load_rule_counts(rule_counts_file: str) -> pd.DataFrame:
     return pd.read_csv(rule_counts_file, index_col=0)
 
 
-def load_norm_counts(norm_counts_file: str) -> Optional[pd.DataFrame]:
+def load_norm_counts(norm_counts_file: str) -> pd.DataFrame:
     """Loads a norm_counts CSV as a DataFrame
     Args:
         norm_counts_file: The norm counts CSV produced by DESeq2
     Returns:
-        The norm counts DataFrame
+        The norm counts DataFrame (multiindex if it contains a Tag column)
     """
 
-    return pd.read_csv(norm_counts_file, index_col=0)
+    norm_counts = pd.read_csv(norm_counts_file)\
+        .rename({"Unnamed: 0": "Feature ID"}, axis="columns")
+    return tokenize_feature_classes(norm_counts)\
+        .set_index(["Feature ID", "Tag"]
+                    # For backward compatability
+                    if "Tag" in norm_counts.columns
+                    else "Feature ID")
+
+
+def tokenize_feature_classes(counts_df: pd.DataFrame) -> pd.DataFrame:
+    """Parses each Feature Class element into a list. The resulting "lists" are
+    tuples to allow for .groupby() operations
+    Args:
+        counts_df: a DataFrame containing Feature Class list strings
+    Returns: a new DataFrame with tokenized Feature Class elements
+    """
+
+    tokenized = counts_df.copy()
+    tokenized["Feature Class"] = (
+        counts_df["Feature Class"]
+            .str.split(',')
+            .apply(lambda classes: tuple(c.strip() for c in classes))
+    )
+
+    return tokenized
 
 
 def get_flat_classes(counts_df: pd.DataFrame) -> pd.Series:
     """Features with multiple associated classes must have these classes flattened
-    In these cases, the feature will be listed multiple times in the index with one associated class per row.
-
     Args:
-        counts_df: A counts DataFrame
+        counts_df: A counts DataFrame with a list-parsed Feature Class column
     Returns:
-        A Series with an index of features, and entries for each associated class
+        A Series with the same index as the input and (optionally tagged) single classes
+        per index entry. Index repetitions are allowed for accommodating all classes.
     """
 
-    return counts_df["Feature Class"] \
-        .apply(lambda x: [cls.strip() for cls in x.split(',')]) \
-        .explode()
+    # For backward compatability
+    if isinstance(counts_df.index, pd.MultiIndex):
+        counts_df["Feature Class"] = counts_df.apply(tag_classes, axis="columns")
+
+    return counts_df["Feature Class"].explode()
+
+
+def tag_classes(row: pd.Series) -> tuple:
+    """Appends a feature's tag to its (tokenized) classes, if present.
+    Intended for use with df.apply()
+    Args:
+        row: a series, as provided by .apply(... , axis="columns")
+    Returns: a tuple of tagged classes for a feature
+    """
+
+    # For backward compatability
+    tag = row.name[1] if type(row.name) is tuple else pd.NA
+    return tuple(
+        cls if pd.isna(tag) else f"{cls} ({tag})"
+        for cls in row["Feature Class"]
+    )
 
 
 def get_class_counts(raw_counts_df: pd.DataFrame) -> pd.DataFrame:
@@ -397,16 +498,30 @@ def get_class_counts(raw_counts_df: pd.DataFrame) -> pd.DataFrame:
         class_counts: A DataFrame with an index of classes and count entries, per comparison
     """
 
-    # 1. Group by Feature Class. Class "lists" are strings. Normalize their counts by the number of commas.
-    grouped = (raw_counts_df.drop("Feature Name", 1, errors='ignore')
-               .groupby("Feature Class")
-               .apply(lambda grp: grp.sum() / (grp.name.count(',') + 1)))
+    # 1. Tokenize Feature Class lists and label each with the feature's Tag (if provided)
+    tokenized = raw_counts_df.copy().drop("Feature Name", axis="columns", errors='ignore')
+    tokenized['Feature Class'] = raw_counts_df.apply(tag_classes, axis="columns")
 
-    # 2. Convert class "list" strings to true lists since we no longer need a hashable index
-    grouped.index = grouped.index.map(lambda x: [cls.strip() for cls in x.split(',')])
+    # 2. Group and sum by Feature Class. Prepare for 3. by dividing by group's class count.
+    grouped = (tokenized.groupby("Feature Class")
+               .apply(lambda grp: grp.sum() / len(grp.name)))
 
-    # 3. Finally, flatten class lists and add the normalized counts to their groups
-    return grouped.reset_index().explode("Feature Class").groupby("Feature Class").sum()
+    """
+    # Sanity check!
+    tokenized.groupby("Feature Class").apply(
+        lambda x: print('\n' + str(x.name) + '\n'
+                        f"{x.iloc[:,1:].sum()} / {len(x.name)} =" + '\n' +
+                        f"{x.iloc[:,1:].sum() / len(x.name)}" + '\n' +
+                        f"Total: {(x.iloc[:,1:].sum() / len(x.name)).sum()}"
+                        )
+    )"""
+
+    # 3. Flatten class lists, regroup and sum by the normalized group counts from 2.
+    class_counts = grouped.reset_index().explode("Feature Class").groupby("Feature Class").sum()
+
+    # Sanity check. Tolerance of 1 is overprovisioned for floating point errors
+    assert -1 < (class_counts.sum().sum() - raw_counts_df.iloc[:,2:].sum().sum()) < 1
+    return class_counts
 
 
 def validate_inputs(args: argparse.Namespace) -> None:
@@ -462,7 +577,8 @@ def setup(args: argparse.Namespace) -> dict:
     """
 
     required_inputs = {
-        'len_dist': [],
+        'len_dist':
+            ["ld_matrices_dict"],
         'rule_charts':
             ["rule_counts_df"],
         'class_charts':
@@ -477,8 +593,11 @@ def setup(args: argparse.Namespace) -> dict:
              "feat_classes_df", "de_table_df", "avg_view_lims"]
     }
 
+    # These are frozen function pointers; both the function and its
+    # parameters aren't called until they are supplied the call operator ()
     fetched: Dict[str, Union[pd.DataFrame, pd.Series, dict, None]] = {}
     input_getters = {
+        'ld_matrices_dict': lambda: get_len_dist_dict(args.len_dist),
         'raw_counts_df': lambda: load_raw_counts(args.raw_counts),
         'mapped_reads_ds': lambda: load_mapped_reads(args.summary_stats),
         'norm_counts_df': lambda: load_norm_counts(args.norm_counts),
@@ -492,6 +611,7 @@ def setup(args: argparse.Namespace) -> dict:
         'norm_view_lims': lambda: aqplt.get_scatter_view_lims(fetched["norm_counts_df"].select_dtypes(['number']))
     }
 
+    # Input getters are executed here
     for plot in args.plots:
         for req in required_inputs[plot]:
             if req is not None and req not in fetched:
@@ -520,7 +640,7 @@ def main():
     for plot in args.plots:
         if plot == 'len_dist':
             func = len_dist_plots
-            arg = (args.len_dist, args.out_prefix)
+            arg = (inputs["ld_matrices_dict"], args.out_prefix, args.len_dist_min, args.len_dist_max)
             kwd = {}
         elif plot == 'class_charts':
             func = class_charts
@@ -528,7 +648,7 @@ def main():
             kwd = {}
         elif plot == 'rule_charts':
             func = rule_charts
-            arg = (inputs['rule_counts_df'], args.out_prefix)
+            arg = (inputs["rule_counts_df"], args.out_prefix)
             kwd = {}
         elif plot == 'replicate_scatter':
             func = scatter_replicates
@@ -548,22 +668,28 @@ def main():
 
         itinerary.append((func, arg, kwd))
 
-    if len(itinerary) > 1:
+    if len(itinerary) > 1 and not aqplt.is_debug_mode():
+        mp.set_start_method('fork')
         with mp.Pool(len(itinerary)) as pool:
             results = []
             for task, args, kwds in itinerary:
                 results.append(pool.apply_async(task, args, kwds, error_callback=err))
             for result in results:
                 result.wait()
-    elif len(itinerary) == 1:
+    else:
         # Don't use multiprocessing if only one plot type requested
-        task = itinerary.pop()
-        task[0](*task[1], **task[2])
+        # or if in debug mode (matplotlib compatibility)
+        for task, args, kwds in itinerary:
+            task(*args, **kwds)
 
 def err(e):
     """Allows us to print errors from a MP worker without discarding the other results"""
-    print("An error occurred. See console log for details.", file=sys.stderr)
     print(''.join(traceback.format_exception(type(e), e, e.__traceback__)))
+    print("\n\nPlotter encountered an error. Don't worry! You don't have to start over.\n"
+              "You can resume the pipeline at Plotter. To do so:\n\t"
+              "1. cd into your Run Directory\n\t"
+              '2. Run "tiny replot --config your_run_config.yml"\n\t'
+              '   (that\'s the processed run config) ^^^\n\n', file=sys.stderr)
 
 if __name__ == '__main__':
     main()

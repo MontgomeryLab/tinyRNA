@@ -16,6 +16,11 @@ class MyTestCase(unittest.TestCase):
     def setUpClass(cls):
         cls.stylesheet = resource_filename('tiny', 'templates/tinyrna-light.mplstyle')
 
+    def get_label_width_pairs_from_annotations_mock(self, annotations):
+        bar_widths = [i[1]['xycoords'].get_width() for i in annotations.call_args_list]
+        bar_labels = [i[0][0] for i in annotations.call_args_list]
+        return list(zip(bar_labels, bar_widths))
+
     """Are class counts properly calculated?"""
 
     def test_class_counts(self):
@@ -23,11 +28,14 @@ class MyTestCase(unittest.TestCase):
         be divided by the number of classes before being summed."""
 
         # Each feature contributes a single count to its listed classes
-        counts = {'feat1': ['wago', 1, 1, 1],
-                  'feat2': ['csr,wago', 2, 2, 2],
-                  'feat3': ['wago,csr,other', 3, 3, 3]}
-        raw_counts_df = pd.DataFrame.from_dict(counts, orient='index',
-                        columns=['Feature Class', 'lib1', 'lib2', 'lib3'])
+        raw_counts_df = plotter.tokenize_feature_classes(
+            pd.DataFrame.from_dict(
+                {('feat1', pd.NA): ['', 'wago', 1, 1, 1],
+                 ('feat2', pd.NA): ['', 'csr,wago', 2, 2, 2],
+                 ('feat3', pd.NA): ['', 'wago,csr,other', 3, 3, 3]},
+                orient='index',
+                columns=['Feature Name', 'Feature Class', 'lib1', 'lib2', 'lib3'])
+        )
 
         actual = plotter.get_class_counts(raw_counts_df)
         expected = pd.DataFrame.from_dict(
@@ -38,72 +46,86 @@ class MyTestCase(unittest.TestCase):
 
         assert_frame_equal(actual, expected, check_like=True)
 
-    """Are class proportion percentages calculated properly?"""
+    """Are proportions properly labeled as percentages?"""
 
-    def test_class_chart_table_percentage(self):
-        class_s = pd.Series({'csr': 75, 'wago': 50, 'other': 25})
+    def test_proportion_chart_percentage_labels(self):
+        group_props = pd.Series({'group1': 0.75, 'group2': 0.50, 'group3': 0.25})
 
-        with patch.object(lib.plt.Axes, 'table') as table:
+        with patch.object(lib.plt.Axes, 'annotate') as annotations:
             plib = lib.plotterlib(self.stylesheet)
-            plib.class_pie_barh(class_s, 100)
+            plib.barh_proportion(group_props)
 
-        expected = np.array([
-            ['csr', '75.00%'],
-            ['wago', '50.00%'],
-            ['other', '25.00%']
-        ], dtype=object)
+        actual = self.get_label_width_pairs_from_annotations_mock(annotations)
+        expected = [
+            ('25.00%', 25.0),
+            ('50.00%', 50.0),
+            ('75.00%', 75.0)
+        ]
 
-        np.testing.assert_array_equal(table.call_args[1]['cellText'], expected)
+        self.assertListEqual(actual, expected)
 
-    """Do class proportion percentages have the correct scale?"""
+    """Do plotted proportions have the correct percentage label scale?"""
 
-    def test_class_chart_table_percentage_scale(self):
-        class_s = pd.Series({'csr': 1})
+    def test_proportion_chart_percentage_label_scale(self):
+        prop_df = plotter.get_proportions_df(
+            pd.DataFrame.from_dict({'group1': [1]}, orient='index', columns=['lib1']),
+            mapped_totals=pd.Series({'lib1': 3}),
+            un="Unassigned"
+        )
 
-        with patch.object(lib.plt.Axes, 'table') as table:
+        with patch.object(lib.plt.Axes, 'annotate') as annotations:
             plib = lib.plotterlib(self.stylesheet)
-            plib.class_pie_barh(class_s, 3)
+            plib.barh_proportion(prop_df['lib1'])
 
-        expected = np.array([
-            ['csr', '33.33%'],
-            ['Unassigned', '66.67%']
-        ], dtype=object)
+        actual = self.get_label_width_pairs_from_annotations_mock(annotations)
+        expected = [
+            ('33.33%', 33.33),  # group1
+            ('66.67%', 66.67)   # unassigned
+        ]
 
-        np.testing.assert_array_equal(table.call_args[1]['cellText'], expected)
+        self.assertListEqual(actual, expected)
 
-    """Do class proportion percentages display "Unassigned" at the correct threshold?"""
+    """Do proportion charts display "Unassigned" at the correct threshold?"""
 
-    def test_class_chart_table_percentage_unassigned(self):
+    def test_proportion_chart_percentage_unassigned(self):
         """This problem becomes very interesting when you consider floating point precision.
         Percentage values are rounded according to the scale for simplicity, which we assume
         to be 2 for percentages (4 for decimal). With this in mind the threshold value for
         "Unassigned" is the rounding threshold at scale + 1"""
 
-        class_count = 1
-        class_s = pd.Series({'csr': class_count})
+        class_count = 1.0
+        df_kwargs = {'orient': 'index', 'columns': ['lib1']}
 
-        # Value here refers to the decimal value of the "Unassigned" category
+        # Value refers to the decimal value of the "Unassigned" category
+        # Total refers to the total Mapped Reads required to push class_count proportion above/below threshold
         above_thresh_value = 0.00005
         above_thresh_total = class_count / (1 - above_thresh_value)
+        above_thresh_series = pd.Series({'lib1': above_thresh_total})
+
         below_thresh_value = 0.00004
         below_thresh_total = class_count / (1 - below_thresh_value)
+        below_thresh_series = pd.Series({'lib1': below_thresh_total})
 
-        with patch.object(lib.plt.Axes, 'table') as table:
-            plib = lib.plotterlib(self.stylesheet)
-            plib.class_pie_barh(class_s, above_thresh_total)
-            plib.class_pie_barh(class_s, below_thresh_total)
+        class_df = pd.DataFrame.from_dict({'group1': [class_count]}, **df_kwargs)
 
-        expected_above_thresh = np.array([
-            ['csr', '99.99%'],
-            ['Unassigned', '0.01%']
-        ])
+        # ===== ABOVE THRESHOLD ======================================================================
+        actual_above_thresh = plotter.get_proportions_df(class_df, mapped_totals=above_thresh_series, un="Unassigned")
+        expected_above_thresh = pd.DataFrame.from_dict({
+            'group1':     0.9999,
+            'Unassigned': 0.0001
+        }, **df_kwargs)
 
-        expected_below_thresh = np.array([
-            ['csr', '100.00%']
-        ])
+        assert_frame_equal(actual_above_thresh, expected_above_thresh, check_like=True)
 
-        np.testing.assert_array_equal(table.call_args_list[0][1]['cellText'], expected_above_thresh)
-        np.testing.assert_array_equal(table.call_args_list[1][1]['cellText'], expected_below_thresh)
+        # ===== BELOW THRESHOLD ======================================================================
+        actual_below_thresh = plotter.get_proportions_df(class_df, mapped_totals=below_thresh_series, un="Unassigned")
+        expected_below_thresh = pd.DataFrame.from_dict({
+            'group1':     1.0000,
+            'Unassigned': pd.NA  # Ok to have NA values here because they are dropped in barh_proportion()
+        }, **df_kwargs)
+
+        assert_frame_equal(actual_below_thresh, expected_below_thresh, check_dtype=False, check_like=True)
+
 
 if __name__ == '__main__':
     unittest.main()

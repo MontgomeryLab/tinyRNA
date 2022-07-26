@@ -25,48 +25,53 @@ counter: FeatureCounter
 def get_args():
     """Get input arguments from the user/command line."""
 
-    arg_parser = argparse.ArgumentParser(description=__doc__)
-    required_group = arg_parser.add_argument_group("required arguments")
+    arg_parser = argparse.ArgumentParser(description=__doc__, add_help=False)
+    required_args = arg_parser.add_argument_group("Required arguments")
+    optional_args = arg_parser.add_argument_group("Optional arguments")
 
     # Required arguments
-    required_group.add_argument('-i', '--input-csv', metavar='SAMPLES', required=True,
-                        help='your Samples Sheet')
-    required_group.add_argument('-c', '--config', metavar='CONFIGFILE', required=True,
-                        help='your Features Sheet')
-    required_group.add_argument('-o', '--out-prefix', metavar='OUTPUTPREFIX', required=True,
-                        help='output prefix to use for file names')
+    required_args.add_argument('-i', '--input-csv', metavar='SAMPLES', required=True,
+                               help='your Samples Sheet')
+    required_args.add_argument('-c', '--config', metavar='CONFIGFILE', required=True,
+                               help='your Features Sheet')
+    required_args.add_argument('-o', '--out-prefix', metavar='OUTPUTPREFIX', required=True,
+                               help='output prefix to use for file names')
 
     # Optional arguments
-    arg_parser.add_argument('-sf', '--source-filter', metavar='SOURCE', nargs='*', default=[],
-                        help='Only produce counts for features whose '
-                             'GFF column 2 matches the source(s) listed')
-    arg_parser.add_argument('-tf', '--type-filter', metavar='TYPE', nargs='*', default=[],
-                        help='Only produce counts for features whose '
-                             'GFF column 3 matches the type(s) listed')
-    arg_parser.add_argument('-nn', '--no-normalize', action='store_true',
-                        help='Do not normalize counts by (selected) '
-                             'overlapping feature counts.')
-    arg_parser.add_argument('-dc', '--decollapse', action='store_true',
-                        help='Create a decollapsed copy of all SAM '
-                             'files listed in your Samples Sheet.')
-    arg_parser.add_argument('-a', '--all-features', action='store_true',
-                        help='Represent all features in output counts table, '
-                             'regardless of counts or identity rules.')
-    arg_parser.add_argument('-p', '--is-pipeline', action='store_true',
-                        help='Indicates that counter was invoked as part of a pipeline run '
-                             'and that input files should be sourced as such.')
-    arg_parser.add_argument('-d', '--report-diags', action='store_true',
-                        help='Produce diagnostic information about uncounted/eliminated '
-                             'selection elements.')
+    optional_args.add_argument('-h', '--help', action="help", help="show this help message and exit")
+    optional_args.add_argument('-sf', '--source-filter', metavar='SOURCE', nargs='*', default=[],
+                               help='Only produce counts for features whose '
+                                    'GFF column 2 matches the source(s) listed')
+    optional_args.add_argument('-tf', '--type-filter', metavar='TYPE', nargs='*', default=[],
+                               help='Only produce counts for features whose '
+                                    'GFF column 3 matches the type(s) listed')
+    optional_args.add_argument('-nh', '--normalize-by-hits', metavar='T/F', default='T',
+                               help='If T/true, normalize counts by (selected) '
+                                    'overlapping feature counts. Default: true.')
+    optional_args.add_argument('-dc', '--decollapse', action='store_true',
+                               help='Create a decollapsed copy of all SAM '
+                                    'files listed in your Samples Sheet.')
+    optional_args.add_argument('-a', '--all-features', action='store_true',
+                               help='Represent all features in output counts table, '
+                                    'even if they did not match a Select for / with value.')
+    optional_args.add_argument('-p', '--is-pipeline', action='store_true',
+                               help='Indicates that tiny-count was invoked as part of a pipeline run '
+                                    'and that input files should be sourced as such.')
+    optional_args.add_argument('-d', '--report-diags', action='store_true',
+                               help='Produce diagnostic information about uncounted/eliminated '
+                                    'selection elements.')
 
-    return arg_parser.parse_args()
+    args = arg_parser.parse_args()
+    setattr(args, 'normalize_by_hits', args.normalize_by_hits.lower() in ['t', 'true'])
+
+    return args
 
 
 def load_samples(samples_csv: str, is_pipeline: bool) -> List[Dict[str, str]]:
     """Parses the Samples Sheet to determine library names and alignment files for counting
 
-    Sample files may have a .fastq(.gz) extension (i.e. when Counter is called as part of a
-    pipeline run) or a .sam extension (i.e. when Counter is called as a standalone tool).
+    Sample files may have a .fastq(.gz) extension (i.e. when tiny-count is called as part of a
+    pipeline run) or a .sam extension (i.e. when tiny-count is called as a standalone tool).
 
     Args:
         samples_csv: a csv file which defines sample group, replicate, and file location
@@ -103,7 +108,13 @@ def load_samples(samples_csv: str, is_pipeline: bool) -> List[Dict[str, str]]:
     for row in CSVReader(samples_csv, "Samples Sheet").rows():
         library_name = f"{row['Group']}_rep_{row['Replicate']}"
         library_file_name = get_library_filename(row['File'], samples_csv)
-        record = {"Name": library_name, "File": library_file_name}
+        library_normalization = row['Normalization']
+
+        record = {
+            "Name": library_name,
+            "File": library_file_name,
+            "Norm": library_normalization
+        }
 
         if record not in inputs: inputs.append(record)
 
@@ -128,11 +139,11 @@ def load_config(features_csv: str, is_pipeline: bool) -> Tuple[List[dict], Dict[
     rules, gff_files = list(), defaultdict(list)
 
     for row in CSVReader(features_csv, "Features Sheet").rows():
-        rule = {col: row[col] for col in ["Strand", "Hierarchy", "nt5end", "Length", "Strict"]}
+        rule = {col: row[col] for col in ["Tag", "Hierarchy", "Strand", "nt5end", "Length", "Overlap"]}
         rule['nt5end'] = rule['nt5end'].upper().translate({ord('U'): 'T'})  # Convert RNA base to cDNA base
         rule['Identity'] = (row['Key'], row['Value'])                       # Create identity tuple
         rule['Hierarchy'] = int(rule['Hierarchy'])                          # Convert hierarchy to number
-        rule['Strict'] = rule['Strict'].lower()                             # Built later in ReferenceTables
+        rule['Overlap'] = rule['Overlap'].lower()                           # Built later in ReferenceTables
 
         gff = os.path.basename(row['Source']) if is_pipeline else from_here(features_csv, row['Source'])
 
@@ -152,6 +163,7 @@ def map_and_reduce(libraries, prefs):
 
     # Use a multiprocessing pool if multiple sam files were provided
     if len(libraries) > 1:
+        mp.set_start_method("fork")
         with mp.Pool(len(libraries)) as pool:
             async_results = pool.imap_unordered(counter.count_reads, libraries)
 
@@ -164,7 +176,7 @@ def map_and_reduce(libraries, prefs):
     return summary
 
 
-@report_execution_time("Counter's overall runtime")
+@report_execution_time("tiny-count's overall runtime")
 def main():
     # Get command line arguments.
     args = get_args()
@@ -187,11 +199,12 @@ def main():
         merged_counts.write_report_files()
     except:
         traceback.print_exception(*sys.exc_info())
-        print("\n\nCounter encountered an error. Don't worry! You don't have to start over.\n"
-              "You can resume the pipeline at Counter. To do so:\n\t"
-              "1. cd into your Run Directory\n\t"
-              '2. Run "tiny recount --config your_run_config.yml"\n\t'
-              '   (that\'s the processed run config) ^^^\n\n', file=sys.stderr)
+        if args.is_pipeline:
+            print("\n\ntiny-count encountered an error. Don't worry! You don't have to start over.\n"
+                  "You can resume the pipeline at tiny-count. To do so:\n\t"
+                  "1. cd into your Run Directory\n\t"
+                  '2. Run "tiny recount --config your_run_config.yml"\n\t'
+                  '   (that\'s the processed run config) ^^^\n\n', file=sys.stderr)
 
 
 if __name__ == '__main__':

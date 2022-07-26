@@ -37,7 +37,7 @@ class plotterlib:
 
     def __init__(self, user_style_sheet):
 
-        self.debug = getattr(sys, 'gettrace', lambda: None)() is not None
+        self.debug = self.is_debug_mode()
         if self.debug:
             mpl.use("TkAgg", force=True)
             mpl.rcParams['savefig.dpi'] = 100
@@ -48,11 +48,11 @@ class plotterlib:
         self.subplot_cache = {}
         self.dge_scatter_tick_cache = {}
 
-    def len_dist_bar(self, size_df: pd.DataFrame, subtype: str, **kwargs) -> plt.Axes:
+    def len_dist_bar(self, size_prop: pd.DataFrame, subtype: str, **kwargs) -> plt.Axes:
         """Creates a stacked barplot of 5' end nucleotides by read length
 
         Args:
-            size_df: A dataframe containing the size x 5'nt raw counts
+            size_prop: A dataframe of size x 5'nt read count proportions
             subtype: The subtype of this len_dist plot so the title can be properly set
             kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
 
@@ -63,21 +63,21 @@ class plotterlib:
         # Retrieve axis and styles for this plot type
         fig, ax = self.reuse_subplot("len_dist")
 
-        # Convert reads to proportion
-        size_prop = size_df / size_df.sum().sum()
+        # Ensure xaxis tick labels won't be too crowded
+        font_size = self.get_xtick_labelsize_for_axis(ax.xaxis, size_prop.index)
 
-        # Override default colors. User may override with kwargs. (Orange, Yellow-green, Blue, Pink)
-        colors = {'axes.prop_cycle': mpl.cycler(color=['#F78E2D', '#CBDC3F', '#4D8AC8', '#E06EAA'])}
+        # Override default colors. User may override with kwargs. (Orange, Yellow-green, Blue, Pink, Gray)
+        colors = {'axes.prop_cycle': mpl.cycler(color=['#F78E2D', '#CBDC3F', '#4D8AC8', '#E06EAA', '#B3B3B3'])}
 
         # The style context allows us to use temporary styles
         with plt.style.context(colors):
             plt.sca(ax)
             sizeb = size_prop.plot(kind='bar', stacked=True, reuse_plot=True, **kwargs)
+            sizeb.tick_params(axis='x', labelsize=font_size, rotation=0)
+            sizeb.set_ylim(0, np.max(np.sum(size_prop, axis=1)) + 0.025)
             sizeb.set_title(f'Distribution of {subtype} Reads')
-            sizeb.set_ylim(0,np.max(np.sum(size_prop, axis=1))+0.025)
             sizeb.set_ylabel('Proportion of Reads')
             sizeb.set_xlabel('Length of Sequence')
-            sizeb.set_xticklabels(sizeb.get_xticklabels(), rotation=0)
 
         return sizeb
 
@@ -132,14 +132,12 @@ class plotterlib:
         # Create the plot and set plot attributes
         cbar = (prop_ds * 100).plot(kind='barh', ax=ax, color=bar_colors, sort_columns=False, **kwargs)
         cbar.xaxis.set_major_formatter(tix.PercentFormatter())
-        cbar.tick_params(labelsize=10)
         cbar.set_xlabel('Percentage of Reads')
         cbar.set_xlim(0, min([(max_prop * 100) + 10, 100]))
 
         # Remove irrelevant plot attributes
         cbar.legend().set_visible(False)
         cbar.grid(False, axis='y')
-        cbar.set_title('')
 
         # For converting data coordinates to axes fraction coordinates
         frac_tf = cbar.transData + cbar.transAxes.inverted()
@@ -147,13 +145,16 @@ class plotterlib:
         # Place percentage annotations
         for bar in cbar.patches:
             width = bar.get_width()
+            height = bar.get_height()
             axes_frac = frac_tf.transform((width, 0))[0]
-            x_offset = 8 if axes_frac < 0.8 else -5 * 8
+            fontsize = min(self.data_val_to_points(cbar, height), plt.rcParams['axes.labelsize'])
+            x_offset = 0.8 * fontsize if axes_frac < 0.8 else -4 * fontsize
             cbar.annotate(
                 f"{width:.{scale}f}%",
                 (1.0, 0.5), xycoords=bar,  # anchor text to bar
                 xytext=(x_offset, 0), textcoords='offset points',
                 color=text_colors(width / 100 + 0.4),
+                fontproperties={'size': fontsize},
                 va='center_baseline',
             )
 
@@ -254,12 +255,24 @@ class plotterlib:
         gscat.legend(labels=labels)
         return gscat
 
+    def set_dge_class_legend_style(self):
+        expand_width_inches = 3
+
+        fig, scatter = self.reuse_subplot("scatter")
+        transFigure = fig.transFigure
+        orig_axes_pos = scatter.get_position().transformed(transFigure)
+        orig_fig_size = fig.get_size_inches()
+
+        # Expand the figure and move the plot back to its original position at left
+        fig.set_size_inches(orig_fig_size[0] + expand_width_inches, orig_fig_size[1])
+        scatter.set_position(orig_axes_pos.transformed(transFigure.inverted()))
+
     @staticmethod
     def get_scatter_view_lims(counts_df: pd.DataFrame) -> Tuple[float, float]:
         """Calculates scatter view limits for the counts dataframe"""
 
         x0 = counts_df.min(axis='columns').where(lambda x: x != 0).dropna().min()
-        x1 = np.max(counts_df).max()
+        x1 = counts_df.max().max()
         minpos = 1e-300
 
         if not np.isfinite([x0, x1]).all() or not isinstance(x0, np.float) or x1 <= 0:
@@ -369,7 +382,7 @@ class plotterlib:
 
         # If the last tick label on the x-axis will extend past the plot space,
         # then hide it and its corresponding tick on the y-axis
-        if axis.__name__ is "xaxis" and axis.get_tick_space() == len(ticks_displayed):
+        if axis.__name__ == "xaxis" and axis.get_tick_space() == len(ticks_displayed):
             major_ticks[last_idx].label1.set_visible(False)
             yaxis = axis.axes.yaxis
             yaxis.get_major_ticks()[last_idx].label1.set_visible(False)
@@ -408,7 +421,7 @@ class plotterlib:
     def restore_ticks(self, ax: plt.Axes, axis: str):
         """Restore tick objects from previous render"""
 
-        axes = [ax.xaxis, ax.yaxis] if axis is "both" else [getattr(ax, axis)]
+        axes = [ax.xaxis, ax.yaxis] if axis == "both" else [getattr(ax, axis)]
         for axis in axes:
             name = axis.__name__
             for type in ["major", "minor"]:
@@ -491,6 +504,38 @@ class plotterlib:
 
         return val / co  # Units: data * pts/data = pts
 
+    @staticmethod
+    def get_xtick_labelsize_for_axis(axis: mpl.axis.XAxis, index: pd.Index, min_size=5) -> int:
+        """Calculates a new labelsize for the xaxis if the default size will cause crowding
+
+        Args:
+            axis: The xaxis to fit
+            index: The index representing plotted xaxis values
+            min_size: The minimum acceptable font size
+
+        Returns: an adjusted fontsize if necessary, otherwise the default font size
+        """
+
+        # Get width of axis in points
+        ax_length = Bbox.from_bounds(0, 0, 1, 1) \
+                        .transformed(axis.axes.transAxes - axis.figure.dpi_scale_trans) \
+                        .width * 72
+
+        # Get current xtick labelsize in points
+        default_size = int(axis._get_tick_label_size('x'))
+
+        # Assume text for values <100 will have aspect ratio of 1.1:1
+        # Solve for size: len(index) = ax_length / (size * 1.1)
+        size = int(np.floor(ax_length / (len(index) * 1.1)))
+
+        if size > default_size:
+            size = default_size
+        elif size < min_size:
+            size = min_size
+            print(f"WARNING: minimum font size ({min_size}) reached while attempting "
+                  "to reduce xaxis tick label crowding.", file=sys.stderr)
+
+        return size
 
     @staticmethod
     def draw_bbox_rectangle(ax: plt.Axes, box: Bbox):
@@ -500,6 +545,10 @@ class plotterlib:
                                   transform=ax.get_transform(), clip_on=False, color="green", fill=False)
         rect.set_in_layout(False)
         ax.add_patch(rect)
+
+    @staticmethod
+    def is_debug_mode():
+        return getattr(sys, 'gettrace', lambda: None)() is not None
 
     def reuse_subplot(self, plot_type: str) -> Tuple[plt.Figure, Union[plt.Axes, List[plt.Axes]]]:
         """Retrieves the reusable subplot for this plot type
@@ -532,7 +581,7 @@ class CacheBase(ABC):
 
 class ClassChartCache(CacheBase):
     def __init__(self):
-        self.fig, self.ax = plt.subplots(figsize=(5, 4))
+        self.fig, self.ax = plt.subplots(figsize=(8, 6))
 
     def get(self) -> Tuple[plt.Figure, plt.Axes]:
         self.ax.clear()
@@ -541,7 +590,7 @@ class ClassChartCache(CacheBase):
 
 class LenDistCache(CacheBase):
     def __init__(self):
-        self.fig, self.ax = plt.subplots(figsize=(7, 4))
+        self.fig, self.ax = plt.subplots(figsize=(8, 4))
 
     def get(self) -> Tuple[plt.Figure, plt.Axes]:
         self.ax.clear()
@@ -551,6 +600,7 @@ class LenDistCache(CacheBase):
 class ScatterCache(CacheBase):
     def __init__(self):
         self.fig, self.ax = plt.subplots(figsize=(8, 8), tight_layout=False)
+        self.ax.set_aspect('equal')
 
     def get(self) -> Tuple[plt.Figure, plt.Axes]:
         if len(self.ax.collections): self.ax.collections.clear()

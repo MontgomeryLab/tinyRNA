@@ -43,10 +43,10 @@ inputs:
     inputBinding:
       prefix: -tf
 
-  no_normalize:
-    type: boolean?
+  normalize_by_hits:
+    type: string?
     inputBinding:
-      prefix: -nn
+      prefix: -nh
 
   decollapse:
     type: boolean?
@@ -91,6 +91,11 @@ outputs:
     type: File
     outputBinding:
       glob: $(inputs.out_prefix)_feature_counts.csv
+
+  norm_counts:
+    type: File[]?
+    outputBinding:
+      glob: $(inputs.out_prefix)_norm_counts.csv
 
   rule_counts:
     type: File

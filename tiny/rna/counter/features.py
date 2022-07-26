@@ -13,19 +13,17 @@ match_tuple = Tuple[int, int, IntervalSelector]             # (rank, rule, inter
 feature_record_tuple = Tuple[str, str, Tuple[match_tuple]]  # (feature ID, strand, match tuple)
 
 
-class Features:
+class Features(metaclass=Singleton):
     chrom_vectors: HTSeq.ChromVector
-    classes: dict
     aliases: dict
+    classes: dict
+    tags: dict
 
-    _instance = None  # Singleton
-
-    def __init__(self, features: HTSeq.GenomicArrayOfSets, aliases: dict, classes: dict):
-        if Features._instance is None:
-            Features.chrom_vectors = features.chrom_vectors  # For interval -> feature ID lookups
-            Features.aliases = aliases                       # For feature ID -> preferred feature name lookups
-            Features.classes = classes                       # For feature ID -> class lookups
-            Features._instance = self
+    def __init__(_, features: HTSeq.GenomicArrayOfSets, aliases: dict, classes: dict, tags: dict):
+        Features.chrom_vectors = features.chrom_vectors  # For interval -> feature record tuple lookups
+        Features.aliases = aliases                       # For feature ID -> preferred feature name lookups
+        Features.classes = classes                       # For feature ID -> class lookups
+        Features.tags = tags                             # For feature ID -> match IDs
 
 
 class FeatureCounter:
@@ -167,22 +165,33 @@ class FeatureSelector:
     def build_selectors(rules_table) -> List[dict]:
         """Builds single/list/range/wildcard membership-matching selectors.
 
-        Applies to: strand, 5' end nucleotide, and length
+        Applies to: strand, 5' end nucleotide, length, and identities containing wildcards
 
         This function replaces text-based selector definitions in the rules_table with
         their corresponding selector classes. Selector evaluation is then performed via
         the membership operator (keyword `in`) which is handled by the selector class'
         __contains__() method.
+
+        Precondition: rules_table preserves original row order
         """
 
-        selector_builders = {"Strand": StrandMatch, "nt5end": NtMatch, "Length": NumericalMatch}
-        for row in rules_table:
-            for selector, build_fn in selector_builders.items():
-                defn = row[selector]
-                if type(defn) is str and any([wc in defn.lower() for wc in ['all', 'both']]):
-                    row[selector] = Wildcard()
-                else:
-                    row[selector] = build_fn(defn)
+        selector_builders = {"Strand": StrandMatch, "nt5end": NtMatch, "Length": NumericalMatch, "Identity": lambda x:x}
+
+        for i, row in enumerate(rules_table):
+            try:
+                for selector, build_fn in selector_builders.items():
+                    defn = row[selector]
+
+                    if type(defn) is str and defn.lower().strip() in Wildcard.kwds:
+                        row[selector] = Wildcard()
+                    elif type(defn) is tuple:
+                        row[selector] = tuple(Wildcard() if x.lower().strip() in Wildcard.kwds else x for x in defn)
+                    else:
+                        row[selector] = build_fn(defn)
+            except Exception as e:
+                # Append to error message while preserving exception provenance and traceback
+                e.args = (str(e.args[0]) + '\n' + f"Error occurred while processing rule number {i + 2}",)
+                raise e.with_traceback(sys.exc_info()[2]) from e
 
         return rules_table
 
@@ -218,7 +227,7 @@ class FeatureSelector:
                 selector = built_selectors.setdefault(match[2], selector_factory[match[2]]())
                 match_tuples[i] = (match[0], match[1], selector)
             except KeyError:
-                raise ValueError(f"Unrecognized interval match type: '{match_tuples[i][2]}'")
+                raise ValueError(f'Invalid overlap selector: "{match_tuples[i][2]}"')
 
         return match_tuples
 

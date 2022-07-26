@@ -58,6 +58,55 @@ class MyTestCase(unittest.TestCase):
         self.assertEqual(ivma, ivmc)
         self.assertNotEqual(ivma, ivmb)
 
+    """Does StrandMatch properly validate the rule definition?"""
+
+    def test_StrandMatch_rule_validation(self):
+        good_defs = ["sense", "antisense", "sense  ", "  antisense"]
+        bad_defs = ["sens", "anstisense", "anti sense"]
+
+        for defn in good_defs:
+            StrandMatch(defn)  # No error
+
+        for defn in bad_defs:
+            errmsg = f'Invalid strand selector: "{defn}"'
+            with self.assertRaisesRegex(AssertionError, errmsg):
+                StrandMatch(defn)
+
+    """Does NtMatch properly validate the rule definition?"""
+
+    def test_NtMatch_rule_validation(self):
+        good_defs = ["A", "T", "G", "C", "N",
+                    "A,T", "A,   T", "G,G",
+                    "A,T,G,C,N"]
+        bad_defs = ["A,", ",", "B", "A,B", " "]
+        errmsgs = [
+            'Invalid nucleotide selector: ""',
+            'Invalid nucleotide selector: ""',
+            'Invalid nucleotide selector: "B"',
+            'Invalid nucleotide selector: "B"',
+            'Invalid nucleotide selector: ""',
+        ]
+
+        for defn in good_defs:
+            NtMatch(defn)
+
+        for defn, errmsg in zip(bad_defs, errmsgs):
+            with self.assertRaisesRegex(AssertionError, errmsg):
+                NtMatch(defn)
+
+    """Does NumericalMatch properly validate the rule definition?"""
+
+    def test_NumericalMatch_rule_validation(self):
+        good_defs = ["10", "10,11", "10-12", "12-14,   16"]
+        bad_defs = [",5", "5 5", " "]
+
+        for defn in good_defs:
+            NumericalMatch(defn)
+
+        for defn in bad_defs:
+            errmsg = f'Invalid length selector: "{defn}"'
+            with self.assertRaisesRegex(AssertionError, errmsg):
+                NumericalMatch(defn)
 
 
 if __name__ == '__main__':

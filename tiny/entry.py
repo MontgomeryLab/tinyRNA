@@ -50,8 +50,8 @@ def get_args():
     subparsers = parser.add_subparsers(required=True, dest='command')
     subcommands_with_configfile = {
         "run": "Processes the provided config file and executes the workflow it specifies.",
-        "replot": "Resume pipeline at the Plotter step using the PROCESSED run config provided",
-        "recount": "Resume pipeline at the Counter step using the PROCESSED run config provided",
+        "replot": "Resume pipeline at the tiny-plot step using the PROCESSED run config provided",
+        "recount": "Resume pipeline at the tiny-count step using the PROCESSED run config provided",
         "setup-cwl": 'Processes the provided config file and copies workflow files to the current directory'
     }
 
@@ -114,7 +114,7 @@ def run(tinyrna_cwl_path: str, config_file: str) -> None:
 
 @report_execution_time("Pipeline resume runtime")
 def resume(tinyrna_cwl_path: str, config_file: str, step: str) -> None:
-    """Resumes pipeline execution at either the Counter or Plotter step
+    """Resumes pipeline execution at either the tiny-count or tiny-plot step
 
     The user must invoke this from the RUN DIRECTORY for which they wish to
     resume, and the config file they provide must be the PROCESSED run config
@@ -136,8 +136,8 @@ def resume(tinyrna_cwl_path: str, config_file: str, step: str) -> None:
 
     # Maps step to Configuration class
     entry_config = {
-        "Counter": ResumeCounterConfig,
-        "Plotter": ResumePlotterConfig
+        "tiny-count": ResumeCounterConfig,
+        "tiny-plot": ResumePlotterConfig
     }
 
     print(f"Resuming pipeline execution at the {step} step...")
@@ -176,7 +176,7 @@ def run_cwltool_subprocess(config_file: str, workflow: str, run_directory=None, 
     """
 
     command = ['cwltool --timestamps --relax-path-checks --on-error continue']
-    if verbosity == 'debug': command.append('--debug --js-console')
+    if verbosity == 'debug': command.append('--debug --js-console --leave-tmpdir')
     if verbosity == 'quiet': command.append('--quiet')
     if run_directory: command.append(f'--outdir {run_directory}')
     if parallel: command.append('--parallel')
@@ -310,8 +310,8 @@ def main():
 
     Options:
         run: Run the end-to-end analysis based on a config file.
-        recount: Resume pipeline execution at the Counter step
-        replot: Resume pipeline execution at the Plotter step
+        recount: Resume pipeline execution at the tiny-count step
+        replot: Resume pipeline execution at the tiny-plot step
         get-template: Get the input sheets & template config files.
         setup-cwl: Get the CWL workflow for a run
     """
@@ -326,8 +326,8 @@ def main():
     # Execute appropriate command based on command line input
     command_map = {
         "run": lambda: run(cwl_path, args.config),
-        "replot": lambda: resume(cwl_path, args.config, "Plotter"),
-        "recount": lambda: resume(cwl_path, args.config, "Counter"),
+        "replot": lambda: resume(cwl_path, args.config, "tiny-plot"),
+        "recount": lambda: resume(cwl_path, args.config, "tiny-count"),
         "setup-cwl": lambda: setup_cwl(cwl_path, args.config),
         "get-template": lambda: get_template(templates_path)
     }

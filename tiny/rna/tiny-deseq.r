@@ -1,8 +1,8 @@
 #!/usr/bin/env Rscript
 
-#### ---- Validate the provided command line arguments ---- ####
 args <- commandArgs(trailingOnly = TRUE)
-usage <- "The following arguments are accepted:
+usage <- "
+Required arguments:
 
        --input-file <count_file>
               A text file containing a table of features x samples of the run to
@@ -13,30 +13,31 @@ usage <- "The following arguments are accepted:
                   1. Normalized count table of all samples
                   2. Differential gene expression table per comparison
                   3. A PCA plot per comparison, if --pca is also provided.
+                  
+Optional arguments:
 
        --control <control_condition>
-              Opional. If the control condition is specified, comparisons will
-              only be made between the control and experimental conditions.
+              If the control condition is specified, comparisons will only 
+              be made between the control and experimental conditions.
 
        --pca
-              Optional. This will produce principle component analysis plots
-              using the DESeq2 library. Output files are PDF format.
+              This will produce principle component analysis plots using 
+              the DESeq2 library. Output files are PDF format.
 
        --drop-zero
-              Optional. Prior to performing analysis, this will drop all
-              rows/features which have a zero count in all samples."
+              Prior to performing analysis, this will drop all rows/features 
+              which have a zero count in all samples."
 
 # Increase max error string length by the length of the usage string
-options(warning.length = getOption("warning.length") + nchar(usage))
+# 8170: https://github.com/wch/r-source/blob/tags/R-4-1-1/src/main/options.c#L626
+options(warning.length = min(getOption("warning.length") + nchar(usage), 8170))
 
-## Returns the provided data as a dataframe with corresponding metadata columns, regardless of order
-df_with_metadata <- function(classless_df){
-  return(data.frame(
-    merge(metadata, data.frame(classless_df), by=0),
-    row.names = "Row.names",
-    check.names = FALSE
-  ))
-}
+# Suppress conversion to scientific notation
+options(scipen = 999)
+
+
+#### ---- Validate commandline arguments ---- ####
+
 
 ## Throw an error if an unexpected number of arguments is provided
 if (length(args) > 8){
@@ -71,14 +72,18 @@ if (count_file %in% all_args[all_args != '--input-file']){
 ## Resolve relative paths and perform tilde expansion for input file path
 count_file <- normalizePath(count_file)
 
-## DESeq2 prefers R-safe column names. We want to preserve the original col names to use in final outputs
-orig_sample_names <- colnames(read.csv(count_file, check.names = FALSE, row.names = 1, nrows = 1))[0:-2]
+## DESeq2 prefers R-safe column names. We want to preserve original sample names to use in final outputs
+orig_sample_names <- colnames(read.csv(count_file, check.names = FALSE, row.names = 1, nrows = 1))[0:-3]
 
 ## Read counts CSV with sanitized column names for handling. Subset classes and aliases.
-counts <- read.csv(count_file, row.names = 1)
-metadata <- data.frame("Feature Name" = counts[[1]], "Feature Class" = counts[[2]], row.names = rownames(counts), check.names = FALSE)
+counts <- read.csv(count_file)
 
-## Subset counts table to drop Feature Name and Feature Class columns before integer sapply
+## Set rownames to concatenated Feature ID and Tag, then drop these columns
+rownames(counts) <- split(counts[, c('Feature.ID', 'Tag')], seq(nrow(counts)))
+counts <- subset(counts, select = -c(Feature.ID, Tag))
+
+## Copy feature metadata and drop these columns, leaving only integer columns
+metadata <- data.frame("Feature Name" = counts[[1]], "Feature Class" = counts[[2]], row.names = rownames(counts), check.names = FALSE)
 counts <- data.frame(sapply(counts[0:-2], as.integer), row.names = rownames(counts))
 
 ## Remove rows containing all zeros if user requests
@@ -104,6 +109,31 @@ library(DESeq2)
 library(ggplot2)
 library(utils)
 
+## Returns a new dataframe with metadata columns prepended
+df_with_metadata <- function(classless_df){
+  return(data.frame(
+    merge(metadata, data.frame(classless_df), by=0),
+    row.names = "Row.names",
+    check.names = FALSE
+  ))
+}
+
+restore_multiindex <- function(base_df){
+  base_df[] <- sapply(base_df, as.character)
+  base_matrix <- as.matrix(base_df)
+
+  # Parse row names back to "MultiIndex" comprised of Feature ID and Tag
+  split_rn <- lapply(rownames(base_matrix), function(x) eval(parse(text=x)))
+  split_mx <- do.call(rbind, split_rn)
+
+  # Assign the MultiIndex columns and drop rownames
+  multiidx_mx <- cbind(split_mx, base_matrix)
+  colnames(multiidx_mx) <- c("Feature ID", "Tag", colnames(base_matrix))
+  rownames(multiidx_mx) <- NULL
+
+  return(multiidx_mx)
+}
+
 ## Create the deseqdataset
 sample_table <- data.frame(row.names=names(orig_sample_names), condition=factor(names(sampleConditions)))
 deseq_ds <- DESeq2::DESeqDataSetFromMatrix(countData = counts, colData = sample_table, design = ~ condition)
@@ -128,9 +158,15 @@ if (plot_pca){
 }
 
 ## Get normalized counts and write them to CSV with original sample names in header
-deseq_counts <- df_with_metadata(counts(deseq_run, normalized=TRUE))
+deseq_counts <- df_with_metadata(DESeq2::counts(deseq_run, normalized=TRUE))
 colnames(deseq_counts)[0:-2] <- orig_sample_names
-write.csv(deseq_counts, paste(out_pref, "norm_counts.csv", sep="_"))
+write.csv(
+  restore_multiindex(deseq_counts),
+  paste(out_pref, "norm_counts.csv", sep="_"),
+  row.names=FALSE,
+  quote=1:4,
+  na=""
+)
 
 if (has_control){
   # Comparison is the cartesian product of control and experimental conditions
@@ -145,11 +181,15 @@ if (has_control){
 }
 
 write_dge_table <- function (dge_df, cond1, cond2){
-  write.csv(dge_df,
+  write.csv(
+    restore_multiindex(dge_df),
     paste(out_pref,
           "cond1", cond1,
           "cond2", cond2,
-          "deseq_table.csv", sep="_")
+          "deseq_table.csv", sep="_"),
+    row.names=FALSE,
+    quote=1:4,
+    na=""
   )
 }
 
@@ -168,8 +208,7 @@ for (i in seq_len(nrow(all_comparisons))){
   if (!has_control){
     # Save DGE table for reverse comparison
     flip_sign <- c("log2FoldChange", "stat")
-    result_df <- result_df[flip_sign] * -1
+    result_df[flip_sign] <- result_df[flip_sign] * -1
     write_dge_table(result_df, cond2, cond1)
   }
 }
-
