@@ -7,7 +7,7 @@ from setuptools.command.install import install
 
 # Package metadata
 NAME = 'tinyrna'
-DESCRIPTION = 'Comprehensive analysis of small RNA high-throughput sequencing data'
+DESCRIPTION = 'Precision analysis of small RNA high-throughput sequencing data'
 URL = 'https://github.com/MontgomeryLab/tinyrna/'
 EMAIL = 'ajtate@colostate.edu'
 AUTHOR = 'Kristen Brown, Alex Tate'
