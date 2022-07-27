@@ -330,6 +330,7 @@ dir_name_plotter: plots
 ######-------------------------------------------------------------------------------######
 
 run_directory: ~
+tmp_directory: ~
 features_csv: { }
 samples_csv: { }
 reference_genome_files: [ ]
