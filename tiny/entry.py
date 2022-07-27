@@ -89,21 +89,16 @@ def run(tinyrna_cwl_path: str, config_file: str) -> None:
     # First get the configuration file set up for this run
     config_object = Configuration(config_file)
     run_directory = config_object.create_run_directory()
-    cwl_conf_file = config_object.save_run_profile()
+    config_object.save_run_profile()
 
     workflow = f"{tinyrna_cwl_path}/workflows/tinyrna_wf.cwl"
-    parallel = config_object['run_parallel']
-    loudness = config_object['verbosity']
 
-    if config_object['run_native']:  # experimental
+    if config_object['run_native']:
         # Execute the CWL runner via native Python
-        return_code = run_native(config_object, workflow, run_directory, verbosity=loudness)
+        return_code = run_cwltool_native(config_object, workflow, run_directory)
     else:
         # Use the cwltool CWL runner via command line
-        return_code = run_cwltool_subprocess(
-            cwl_conf_file, workflow,
-            run_directory=run_directory,
-            parallel=parallel, verbosity=loudness)
+        return_code = run_cwltool_subprocess(config_object, workflow, run_directory)
 
     # If the workflow completed without errors, we want to update
     # the Paths Sheet to point to the new bowtie index prefix
@@ -149,43 +144,46 @@ def resume(tinyrna_cwl_path: str, config_file: str, step: str) -> None:
 
     if config['run_native']:
         # We can pass our config object directly without writing to disk first
-        run_native(config, resume_wf, verbosity=config['verbosity'])
+        run_cwltool_native(config, resume_wf)
     else:
         # Processed Run Config must be written to disk first
-        resume_conf_file = "resume_" + os.path.basename(config_file)
+        resume_conf_file = config.get_outfile_path()
         config.write_processed_config(resume_conf_file)
-        run_cwltool_subprocess(resume_conf_file, resume_wf, verbosity=config['verbosity'])
+        run_cwltool_subprocess(config, resume_wf)
 
     if os.path.isfile(resume_wf):
         # We don't want the generated workflow to be returned by a call to setup-cwl
         os.remove(resume_wf)
 
 
-def run_cwltool_subprocess(config_file: str, workflow: str, run_directory=None, parallel=False, verbosity="normal") -> int:
+def run_cwltool_subprocess(config_object: 'ConfigBase', workflow: str, run_directory='.') -> int:
     """Executes the workflow using a command line invocation of cwltool
 
     Args:
-        config_file: the processed configuration file produced by configuration.py
+        config_object: a constructed ConfigBase-derived object
         workflow: the path to the workflow to be executed
         run_directory: the destination folder for workflow output subdirectories (default: CWD)
-        parallel: process libraries in parallel where possible
-        verbosity: controls the depth of information written to terminal by cwltool
 
     Returns: None
 
     """
 
-    command = ['cwltool --timestamps --relax-path-checks --on-error continue']
+    processed_configfile = config_object.get_outfile_path()
+    tmpdir = config_object['tmp_directory']
+    parallel = config_object['run_parallel']
+    verbosity = config_object['verbosity']
+
+    command = [f'cwltool --timestamps --relax-path-checks --on-error continue --outdir {run_directory}']
+    if tmpdir is not None: command.append(f'--tmpdir-prefix {tmpdir}')
     if verbosity == 'debug': command.append('--debug --js-console --leave-tmpdir')
     if verbosity == 'quiet': command.append('--quiet')
-    if run_directory: command.append(f'--outdir {run_directory}')
     if parallel: command.append('--parallel')
 
-    cwl_runner = ' '.join(command + [workflow, config_file])
+    cwl_runner = ' '.join(command + [workflow, processed_configfile])
     return subprocess.run(cwl_runner, shell=True).returncode
 
 
-def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = '.', verbosity="normal") -> int:
+def run_cwltool_native(config_object: 'ConfigBase', workflow: str, run_directory: str = '.') -> int:
     """Executes the workflow using native Python rather than subprocess "command line"
 
     Args:
@@ -214,6 +212,7 @@ def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = 
             furnish_if_file_record(config_param)
 
     # Set overall config for cwltool
+    verbosity = config_object['verbosity']
     runtime_context = RuntimeContext({
         'secret_store': cwltool.secrets.SecretStore(),
         'outdir': run_directory,
