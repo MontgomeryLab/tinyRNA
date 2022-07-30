@@ -351,7 +351,11 @@ class ReferenceTables:
         self._set_filters(**kwargs)
         self.gff_files = gff_files
         # ----------------------------------------------------------- Primary Key:
-        self.feats = HTSeq.GenomicArrayOfSets("auto", stranded=False)   # Root Match ID
+        if use_cython_stepvector:
+            self.feats = HTSeq.GenomicArray("auto", stranded=False)         # Root Match ID
+        else:
+            self.feats = HTSeq.GenomicArrayOfSets("auto", stranded=False)   # Root Match ID
+
         self.parents, self.filtered = {}, set()                         # Original Feature ID
         self.intervals = defaultdict(list)                              # Root Feature ID
         self.matches = defaultdict(set)                                 # Root Match ID
@@ -361,6 +365,10 @@ class ReferenceTables:
 
         # Patch the GFF attribute parser to support comma separated attribute value lists
         setattr(HTSeq.features.GFF_Reader, 'parse_GFF_attribute_string', staticmethod(parse_GFF_attribute_string))
+
+        # Patch HTSeq's StepVector with our Cython implementation (60% faster)
+        if use_cython_stepvector:
+            setattr(HTSeq.StepVector, 'StepVector', StepVector)
 
     @report_execution_time("GFF parsing")
     def get(self) -> Tuple[StepVector, AliasTable, ClassTable, dict]:
