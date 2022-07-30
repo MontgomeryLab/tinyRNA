@@ -56,8 +56,7 @@ class SAM_reader:
     def _parse_alignments(self, file_obj) -> Iterator[dict]:
         """Parses and yields individual SAM alignments from the open file_obj"""
 
-        line, line_no = self._read_thru_header(file_obj)
-        self._validate_collapsed_input(line.decode())
+        line, line_no = self._read_to_first_aln(file_obj)
         decollapse_sam = self.decollapse
 
         try:
@@ -101,33 +100,22 @@ class SAM_reader:
             e.args = (str(e.args[0]) + '\n' + f"Error occurred on line {line_no} of {self.file}",)
             raise e.with_traceback(sys.exc_info()[2]) from e
 
-    def _get_decollapsed_filename(self):
-        if self._decollapsed_filename is None:
-            basename = os.path.splitext(os.path.basename(self.file))[0]
-            self._decollapsed_filename = make_filename([basename, "decollapsed"], ext='.sam')
-        return self._decollapsed_filename
-
-    def _read_thru_header(self, file_obj):
+    def _read_to_first_aln(self, file_obj):
         """Advance file_obj past the SAM header and return the first alignment unparsed"""
 
         lineno = 1
         line = file_obj.readline()
         while line[0] == ord('@'):
-            self._save_header_line(line.decode('utf-8'))
+            self._parse_header_line(line.decode('utf-8'))
             line = file_obj.readline()
             lineno += 1
 
-        # Todo: this is probably better off in _validate_collapsed_input
-        #  or perhaps part of a slightly larger refactor to group these routines into a prepare() fn
-        #  the problem is if input is non-collapsed and decollapse=True, the header is written before issue is discovered
-        if self.decollapse:
-            # Write the same header data to the decollapsed file
-            with open(self._get_decollapsed_filename(), 'w') as f:
-                f.writelines(self._header_lines)
+        self._determine_collapser_type(line.decode())
+        if self.decollapse: self._write_header_for_decollapsed_sam()
 
         return line, lineno
 
-    def _save_header_line(self, headerline: str):
+    def _parse_header_line(self, headerline: str):
         # Header lines
         self._header_lines.append(headerline)
 
@@ -141,23 +129,32 @@ class SAM_reader:
             self._header_dict[rec_type] = \
                 {field[:2]: field[3:].strip() for field in fields}
 
-    def _validate_collapsed_input(self, first_aln_line):
+    def _determine_collapser_type(self, first_aln_line):
         if re.match(r"\d+_count=\d+", first_aln_line) is not None:
             self.collapser_type = "tiny-collapse"
-
         elif re.match(_re_fastx, first_aln_line) is not None:
             self.collapser_type = "fastx"
             sort_order = self._header_dict.get('@HD', {}).get('SO', None)
             if sort_order is None or sort_order != "queryname":
                 raise ValueError("SAM files from fastx collapsed outputs must be sorted by queryname\n"
                                  "(and the @HD [...] SO header must be set accordingly).")
-
         else:
             self.collapser_type = None
             if self.decollapse:
                 self.decollapse = False
-                print("Decollapsed SAM files will not be produced because input alignments are not derived "
-                      "from a tiny-collapse or fastx_collapser output", file=sys.stderr)
+                print("Alignments do not appear to be derived from a supported collapser input. "
+                      "Decollapsed SAM files will therefore not be produced.", file=sys.stderr)
+
+    def _get_decollapsed_filename(self):
+        if self._decollapsed_filename is None:
+            basename = os.path.splitext(os.path.basename(self.file))[0]
+            self._decollapsed_filename = make_filename([basename, "decollapsed"], ext='.sam')
+        return self._decollapsed_filename
+
+    def _write_header_for_decollapsed_sam(self):
+        assert self.collapser_type is not None
+        with open(self._get_decollapsed_filename(), 'w') as f:
+            f.writelines(self._header_lines)
 
     def _write_decollapsed_sam(self):
         assert self.collapser_type is not None

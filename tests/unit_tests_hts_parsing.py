@@ -544,7 +544,7 @@ class MyTestCase(unittest.TestCase):
 
         self.assertEqual(sam_out, "sam_file_decollapsed.sam")
 
-    """Does SAM_reader._read_thru_header() correctly identify header lines and write them to the decollapsed file?"""
+    """Does SAM_reader._read_to_first_aln() correctly identify header lines and write them to the decollapsed file?"""
 
     def test_SAM_reader_read_thru_header(self):
         reader = SAM_reader(decollapse=True)
@@ -552,7 +552,7 @@ class MyTestCase(unittest.TestCase):
 
         with open(self.short_sam_file, 'rb') as sam_in:
             with patch('builtins.open', mock_open()) as sam_out:
-                line = reader._read_thru_header(sam_in)
+                line = reader._read_to_first_aln(sam_in)
 
         expected_writelines = [
             call('mock_outfile_name.sam', 'w'),
@@ -608,17 +608,20 @@ class MyTestCase(unittest.TestCase):
 
     def test_SAM_reader_no_decollapse_non_collapsed_SAM_files(self):
         stdout_capture = io.StringIO()
-        with patch.object(SAM_reader, "_write_decollapsed_sam") as write_fn:
+        with patch.object(SAM_reader, "_write_decollapsed_sam") as write_sam, \
+                patch.object(SAM_reader, "_write_header_for_decollapsed_sam") as write_header:
+
             with contextlib.redirect_stderr(stdout_capture):
                 reader = SAM_reader(decollapse=True)
                 records = reader.bundle_multi_alignments(f"{resources}/non-collapsed.sam")
                 self.exhaust_iterator(records)
 
-        write_fn.assert_not_called()
+        write_sam.assert_not_called()
+        write_header.assert_not_called()
         self.assertEqual(reader.collapser_type, None)
         self.assertEqual(stdout_capture.getvalue(),
-                         "Decollapsed SAM files will not be produced because input alignments "
-                         "are not derived from a tiny-collapse or fastx_collapser output\n")
+                         "Alignments do not appear to be derived from a supported collapser input. "
+                         "Decollapsed SAM files will therefore not be produced.\n")
 
     """Does CaseInsensitiveAttrs correctly store, check membership, and retrieve?"""
 
