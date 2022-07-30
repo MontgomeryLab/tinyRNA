@@ -317,6 +317,10 @@ ClassTable = AliasTable = DefaultDict[str, Tuple[str]]
 StepVector = HTSeq.GenomicArrayOfSets
 Tags = DefaultDict[str, Set[str]]
 
+use_cython_stepvector = True
+if use_cython_stepvector:
+    from tiny.rna.counter.stepvector import StepVector
+    setattr(HTSeq.StepVector, 'StepVector', StepVector)
 
 class ReferenceTables:
     """A GFF parser which builds feature, alias, and class reference tables
@@ -365,10 +369,6 @@ class ReferenceTables:
 
         # Patch the GFF attribute parser to support comma separated attribute value lists
         setattr(HTSeq.features.GFF_Reader, 'parse_GFF_attribute_string', staticmethod(parse_GFF_attribute_string))
-
-        # Patch HTSeq's StepVector with our Cython implementation (60% faster)
-        if use_cython_stepvector:
-            setattr(HTSeq.StepVector, 'StepVector', StepVector)
 
     @report_execution_time("GFF parsing")
     def get(self) -> Tuple[StepVector, AliasTable, ClassTable, dict]:
