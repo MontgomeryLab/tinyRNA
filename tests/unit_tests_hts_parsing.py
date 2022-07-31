@@ -64,7 +64,7 @@ class MyTestCase(unittest.TestCase):
     """Did SAM_reader correctly skip header values and parse all pertinent info from a single record SAM file?"""
 
     def test_sam_reader(self):
-        sam_bundle = next(SAM_reader().bundle_multi_alignments(self.short_sam_file))
+        sam_bundle, read_count = next(SAM_reader().bundle_multi_alignments(self.short_sam_file))
         sam_record = sam_bundle[0]
 
         self.assertEqual(sam_record['chrom'], "I")
@@ -603,6 +603,23 @@ class MyTestCase(unittest.TestCase):
                 sam_in.seek(0)
                 self.exhaust_iterator(reader._parse_alignments(sam_in))
                 write_fn.assert_called_once()
+
+    """Does SAM_reader report a single read count for non-collapsed SAM records?"""
+
+    def test_SAM_reader_single_readcount_non_collapsed_SAM(self):
+        # Read non-collapsed.sam but duplicate its single record twice
+        with open(f"{resources}/non-collapsed.sam", 'rb') as f:
+            sam_lines = f.readlines()
+            sam_lines.extend([sam_lines[1]] * 2)
+            mock_file = mock_open(read_data=b''.join(sam_lines))
+
+        with patch('tiny.rna.counter.hts_parsing.open', new=mock_file):
+            reader = SAM_reader()
+            bundle, read_count = next(reader.bundle_multi_alignments('mock_file'))
+
+        self.assertEqual(bundle[0]['name'], b'NON_COLLAPSED_QNAME')
+        self.assertEqual(len(bundle), 3)
+        self.assertEqual(read_count, 1)
 
     """Are decollapsed outputs skipped when non-collapsed SAM files are supplied?"""
 
