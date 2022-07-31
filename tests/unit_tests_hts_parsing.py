@@ -71,7 +71,7 @@ class MyTestCase(unittest.TestCase):
         self.assertEqual(sam_record['start'], 15064569)
         self.assertEqual(sam_record['end'], 15064590)
         self.assertEqual(sam_record['strand'], '-')
-        self.assertEqual(sam_record['name'], "0_count=5")
+        self.assertEqual(sam_record['name'], b"0_count=5")
         self.assertEqual(sam_record['seq'], b"CAAGACAGAGCTTCACCGTTC")
         self.assertEqual(sam_record['len'], 21)
         self.assertEqual(sam_record['nt5'], 'G')
@@ -89,13 +89,13 @@ class MyTestCase(unittest.TestCase):
         ours = SAM_reader().bundle_multi_alignments(file)
         theirs = HTSeq.bundle_multiple_alignments(HTSeq.BAM_Reader(file))
 
-        for our_bundle, their_bundle in zip(ours, theirs):
+        for (our_bundle, _), their_bundle in zip(ours, theirs):
             self.assertEqual(len(our_bundle), len(their_bundle))
             for our, their in zip(our_bundle, their_bundle):
                 self.assertEqual(our['chrom'], their.iv.chrom)
                 self.assertEqual(our['start'], their.iv.start)
                 self.assertEqual(our['end'], their.iv.end)
-                self.assertEqual(our['name'], their.read.name)
+                self.assertEqual(our['name'].decode(), their.read.name)
                 self.assertEqual(our['nt5'], chr(their.read.seq[0]))  # See note above
                 self.assertEqual(our['strand'], their.iv.strand)
                 if our['strand'] == '-':                              # See note above
