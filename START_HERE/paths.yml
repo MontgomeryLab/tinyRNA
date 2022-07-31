@@ -36,7 +36,7 @@ tmp_directory:
 
 ##-- The prefix for your bowtie index, include relative path (relative to this config file) --##
 ##-- If you do not have a bowtie index, change this to ebwt: ''
-ebwt: /Users/alex/Projects/PycharmProjects/tinyrna/START_HERE/tinyrna_2022-07-26_13-35-30_run_directory/bowtie-build/ram1
+ebwt: ''
 
 ##-- If you do not have a bowtie index, provide your reference genome file(s) here --##
 ##-- One file per line, with "- " at the beginning (think: bulleted list) --##
