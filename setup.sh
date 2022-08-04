@@ -6,10 +6,8 @@
 
 [[ $# -eq 1 ]] && env_name=$1 || env_name="tinyrna"
 
-python_version="3.7"
+python_version="3.9"
 miniconda_version="4.12.0"
-bioc_version="3.14"
-tested_bioc_versions="3.1[2-4]"
 
 function success() {
   check="✓"
@@ -83,12 +81,12 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
   success "macOS detected"
   shell=$(basename "$(dscl . -read ~/ UserShell | cut -f 2 -d " ")")
   miniconda_installer="Miniconda3-py${python_version/./}_${miniconda_version}-MacOSX-x86_64.sh"
-  platform_lock_file="./conda/conda-r-osx-64.lock"
+  platform_lock_file="./conda/conda-osx-64.lock"
 elif [[ "$OSTYPE" == "linux-gnu" ]]; then
   success "Linux detected"
   shell="$(basename "$SHELL")"
   miniconda_installer="Miniconda3-py${python_version/./}_${miniconda_version}-Linux-x86_64.sh"
-  platform_lock_file="./conda/conda-r-linux-64.lock"
+  platform_lock_file="./conda/conda-linux-64.lock"
 else
   fail "Unsupported OS"
   exit 1
@@ -121,46 +119,6 @@ else
 
   success "Miniconda installed"
   rm $miniconda_installer
-fi
-
-# By default, assume that host environment does not contain an appropriate DESeq2 version
-install_R_deseq2=true
-
-# Check if R is installed
-if [ -x "$(command -v R)" ]; then
-  status "Checking host R environment..."
-  # Check if DESeq2 is installed
-  if Rscript -e "library(DESeq2); print(TRUE)" 2>&1 | tail -n 1 | grep -q TRUE; then
-    # Get installed Bioconductor version
-    host_bioc_vers=$(Rscript -e "library(BiocManager); BiocManager::version()" 2>&1 | tail -n 1 | grep -Eo '[0-9]+\.[0-9]+')
-    # Check to see if host_bioc_version is in our tested range
-    if [[ $host_bioc_vers =~ $tested_bioc_versions ]]; then
-      success "DESeq2 is already installed in the host environment"
-      install_R_deseq2=false
-    else
-      echo
-      echo "tinyRNA has been tested with DESeq2 in Bioconductor release $tested_bioc_versions." \
-      "The installer found v$host_bioc_vers on your system. tinyRNA can use your copy or we can" \
-      "install a tested version of DESeq2 and R in the isolated tinyRNA environment." | fold -s
-      echo
-      echo "BEWARE: installation of DESeq2 will take over 20 minutes."
-      echo
-      read -p "Would you like tinyRNA to use your copy of DESeq2? [y/n]: " -n 1 -r
-      echo
-      if [[ $REPLY =~ ^[Yy]$ ]]; then
-        success "The host's DESeq2 installation will be used"
-        install_R_deseq2=false
-      elif [[ $REPLY =~ ^[^YyNn]$ ]]; then
-        fail "Invalid option: $REPLY"
-        exit 1
-      fi
-    fi # End of Bioconductor version check
-  fi # End DESeq2 check
-fi # End of R check
-
-if [[ $install_R_deseq2 == false ]]; then
-  # Switch to using non-R lock file
-  platform_lock_file="${platform_lock_file//-r/}"
 fi
 
 # Check if the conda environment $env_name exists
@@ -200,34 +158,18 @@ else
   setup_environment
 fi
 
-# Activate tinyRNA environment
+# Activate environment and set environment variable config for Linux stability
 conda activate $env_name
+conda env config vars set PYTHONNOUSERSITE=1 > /dev/null  # FYI: cannot be set by lockfile
 
-# Install pip dependencies and our codebase
-status "Installing pip dependencies..."
-if ! pip --use-feature=in-tree-build install htseq==0.13.5 . > "pip_install.log" 2>&1; then
-  fail "Failed to install pip dependencies"
+# Install the tinyRNA codebase
+status "Installing tinyRNA codebase via pip..."
+if ! pip install . > "pip_install.log" 2>&1; then
+  fail "Failed to install tinyRNA codebase"
   echo "Check the pip_install.log file for more information."
   exit 1
 fi
-success "pip dependencies installed"
-
-if [[ $install_R_deseq2 == true ]]; then
-  # Install DESeq2 from Bioconductor
-  status "Installing DESeq2 from Bioconductor (this may take over 20 minutes)..."
-  status 'To check status run "tail -f deseq2_install.log" from another terminal'
-  Rscript -e "install.packages(\"BiocManager\", version=\"$bioc_version\", repos=\"https://cloud.r-project.org\")" > "deseq2_install.log" 2>&1
-  Rscript -e "BiocManager::install(\"DESeq2\", version=\"$bioc_version\")" >> "deseq2_install.log" 2>&1
-
-  # Check if DESeq2 installation was successful
-  if grep -q "DONE (DESeq2)" "deseq2_install.log"; then
-    success "DESeq2 installation was successful"
-  else
-    fail "DESeq2 installation failed"
-    echo "See deseq2_install.log for more information"
-    exit 1
-  fi
-fi
+success "tinyRNA codebase installed"
 
 success "Setup complete"
 status "To activate the environment, run:"

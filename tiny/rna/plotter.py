@@ -248,9 +248,10 @@ def get_sample_rep_dict(df: pd.DataFrame) -> dict:
     """
 
     sample_dict = defaultdict(list)
+    non_numeric_cols = ["Feature Class", "Feature Name"]
 
     for col in df.columns:
-        if col == "Feature Class": continue
+        if col in non_numeric_cols: continue
         sample = col.split("_rep_")[0]
         sample_dict[sample].append(col)
 
@@ -668,6 +669,7 @@ def main():
         itinerary.append((func, arg, kwd))
 
     if len(itinerary) > 1 and not aqplt.is_debug_mode():
+        mp.set_start_method('fork')
         with mp.Pool(len(itinerary)) as pool:
             results = []
             for task, args, kwds in itinerary:

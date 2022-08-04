@@ -97,7 +97,10 @@ def run(tinyrna_cwl_path: str, config_file: str) -> None:
 
     if config_object['run_native']:  # experimental
         # Execute the CWL runner via native Python
-        return_code = run_native(config_object, workflow, run_directory, verbosity=loudness)
+        return_code = run_native(
+            config_object, workflow,
+            run_directory=run_directory,
+            parallel=parallel, verbosity=loudness)
     else:
         # Use the cwltool CWL runner via command line
         return_code = run_cwltool_subprocess(
@@ -176,7 +179,7 @@ def run_cwltool_subprocess(config_file: str, workflow: str, run_directory=None, 
     """
 
     command = ['cwltool --timestamps --relax-path-checks --on-error continue']
-    if verbosity == 'debug': command.append('--debug --js-console')
+    if verbosity == 'debug': command.append('--debug --js-console --leave-tmpdir')
     if verbosity == 'quiet': command.append('--quiet')
     if run_directory: command.append(f'--outdir {run_directory}')
     if parallel: command.append('--parallel')
@@ -185,7 +188,7 @@ def run_cwltool_subprocess(config_file: str, workflow: str, run_directory=None, 
     return subprocess.run(cwl_runner, shell=True).returncode
 
 
-def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = '.', verbosity="normal") -> int:
+def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = '.', parallel=False, verbosity="normal") -> int:
     """Executes the workflow using native Python rather than subprocess "command line"
 
     Args:
@@ -238,14 +241,14 @@ def run_native(config_object: 'ConfigBase', workflow: str, run_directory: str = 
                         datefmt="%Y-%m-%d %H:%M:%S", level=level, isatty=True)
 
     # Create a wrapper for the executors so that we may pass our logger to them (unsupported by Factory)
-    parallel: MultithreadedJobExecutor = functools.partial(MultithreadedJobExecutor(), logger=logger)
-    serial: SingleJobExecutor = functools.partial(SingleJobExecutor(), logger=logger)
+    parallel_exec: MultithreadedJobExecutor = functools.partial(MultithreadedJobExecutor(), logger=logger)
+    serial_exec: SingleJobExecutor = functools.partial(SingleJobExecutor(), logger=logger)
 
     # Instantiate Factory with our run preferences
     cwl = cwltool.factory.Factory(
         runtime_context=runtime_context,
         loading_context=LoadingContext({'relax_path_checks': True}),
-        executor=parallel if parallel else serial
+        executor=parallel_exec if parallel else serial_exec
     )
 
     try:
