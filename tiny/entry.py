@@ -190,12 +190,14 @@ def run_cwltool_native(config_object: 'ConfigBase', workflow: str, run_directory
         config_object: a constructed ConfigBase-derived object
         workflow: the path to the workflow to be executed
         run_directory: the destination folder for workflow output subdirectories (default: CWD)
-        parallel: process libraries in parallel where possible
-        verbosity: controls the depth of information written to terminal by cwltool
 
     Returns: None
 
     """
+
+    tmpdir = config_object['tmp_directory']
+    parallel = config_object['run_parallel']
+    verbosity = config_object['verbosity']
 
     def furnish_if_file_record(file_dict):
         if isinstance(file_dict, dict) and file_dict.get('class', None) == 'File':
@@ -212,7 +214,6 @@ def run_cwltool_native(config_object: 'ConfigBase', workflow: str, run_directory
             furnish_if_file_record(config_param)
 
     # Set overall config for cwltool
-    verbosity = config_object['verbosity']
     runtime_context = RuntimeContext({
         'secret_store': cwltool.secrets.SecretStore(),
         'outdir': run_directory,
@@ -221,8 +222,10 @@ def run_cwltool_native(config_object: 'ConfigBase', workflow: str, run_directory
         'debug': verbosity == "debug"
     })
 
-    # Set proper temp directory for Mac users
-    if sys.platform == "darwin":
+    # Set temp directory for intermediate outputs
+    if tmpdir is not None:
+        runtime_context.tmp_outdir_prefix = tmpdir
+    elif sys.platform == "darwin":
         default_mac_path = "/private/tmp/docker_tmp"
         if runtime_context.tmp_outdir_prefix == DEFAULT_TMP_PREFIX:
             runtime_context.tmp_outdir_prefix = default_mac_path
