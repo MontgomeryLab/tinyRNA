@@ -237,14 +237,14 @@ def run_cwltool_native(config_object: 'ConfigBase', workflow: str, run_directory
                         datefmt="%Y-%m-%d %H:%M:%S", level=level, isatty=True)
 
     # Create a wrapper for the executors so that we may pass our logger to them (unsupported by Factory)
-    parallel: MultithreadedJobExecutor = functools.partial(MultithreadedJobExecutor(), logger=logger)
-    serial: SingleJobExecutor = functools.partial(SingleJobExecutor(), logger=logger)
+    parallel_exec: MultithreadedJobExecutor = functools.partial(MultithreadedJobExecutor(), logger=logger)
+    serial_exec: SingleJobExecutor = functools.partial(SingleJobExecutor(), logger=logger)
 
     # Instantiate Factory with our run preferences
     cwl = cwltool.factory.Factory(
         runtime_context=runtime_context,
         loading_context=LoadingContext({'relax_path_checks': True}),
-        executor=parallel if parallel else serial
+        executor=parallel_exec if parallel else serial_exec
     )
 
     try:
