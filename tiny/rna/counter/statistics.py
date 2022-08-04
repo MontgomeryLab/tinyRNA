@@ -1,5 +1,3 @@
-import re
-
 import pandas as pd
 import mmap
 import json
@@ -12,7 +10,6 @@ from abc import abstractmethod, ABC
 from typing import Tuple, Optional, Union
 from collections import Counter, defaultdict
 
-from tiny.rna.counter.hts_parsing import _re_fastx
 from ..util import make_filename
 
 
@@ -45,10 +42,8 @@ class LibraryStats:
 
         bundle_read = aln_bundle[0]
         loci_counts = len(aln_bundle)
-        nt5, seqlen = bundle_read['nt5'], len(bundle_read['seq'])
-
-        # Calculate counts for multi-mapping
         corr_counts = read_counts / loci_counts
+        nt5, seqlen = bundle_read['nt5'], len(bundle_read['seq'])
 
         # Fill in 5p nt/length matrix
         self.mapped_nt_len[nt5][seqlen] += read_counts
