@@ -30,9 +30,9 @@ def get_args():
     optional_args = arg_parser.add_argument_group("Optional arguments")
 
     # Required arguments
-    required_args.add_argument('-i', '--input-csv', metavar='SAMPLES', required=True,
+    required_args.add_argument('-i', '--samples-csv', metavar='SAMPLES', required=True,
                                help='your Samples Sheet')
-    required_args.add_argument('-c', '--config', metavar='CONFIGFILE', required=True,
+    required_args.add_argument('-f', '--features-csv', metavar='FEATURES', required=True,
                                help='your Features Sheet')
     required_args.add_argument('-o', '--out-prefix', metavar='OUTPUTPREFIX', required=True,
                                help='output prefix to use for file names')
@@ -49,8 +49,8 @@ def get_args():
                                help='If T/true, normalize counts by (selected) '
                                     'overlapping feature counts. Default: true.')
     optional_args.add_argument('-dc', '--decollapse', action='store_true',
-                               help='Create a decollapsed copy of all SAM '
-                                    'files listed in your Samples Sheet.')
+                               help='Create a decollapsed copy of all SAM files listed in your '
+                                    'Samples Sheet. This option is ignored for non-collapsed inputs.')
     optional_args.add_argument('-a', '--all-features', action='store_true',
                                help='Represent all features in output counts table, '
                                     'even if they did not match a Select for / with value.')
