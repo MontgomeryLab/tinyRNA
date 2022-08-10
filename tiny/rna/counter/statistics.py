@@ -389,7 +389,7 @@ class SummaryStats(MergedStat):
     def library_has_collapser_outputs(self, other: LibraryStats) -> bool:
         # Collapser outputs may have been gzipped. Accept either filename.
         collapsed_fa = glob(other.library['basename'] + "_collapsed.fa*")
-        if os.path.isfile(collapsed_fa[0]):
+        if len(collapsed_fa):
             other.library['collapsed'] = collapsed_fa[0]
             return True
         else:
