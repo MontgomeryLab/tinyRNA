@@ -28,7 +28,7 @@ class StrandMatch:
         self.select = (self.strand == 'sense')
 
     def __contains__(self, x):
-        return self.select == (x[0] == x[1])
+        return self.select ^ x
 
     def __repr__(self): return str(self.strand)
 
