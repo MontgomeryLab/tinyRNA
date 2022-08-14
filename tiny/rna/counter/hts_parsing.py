@@ -228,13 +228,14 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False, gff_vers
 class CaseInsensitiveAttrs(Dict[str, tuple]):
     """A dictionary subclass that allows for case-insensitive queries against feature attributes"""
 
+    template = namedtuple("Entry", "orig_key orig_val ci_val")(None, None, None)
+
     def __init__(self):
         super().__init__()
-        self.Entry = namedtuple("Entry", "orig_key orig_val ci_val")
 
     def __setitem__(self, key: str, val: tuple):
         lowercase_val = tuple(v.lower() for v in val)
-        super().__setitem__(key.lower(), self.Entry(key, val, lowercase_val))
+        super().__setitem__(key.lower(), self.template._replace(orig_key=key, orig_val=val, ci_val=lowercase_val))
 
     def __getitem__(self, key: str):
         # Allows case-insensitive key lookups which return original case values
