@@ -17,6 +17,9 @@ features_csv: './features.csv'
 ##-- The final output directory for files produced by the pipeline --#
 run_directory: run_directory
 
+##-- The directory for temporary files. Determined by cwltool if blank. --##
+tmp_directory:
+
 ######-------------------------------- BOWTIE-BUILD ---------------------------------######
 #
 # To build bowtie indexes:

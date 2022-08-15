@@ -97,6 +97,11 @@ class ResumeConfig(ConfigBase, ABC):
         # Update run_name output prefix variable for the current date and time
         self['run_name'] = re.sub(timestamp_format, self.dt, self['run_name'])
 
+    # Override
+    def get_outfile_path(self, infile: str = None) -> str:
+        if infile is None: infile = self.inf
+        return "resume_" + os.path.basename(infile)
+
     def write_workflow(self, workflow_outfile: str) -> None:
         with open(workflow_outfile, "w") as wf:
             self.yaml.dump(self.workflow, wf)

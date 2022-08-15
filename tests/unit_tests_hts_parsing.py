@@ -1,9 +1,11 @@
 import collections
+import contextlib
 import unittest
-from random import randint
-
 import HTSeq
+import io
+
 from copy import deepcopy
+from random import randint
 from unittest.mock import patch, mock_open, call
 
 from tiny.rna.counter.features import FeatureSelector
@@ -62,14 +64,14 @@ class MyTestCase(unittest.TestCase):
     """Did SAM_reader correctly skip header values and parse all pertinent info from a single record SAM file?"""
 
     def test_sam_reader(self):
-        sam_bundle = next(SAM_reader().bundle_multi_alignments(self.short_sam_file))
+        sam_bundle, read_count = next(SAM_reader().bundle_multi_alignments(self.short_sam_file))
         sam_record = sam_bundle[0]
 
         self.assertEqual(sam_record['chrom'], "I")
         self.assertEqual(sam_record['start'], 15064569)
         self.assertEqual(sam_record['end'], 15064590)
         self.assertEqual(sam_record['strand'], '-')
-        self.assertEqual(sam_record['name'], "0_count=5")
+        self.assertEqual(sam_record['name'], b"0_count=5")
         self.assertEqual(sam_record['seq'], b"CAAGACAGAGCTTCACCGTTC")
         self.assertEqual(sam_record['len'], 21)
         self.assertEqual(sam_record['nt5'], 'G')
@@ -87,13 +89,13 @@ class MyTestCase(unittest.TestCase):
         ours = SAM_reader().bundle_multi_alignments(file)
         theirs = HTSeq.bundle_multiple_alignments(HTSeq.BAM_Reader(file))
 
-        for our_bundle, their_bundle in zip(ours, theirs):
+        for (our_bundle, _), their_bundle in zip(ours, theirs):
             self.assertEqual(len(our_bundle), len(their_bundle))
             for our, their in zip(our_bundle, their_bundle):
                 self.assertEqual(our['chrom'], their.iv.chrom)
                 self.assertEqual(our['start'], their.iv.start)
                 self.assertEqual(our['end'], their.iv.end)
-                self.assertEqual(our['name'], their.read.name)
+                self.assertEqual(our['name'].decode(), their.read.name)
                 self.assertEqual(our['nt5'], chr(their.read.seq[0]))  # See note above
                 self.assertEqual(our['strand'], their.iv.strand)
                 if our['strand'] == '-':                              # See note above
@@ -542,7 +544,7 @@ class MyTestCase(unittest.TestCase):
 
         self.assertEqual(sam_out, "sam_file_decollapsed.sam")
 
-    """Does SAM_reader._read_thru_header() correctly identify header lines and write them to the decollapsed file?"""
+    """Does SAM_reader._read_to_first_aln() correctly identify header lines and write them to the decollapsed file?"""
 
     def test_SAM_reader_read_thru_header(self):
         reader = SAM_reader(decollapse=True)
@@ -550,7 +552,7 @@ class MyTestCase(unittest.TestCase):
 
         with open(self.short_sam_file, 'rb') as sam_in:
             with patch('builtins.open', mock_open()) as sam_out:
-                line = reader._read_thru_header(sam_in)
+                line = reader._read_to_first_aln(sam_in)
 
         expected_writelines = [
             call('mock_outfile_name.sam', 'w'),
@@ -560,12 +562,13 @@ class MyTestCase(unittest.TestCase):
         ]
 
         sam_out.assert_has_calls(expected_writelines)
-        self.assertTrue(len(reader._headers) == 1)
+        self.assertTrue(len(reader._header_lines) == 1)
 
     """Does SAM_reader._write_decollapsed_sam() write the correct number of duplicates to the decollapsed file?"""
 
     def test_SAM_reader_write_decollapsed_sam(self):
         reader = SAM_reader(decollapse=True)
+        reader.collapser_type = "tiny-collapse"
         reader._decollapsed_reads = [(b"0_count=5", b"mock line from SAM file")]
         reader._decollapsed_filename = "mock_outfile_name.sam"
 
@@ -600,6 +603,42 @@ class MyTestCase(unittest.TestCase):
                 sam_in.seek(0)
                 self.exhaust_iterator(reader._parse_alignments(sam_in))
                 write_fn.assert_called_once()
+
+    """Does SAM_reader report a single read count for non-collapsed SAM records?"""
+
+    def test_SAM_reader_single_readcount_non_collapsed_SAM(self):
+        # Read non-collapsed.sam but duplicate its single record twice
+        with open(f"{resources}/non-collapsed.sam", 'rb') as f:
+            sam_lines = f.readlines()
+            sam_lines.extend([sam_lines[1]] * 2)
+            mock_file = mock_open(read_data=b''.join(sam_lines))
+
+        with patch('tiny.rna.counter.hts_parsing.open', new=mock_file):
+            reader = SAM_reader()
+            bundle, read_count = next(reader.bundle_multi_alignments('mock_file'))
+
+        self.assertEqual(bundle[0]['name'], b'NON_COLLAPSED_QNAME')
+        self.assertEqual(len(bundle), 3)
+        self.assertEqual(read_count, 1)
+
+    """Are decollapsed outputs skipped when non-collapsed SAM files are supplied?"""
+
+    def test_SAM_reader_no_decollapse_non_collapsed_SAM_files(self):
+        stdout_capture = io.StringIO()
+        with patch.object(SAM_reader, "_write_decollapsed_sam") as write_sam, \
+                patch.object(SAM_reader, "_write_header_for_decollapsed_sam") as write_header:
+
+            with contextlib.redirect_stderr(stdout_capture):
+                reader = SAM_reader(decollapse=True)
+                records = reader.bundle_multi_alignments(f"{resources}/non-collapsed.sam")
+                self.exhaust_iterator(records)
+
+        write_sam.assert_not_called()
+        write_header.assert_not_called()
+        self.assertEqual(reader.collapser_type, None)
+        self.assertEqual(stdout_capture.getvalue(),
+                         "Alignments do not appear to be derived from a supported collapser input. "
+                         "Decollapsed SAM files will therefore not be produced.\n")
 
     """Does CaseInsensitiveAttrs correctly store, check membership, and retrieve?"""
 

@@ -37,16 +37,13 @@ class LibraryStats:
     def assign_library(self, library: dict):
         self.library = library
 
-    def count_bundle(self, aln_bundle: iter) -> dict:
+    def count_bundle(self, aln_bundle: iter, read_counts: int) -> dict:
         """Called for each multiple-alignment bundle before it is processed"""
 
         bundle_read = aln_bundle[0]
         loci_counts = len(aln_bundle)
-        nt5, seqlen = bundle_read['nt5'], len(bundle_read['seq'])
-
-        # Calculate counts for multi-mapping
-        read_counts = int(bundle_read['name'].split('=')[1])
         corr_counts = read_counts / loci_counts
+        nt5, seqlen = bundle_read['nt5'], len(bundle_read['seq'])
 
         # Fill in 5p nt/length matrix
         self.mapped_nt_len[nt5][seqlen] += read_counts
