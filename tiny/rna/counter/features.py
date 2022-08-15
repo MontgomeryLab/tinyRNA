@@ -138,7 +138,7 @@ class FeatureSelector:
 
         if not hits: return {}
         selections = defaultdict(set)
-        min_rank = min(hits, key=lambda x: x[0])
+        min_rank = min(hits, key=lambda x: x[0])[0]
 
         for rank, rule, feat, strand in hits:
             if rank != min_rank: continue
