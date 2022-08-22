@@ -318,10 +318,6 @@ ClassTable = AliasTable = DefaultDict[str, Tuple[str]]
 StepVector = HTSeq.GenomicArrayOfSets
 Tags = DefaultDict[str, Set[str]]
 
-use_cython_stepvector = True
-if use_cython_stepvector:
-    from tiny.rna.counter.stepvector import StepVector
-    setattr(HTSeq.StepVector, 'StepVector', StepVector)
 
 class ReferenceTables:
     """A GFF parser which builds feature, alias, and class reference tables
@@ -350,13 +346,15 @@ class ReferenceTables:
     source_filter = []
     type_filter = []
 
-    def __init__(self, gff_files: Dict[str, list], feature_selector, **kwargs):
-        self.all_features = kwargs.get('all_features', False)
+    def __init__(self, gff_files: Dict[str, list], feature_selector, **prefs):
+        self.all_features = prefs.get('all_features', False)
         self.selector = feature_selector
-        self._set_filters(**kwargs)
+        self._set_filters(**prefs)
         self.gff_files = gff_files
         # ----------------------------------------------------------- Primary Key:
-        if use_cython_stepvector:
+        if prefs['step_vector'] == 'Cython':
+            from tiny.rna.counter.stepvector import StepVector
+            setattr(HTSeq.StepVector, 'StepVector', StepVector)
             self.feats = HTSeq.GenomicArray("auto", stranded=False)         # Root Match ID
         else:
             self.feats = HTSeq.GenomicArrayOfSets("auto", stranded=False)   # Root Match ID

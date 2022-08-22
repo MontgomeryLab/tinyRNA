@@ -13,9 +13,6 @@ cdef extern from "src/PyRef.h" namespace "PyPtr":
         PyObject* get() const
         PyRef& operator+(const PyRef &po)
 
-cdef extern from "src/StepVector.cpp":
-    pass
-
 cdef extern from "src/StepVector.h" namespace "sparse_vectors":
     cdef cppclass _StepVector[T]:
         ctypedef ccmap[long int, T].const_iterator const_iterator

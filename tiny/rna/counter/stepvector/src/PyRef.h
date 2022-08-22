@@ -1,30 +1,38 @@
 #include "Python.h"
 #include <iostream>
+#include <cstring>
 
 namespace PyPtr {
     class PyRef {
         PyObject* obj;
+        bool debug = false;
 
         public:
             PyObject* get() const {return obj;}
 
             // Default constructor
             PyRef() {
-                obj = NULL;
+                obj = PySet_New(NULL);
             }
 
             // Obj constructor
-            PyRef(PyObject* obj) {
-                if (PySet_Check(obj)){
-                    this->obj = obj;
+            PyRef(PyObject* payload) {
+                if (PySet_Check(payload)){
+                    obj = payload;
+                    Py_XINCREF(obj);
                 } else {
                     // PySet_New treats the argument as an iterable
                     // We don't want that, e.g. if adding a tuple
                     // PySet_Add simply adds without iteration
-                    this->obj = PySet_New(NULL);
-                    PySet_Add(this->obj, obj);
+                    obj = PySet_New(NULL);
+                    PySet_Add(obj, payload);
                 }
-                Py_XINCREF(this->obj);
+
+                if (debug){
+                    std::cout << "Object ctor: ";
+                    PyObject_Print(payload, stdout, 0);
+                    std::cout << " (obj: " << obj << ")" << std::endl;
+                }
             }
 
             // Destructor
@@ -35,50 +43,86 @@ namespace PyPtr {
             // Copy constructor
             PyRef(const PyRef& other) {
                 obj = PySet_New(other.obj);
-                Py_XINCREF(obj);
-                Py_XDECREF(other.obj);
+
+                if (debug) {
+                    std::cout << "Copy ctor: ";
+                    PyObject_Print(other.obj, stdout, 0);
+                    std::cout << " (obj: " << other.obj << " -> " << obj << ")";
+                    std::cout << std::endl << std::flush;
+                }
             }
 
             // Move constructor
             PyRef(PyRef&& other) {
+                if (debug) {
+                    std::cout << "Move ctor: ";
+                    PyObject_Print(other.obj, stdout, 0);
+                    std::cout << " (obj: " << other.obj << ")";
+                    std::cout << std::endl << std::flush;
+                }
+
                 obj = other.obj;
                 Py_XDECREF(other.obj);
             }
 
             // Assignment
             PyRef& operator=(const PyRef& other) {
+                if (debug) {
+                    std::cout << "Assignment: ";
+                    PyObject_Print(other.obj, stdout, 0);
+                    std::cout << " (obj: " << other.obj << ")";
+                    std::cout << std::endl << std::flush;
+                }
+
                 Py_XDECREF(obj);
-                obj = other.obj;
-                Py_XINCREF(obj);
+                obj = PySet_New(other.obj);
                 return *this;
             }
 
             // Move assignment
             PyRef& operator=(PyRef&& other) {
+                if (debug) {
+                    std::cout << "Move assignment: ";
+                    PyObject_Print(other.obj, stdout, 0);
+                    std::cout << " (obj: " << other.obj << ")";
+                    std::cout << std::endl << std::flush;
+                }
+
                 Py_XDECREF(obj);
-                obj = PySet_New(other.obj);
-                Py_XINCREF(obj);
+                obj = other.obj;
+                // Py_XINCREF(obj);
                 other.obj = NULL;
                 return *this;
             }
 
             PyRef& operator+= (const PyRef& other) {
+                if (debug) {
+                    std::cout << "+=" << std::endl;
+                }
+
                 if (PySet_Check(other.obj)){
-                    _PySet_Update(this->obj, PyObject_GetIter(other.obj));
+                    _PySet_Update(obj, PyObject_GetIter(other.obj));
                 } else {
-                    PySet_Add(this->obj, other.obj);
+                    std::cerr << "Error: rhs value holds a non-set type PyObject." << std::endl;
                 }
                 return *this;
             }
 
-            PyRef operator+ (const PyRef& other) {
-                PyRef result(obj);
-                if (PySet_Check(other.obj)){
-                    _PySet_Update(result.obj, PyObject_GetIter(other.obj));
-                } else {
-                    PySet_Add(result.obj, other.obj);
+            PyRef operator+ (const PyRef& rhs) {
+                if (debug){
+                    PyObject_Print(obj, stdout, 0);
+                    std::cout << " + ";
+                    PyObject_Print(rhs.obj, stdout, 0);
+                    std::cout << std::endl;
                 }
-                Py_XINCREF(result.obj);
+
+                PyRef result(obj);
+                if (PySet_Check(rhs.obj)){
+                    _PySet_Update(result.obj, PyObject_GetIter(rhs.obj));
+                } else {
+                    std::cerr << "Error: rhs value holds a non-set type PyObject." << std::endl;
+                }
+                
                 return result;
             }
 
