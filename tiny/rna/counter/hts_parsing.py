@@ -248,7 +248,7 @@ class CaseInsensitiveAttrs(Dict[str, tuple]):
         super().__init__()
 
     def __setitem__(self, key: str, vals: tuple):
-        lowercase_vals = tuple(v.lower() for v in vals)
+        lowercase_vals = tuple(map(str.lower, vals))
         super().__setitem__(key.lower(), (key, vals, lowercase_vals))
 
     def __getitem__(self, key: str):
