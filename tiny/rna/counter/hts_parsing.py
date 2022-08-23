@@ -3,7 +3,7 @@ import HTSeq
 import sys
 import re
 
-from collections import Counter, defaultdict, namedtuple
+from collections import Counter, defaultdict
 from typing import Tuple, List, Dict, Iterator, Optional, DefaultDict, Set, Union
 from inspect import stack
 
@@ -226,22 +226,36 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False, gff_vers
 
 
 class CaseInsensitiveAttrs(Dict[str, tuple]):
-    """A dictionary subclass that allows for case-insensitive queries against feature attributes"""
+    """A dictionary subclass that allows for case-insensitive queries against feature attributes
 
-    template = namedtuple("Entry", "orig_key orig_val ci_val")(None, None, None)
+    From a bird's eye view, this class holds the feature attribute's name as the key,
+    and a tuple of values associated with that attribute name. The attribute's values did
+    not contain any commas, this tuple will have a length of 1. Otherwise, the original value
+    is tokenized on comma and each token is stored in a separate tuple index.
+
+    Internally, each key is stored in lowercase form, and its associated value is a (nested) tuple
+    that contains (at the following indices):
+        [0]: The key (attribute name) in its original case
+        [1]: A tuple of values in their original case
+        [2]: A tuple of values in lowercase form
+
+    Interactions with the Dict base class involve handling the "internal" nested tuple described
+    above. Functions which call self[item] in turn call these methods, and therefore the handling of the
+    internal tuple is abstracted away; these functions only deal with the key/values in their original form.
+    """
 
     def __init__(self):
         super().__init__()
 
-    def __setitem__(self, key: str, val: tuple):
-        lowercase_val = tuple(v.lower() for v in val)
-        super().__setitem__(key.lower(), self.template._replace(orig_key=key, orig_val=val, ci_val=lowercase_val))
+    def __setitem__(self, key: str, vals: tuple):
+        lowercase_vals = tuple(v.lower() for v in vals)
+        super().__setitem__(key.lower(), (key, vals, lowercase_vals))
 
     def __getitem__(self, key: str):
         # Allows case-insensitive key lookups which return original case values
         # Ensure that KeyError contains the original key
         if key.lower() not in self: raise KeyError(key)
-        return super().__getitem__(key.lower()).orig_val
+        return super().__getitem__(key.lower())[1]
 
     def __contains__(self, key: str):
         # Allows case-insensitive membership queries by key
@@ -249,11 +263,11 @@ class CaseInsensitiveAttrs(Dict[str, tuple]):
 
     def __str__(self):
         # Returns original case keys/values
-        return str({v.orig_key: v.orig_val for v in super().values()})
+        return str({v[0]: v[1] for v in super().values()})
 
     def __repr__(self):
         # Returns both original case and lowercase keys/values
-        return str({f"{k}/{v.orig_key}": f"{v.ci_val}/{v.orig_val}" for k,v in super().items()})
+        return str({f"{k}/{v[0]}": f"{v[2]}/{v[1]}" for k,v in super().items()})
 
     def setdefault(self, key: str, value: Optional[Tuple]=None):
         if key not in self:
@@ -269,12 +283,12 @@ class CaseInsensitiveAttrs(Dict[str, tuple]):
     def keys(self):
         # Roughly mimics a KeysView with original case
         for v in super(CaseInsensitiveAttrs, self).values():
-            yield v.orig_key
+            yield v[0]
 
     def values(self):
         # Roughly mimics a ValuesView with original case
         for v in super(CaseInsensitiveAttrs, self).values():
-            yield v.orig_val
+            yield v[1]
 
     def items(self):
         # Roughly mimics an ItemsView with original case
@@ -295,12 +309,12 @@ class CaseInsensitiveAttrs(Dict[str, tuple]):
         if key_type is val_type is str:
             # Allows case-insensitive membership queries by (key, value)
             return key in self and \
-                   val in super(CaseInsensitiveAttrs, self).__getitem__(key).ci_val
+                   val in super(CaseInsensitiveAttrs, self).__getitem__(key)[2]
         if key_type is str and val_type is Wildcard:
             return key in self
         if key_type is Wildcard and val_type is str:
             for v in super(CaseInsensitiveAttrs, self).values():
-                if val in v.ci_val: return True
+                if val in v[2]: return True
             else: return False
 
     # Dict methods not implemented which are invalid if delegated to dict class
