@@ -60,6 +60,8 @@ def get_args():
     optional_args.add_argument('-d', '--report-diags', action='store_true',
                                help='Produce diagnostic information about uncounted/eliminated '
                                     'selection elements.')
+    optional_args.add_argument('-sv', '--step-vector', choices=['Cython', 'HTSeq'], default='Cython',
+                               help='Select which StepVector is used for interval -> feature resolution.')
 
     args = arg_parser.parse_args()
     setattr(args, 'normalize_by_hits', args.normalize_by_hits.lower() in ['t', 'true'])

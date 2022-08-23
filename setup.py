@@ -30,13 +30,25 @@ class PrereqAndExec(install):
         return all([os.getenv(conda_var) for conda_var in ["CONDA_PREFIX", "CONDA_DEFAULT_ENV"]])
 
 debug_cython = False
+cxx_extension_args = {
+    'extra_compile_args': [
+        '-isystem', '/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include',
+        '-stdlib=libc++', '-std=c++11',
+        '-O3'],
+    'extra_link_args': ['-L/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib'],
+    'language': 'c++'
+}
 cython_extensions = [
     setuptools.Extension(
         "tiny.rna.counter.stepvector._stepvector",
         sources=['tiny/rna/counter/stepvector/_stepvector.pyx'],
-        extra_compile_args=['-isystem', '/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include', '-stdlib=libc++', '-std=c++11'],
-        extra_link_args=['-L/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib'],
-        language='c++')
+        **cxx_extension_args
+    ),
+    setuptools.Extension(
+        "tiny.rna.counter.stepvector.test_stepvec",
+        sources=['tiny/rna/counter/stepvector/test_stepvec.pyx'],
+        **cxx_extension_args
+    )
 ]
 
 setuptools.setup(

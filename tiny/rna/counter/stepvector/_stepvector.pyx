@@ -132,9 +132,8 @@ cdef class StepVector:
             stop_s = "inf"
         else:
             stop_s = str(self.stop)
-        return "<%s object, type '%s', index range %s:%s, %d step(s)>" % (
-            self.__class__.__name__, self.typecode(), start_s,
-            stop_s, self.num_steps())
+        return "<tinyRNA Cythonized %s object, index range %s:%s, %d step(s)>" % (
+            self.__class__.__name__, start_s, stop_s, self.num_steps())
 
     def typecode(self):
         return chr(self._typecode)
@@ -168,7 +167,8 @@ cdef class StepVector:
 
     # Todo
     def __eq__(self, other): pass
-    def __reduce__(self): pass
+    def __reduce__(self):
+        print("The __reduce__() function is not yet implemented")
     def apply(self, func, start=None, stop=None): pass
 
     @property
