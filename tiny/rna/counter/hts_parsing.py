@@ -72,24 +72,24 @@ class SAM_reader:
 
                 # Note: we assume sRNA sequencing data is NOT reversely stranded
                 if (int(cols[1]) & 16):
-                    strand = '-'
+                    strand = False  # -
                     try:
                         nt5 = complement[seq[-1]]
                     except KeyError:
                         nt5 = chr(seq[-1])
                 else:
-                    strand = '+'
+                    strand = True  # +
                     nt5 = chr(seq[0])
 
                 yield {
                     "name": cols[0].decode(),
-                    "len": length,
+                    "Length": length,
                     "seq": seq,
-                    "nt5": nt5,
+                    "nt5end": nt5,
                     "chrom": cols[2].decode(),
                     "start": start,
                     "end": start + length,
-                    "strand": strand
+                    "Strand": strand
                 }
         except Exception as e:
             # Append to error message while preserving exception provenance and traceback
@@ -540,7 +540,7 @@ class ReferenceTables:
 
                 for sub_iv in merged_sub_ivs:
                     finalized_match_tuples = self.selector.build_interval_selectors(sub_iv, sorted_matches.copy())
-                    self.feats[sub_iv] += (tagged_id, sub_iv.strand, tuple(finalized_match_tuples))
+                    self.feats[sub_iv] += (tagged_id, sub_iv.strand == '+', tuple(finalized_match_tuples))
 
     @staticmethod
     def _merge_adjacent_subintervals(unmerged_sub_ivs: List[HTSeq.GenomicInterval]) -> list:

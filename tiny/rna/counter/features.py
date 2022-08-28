@@ -133,31 +133,26 @@ class FeatureSelector:
             selections: a set of features which passed selection
         """
 
-        hits, min_rank = [], sys.maxsize
-
-        for feat, strand, matches in candidates:
-            for rule, rank, iv_match in matches:
-                if rank > min_rank: continue
-                if alignment not in iv_match: continue
-                if rank < min_rank: min_rank = rank
-                hits.append((rank, rule, feat, strand))
+        hits = [(rank, rule, feat, strand)
+                for feat, strand, matches in candidates
+                for rule, rank, iv_match in matches
+                if alignment in iv_match]
 
         if not hits: return {}
+        hits.sort(key=lambda x: x[0])
+        min_rank = None
 
         selections = defaultdict(set)
-        for hit in hits:
-            if hit[0] != min_rank: continue
-            _, rule, feat, strand = hit
-
-            strand = (alignment['strand'], strand)
-            nt5end = alignment['nt5']
-            length = alignment['len']
+        for rank, rule, feat, strand in hits:
+            if min_rank is not None and rank != min_rank: break
 
             rule_def = FeatureSelector.rules_table[rule]
-            if strand not in rule_def["Strand"]: continue
-            if nt5end not in rule_def["nt5end"]: continue
-            if length not in rule_def["Length"]: continue
+            if alignment['nt5end'] not in rule_def["nt5end"]: continue
+            if alignment['Length'] not in rule_def["Length"]: continue
+            if alignment['Strand'] ^ strand not in rule_def["Strand"]: continue
+
             selections[feat].add(rule)
+            min_rank = rank
 
         return selections
 

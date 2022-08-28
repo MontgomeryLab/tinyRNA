@@ -3,7 +3,7 @@ from copy import deepcopy
 
 from unittest.mock import patch, call
 from tiny.rna.counter.features import *
-from unit_test_helpers import read, make_parsed_sam_record, rules_template
+from unit_test_helpers import read, make_parsed_sam_record, rules_template, strand_to_bool
 
 resources = "./testdata/counter"
 
@@ -21,7 +21,7 @@ class FeaturesTests(unittest.TestCase):
 
     """Helper functions"""
 
-    def make_feature_for_interval_test(self, iv_rule, feat_id, chrom, strand, start, stop):
+    def make_feature_for_interval_test(self, iv_rule, feat_id, chrom, strand: str, start, stop):
         feat_iv = HTSeq.GenomicInterval(chrom, start, stop, strand)
         rules = [
             dict(deepcopy(rules_template[0]), Overlap=iv_rule, Identity=('N/A', 'N/A'), nt5end='all', Length='all')]
@@ -29,7 +29,7 @@ class FeaturesTests(unittest.TestCase):
 
         # Feature with specified coordinates, matching rule 0 with hierarchy 0 and the appropriate selector for iv_rule
         match_tuple = tuple(fs.build_interval_selectors(feat_iv, [(0, 0, iv_rule)]))
-        feat = {(feat_id, strand, match_tuple)}
+        feat = {(feat_id, strand_to_bool(strand), match_tuple)}
 
         return feat, fs
 
@@ -106,7 +106,7 @@ class FeaturesTests(unittest.TestCase):
         htsgas[iv_none] += "Should not match"
 
         # Create mock SAM alignment with non-overlapping interval
-        sam_aln = make_parsed_sam_record(**{'start': 2, 'chrom': chrom, 'strand': strand})
+        sam_aln = make_parsed_sam_record(**{'start': 2, 'chrom': chrom, 'Strand': strand_to_bool(strand)})
 
         """
         iv_none: 0 |--| 2
@@ -134,7 +134,7 @@ class FeaturesTests(unittest.TestCase):
         htsgas[iv_none] += "Non-overlapping feature"
 
         # Create mock SAM alignment which overlaps iv_olap by one base
-        sam_aln = make_parsed_sam_record(**{'chrom': chrom, 'strand': strand, 'start': 0, 'seq': 'AT'})
+        sam_aln = make_parsed_sam_record(**{'chrom': chrom, 'Strand': strand_to_bool(strand), 'start': 0, 'seq': 'AT'})
 
         """
         iv_none:    2 |-| 3
@@ -181,10 +181,10 @@ class FeaturesTests(unittest.TestCase):
 
     def test_feature_selector_full_interval(self):
         iv_rule = 'full'
-        chrom, strand, start, stop = "n/a", ".", 5, 10
+        chrom, strand, start, stop = "n/a", "+", 5, 10
         feat, fs = self.make_feature_for_interval_test(iv_rule, "Full Overlap", chrom, strand, start, stop)
 
-        aln_base = {'seq': 'ATGC', 'chrom': chrom, 'strand': strand}
+        aln_base = {'seq': 'ATGC', 'chrom': chrom, 'Strand': strand_to_bool(strand)}
         aln_spill_lo = make_parsed_sam_record(**dict(aln_base, start=start - 1, name="spill"))
         aln_spill_hi = make_parsed_sam_record(**dict(aln_base, start=start + 2, name="spill"))
         aln_contained = make_parsed_sam_record(**dict(aln_base, seq="N", start=7, name="contained"))
@@ -211,10 +211,10 @@ class FeaturesTests(unittest.TestCase):
 
     def test_feature_selector_partial_interval(self):
         iv_rule = "partial"
-        chrom, strand, start, stop = "n/a", ".", 5, 10
+        chrom, strand, start, stop = "n/a", "+", 5, 10
         feat, fs = self.make_feature_for_interval_test(iv_rule, "Partial Overlap", chrom, strand, start, stop)
 
-        aln_base = {'seq': 'ATGC', 'chrom': chrom, 'strand': strand}
+        aln_base = {'seq': 'ATGC', 'chrom': chrom, 'Strand': strand_to_bool(strand)}
         aln_spill_lo = make_parsed_sam_record(**dict(aln_base, start=start - 1, name="spill"))
         aln_spill_hi = make_parsed_sam_record(**dict(aln_base, start=start + 2, name="spill"))
         aln_contained_lo = make_parsed_sam_record(**dict(aln_base, start=start, name="contained"))
@@ -238,11 +238,11 @@ class FeaturesTests(unittest.TestCase):
 
     def test_feature_selector_exact_interval(self):
         iv_rule = "exact"
-        chrom, strand, start, stop = "n/a", ".", 5, 9
+        chrom, strand, start, stop = "n/a", "+", 5, 9
         feat, fs = self.make_feature_for_interval_test(iv_rule, "Exact Overlap", chrom, strand, start, stop)
 
-        aln_match = {'seq': 'ATGC', 'chrom': chrom, 'strand': strand}
-        aln_short = {'seq': 'NNN', 'chrom': chrom, 'strand': strand}
+        aln_match = {'seq': 'ATGC', 'chrom': chrom, 'Strand': strand_to_bool(strand)}
+        aln_short = {'seq': 'NNN', 'chrom': chrom, 'Strand': strand_to_bool(strand)}
         aln_exact = make_parsed_sam_record(**dict(aln_match, start=start, name="exact"))
         aln_short_lo = make_parsed_sam_record(**dict(aln_short, start=start, name="match lo"))
         aln_short_hi = make_parsed_sam_record(**dict(aln_short, start=start + 1, name="match hi"))
@@ -288,7 +288,7 @@ class FeaturesTests(unittest.TestCase):
 
         # Test feat_A on (+) strand
         feat_A, fs = self.make_feature_for_interval_test(iv_rule, "5' Anchored Overlap (+)", chrom, '+', start, end)
-        aln_base = {'start': start, 'chrom': chrom, 'strand': '+'}
+        aln_base = {'start': start, 'chrom': chrom, 'Strand': True}
         aln = {
             'aln_none': make_parsed_sam_record(**dict(aln_base, start=start + 1, seq="ATGC")),
             'aln_long': make_parsed_sam_record(**dict(aln_base, seq="ATGCNN")),
@@ -303,10 +303,10 @@ class FeaturesTests(unittest.TestCase):
 
         # Test feat_B on (-) strand
         feat_B, fs = self.make_feature_for_interval_test(iv_rule, "5' Anchored Overlap (-)", chrom, '-', start, end)
-        aln['aln_short'].update({'start': 6, 'end': 10, 'strand': '-'})
-        aln['aln_exact'].update({'start': 5, 'end': 10, 'strand': '-'})
-        aln['aln_long'].update({'start': 4, 'end': 10, 'strand': '-'})
-        aln['aln_none'].update({'start': 5, 'end': 9, 'strand': '-'})
+        aln['aln_short'].update({'start': 6, 'end': 10, 'Strand': False})
+        aln['aln_exact'].update({'start': 5, 'end': 10, 'Strand': False})
+        aln['aln_long'].update({'start': 4, 'end': 10, 'Strand': False})
+        aln['aln_none'].update({'start': 5, 'end': 9, 'Strand': False})
 
         self.assertEqual(fs.choose(feat_B, aln['aln_none']), {})
         self.assertEqual(fs.choose(feat_B, aln['aln_long']), {"5' Anchored Overlap (-)": {0}})
@@ -335,7 +335,7 @@ class FeaturesTests(unittest.TestCase):
 
         # Test feat_A on (+) strand
         feat_A, fs = self.make_feature_for_interval_test(iv_rule, "3' Anchored Overlap (+)", chrom, '+', start, end)
-        aln_base = {'start': start, 'chrom': chrom, 'strand': '+'}
+        aln_base = {'start': start, 'chrom': chrom, 'Strand': True}
         aln = {
             'aln_none': make_parsed_sam_record(**dict(aln_base, seq="ATGC")),
             'aln_long': make_parsed_sam_record(**dict(aln_base, start=start - 1, seq="ATGCNN")),
@@ -350,10 +350,10 @@ class FeaturesTests(unittest.TestCase):
 
         # Test feat_B on (-) strand
         feat_B, fs = self.make_feature_for_interval_test(iv_rule, "3' Anchored Overlap (-)", chrom, '-', start, end)
-        aln['aln_short'].update({'start': 5, 'end': 9, 'strand': '-'})
-        aln['aln_exact'].update({'start': 5, 'end': 10, 'strand': '-'})
-        aln['aln_long'].update({'start': 5, 'end': 11, 'strand': '-'})
-        aln['aln_none'].update({'start': 6, 'end': 10, 'strand': '-'})
+        aln['aln_short'].update({'start': 5, 'end': 9, 'Strand': False})
+        aln['aln_exact'].update({'start': 5, 'end': 10, 'Strand': False})
+        aln['aln_long'].update({'start': 5, 'end': 11, 'Strand': False})
+        aln['aln_none'].update({'start': 6, 'end': 10, 'Strand': False})
 
         self.assertEqual(fs.choose(feat_B, aln['aln_none']), {})
         self.assertEqual(fs.choose(feat_B, aln['aln_long']), {"3' Anchored Overlap (-)": {0}})

@@ -27,8 +27,9 @@ class StrandMatch:
         self.strand = strand
         self.select = (self.strand == 'sense')
 
-    def __contains__(self, x):
-        return self.select == (x[0] == x[1])
+    def __contains__(self, x: bool):
+        assert x in [True, False]
+        return self.select ^ x
 
     def __repr__(self): return str(self.strand)
 
@@ -184,7 +185,9 @@ class Interval5pMatch(IntervalSelector):
             terminus of this feature's interval.
         """
 
-        if alignment['strand'] == '+':
+        assert alignment['Strand'] in [True, False]
+
+        if alignment['Strand'] is True:
             return alignment['start'] == self.start
         else:
             return alignment['end'] == self.end
@@ -221,7 +224,9 @@ class Interval3pMatch(IntervalSelector):
             terminus of this feature's interval.
         """
 
-        if alignment["strand"] == '+':
+        assert alignment['Strand'] in [True, False]
+
+        if alignment['Strand'] is True:
             return alignment['end'] == self.end
         else:
             return alignment['start'] == self.start
