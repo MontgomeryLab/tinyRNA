@@ -150,7 +150,7 @@ class MergedStatsManager:
         MergedStat.prefix = prefs.get('out_prefix', '')
 
         self.merged_stats = [
-            FeatureCounts(Features_obj), RuleCounts(prefs['config']),
+            FeatureCounts(Features_obj), RuleCounts(prefs['features_csv']),
             AlignmentStats(), SummaryStats(),
             NtLenMatrices()
         ]

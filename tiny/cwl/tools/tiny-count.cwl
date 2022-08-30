@@ -21,10 +21,10 @@ inputs:
     inputBinding:
       prefix: -i
 
-  config_csv:
+  features_csv:
     type: File
     inputBinding:
-      prefix: -c
+      prefix: -f
 
   out_prefix:
     type: string
