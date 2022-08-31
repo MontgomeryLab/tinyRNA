@@ -31,7 +31,7 @@ tinyRNA is a set of tools to simplify the analysis of next-generation sequencing
 A setup script has been provided for easy installation of tinyRNA. First, download the latest release of tinyRNA from the [Releases link](https://github.com/MontgomeryLab/tinyRNA/releases) on the right sidebar. Decompress the downloaded file and navigate to the resulting directory in your terminal, then execute the setup script:
 
 ```shell
-# Change into the tinyRNA directory (assuming v1.0.1, include path relative to your working directory)
+# Change into the tinyRNA directory (include path relative to your working directory)
  cd tinyRNA-1.0.1
 
 # Install the tinyrna environment and dependencies
