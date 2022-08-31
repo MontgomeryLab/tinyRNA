@@ -202,7 +202,7 @@ steps:
     run: ../tools/tiny-count.cwl
     in:
       samples_csv: samples_csv
-      config_csv: features_csv
+      features_csv: features_csv
       aligned_seqs: bowtie/sam_out
       gff_files: gff_files
       out_prefix: run_name

@@ -183,10 +183,10 @@ def main():
 
     try:
         # Determine SAM inputs and their associated library names
-        libraries = load_samples(args.input_csv, args.is_pipeline)
+        libraries = load_samples(args.samples_csv, args.is_pipeline)
 
-        # Load selection rules and feature sources from config
-        selection_rules, gff_file_set = load_config(args.config, args.is_pipeline)
+        # Load selection rules and feature sources from the Features Sheet
+        selection_rules, gff_file_set = load_config(args.features_csv, args.is_pipeline)
 
         # global for multiprocessing
         global counter
