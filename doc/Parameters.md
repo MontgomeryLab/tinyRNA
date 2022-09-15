@@ -75,14 +75,14 @@ By default, tiny-count will only evaluate alignments to features which match a `
 |----------------------------|---------------------------|
 | counter-normalize-by-hits: | `--normalize-by-hits T/F` |
 
-By default, tiny-count will divide the number of counts associated with each sequence, twice, before they are assigned to a feature. Each unique sequence's count is determined by tiny-collapse and is preserved through the alignment process. The original count is divided first by the number of loci that the sequence aligns to, and second by the number of features passing selection at each locus. Switching this option "off" disables the latter normalization step.
+By default, tiny-count will divide the number of counts associated with each sequence, twice, before they are assigned to a feature. Each unique sequence's count is determined by tiny-collapse (or a compatible collapsing utility) and is preserved through the alignment process. The original count is divided first by the number of loci that the sequence aligns to, and second by the number of features passing selection at each locus. Switching this option "off" disables the latter normalization step.
 
 ### Decollapse
  | Run Config Key      | Commandline Argument   |
 |---------------------|------------------------|
 | counter_decollapse: | `--decollapse`         |
 
-The SAM files produced by the tinyRNA pipeline are collapsed by default; alignments sharing a SEQ field are strictly multi-alignments and do not reflect original sequence counts. If this option is switched "on", tiny-count will produce a decollapsed copy of each input SAM file. Each alignment in the decollapsed SAM will be duplicated by the sequence's original count. This is useful for browsing in IGV.
+The SAM files produced by the tinyRNA pipeline are collapsed by default; alignments sharing a SEQ field are strictly multi-alignments and do not reflect original sequence counts. If this option is switched "on", tiny-count will produce a decollapsed copy of each input SAM file. Each alignment in the decollapsed SAM will be duplicated by the sequence's original count. This is useful for browsing in IGV. If non-collapsed inputs are provided to tiny-count in standalone mode, this option will be ignored.
 
 ### Filters
  | Run Config Key                 | Commandline Argument                       |
@@ -108,9 +108,9 @@ Diagnostic information will include intermediate alignment files for each librar
 
 ### Full tiny-count Help String
 ```
-tiny-count -i SAMPLES -c CONFIGFILE -o OUTPUTPREFIX [-h]
-           [-sf [SOURCE [SOURCE ...]]] [-tf [TYPE [TYPE ...]]]
-           [-nh T/F] [-dc] [-a] [-p] [-d]
+tiny-count -i SAMPLES -f FEATURES -o OUTPUTPREFIX [-h]
+           [-sf [SOURCE ...]] [-tf [TYPE ...]] [-nh T/F] [-dc] [-a]
+           [-p] [-d]
 
 This submodule assigns feature counts for SAM alignments using a Feature Sheet
 ruleset. If you find that you are sourcing all of your input files from a
@@ -118,9 +118,9 @@ prior run, we recommend that you instead run `tiny recount` within that run's
 directory.
 
 Required arguments:
-  -i SAMPLES, --input-csv SAMPLES
+  -i SAMPLES, --samples-csv SAMPLES
                         your Samples Sheet
-  -c CONFIGFILE, --config CONFIGFILE
+  -f FEATURES, --features-csv FEATURES
                         your Features Sheet
   -o OUTPUTPREFIX, --out-prefix OUTPUTPREFIX
                         output prefix to use for file names
@@ -137,7 +137,8 @@ Optional arguments:
                         If T/true, normalize counts by (selected) overlapping
                         feature counts. Default: true.
   -dc, --decollapse     Create a decollapsed copy of all SAM files listed in
-                        your Samples Sheet.
+                        your Samples Sheet. This option is ignored for non-
+                        collapsed inputs.
   -a, --all-features    Represent all features in output counts table, even if
                         they did not match a Select for / with value.
   -p, --is-pipeline     Indicates that tiny-count was invoked as part of a

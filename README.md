@@ -28,17 +28,7 @@ tinyRNA is a set of tools to simplify the analysis of next-generation sequencing
 
 ## Installation
 
-A setup script has been provided for easy installation of tinyRNA. The project and its dependencies will be installed in a conda environment named `tinyrna` after running the following commands in your terminal:
-
-```shell
-# Clone the repository into a local directory
- git clone https://github.com/MontgomeryLab/tinyrna.git
- cd tinyrna
-
-# Install the tinyrna environment and dependencies
-# A custom environment name can also be passed as a command line argument
- ./setup.sh
-```
+A setup script has been provided for easy installation of tinyRNA. First, download the latest release of tinyRNA from the [Releases link](https://github.com/MontgomeryLab/tinyRNA/releases) on the right sidebar. Decompress the downloaded file and navigate to the resulting directory in your terminal, then execute `./setup.sh`. This will install the project and its dependencies in a conda environment named `tinyrna`.
 
 If the installation script runs the Miniconda installer:
 - Press "q" if you find yourself trapped on the license page

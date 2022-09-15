@@ -65,8 +65,8 @@ class FeatureCounter:
         self.stats.assign_library(library)
 
         # For each sequence in the sam file...
-        for bundle in read_seq:
-            bstat = self.stats.count_bundle(bundle)
+        for bundle, read_count in read_seq:
+            bstat = self.stats.count_bundle(bundle, read_count)
 
             # For each alignment of the given sequence...
             for alignment in bundle:

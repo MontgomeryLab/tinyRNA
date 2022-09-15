@@ -7,10 +7,12 @@ For an explanation of tiny-count's parameters in the Run Config and by commandli
 tiny-count offers a variety of options for refining your analysis. You might find that repeat analyses are required while tuning these options to your goals. However, the earlier pipeline steps are resource and time intensive, so it is inconvenient to rerun an end-to-end analysis to test new selection rules. Using the command `tiny recount`, tinyRNA will run the workflow starting at the tiny-count step using inputs from a prior end-to-end run. See the [pipeline resume documentation](Pipeline.md#resuming-a-prior-analysis) for details and prerequesites.
 
 ## Running as a Standalone Tool
-If you would like to run tiny-count as a standalone tool, not as part of an end-to-end or resumed analysis, you can do so with the command `tiny-count`. The command requires that you specify the paths to your Samples Sheet and Features Sheet, and a filename prefix for outputs. [All other arguments are optional](Parameters.md#full-tiny-count-help-string). You will need to make a copy of your Samples Sheet and modify it so that the `Input FASTQ Files` column instead contains paths to the corresponding SAM files from a prior end-to-end run. SAM files from non-tinyRNA sources are not currently supported as the tiny-collapse step is critical to its function.
+If you would like to run tiny-count as a standalone tool, not as part of an end-to-end or resumed analysis, you can do so with the command `tiny-count`. The command requires that you specify the paths to your Samples Sheet and Features Sheet, and a filename prefix for outputs. [All other arguments are optional](Parameters.md#full-tiny-count-help-string). You will need to make a copy of your Samples Sheet and modify it so that the `Input FASTQ Files` column instead contains paths to the corresponding SAM files from a prior end-to-end run. SAM files from third party sources are also supported, and can be produced from reads collapsed by tiny-collapse or fastx, or from non-collapsed reads.
 
 >**Important:** reusing the same output filename prefix between standalone runs will result in prior outputs being overwritten.
 
+#### Using Non-collapsed Sequence Alignments
+While third-party SAM files from non-collapsed reads are supported, there are some caveats. These files will result in substantially higher resource usage and runtimes; we strongly recommend collapsing prior to alignment. Additionally, the sequence-related stats produced by tiny-count will no longer represent _unique_ sequences. These stats will instead refer to all sequences with unique QNAMEs (that is, multi-alignment bundles still cary a sequence count of 1.)
 
 
 # Feature Selection

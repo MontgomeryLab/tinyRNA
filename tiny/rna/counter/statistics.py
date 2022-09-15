@@ -1,6 +1,7 @@
 import pandas as pd
-import mmap
+import gzip
 import json
+import mmap
 import csv
 import sys
 import os
@@ -9,6 +10,7 @@ import re
 from abc import abstractmethod, ABC
 from typing import Tuple, Optional, Union
 from collections import Counter, defaultdict
+from glob import glob
 
 from ..util import make_filename
 
@@ -37,16 +39,13 @@ class LibraryStats:
     def assign_library(self, library: dict):
         self.library = library
 
-    def count_bundle(self, aln_bundle: iter) -> dict:
+    def count_bundle(self, aln_bundle: iter, read_counts: int) -> dict:
         """Called for each multiple-alignment bundle before it is processed"""
 
         bundle_read = aln_bundle[0]
         loci_counts = len(aln_bundle)
-        nt5, seqlen = bundle_read['nt5end'], bundle_read['Length']
-
-        # Calculate counts for multi-mapping
-        read_counts = int(bundle_read['name'].split('=')[1])
         corr_counts = read_counts / loci_counts
+        nt5, seqlen = bundle_read['nt5end'], bundle_read['Length']
 
         # Fill in 5p nt/length matrix
         self.mapped_nt_len[nt5][seqlen] += read_counts
@@ -385,9 +384,10 @@ class SummaryStats(MergedStat):
         self.df_to_csv(self.pipeline_stats_df, "Summary Statistics", self.prefix, "summary_stats")
 
     def library_has_collapser_outputs(self, other: LibraryStats) -> bool:
-        collapsed_fa = other.library['basename'] + "_collapsed.fa"
-        if os.path.isfile(collapsed_fa):
-            other.library['collapsed'] = collapsed_fa
+        # Collapser outputs may have been gzipped. Accept either filename.
+        collapsed_fa = glob(other.library['basename'] + "_collapsed.fa*")
+        if len(collapsed_fa):
+            other.library['collapsed'] = collapsed_fa[0]
             return True
         else:
             self.missing_collapser_outputs.append(other.library['basename'])
@@ -420,8 +420,19 @@ class SummaryStats(MergedStat):
     def get_collapser_stats(self, other: LibraryStats) -> Optional[int]:
         """Determine the total number of unique sequences (after quality filtering) in this library"""
 
-        with open(other.library['collapsed'], 'r') as f:
-            with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+        collapsed_fa = other.library['collapsed']
+
+        if collapsed_fa.endswith('.gz'):
+            # Random access is much harder with gzip
+            # Instead, get last header in last 250 bytes
+            with gzip.open(collapsed_fa) as g:
+                g.seek(-250, os.SEEK_END)
+                lines = g.readlines()
+                while lines[-1] == "": lines.pop(-1)
+                last_header = lines[-2].decode()
+                count = last_header.split('_count=')[0][1:]
+        else:
+            with open(collapsed_fa, 'r') as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
                 from_pos = mm.rfind(b">") + 1
                 to_pos = mm.rfind(b"_count=")
                 count = mm[from_pos:to_pos]
