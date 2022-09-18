@@ -535,7 +535,7 @@ class ReferenceTables:
                 self.alias[root_id].add(row_val)
 
     def get_matches_and_classes(self, row_attrs: CaseInsensitiveAttrs) -> Tuple[DefaultDict, set]:
-        """Grabs classes and match tuples from attributes that match identity rules"""
+        """Grabs classes and match tuples from attributes that match identity rules (Stage 1 Selection)"""
 
         row_attrs.setdefault("Class", ("_UNKNOWN_",))
         classes = {c for c in row_attrs["Class"]}

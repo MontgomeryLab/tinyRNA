@@ -133,6 +133,7 @@ class FeatureSelector:
             selections: a set of features which passed selection
         """
 
+        # Stage 2
         hits = [(rank, rule, feat, strand)
                 for feat, strand, matches in candidates
                 for rule, rank, iv_match in matches
@@ -140,8 +141,9 @@ class FeatureSelector:
 
         if not hits: return {}
         hits.sort(key=lambda x: x[0])
-        min_rank = None
 
+        # Stage 3
+        min_rank = None
         selections = defaultdict(set)
         for rank, rule, feat, strand in hits:
             if min_rank is not None and rank != min_rank: break
