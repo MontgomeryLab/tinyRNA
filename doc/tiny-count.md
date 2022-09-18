@@ -16,15 +16,15 @@ While third-party SAM files from non-collapsed reads are supported, there are so
 
 
 # Feature Selection
-We provide a Features Sheet (`features.csv`) in which you can define selection rules to more accurately capture counts for the small RNAs of interest. The parameters for these rules include attributes commonly used in the classification of small RNAs, such as length, strandedness, and 5' nucleotide. They are utilized at each alignment locus to determine which overlapping features should be assigned a portion of the read counts for the given sequence.
+We provide a Features Sheet (`features.csv`) in which you can define selection rules to more accurately capture counts for the small RNAs of interest. The parameters for these rules include attributes commonly used in the classification of small RNAs, such as length, strandedness, and 5' nucleotide.
 
->**Important**: candidate features do not receive counts if they do not pass selection process described below
+>**Important**: candidate features do not receive counts if they do not pass the selection process described below
 
 Selection occurs in three stages, with the output of each stage as input to the next:
 1. Features are matched to rules based on their GFF column 9 attributes
-2. Features which overlap an alignment are eliminated based on the hierarchy values and desired overlap characteristics defined in their mached rules
-3. Remaining feature candidates are then selected based on the small RNA attributes of the alignment to which they are being assigned. These attributes are, again, defined in each feature's matched rules
-
+2. At each alignment locus, overlapping features are selected based on the overlap requirements of their matched rules. Selected features are sorted by hierarchy value so that lower values take precedence in the next stage.
+3. Finally, features are selected for read assignment based on the small RNA attributes of the alignment locus. Once reads are assigned to a feature, they are excluded from matches with higher hierarchy values.
+ 
 ## Stage 1: Feature Attribute Parameters
 | _features.csv columns:_ | Select for... | with value... | Tag |
 |-------------------------|---------------|---------------|-----|
@@ -42,24 +42,11 @@ Wildcard values (`all`, `*`, or an empty cell) can be used in the `Select for...
 #### Tagged Counting (advanced)
 You can optionally specify a tag for each rule. Feature assignments resulting from tagged rules will have reads counted separately from those assigned by non-tagged rules. This essentially creates a new "sub-feature" for each feature that a tagged rule matches, and these "sub-features" are treated as distinct during downstream DGE analysis. Additionally, these counts subsets can be pooled across any number of rules by specifying the same tag. We recommend using tag names which _do not_ pertain to the `Select for...` / `with value...` in order to avoid potentially confusing results in class-related plots. 
 
-## Stage 2: Hierarchy and Overlap Parameters
+## Stage 2: Overlap and Hierarchy Parameters
 | _features.csv columns:_ | Hierarchy | Overlap |
 |-------------------------|-----------|---------|
 
 This stage of selection is concerned with the interval overlap between alignments and features. **Overlap is determined in a strandless fashion.** See the [Strand](#strand) section in Stage 3 for refinement of selections by strand.
-
-### Hierarchy
-Each rule must be assigned a hierarchy value. This value is used to perform elimination when multiple features, or multiple feature-rule pairs, overlap an alignment locus.
-- Each feature can have multiple hierarchy values if it matched more than one rule during Stage 1 selection
-- Multiple rules are allowed to share the same value
-- Only the lowest value is selected at each locus
-
->**Important:**
-Let's take a step back. What exactly is the product of selection here? Not just a feature, but a feature _and_ a rule it had matched during Stage 1 selection. This is an important distinction because in Stage 3, only the **selected rule(s)** will be used to determine if the corresponding feature is an appropriate assignment based on the alignment's attributes.
-
-You can use higher hierarchy values to exclude features that are not of interest.
-
->**Example:** suppose you have a miRNA locus embedded within a coding gene locus (within an intron for example). By assigning a hierarchy of 1 to miRNA and a hierarchy of 2 to coding genes, all small RNA counts from sequences matching to the miRNA would be excluded from total counts for the coding gene. Reversing the hierarchy such that miRNA had a hierarchy of 2 and coding genes had a hierarchy of 1 would instead exclude reads from sequences matching to the coding gene from total counts for the miRNA. If a hierarchy of 1 was assigned to both miRNAs and coding genes, counts for sequences matching both features would be split between them.
 
 ### Overlap
 This column allows you to specify which read alignments should be assigned based on how their start and end points overlap with candidate features. Candidates for each matched rule can be selected using the following options:
@@ -73,11 +60,23 @@ The following diagrams demonstrate the strand semantics of these interval select
 ![3'_anchored_5'_anchored](../images/3'_anchored_5'_anchored_interval.png)
 ![Full_Exact_Partial](../images/full_exact_partial_interval.png)
 
+### Hierarchy
+Each rule must be assigned a hierarchy value. This value is used to sort Stage 2 matches so that matches with lower hierarchy values take precedence in Stage 3.
+- Each feature can have multiple hierarchy values if it matched more than one rule during Stage 1 selection
+- Multiple rules are allowed to share the same value
+
+>**Important:**
+Let's take a step back. What exactly is the product of selection here? Not just a feature, but a feature _and_ a rule it had matched during Stage 1 selection. This is an important distinction because in Stage 3, only the **selected rule(s)** will be used to determine if the corresponding feature is an appropriate assignment based on the alignment's attributes.
+
+You can use higher hierarchy values to exclude features that are not of interest.
+
+>**Example:** suppose you have a miRNA locus embedded within a coding gene locus (within an intron for example). By assigning a hierarchy of 1 to miRNA and a hierarchy of 2 to coding genes, all small RNA counts from sequences matching to the miRNA would be excluded from total counts for the coding gene. Reversing the hierarchy such that miRNA had a hierarchy of 2 and coding genes had a hierarchy of 1 would instead exclude reads from sequences matching to the coding gene from total counts for the miRNA. If a hierarchy of 1 was assigned to both miRNAs and coding genes, counts for sequences matching both features would be split between them.
+
 ## Stage 3: Alignment Attribute Parameters
 | _features.csv columns:_ | Strand | 5' End Nucleotide | Length |
 |-------------------------|--------|-------------------|--------|
 
-The final stage of selection is concerned with attributes of the alignment to which features are being assigned.
+The final stage of selection is concerned with the small RNA attributes of each alignment locus. Candidates are evaluated in order of hierarchy value where lower values take precedence. Once a match has been found, reads are excluded from remaining candidates with higher hierarchy values.
 
 ### Strand
 - `sense`: the alignment strand must match the feature's strand for a match
