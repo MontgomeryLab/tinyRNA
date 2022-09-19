@@ -85,15 +85,15 @@ def get_dir_checksum_tree(root_path: str) -> dict:
     return dir_tree
 
 
-def make_parsed_sam_record(name="0_count=1", seq="CAAGACAGAGCTTCACCGTTC", chrom='I', start=15064570, Strand:bool = True):
+def make_parsed_sam_record(Name="0_count=1", Seq="CAAGACAGAGCTTCACCGTTC", Chrom='I', Start=15064570, Strand:bool = True):
     return {
-        "name": name,
-        "Length": len(seq),
-        "seq": seq,
-        "nt5end": seq[0] if Strand is True else seq[-1].translate(complement),
-        "chrom": chrom,
-        "start": start,
-        "end": start + len(seq),
+        "Name": Name,
+        "Length": len(Seq),
+        "Seq": Seq,
+        "nt5end": Seq[0] if Strand is True else Seq[-1].translate(complement),
+        "Chrom": Chrom,
+        "Start": Start,
+        "End": Start + len(Seq),
         "Strand": Strand
     }
 

@@ -47,7 +47,7 @@ class SAM_reader:
             bundle, read_count = self._new_bundle(next(aln_iter))
 
             for aln in aln_iter:
-                if aln['name'] != bundle[0]['name']:
+                if aln['Name'] != bundle[0]['Name']:
                     yield bundle, read_count
                     bundle, read_count = self._new_bundle(aln)
                 else:
@@ -62,7 +62,7 @@ class SAM_reader:
 
         if self.collapser_type is not None:
             token = self.collapser_token
-            count = int(aln['name'].split(token)[-1])
+            count = int(aln['Name'].split(token)[-1])
         else:
             count = 1
 
@@ -101,13 +101,13 @@ class SAM_reader:
                     nt5 = chr(seq[0])
 
                 yield {
-                    "name": cols[0].decode(),
+                    "Name": cols[0],
                     "Length": length,
-                    "seq": seq,
+                    "Seq": seq,
                     "nt5end": nt5,
-                    "chrom": cols[2].decode(),
-                    "start": start,
-                    "end": start + length,
+                    "Chrom": cols[2].decode(),
+                    "Start": start,
+                    "End": start + length,
                     "Strand": strand
                 }
         except Exception as e:
@@ -239,7 +239,7 @@ def infer_strandedness(sam_file: str, intervals: dict) -> str:
     for count in range(1, 20000):
         try:
             rec = next(sample_read)
-            strandless = HTSeq.GenomicInterval(rec['chrom'], rec['start'], rec['end'])
+            strandless = HTSeq.GenomicInterval(rec['Chrom'], rec['Start'], rec['End'])
             sam_strand = rec['strand']
             gff_strand = ':'.join(unstranded[strandless].get_steps())
             gff_sam_map[sam_strand + gff_strand] += 1

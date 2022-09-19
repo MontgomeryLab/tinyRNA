@@ -139,7 +139,7 @@ class IntervalFullMatch(IntervalSelector):
         super().__init__(iv)
 
     def __contains__(self, alignment):
-        return self.start <= alignment['start'] and alignment['end'] <= self.end
+        return self.start <= alignment['Start'] and alignment['End'] <= self.end
 
     def __repr__(self):
         return f"<Between [{self.start}, {self.end})>"
@@ -151,7 +151,7 @@ class IntervalExactMatch(IntervalSelector):
         super().__init__(iv)
 
     def __contains__(self, alignment):
-        return self.start == alignment['start'] and alignment['end'] == self.end
+        return self.start == alignment['Start'] and alignment['End'] == self.end
 
     def __repr__(self):
         return f"<Exactly [{self.start}, {self.end})>"
@@ -188,9 +188,9 @@ class Interval5pMatch(IntervalSelector):
         assert alignment['Strand'] in [True, False]
 
         if alignment['Strand'] is True:
-            return alignment['start'] == self.start
+            return alignment['Start'] == self.start
         else:
-            return alignment['end'] == self.end
+            return alignment['End'] == self.end
 
     def __repr__(self):
         return f"<5' anchored to {self.start} on (+) / {self.end} on (-)>"
@@ -227,9 +227,9 @@ class Interval3pMatch(IntervalSelector):
         assert alignment['Strand'] in [True, False]
 
         if alignment['Strand'] is True:
-            return alignment['end'] == self.end
+            return alignment['End'] == self.end
         else:
-            return alignment['start'] == self.start
+            return alignment['Start'] == self.start
 
     def __repr__(self):
         return f"<3' anchored to {self.end} on (+) / {self.start} on (-)>"

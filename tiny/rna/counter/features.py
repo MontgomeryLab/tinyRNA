@@ -44,8 +44,8 @@ class FeatureCounter:
 
         try:
             feat_matches = feat_matches.union(*(match for match in
-                    (Features.chrom_vectors[al['chrom']]['.']       # GenomicArrayOfSets -> ChromVector
-                             .array[al['start']:al['end']]          # ChromVector -> StepVector
+                    (Features.chrom_vectors[al['Chrom']]['.']       # GenomicArrayOfSets -> ChromVector
+                             .array[al['Start']:al['End']]          # ChromVector -> StepVector
                              .get_steps(values_only=True))          # StepVector -> {features}
                     # If an alignment does not map to a feature, an empty set is returned
                     if len(match) != 0))
