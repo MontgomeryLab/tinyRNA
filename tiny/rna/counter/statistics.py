@@ -45,7 +45,7 @@ class LibraryStats:
         bundle_read = aln_bundle[0]
         loci_counts = len(aln_bundle)
         corr_counts = read_counts / loci_counts
-        nt5, seqlen = bundle_read['nt5'], len(bundle_read['seq'])
+        nt5, seqlen = bundle_read['nt5end'], bundle_read['Length']
 
         # Fill in 5p nt/length matrix
         self.mapped_nt_len[nt5][seqlen] += read_counts
@@ -487,19 +487,19 @@ class Diagnostics:
         after the entire SAM file has been processed."""
 
         # Perform reverse complement for anti-sense reads
-        read = aln['seq'] \
-            if aln['strand'] == '+' \
-            else aln['seq'][::-1].translate(self.complement)
+        read = aln['Seq'] \
+            if aln['Strand'] is True \
+            else aln['Seq'][::-1].translate(self.complement)
 
         # sequence, cor_counts, strand, start, end, feat1;feat2;feat3
-        self.alignments.append((read, bundle['corr_count'], aln['strand'], aln['start'], aln['end'],
+        self.alignments.append((read, bundle['corr_count'], aln['Strand'], aln['Start'], aln['End'],
                                 ';'.join(assignments)))
 
     def record_diagnostics(self, assignments, n_candidates, aln, bundle):
         """Records basic diagnostic info"""
 
         if len(assignments) == 0:
-            if aln['strand'] == '+':
+            if aln['Strand'] is True:
                 self.alignment_diags['Uncounted alignments (+)'] += 1
             else:
                 self.alignment_diags['Uncounted alignments (-)'] += 1

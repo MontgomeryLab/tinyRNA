@@ -85,25 +85,25 @@ def get_dir_checksum_tree(root_path: str) -> dict:
     return dir_tree
 
 
-def make_parsed_sam_record(name="0_count=1", seq="CAAGACAGAGCTTCACCGTTC", chrom='I', start=15064570, strand='+'):
+def make_parsed_sam_record(Name="0_count=1", Seq="CAAGACAGAGCTTCACCGTTC", Chrom='I', Start=15064570, Strand:bool = True):
     return {
-        "name": name,
-        "len": len(seq),
-        "seq": seq,
-        "nt5": seq[0] if strand == '+' else seq[-1].translate(complement),
-        "chrom": chrom,
-        "start": start,
-        "end": start + len(seq),
-        "strand": strand
+        "Name": Name,
+        "Length": len(Seq),
+        "Seq": Seq,
+        "nt5end": Seq[0] if Strand is True else Seq[-1].translate(complement),
+        "Chrom": Chrom,
+        "Start": Start,
+        "End": Start + len(Seq),
+        "Strand": Strand
     }
 
 
-def make_single_sam(name="read_id", strand="+", chrom="I", start=15064570, seq="CAAGACAGAGCTTCACCGTTC"):
-    if strand == '-':
+def make_single_sam(name="read_id", strand=True, chrom="I", start=15064570, seq="CAAGACAGAGCTTCACCGTTC"):
+    if strand is True:
+        flag = "0"
+    else:
         seq = seq.encode()[::-1].translate(complement)
         flag = "16"
-    else:
-        flag = "0"
 
     length = str(len(seq))
     header = '\t'.join(["@SQ", "SN:%s", "LN:%s"]) % (chrom, length)
@@ -131,6 +131,12 @@ def reset_mocks(mock_open_f, mock_os, mock_stdout):
 # The gzip module uses a buffered writer, so we need to reassemble the individual writes
 def reassemble_gz_w(mock_calls):
     return b''.join([x[1][0] for x in mock_calls if x[0] == '().write'])
+
+
+# Converts strand character to a boolean value
+def strand_to_bool(strand):
+    assert strand in ['+', '-']
+    return strand == '+'
 
 
 # For performing reverse complement

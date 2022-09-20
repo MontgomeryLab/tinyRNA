@@ -47,7 +47,7 @@ class SAM_reader:
             bundle, read_count = self._new_bundle(next(aln_iter))
 
             for aln in aln_iter:
-                if aln['name'] != bundle[0]['name']:
+                if aln['Name'] != bundle[0]['Name']:
                     yield bundle, read_count
                     bundle, read_count = self._new_bundle(aln)
                 else:
@@ -62,7 +62,7 @@ class SAM_reader:
 
         if self.collapser_type is not None:
             token = self.collapser_token
-            count = int(aln['name'].split(token)[-1])
+            count = int(aln['Name'].split(token)[-1])
         else:
             count = 1
 
@@ -91,24 +91,24 @@ class SAM_reader:
 
                 # Note: we assume sRNA sequencing data is NOT reversely stranded
                 if (int(cols[1]) & 16):
-                    strand = '-'
+                    strand = False  # -
                     try:
                         nt5 = complement[seq[-1]]
                     except KeyError:
                         nt5 = chr(seq[-1])
                 else:
-                    strand = '+'
+                    strand = True  # +
                     nt5 = chr(seq[0])
 
                 yield {
-                    "name": cols[0],
-                    "len": length,
-                    "seq": seq,
-                    "nt5": nt5,
-                    "chrom": cols[2].decode(),
-                    "start": start,
-                    "end": start + length,
-                    "strand": strand
+                    "Name": cols[0],
+                    "Length": length,
+                    "Seq": seq,
+                    "nt5end": nt5,
+                    "Chrom": cols[2].decode(),
+                    "Start": start,
+                    "End": start + length,
+                    "Strand": strand
                 }
         except Exception as e:
             # Append to error message while preserving exception provenance and traceback
@@ -239,7 +239,7 @@ def infer_strandedness(sam_file: str, intervals: dict) -> str:
     for count in range(1, 20000):
         try:
             rec = next(sample_read)
-            strandless = HTSeq.GenomicInterval(rec['chrom'], rec['start'], rec['end'])
+            strandless = HTSeq.GenomicInterval(rec['Chrom'], rec['Start'], rec['End'])
             sam_strand = rec['strand']
             gff_strand = ':'.join(unstranded[strandless].get_steps())
             gff_sam_map[sam_strand + gff_strand] += 1
@@ -535,7 +535,7 @@ class ReferenceTables:
                 self.alias[root_id].add(row_val)
 
     def get_matches_and_classes(self, row_attrs: CaseInsensitiveAttrs) -> Tuple[DefaultDict, set]:
-        """Grabs classes and match tuples from attributes that match identity rules"""
+        """Grabs classes and match tuples from attributes that match identity rules (Stage 1 Selection)"""
 
         row_attrs.setdefault("Class", ("_UNKNOWN_",))
         classes = {c for c in row_attrs["Class"]}
@@ -622,7 +622,7 @@ class ReferenceTables:
 
                 for sub_iv in merged_sub_ivs:
                     finalized_match_tuples = self.selector.build_interval_selectors(sub_iv, sorted_matches.copy())
-                    self.feats[sub_iv] += (tagged_id, sub_iv.strand, tuple(finalized_match_tuples))
+                    self.feats[sub_iv] += (tagged_id, sub_iv.strand == '+', tuple(finalized_match_tuples))
 
     @staticmethod
     def _merge_adjacent_subintervals(unmerged_sub_ivs: List[HTSeq.GenomicInterval]) -> list:
