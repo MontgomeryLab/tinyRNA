@@ -15,6 +15,15 @@ tinyRNA automatically handles file inputs when tiny-plot is called as a step in 
 | sample_avg_scatter_by_dge       | `--norm-counts FILE`</br>`--dge-tables FILE FILE FILE ...` | tiny-deseq.r</br>tiny-deseq.r |
 | sample_avg_scatter_by_dge_class | `--norm-counts FILE`</br>`--dge-tables FILE FILE FILE ...` | tiny-deseq.r</br>tiny-deseq.r |
 
+
+# Using the Plot Stylesheet
+Plots produced by tiny-plot are, by default, 300 dpi and at least 8 inches wide. In most cases you'll want to scale your plots down to fit the space available, and in doing so you might find that the default styles are no longer appropriate. Scaling and changing these styles can be tedious by hand, but you can use a Plot Stylesheet to do some of the work for you.
+
+1. Obtain a copy of the default configuration files, including the Plot Stylesheet, with the command `tiny get-template`.
+2. Open the Plot Stylesheet in a text editor and make the desired changes. See [the matplotlibrc file documentation](https://matplotlib.org/3.5.2/tutorials/introductory/customizing.html#the-default-matplotlibrc-file) for information about the available options. Save your changes to the file.
+3. In your Paths Sheet, enter the path to your modified stylesheet next to the `plot_style_sheet` key.
+4. In your terminal, navigate to the Run Directory whose plots you wish to redraw. Execute `tiny replot --config processed_run_config.yml`
+
 # Plot Types
 
 ## len_dist
