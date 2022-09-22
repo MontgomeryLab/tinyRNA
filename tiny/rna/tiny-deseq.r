@@ -110,7 +110,10 @@ library(ggplot2)
 library(utils)
 
 ## Returns a new dataframe with metadata columns prepended
+## Columns are rounded according to host preference
 df_with_metadata <- function(classless_df){
+  prec <- getOption('digits')
+  classless_df <- data.frame(rbind(format(round(classless_df, prec), digits=prec, nsmall=prec)))
   return(data.frame(
     merge(metadata, data.frame(classless_df), by=0),
     row.names = "Row.names",
@@ -165,7 +168,6 @@ write.csv(
   paste(out_pref, "norm_counts.csv", sep="_"),
   row.names=FALSE,
   quote=1:4,
-  na=""
 )
 
 if (has_control){
@@ -198,7 +200,7 @@ for (i in seq_len(nrow(all_comparisons))){
   comparison <- all_comparisons[i,]
 
   deseq_res <- DESeq2::results(deseq_run, c("condition", comparison[2], comparison[1]))
-  result_df <- df_with_metadata(deseq_res[order(deseq_res$padj),])
+  result_df <- df_with_metadata(data.frame(deseq_res[order(deseq_res$padj),]))
 
   # Resolve original condition names for use in output filename
   cond1 <- sampleConditions[[comparison[1]]]
