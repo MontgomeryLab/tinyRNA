@@ -296,8 +296,8 @@ def scatter_replicates(count_df: pd.DataFrame, samples: dict, output_prefix: str
             aqplt.set_scatter_ticks(rscat)
             rscat.set_title(samp)
             rep1, rep2 = pair[0].split('_rep_')[1], pair[1].split('_rep_')[1]
-            rscat.set_xlabel("Log$_{2}$ normalized reads in replicate " + rep1)
-            rscat.set_ylabel("Log$_{2}$ normalized reads in replicate " + rep2)
+            rscat.set_xlabel("Log$_{2}$ Normalized Reads in Replicate " + rep1)
+            rscat.set_ylabel("Log$_{2}$ Normalized Reads in Replicate " + rep2)
             pdf_name = make_filename([output_prefix, samp, 'replicates', rep1, rep2, 'scatter'], ext='.pdf')
             rscat.figure.savefig(pdf_name)
 
@@ -359,7 +359,7 @@ def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, show_un
             uniq_classes.remove('unknown')
 
         for pair in dges:
-            p1, p2 = pair.split("_vs_")
+            control_grp, experimental_grp = pair.split("_vs_")
             # Get list of differentially expressed features for this comparison pair
             dge_list = list(dges.index[dges[pair] < pval])
             # Create series of feature -> class relationships
@@ -368,12 +368,13 @@ def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, show_un
             grp_args = [class_dges.index[class_dges == cls].tolist() for cls in uniq_classes]
 
             labels = uniq_classes
-            sscat = aqplt.scatter_grouped(count_df.loc[:, p1], count_df.loc[:, p2], *grp_args, colors=class_colors,
-                                          pval=pval, view_lims=view_lims, labels=labels, rasterized=RASTER)
+            sscat = aqplt.scatter_grouped(count_df.loc[:, control_grp], count_df.loc[:, experimental_grp], *grp_args,
+                                          colors=class_colors, pval=pval, view_lims=view_lims, labels=labels,
+                                          rasterized=RASTER)
 
-            sscat.set_title('%s vs %s' % (p1, p2))
-            sscat.set_xlabel("Log$_{2}$ normalized reads in " + p1)
-            sscat.set_ylabel("Log$_{2}$ normalized reads in " + p2)
+            sscat.set_title('%s vs %s' % (experimental_grp, control_grp))  #
+            sscat.set_xlabel("Log$_{2}$ Normalized Reads in " + control_grp)
+            sscat.set_ylabel("Log$_{2}$ Normalized Reads in " + experimental_grp)
             sscat.get_legend().set_bbox_to_anchor((1, 1))
             pdf_name = make_filename([output_prefix, pair, 'scatter_by_dge_class'], ext='.pdf')
             sscat.figure.savefig(pdf_name)
@@ -381,16 +382,16 @@ def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, show_un
     else:
         for pair in dges:
             grp_args = list(dges.index[dges[pair] < pval])
-            p1, p2 = pair.split("_vs_")
+            control_grp, experimental_grp = pair.split("_vs_")
 
             labels = ['p < %g' % pval]
             colors = aqplt.assign_class_colors(labels)
-            sscat = aqplt.scatter_grouped(count_df.loc[:, p1], count_df.loc[:, p2], grp_args, colors=colors, alpha=0.5,
+            sscat = aqplt.scatter_grouped(count_df.loc[:, control_grp], count_df.loc[:, experimental_grp], grp_args, colors=colors, alpha=0.5,
                                           pval=pval, view_lims=view_lims, labels=labels, rasterized=RASTER)
 
-            sscat.set_title('%s vs %s' % (p1, p2))
-            sscat.set_xlabel("Log$_{2}$ normalized reads in " + p1)
-            sscat.set_ylabel("Log$_{2}$ normalized reads in " + p2)
+            sscat.set_title('%s vs %s' % (experimental_grp, control_grp))
+            sscat.set_xlabel("Log$_{2}$ Normalized Reads in " + control_grp)
+            sscat.set_ylabel("Log$_{2}$ Normalized Reads in " + experimental_grp)
             pdf_name = make_filename([output_prefix, pair, 'scatter_by_dge'], ext='.pdf')
             sscat.figure.savefig(pdf_name)
 
