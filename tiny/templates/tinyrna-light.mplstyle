@@ -10,17 +10,17 @@ figure.edgecolor: 0.50
 scatter.marker: o
 
 #### Tick styles ####
-xtick.color: 333333
+xtick.color: 000000
 xtick.direction: out
-ytick.color: 333333
+ytick.color: 000000
 ytick.direction: out
 
 xtick.major.size: 3.0
 ytick.major.size: 3.0
 xtick.minor.size: 1.5
 ytick.minor.size: 1.5
-xtick.major.width: 0.8
-ytick.major.width: 0.8
+xtick.major.width: 0.3
+ytick.major.width: 0.3
 xtick.minor.width: 0.6
 ytick.minor.width: 0.6
 
@@ -31,13 +31,13 @@ xtick.labelsize: 16
 ytick.labelsize: 16
 
 #### Axes basics ####
-axes.labelsize: 16
-axes.titlesize: 16
+axes.labelsize: 24
+axes.titlesize: 24
 axes.facecolor: white
-axes.edgecolor: 333333
-axes.linewidth: 1
+axes.edgecolor: 000000
+axes.linewidth: 0.5
 axes.grid: True
-axes.labelcolor: 333333
+axes.labelcolor: 000000
 axes.labelpad: 4.0
 axes.axisbelow: True
 axes.autolimit_mode: round_numbers
@@ -69,7 +69,7 @@ font.size: 10
 mathtext.default: regular
 
 #### Line style ####
-lines.linewidth: 1.0
+lines.linewidth: 0.5
 lines.markersize: 3.25
 lines.markeredgewidth: 0
 
@@ -91,7 +91,7 @@ axes.prop_cycle: cycler('color', ['F1605D', '51B9CF', 'FDC010', 'A5D38E', 'ED289
 
 #### Grid style ####
 grid.color: 333333
-grid.linestyle: --
-grid.linewidth: 0.8
+grid.linestyle: :
+grid.linewidth: 0.3
 grid.alpha: 0.2
 
