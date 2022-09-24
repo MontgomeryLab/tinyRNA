@@ -28,10 +28,26 @@ tinyRNA is a set of tools to simplify the analysis of next-generation sequencing
 
 ## Installation
 
-A setup script has been provided for easy installation of tinyRNA. The project and its dependencies will be installed in a conda environment named `tinyrna` after running the following commands in your terminal:
+A setup script has been provided for easy installation of tinyRNA. First, download the latest release of tinyRNA from the [Releases link](https://github.com/MontgomeryLab/tinyRNA/releases) on the right sidebar. Decompress the downloaded file and navigate to the resulting directory in your terminal, then execute the setup script:
 
 ```shell
-# Clone the repository into a local directory
+# Change into the tinyRNA directory (include path relative to your working directory)
+ cd tinyRNA-1.0.1
+
+# Install the tinyrna environment and dependencies
+ ./setup.sh
+
+# This will install the project and its dependencies in a conda environment named `tinyrna`.
+```
+
+If the installation script runs the Miniconda installer:
+- Press "q" if you find yourself trapped on the license page
+- We recommend answering "yes" to running `conda init`
+
+Alternatively, to install the latest development of tinyRNA, which is not subject to as rigorous of testing but may contain features lacking in the latest release, within your terminal clone the repository using git:
+
+```shell
+# Clone the repository into a local directory and change into the tinyRNA directory
  git clone https://github.com/MontgomeryLab/tinyrna.git
  cd tinyrna
 
@@ -39,10 +55,6 @@ A setup script has been provided for easy installation of tinyRNA. The project a
 # A custom environment name can also be passed as a command line argument
  ./setup.sh
 ```
-
-If the installation script runs the Miniconda installer:
-- Press "q" if you find yourself trapped on the license page
-- We recommend answering "yes" to running `conda init`
 
 ## Usage
 
@@ -78,15 +90,14 @@ tiny get-template
 
 ### Requirements for User-Provided Input Files
 
-| Input Type                                                                 | File Extension          | Requirements                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-|----------------------------------------------------------------------------|-------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Reference annotations<br/>[(example)](START_HERE/reference_data/ram1.gff3) | GFF3 / GFF2 / GTF       | Column 9 attributes (defined as "tag=value" or "tag "):<ul><li>Each feature's `ID` tag is required</li><li>Feature classes can be defined with the `Class` tag. If undefined, the default value \__UNKNOWN_\_ will be used.</li><li>Discontinuous features must be defined with the `Parent` tag whose value is the logical parent's `ID`, or by sharing the same `ID`.</li><li>Attribute values containing commas must represent lists</li><li>All features must be stranded</li><li>See the example link (left) for col. 9 formatting</li></ul> |
-| Sequencing data<br/>[(example)](START_HERE/fastq_files)                    | FASTQ(.gz) <sup>1</sup> | Files must be demultiplexed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| Reference genome<br/>[(example)](START_HERE/reference_data/ram1.fa)        | FASTA                   | Chromosome identifiers (e.g. Chr1): <ul><li>Must match your reference annotation file chromosome identifiers</li><li>Are case sensitive</li></ul>                                                                                                                                                                                                                                                                                                                                                                                                 |
-| Bowtie indexes (optional) <sup>2</sup>                                     | ebwt                    | Must be small indexes (.ebwtl indexes are not supported)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Input Type                                                                 | File Extension    | Requirements                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+|----------------------------------------------------------------------------|-------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Reference annotations<br/>[(example)](START_HERE/reference_data/ram1.gff3) | GFF3 / GFF2 / GTF | Column 9 attributes (defined as "tag=value" or "tag "):<ul><li>Each feature's `ID` tag is required</li><li>Feature classes can be defined with the `Class` tag. If undefined, the default value \__UNKNOWN_\_ will be used.</li><li>Discontinuous features must be defined with the `Parent` tag whose value is the logical parent's `ID`, or by sharing the same `ID`.</li><li>Attribute values containing commas must represent lists</li><li>All features must be stranded</li><li>See the example link (left) for col. 9 formatting</li></ul> |
+| Sequencing data<br/>[(example)](START_HERE/fastq_files)                    | FASTQ(.gz)        | Files must be demultiplexed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Reference genome<br/>[(example)](START_HERE/reference_data/ram1.fa)        | FASTA             | Chromosome identifiers (e.g. Chr1): <ul><li>Must match your reference annotation file chromosome identifiers</li><li>Are case sensitive</li></ul>                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Bowtie indexes (optional) <sup>1</sup>                                     | ebwt              | Must be small indexes (.ebwtl indexes are not supported)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
-<br/><sup>1</sup> `tiny-count` accepts SAM files via your **Samples Sheet** when invoked as an individual step, but they must have been produced by the pipeline. SAM files from other sources are not currently supported. 
-<br/><sup>2</sup> Bowtie indexes can be created for you. See the [configuration file documentation](doc/Configuration.md#building-bowtie-indexes).
+<br/><sup>1</sup> Bowtie indexes can be created for you. See the [configuration file documentation](doc/Configuration.md#building-bowtie-indexes).
 
 ### Running an End-to-End Analysis
 In most cases you will use this toolset as an end-to-end pipeline. This will run a full, standard small RNA sequencing data analysis according to your configuration file. Before starting, you will need the following:

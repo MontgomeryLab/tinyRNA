@@ -17,6 +17,7 @@ inputs:
   ebwt:
     type: string
     inputBinding:
+      prefix: -x
       position: 23
     doc: "The basename of the index to be searched."
 
@@ -28,9 +29,8 @@ inputs:
   reads:
     type: File
     inputBinding:
-      itemSeparator: ","
       position: 24
-    doc: "Comma-separated list of files containing unpaired reads"
+    doc: "File containing unpaired reads"
 
   outfile:
     type: string

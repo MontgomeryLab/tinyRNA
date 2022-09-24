@@ -44,8 +44,8 @@ class FeatureCounter:
 
         try:
             feat_matches = feat_matches.union(*(
-                    Features.chrom_vectors[al['chrom']]['.']  # GenomicArrayOfSets -> ChromVector
-                             .array[al['start']:al['end']]    # ChromVector -> StepVector
+                    Features.chrom_vectors[al['Chrom']]['.']  # GenomicArrayOfSets -> ChromVector
+                             .array[al['Start']:al['End']]    # ChromVector -> StepVector
                              .get_steps(values_only=True)))   # StepVector -> {features}
         except KeyError as ke:
             self.stats.chrom_misses[ke.args[0]] += 1
@@ -63,8 +63,8 @@ class FeatureCounter:
         self.stats.assign_library(library)
 
         # For each sequence in the sam file...
-        for bundle in read_seq:
-            bstat = self.stats.count_bundle(bundle)
+        for bundle, read_count in read_seq:
+            bstat = self.stats.count_bundle(bundle, read_count)
 
             # For each alignment of the given sequence...
             for alignment in bundle:
@@ -131,45 +131,30 @@ class FeatureSelector:
             selections: a set of features which passed selection
         """
 
+        # Stage 2
         hits = [(rank, rule, feat, strand)
                 for feat, strand, matches in candidates
                 for rule, rank, iv_match in matches
                 if alignment in iv_match]
 
         if not hits: return {}
-        selections = defaultdict(set)
-        min_rank = min(hits, key=lambda x: x[0])[0]
+        hits.sort(key=lambda x: x[0])
 
+        # Stage 3
+        min_rank = None
+        selections = defaultdict(set)
         for rank, rule, feat, strand in hits:
-            if rank != min_rank: continue
+            if min_rank is not None and rank != min_rank: break
 
             rule_def = FeatureSelector.rules_table[rule]
             if alignment['nt5end'] not in rule_def["nt5end"]: continue
             if alignment['Length'] not in rule_def["Length"]: continue
             if alignment['Strand'] ^ strand not in rule_def["Strand"]: continue
+
             selections[feat].add(rule)
+            min_rank = rank
 
         return selections
-
-    """
-    # MEGAZORD list comprehension??:
-        required = FeatureSelector.rules_table
-        min_rank = min(rank for _, _, matches in candidates for _, rank, _ in matches)
-        hits = [(rank, rule, feat)
-                 for feat, strand, matches in candidates
-                 for rule, rank, iv_match in matches
-                 if rank == min_rank
-                 if alignment in iv_match
-                 if alignment['nt5end'] in required[rule]['nt5end']
-                 if alignment['Length'] in required[rule]['Length']
-                 if (strand ^ alignment['Strand']) in required[rule]["Strand"]]
-
-        selections = defaultdict(set)
-        for rank, rule, feat in hits:
-            selections[feat].add(rule)
-
-        return selections
-    """
 
     @staticmethod
     def build_selectors(rules_table) -> List[dict]:

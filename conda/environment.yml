@@ -18,5 +18,6 @@ dependencies:
   - conda-forge::mscorefonts==0.0.1
   - conda-forge::psutil==5.9.1
   - conda-forge::r-base==4.1.1
-  - pip:
-    - ../ # Install tinyRNA via setup.py
+  # tinyRNA codebase must be installed via pip in root project dir
+variables:
+  - PYTHONNOUSERSITE: 1

@@ -248,9 +248,10 @@ def get_sample_rep_dict(df: pd.DataFrame) -> dict:
     """
 
     sample_dict = defaultdict(list)
+    non_numeric_cols = ["Feature Class", "Feature Name"]
 
     for col in df.columns:
-        if col == "Feature Class": continue
+        if col in non_numeric_cols: continue
         sample = col.split("_rep_")[0]
         sample_dict[sample].append(col)
 
@@ -290,7 +291,7 @@ def scatter_replicates(count_df: pd.DataFrame, samples: dict, output_prefix: str
     for samp, reps in samples.items():
         for pair in itertools.combinations(reps, 2):
             rscat = aqplt.scatter_simple(count_df.loc[:,pair[0]], count_df.loc[:,pair[1]],
-                                         color='#B3B3B3', alpha=0.5, log_norm=True, rasterized=RASTER)
+                                         color='#B3B3B3', alpha=0.5, rasterized=RASTER)
             aqplt.set_square_scatter_view_lims(rscat, view_lims)
             aqplt.set_scatter_ticks(rscat)
             rscat.set_title(samp)
@@ -346,10 +347,12 @@ def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, show_un
         output_prefix: A string to use as a prefix for saving files
         classes: An optional dataframe of class(es) per feature. If provided, points are grouped by class
         show_unknown: If true, class "unknown" will be included if highlighting by classes
+        pval: The pvalue threshold for determining the outgroup
     """
 
     if classes is not None:
-        uniq_classes = sorted(list(pd.unique(classes)))
+        uniq_classes = sorted(list(pd.unique(classes)), key=str.lower)
+        class_colors = aqplt.assign_class_colors(uniq_classes)
         aqplt.set_dge_class_legend_style()
 
         if not show_unknown and 'unknown' in uniq_classes:
@@ -357,18 +360,17 @@ def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, show_un
 
         for pair in dges:
             p1, p2 = pair.split("_vs_")
+            # Get list of differentially expressed features for this comparison pair
             dge_list = list(dges.index[dges[pair] < pval])
+            # Create series of feature -> class relationships
             class_dges = classes.loc[dge_list]
-
+            # Gather lists of features by class (listed in order corresponding to unique_classes)
             grp_args = [class_dges.index[class_dges == cls].tolist() for cls in uniq_classes]
 
-            layer_order = np.argsort([len(grp) for grp in grp_args])[::-1]
-            sorted_grps = [grp_args[i] for i in layer_order]
-            sorted_clss = [uniq_classes[i] for i in layer_order]
+            labels = uniq_classes
+            sscat = aqplt.scatter_grouped(count_df.loc[:, p1], count_df.loc[:, p2], *grp_args, colors=class_colors,
+                                          pval=pval, view_lims=view_lims, labels=labels, rasterized=RASTER)
 
-            labels = ['p ≥ %g' % pval] + sorted_clss
-            sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2], view_lims, *sorted_grps,
-                                          log_norm=True, labels=labels, rasterized=RASTER)
             sscat.set_title('%s vs %s' % (p1, p2))
             sscat.set_xlabel("Log$_{2}$ normalized reads in " + p1)
             sscat.set_ylabel("Log$_{2}$ normalized reads in " + p2)
@@ -381,9 +383,11 @@ def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, show_un
             grp_args = list(dges.index[dges[pair] < pval])
             p1, p2 = pair.split("_vs_")
 
-            labels = ['p ≥ %g' % pval, 'p < %g' % pval]
-            sscat = aqplt.scatter_grouped(count_df.loc[:,p1], count_df.loc[:,p2], view_lims, grp_args,
-                                          log_norm=True, labels=labels, alpha=0.5, rasterized=RASTER)
+            labels = ['p < %g' % pval]
+            colors = aqplt.assign_class_colors(labels)
+            sscat = aqplt.scatter_grouped(count_df.loc[:, p1], count_df.loc[:, p2], grp_args, colors=colors, alpha=0.5,
+                                          pval=pval, view_lims=view_lims, labels=labels, rasterized=RASTER)
+
             sscat.set_title('%s vs %s' % (p1, p2))
             sscat.set_xlabel("Log$_{2}$ normalized reads in " + p1)
             sscat.set_ylabel("Log$_{2}$ normalized reads in " + p2)

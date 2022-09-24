@@ -1,9 +1,11 @@
 import collections
+import contextlib
 import unittest
-from random import randint
-
 import HTSeq
+import io
+
 from copy import deepcopy
+from random import randint
 from unittest.mock import patch, mock_open, call
 
 from tiny.rna.counter.features import FeatureSelector
@@ -62,17 +64,17 @@ class MyTestCase(unittest.TestCase):
     """Did SAM_reader correctly skip header values and parse all pertinent info from a single record SAM file?"""
 
     def test_sam_reader(self):
-        sam_bundle = next(SAM_reader().bundle_multi_alignments(self.short_sam_file))
+        sam_bundle, read_count = next(SAM_reader().bundle_multi_alignments(self.short_sam_file))
         sam_record = sam_bundle[0]
 
-        self.assertEqual(sam_record['chrom'], "I")
-        self.assertEqual(sam_record['start'], 15064569)
-        self.assertEqual(sam_record['end'], 15064590)
-        self.assertEqual(sam_record['strand'], '-')
-        self.assertEqual(sam_record['name'], "0_count=5")
-        self.assertEqual(sam_record['seq'], b"CAAGACAGAGCTTCACCGTTC")
-        self.assertEqual(sam_record['len'], 21)
-        self.assertEqual(sam_record['nt5'], 'G')
+        self.assertEqual(sam_record['Chrom'], "I")
+        self.assertEqual(sam_record['Start'], 15064569)
+        self.assertEqual(sam_record['End'], 15064590)
+        self.assertEqual(sam_record['Strand'], False)
+        self.assertEqual(sam_record['Name'], b"0_count=5")
+        self.assertEqual(sam_record['Seq'], b"CAAGACAGAGCTTCACCGTTC")
+        self.assertEqual(sam_record['Length'], 21)
+        self.assertEqual(sam_record['nt5end'], 'G')
 
     """Does our custom SAM parser produce the same pertinent info as HTSeq's BAM_reader?
     
@@ -87,19 +89,19 @@ class MyTestCase(unittest.TestCase):
         ours = SAM_reader().bundle_multi_alignments(file)
         theirs = HTSeq.bundle_multiple_alignments(HTSeq.BAM_Reader(file))
 
-        for our_bundle, their_bundle in zip(ours, theirs):
+        for (our_bundle, _), their_bundle in zip(ours, theirs):
             self.assertEqual(len(our_bundle), len(their_bundle))
             for our, their in zip(our_bundle, their_bundle):
-                self.assertEqual(our['chrom'], their.iv.chrom)
-                self.assertEqual(our['start'], their.iv.start)
-                self.assertEqual(our['end'], their.iv.end)
-                self.assertEqual(our['name'], their.read.name)
-                self.assertEqual(our['nt5'], chr(their.read.seq[0]))  # See note above
-                self.assertEqual(our['strand'], their.iv.strand)
-                if our['strand'] == '-':                              # See note above
-                    self.assertEqual(our['seq'][::-1].translate(helpers.complement), their.read.seq)
+                self.assertEqual(our['Chrom'], their.iv.chrom)
+                self.assertEqual(our['Start'], their.iv.start)
+                self.assertEqual(our['End'], their.iv.end)
+                self.assertEqual(our['Name'].decode(), their.read.name)
+                self.assertEqual(our['nt5end'], chr(their.read.seq[0]))  # See note above
+                self.assertEqual(our['Strand'], helpers.strand_to_bool(their.iv.strand))
+                if our['Strand'] is False:                               # See note above
+                    self.assertEqual(our['Seq'][::-1].translate(helpers.complement), their.read.seq)
                 else:
-                    self.assertEqual(our['seq'], their.read.seq)
+                    self.assertEqual(our['Seq'], their.read.seq)
 
     """Were only the correct attribute keys present in the parser result?"""
 
@@ -148,7 +150,7 @@ class MyTestCase(unittest.TestCase):
 
         tagged_feat_id = ("Gene:WBGene00023193", '')
         self.assertEqual((type(feats), type(alias), type(classes)), (HTSeq.GenomicArrayOfSets, dict, dict))
-        self.assertEqual(steps, [{(("Gene:WBGene00023193", ''), '-', ((1, 2, IntervalPartialMatch(iv)),))}])
+        self.assertEqual(steps, [{(("Gene:WBGene00023193", ''), False, ((1, 2, IntervalPartialMatch(iv)),))}])
         self.assertEqual(alias, {"Gene:WBGene00023193": ('Y74C9A.6',)})
         self.assertEqual(classes, {"Gene:WBGene00023193": ('additional_class', 'unknown')})
 
@@ -171,7 +173,7 @@ class MyTestCase(unittest.TestCase):
         steps = list(feats[iv].array[iv.start:iv.end].get_steps(values_only=True))
 
         self.assertEqual((type(feats), type(alias), type(classes)), (HTSeq.GenomicArrayOfSets, dict, dict))
-        self.assertEqual(steps, [{(("Gene:WBGene00023193", ''), '-', ((1, 2, IntervalPartialMatch(iv)),))}])
+        self.assertEqual(steps, [{(("Gene:WBGene00023193", ''), False, ((1, 2, IntervalPartialMatch(iv)),))}])
         self.assertEqual(alias, {"Gene:WBGene00023193": ('Y74C9A.6',)})
         self.assertEqual(classes, {"Gene:WBGene00023193": ('additional_class', 'unknown')})
 
@@ -256,7 +258,7 @@ class MyTestCase(unittest.TestCase):
 
         expected_matches = [
             set(),
-            {(('Gene:WBGene00023193', ''), '-', ((0, 1, ivm), (1, 2, ivm), (2, 3, ivm)))},
+            {(('Gene:WBGene00023193', ''), False, ((0, 1, ivm), (1, 2, ivm), (2, 3, ivm)))},
             set()
         ]
 
@@ -346,18 +348,18 @@ class MyTestCase(unittest.TestCase):
         # For tables that store features in tagged form
         GrandParent, Parent2, Sibling = ('GrandParent',''), ('Parent2',''), ('Sibling','')
 
-        expected = [{(GrandParent, '-', rule1_gp['0:20'])},
-                    {(GrandParent, '-', rule1_gp['0:20']),  (Parent2,     '-', rule1_p2["19:30"])},
-                    {(Parent2,     '-', rule1_p2["19:30"])},
-                    {(Parent2,     '-', rule1_p2["19:30"]), (GrandParent, '-', rule1_gp['29:40'])},
-                    {(GrandParent, '-', rule1_gp['29:40'])},
-                    {(GrandParent, '-', rule1_gp['29:40']), (Parent2,     '-', rule1_p2['39:50'])},
-                    {(Parent2,     '-', rule1_p2['39:50'])},
+        expected = [{(GrandParent, False, rule1_gp['0:20'])},
+                    {(GrandParent, False, rule1_gp['0:20']),  (Parent2,     False, rule1_p2["19:30"])},
+                    {(Parent2,     False, rule1_p2["19:30"])},
+                    {(Parent2,     False, rule1_p2["19:30"]), (GrandParent, False, rule1_gp['29:40'])},
+                    {(GrandParent, False, rule1_gp['29:40'])},
+                    {(GrandParent, False, rule1_gp['29:40']), (Parent2,     False, rule1_p2['39:50'])},
+                    {(Parent2,     False, rule1_p2['39:50'])},
                     set(),
-                    {(Sibling,     '-', (rule3_sib['99:110'],  rule2_sib['99:110']))},  # Note: sorted by rank, not rule index
-                    {(Sibling,     '-', (rule3_sib['110:120'], rule2_sib['110:120']))},
+                    {(Sibling,     False, (rule3_sib['99:110'],  rule2_sib['99:110']))},  # Note: sorted by rank, not rule index
+                    {(Sibling,     False, (rule3_sib['110:120'], rule2_sib['110:120']))},
                     set(),
-                    {(Sibling,     '-', (rule3_sib['139:150'], rule2_sib['139:150']))},
+                    {(Sibling,     False, (rule3_sib['139:150'], rule2_sib['139:150']))},
                     set()]
 
         feats, _, _, _ = ReferenceTables(feature_source, feature_selector, **rt_kwargs).get()
@@ -393,7 +395,7 @@ class MyTestCase(unittest.TestCase):
 
         child2_iv =     HTSeq.GenomicInterval('I', 39, 50, '-')
         exp_alias =     {'Child2': ('Child2Name',)}
-        exp_feats =     [set(), {(('Child2', ''), '-', ((0, 0, IntervalPartialMatch(child2_iv)),))}, set()]
+        exp_feats =     [set(), {(('Child2', ''), False, ((0, 0, IntervalPartialMatch(child2_iv)),))}, set()]
         exp_intervals = {'Child2': [child2_iv]}
         exp_classes =   {'Child2': ('NA',)}
         exp_filtered =  {"GrandParent", "ParentWithGrandparent", "Parent2", "Child1", "Sibling"}
@@ -421,7 +423,7 @@ class MyTestCase(unittest.TestCase):
 
         child1_iv =     HTSeq.GenomicInterval('I', 29, 40, '-')
         exp_alias =     {'Child1': ('SharedName',)}
-        exp_feats =     [set(), {(('Child1', ''), '-', ((0, 0, IntervalPartialMatch(child1_iv)),))}, set()]
+        exp_feats =     [set(), {(('Child1', ''), False, ((0, 0, IntervalPartialMatch(child1_iv)),))}, set()]
         exp_intervals = {'Child1': [child1_iv]}
         exp_classes =   {'Child1': ('NA',)}
         exp_filtered =  {"GrandParent", "ParentWithGrandparent", "Parent2", "Child2", "Sibling"}
@@ -480,8 +482,8 @@ class MyTestCase(unittest.TestCase):
         iv = IntervalPartialMatch(HTSeq.GenomicInterval('n/a', 3746, 3909))
         expected_feats = [
             set(), {
-                ((feat_id, 'tagged_match'), '-', ((0, 1, iv),)),
-                ((feat_id, ''),             '-', ((1, 2, iv),))
+                ((feat_id, 'tagged_match'), False, ((0, 1, iv),)),
+                ((feat_id, ''),             False, ((1, 2, iv),))
             },
             set()
         ]
@@ -514,12 +516,12 @@ class MyTestCase(unittest.TestCase):
         Child2_iv = IntervalPartialMatch(HTSeq.GenomicInterval('n/a', 39, 50))
         expected_feats = [
             set(), {
-                (('Parent2', 'shared'), '-', ((0, 1, Parent2_iv), (1, 2, Parent2_iv))),
-                (('Parent2', ''),       '-', ((2, 3, Parent2_iv),)),
+                (('Parent2', 'shared'), False, ((0, 1, Parent2_iv), (1, 2, Parent2_iv))),
+                (('Parent2', ''),       False, ((2, 3, Parent2_iv),)),
             },
             set(), {
-                (('Parent2', 'shared'), '-', ((0, 1, Child2_iv), (1, 2, Child2_iv))),
-                (('Parent2', ''),       '-', ((2, 3, Child2_iv),))
+                (('Parent2', 'shared'), False, ((0, 1, Child2_iv), (1, 2, Child2_iv))),
+                (('Parent2', ''),       False, ((2, 3, Child2_iv),))
             },
             set()
         ]
@@ -542,7 +544,7 @@ class MyTestCase(unittest.TestCase):
 
         self.assertEqual(sam_out, "sam_file_decollapsed.sam")
 
-    """Does SAM_reader._read_thru_header() correctly identify header lines and write them to the decollapsed file?"""
+    """Does SAM_reader._read_to_first_aln() correctly identify header lines and write them to the decollapsed file?"""
 
     def test_SAM_reader_read_thru_header(self):
         reader = SAM_reader(decollapse=True)
@@ -550,7 +552,7 @@ class MyTestCase(unittest.TestCase):
 
         with open(self.short_sam_file, 'rb') as sam_in:
             with patch('builtins.open', mock_open()) as sam_out:
-                line = reader._read_thru_header(sam_in)
+                line = reader._read_to_first_aln(sam_in)
 
         expected_writelines = [
             call('mock_outfile_name.sam', 'w'),
@@ -560,12 +562,13 @@ class MyTestCase(unittest.TestCase):
         ]
 
         sam_out.assert_has_calls(expected_writelines)
-        self.assertTrue(len(reader._headers) == 1)
+        self.assertTrue(len(reader._header_lines) == 1)
 
     """Does SAM_reader._write_decollapsed_sam() write the correct number of duplicates to the decollapsed file?"""
 
     def test_SAM_reader_write_decollapsed_sam(self):
         reader = SAM_reader(decollapse=True)
+        reader.collapser_type = "tiny-collapse"
         reader._decollapsed_reads = [(b"0_count=5", b"mock line from SAM file")]
         reader._decollapsed_filename = "mock_outfile_name.sam"
 
@@ -600,6 +603,42 @@ class MyTestCase(unittest.TestCase):
                 sam_in.seek(0)
                 self.exhaust_iterator(reader._parse_alignments(sam_in))
                 write_fn.assert_called_once()
+
+    """Does SAM_reader report a single read count for non-collapsed SAM records?"""
+
+    def test_SAM_reader_single_readcount_non_collapsed_SAM(self):
+        # Read non-collapsed.sam but duplicate its single record twice
+        with open(f"{resources}/non-collapsed.sam", 'rb') as f:
+            sam_lines = f.readlines()
+            sam_lines.extend([sam_lines[1]] * 2)
+            mock_file = mock_open(read_data=b''.join(sam_lines))
+
+        with patch('tiny.rna.counter.hts_parsing.open', new=mock_file):
+            reader = SAM_reader()
+            bundle, read_count = next(reader.bundle_multi_alignments('mock_file'))
+
+        self.assertEqual(bundle[0]['Name'], b'NON_COLLAPSED_QNAME')
+        self.assertEqual(len(bundle), 3)
+        self.assertEqual(read_count, 1)
+
+    """Are decollapsed outputs skipped when non-collapsed SAM files are supplied?"""
+
+    def test_SAM_reader_no_decollapse_non_collapsed_SAM_files(self):
+        stdout_capture = io.StringIO()
+        with patch.object(SAM_reader, "_write_decollapsed_sam") as write_sam, \
+                patch.object(SAM_reader, "_write_header_for_decollapsed_sam") as write_header:
+
+            with contextlib.redirect_stderr(stdout_capture):
+                reader = SAM_reader(decollapse=True)
+                records = reader.bundle_multi_alignments(f"{resources}/non-collapsed.sam")
+                self.exhaust_iterator(records)
+
+        write_sam.assert_not_called()
+        write_header.assert_not_called()
+        self.assertEqual(reader.collapser_type, None)
+        self.assertEqual(stdout_capture.getvalue(),
+                         "Alignments do not appear to be derived from a supported collapser input. "
+                         "Decollapsed SAM files will therefore not be produced.\n")
 
     """Does CaseInsensitiveAttrs correctly store, check membership, and retrieve?"""
 

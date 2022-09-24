@@ -124,8 +124,9 @@ class ConfigBase:
 
         return run_dir
 
-    def get_outfile_path(self, infile: str) -> str:
-        """Prepend date+time to the Config File name. Change its path to reside in the Run Directory."""
+    def get_outfile_path(self, infile: str = None) -> str:
+        """Returns the path and filename for the processed run config"""
+        if infile is None: infile = self.inf
         return self.joinpath(self['run_directory'], os.path.basename(infile))
 
     def write_processed_config(self, filename: str = None) -> str:
@@ -184,7 +185,7 @@ class Configuration(ConfigBase):
             path_to_input = self.paths.from_here(input_file_path)
             return self.cwl_file(path_to_input)
 
-        for absorb_key in ['ebwt', 'plot_style_sheet', 'adapter_fasta']:
+        for absorb_key in ['ebwt', 'plot_style_sheet', 'adapter_fasta', 'tmp_directory']:
             self[absorb_key] = self.paths[absorb_key]
         self['run_directory'] = self.paths.from_here(self.paths['run_directory'])
 
