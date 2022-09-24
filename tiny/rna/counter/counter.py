@@ -60,8 +60,16 @@ def get_args():
     optional_args.add_argument('-d', '--report-diags', action='store_true',
                                help='Produce diagnostic information about uncounted/eliminated '
                                     'selection elements.')
+
+    # Beta arguments
     optional_args.add_argument('-sv', '--step-vector', choices=['Cython', 'HTSeq'], default='Cython',
                                help='Select which StepVector is used for interval -> feature resolution.')
+    optional_args.add_argument('-id', '--id-attr', metavar='KEY', default="id",
+                               help="Set the column 9 attribute key that should serve as the ID "
+                                    "attribute. This is usually 'id' or 'gene_id'.")
+    optional_args.add_argument('-md', '--multi-id', action='store_true',
+                               help="Don't treat features with multiple ID values as an error. "
+                                    "Only the first value will be used as the feature's ID.")
 
     args = arg_parser.parse_args()
     setattr(args, 'normalize_by_hits', args.normalize_by_hits.lower() in ['t', 'true'])

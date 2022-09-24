@@ -53,6 +53,21 @@ inputs:
     inputBinding:
       prefix: -dc
 
+  id_attr:
+    type: string?
+    inputBinding:
+      prefix: -id
+
+  stepvector:
+    type: string?
+    inputBinding:
+      prefix: -sv
+
+  multi_id:
+    type: boolean?
+    inputBinding:
+      prefix: -md
+
   all_features:
     type: boolean?
     inputBinding:

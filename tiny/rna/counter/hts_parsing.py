@@ -362,6 +362,8 @@ class ReferenceTables:
 
     def __init__(self, gff_files: Dict[str, list], feature_selector, **prefs):
         self.all_features = prefs.get('all_features', False)
+        self.multi_id = prefs.get('multi_id', False)
+        self.id_attr = prefs.get('id_attr', 'ID')
         self.selector = feature_selector
         self._set_filters(**prefs)
         self.gff_files = gff_files
@@ -614,15 +616,14 @@ class ReferenceTables:
         if chrom not in self.feats.chrom_vectors:
             self.feats.add_chrom(chrom)
 
-    @staticmethod
-    def get_feature_id(row):
-        id_collection = row.attr.get("ID", None)
+    def get_feature_id(self, row):
+        id_collection = row.attr.get(self.id_attr, None)
 
         if id_collection is None:
             raise ValueError(f"Feature {row.name} does not contain an ID attribute.")
         if len(id_collection) == 0:
             raise ValueError("A feature's ID attribute cannot be empty. This value is required.")
-        if len(id_collection) > 1:
+        if len(id_collection) > 1 and not self.multi_id:
             err_msg = "A feature's ID attribute cannot contain multiple values. Only one ID per feature is allowed."
             raise ValueError(err_msg)
 

@@ -82,10 +82,13 @@ inputs:
   aligned_seqs: File[]?
   is_pipeline: boolean?
   counter_diags: boolean?
+  counter_id_attr: string?
   counter_decollapse: boolean?
+  counter_stepvector: string?
   counter_all_features: boolean?
   counter_type_filter: string[]?
   counter_source_filter: string[]?
+  counter_allow_multi_id: boolean?
   counter_normalize_by_hits: boolean?
 
   # deseq inputs
@@ -208,11 +211,14 @@ steps:
       out_prefix: run_name
       all_features: counter_all_features
       source_filter: counter_source_filter
+      type_filter: counter_type_filter
       normalize_by_hits:
         source: counter_normalize_by_hits
         valueFrom: $(String(self))  # convert boolean -> string
       decollapse: counter_decollapse
-      type_filter: counter_type_filter
+      id_attr: counter_id_attr
+      multi_id: counter_allow_multi_id
+      stepvector: counter_stepvector
       is_pipeline: {default: true}
       diagnostics: counter_diags
       fastp_logs: preprocessing/json_report_file
