@@ -448,9 +448,15 @@ class ReferenceTables:
         self.gff_files = gff_files
         # ----------------------------------------------------------- Primary Key:
         if prefs['step_vector'] == 'Cython':
-            from tiny.rna.counter.stepvector import StepVector
-            setattr(HTSeq.StepVector, 'StepVector', StepVector)
-            self.feats = HTSeq.GenomicArray("auto", stranded=False)         # Root Match ID
+            try:
+                from tiny.rna.counter.stepvector import StepVector
+                setattr(HTSeq.StepVector, 'StepVector', StepVector)
+                self.feats = HTSeq.GenomicArray("auto", stranded=False)     # Root Match ID
+            except ModuleNotFoundError:
+                print("The Cython StepVector has not yet been built.\n"
+                      "Run: python setup.py build_ext --inplace",
+                      file=sys.stderr)
+                sys.exit(1)
         else:
             self.feats = HTSeq.GenomicArrayOfSets("auto", stranded=False)   # Root Match ID
 
