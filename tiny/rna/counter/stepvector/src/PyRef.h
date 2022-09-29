@@ -2,13 +2,21 @@
 #include <iostream>
 #include <cstring>
 
+//#define DEBUG
+
 namespace PyPtr {
     class PyRef {
         PyObject* obj;
-        bool debug = false;
 
         public:
-            PyObject* get() const {return obj;}
+            PyObject* get() const {
+                #ifdef DEBUG
+                    std::cout << "Retrieve: ";
+                    PyObject_Print(obj, stdout, 0);
+                    std::cout << " (obj: " << obj << ")" << std::endl;
+                #endif
+                return obj;
+            }
 
             // Default constructor
             PyRef() {
@@ -28,15 +36,20 @@ namespace PyPtr {
                     PySet_Add(obj, payload);
                 }
 
-                if (debug){
+                #ifdef DEBUG
                     std::cout << "Object ctor: ";
                     PyObject_Print(payload, stdout, 0);
                     std::cout << " (obj: " << obj << ")" << std::endl;
-                }
+                #endif
             }
 
             // Destructor
             ~PyRef() {
+                #ifdef DEBUG
+                    std::cout << "Object destructor: ";
+                    PyObject_Print(obj, stdout, 0);
+                    std::cout << " (obj: " << obj << ")" << std::endl;
+                #endif
                 Py_XDECREF(obj);
             }
 
@@ -44,22 +57,22 @@ namespace PyPtr {
             PyRef(const PyRef& other) {
                 obj = PySet_New(other.obj);
 
-                if (debug) {
+                #ifdef DEBUG
                     std::cout << "Copy ctor: ";
                     PyObject_Print(other.obj, stdout, 0);
                     std::cout << " (obj: " << other.obj << " -> " << obj << ")";
                     std::cout << std::endl << std::flush;
-                }
+                #endif
             }
 
             // Move constructor
             PyRef(PyRef&& other) {
-                if (debug) {
+                #ifdef DEBUG
                     std::cout << "Move ctor: ";
                     PyObject_Print(other.obj, stdout, 0);
                     std::cout << " (obj: " << other.obj << ")";
                     std::cout << std::endl << std::flush;
-                }
+                #endif
 
                 obj = other.obj;
                 Py_XDECREF(other.obj);
@@ -67,12 +80,12 @@ namespace PyPtr {
 
             // Assignment
             PyRef& operator=(const PyRef& other) {
-                if (debug) {
+                #ifdef DEBUG
                     std::cout << "Assignment: ";
                     PyObject_Print(other.obj, stdout, 0);
                     std::cout << " (obj: " << other.obj << ")";
                     std::cout << std::endl << std::flush;
-                }
+                #endif
 
                 Py_XDECREF(obj);
                 obj = PySet_New(other.obj);
@@ -81,12 +94,12 @@ namespace PyPtr {
 
             // Move assignment
             PyRef& operator=(PyRef&& other) {
-                if (debug) {
+                #ifdef DEBUG
                     std::cout << "Move assignment: ";
                     PyObject_Print(other.obj, stdout, 0);
                     std::cout << " (obj: " << other.obj << ")";
                     std::cout << std::endl << std::flush;
-                }
+                #endif
 
                 Py_XDECREF(obj);
                 obj = other.obj;
@@ -96,9 +109,9 @@ namespace PyPtr {
             }
 
             PyRef& operator+= (const PyRef& other) {
-                if (debug) {
+                #ifdef DEBUG
                     std::cout << "+=" << std::endl;
-                }
+                #endif
 
                 if (PySet_Check(other.obj)){
                     _PySet_Update(obj, PyObject_GetIter(other.obj));
@@ -109,12 +122,12 @@ namespace PyPtr {
             }
 
             PyRef operator+ (const PyRef& rhs) {
-                if (debug){
+                #ifdef DEBUG
                     PyObject_Print(obj, stdout, 0);
                     std::cout << " + ";
                     PyObject_Print(rhs.obj, stdout, 0);
                     std::cout << std::endl;
-                }
+                #endif
 
                 PyRef result(obj);
                 if (PySet_Check(rhs.obj)){
