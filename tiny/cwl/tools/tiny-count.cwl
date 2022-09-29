@@ -53,11 +53,6 @@ inputs:
     inputBinding:
       prefix: -dc
 
-  id_attr:
-    type: string?
-    inputBinding:
-      prefix: -id
-
   stepvector:
     type: string?
     inputBinding:

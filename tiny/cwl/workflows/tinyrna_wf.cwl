@@ -82,7 +82,6 @@ inputs:
   aligned_seqs: File[]?
   is_pipeline: boolean?
   counter_diags: boolean?
-  counter_id_attr: string?
   counter_decollapse: boolean?
   counter_stepvector: string?
   counter_all_features: boolean?
@@ -216,7 +215,6 @@ steps:
         source: counter_normalize_by_hits
         valueFrom: $(String(self))  # convert boolean -> string
       decollapse: counter_decollapse
-      id_attr: counter_id_attr
       multi_id: counter_allow_multi_id
       stepvector: counter_stepvector
       is_pipeline: {default: true}
