@@ -29,26 +29,26 @@ class PrereqAndExec(install):
     def in_conda_env(self):
         return all([os.getenv(conda_var) for conda_var in ["CONDA_PREFIX", "CONDA_DEFAULT_ENV"]])
 
-debug_cython = False
+
+pyx_files = [
+    'tiny/rna/counter/stepvector/_stepvector.pyx',
+    'tests/cython_tests/stepvector/test_cython.pyx'
+]
 cxx_extension_args = {
-    'extra_compile_args': [
-        '-isystem', '/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include',
-        '-stdlib=libc++', '-std=c++11',
-        '-O3'],
-    'extra_link_args': ['-L/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib'],
+    'extra_compile_args': ['-stdlib=libc++', '-std=c++11', '-O3'],
+    'extra_link_args': [],
     'language': 'c++'
 }
+if sys.platform == "darwin":
+    cxx_extension_args['extra_compile_args'] += ['-isystem', '/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include']
+    cxx_extension_args['extra_link_args'] += ['-L/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib']
 cython_extensions = [
     setuptools.Extension(
-        "tiny.rna.counter.stepvector._stepvector",
-        sources=['tiny/rna/counter/stepvector/_stepvector.pyx'],
-        **cxx_extension_args
-    ),
-    setuptools.Extension(
-        "tiny.rna.counter.stepvector.test_stepvec",
-        sources=['tiny/rna/counter/stepvector/test_stepvec.pyx'],
+        pyx_filename.replace('/', '.').rstrip('.pyx'),
+        sources=[pyx_filename],
         **cxx_extension_args
     )
+    for pyx_filename in pyx_files
 ]
 
 setuptools.setup(
@@ -73,7 +73,7 @@ setuptools.setup(
     ext_modules=cythonize(
         cython_extensions,
         compiler_directives={'language_level': '3'},
-        gdb_debug=debug_cython
+        gdb_debug=False
     ),
     scripts=['tiny/rna/tiny-deseq.r'],
     classifiers=[
