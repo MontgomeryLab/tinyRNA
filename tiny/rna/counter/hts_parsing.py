@@ -268,18 +268,15 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False, gff_vers
         ID."
     """
 
-    if attrStr.endswith("\n"):
-        attrStr = attrStr[:-1]
-
     # Modification: store attributes in a dict subclass that allows case-insensitive ops
     attribute_dict = CaseInsensitiveAttrs()
     first_val = "_unnamed_"
 
     if gff_version == 2:
-        iterator = HTSeq._HTSeq.quotesafe_split(attrStr.encode())
+        iterator = HTSeq._HTSeq.quotesafe_split(attrStr.rstrip().encode())
     else:
         # GFF3 does not care about quotes
-        iterator = attrStr.encode().split(b';')
+        iterator = attrStr.rstrip().encode().split(b';')
 
     for i, attr in enumerate(iterator):
         attr = attr.decode()

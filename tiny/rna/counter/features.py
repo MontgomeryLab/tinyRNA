@@ -40,20 +40,17 @@ class FeatureCounter:
     def assign_features(self, al: dict) -> Tuple[dict, int]:
         """Determines features associated with the interval then performs rule-based feature selection"""
 
-        feat_matches, assignment = set(), {}
-
         try:
-            feat_matches = feat_matches.union(*(
-                    Features.chrom_vectors[al['Chrom']]['.']  # GenomicArrayOfSets -> ChromVector
-                             .array[al['Start']:al['End']]    # ChromVector -> StepVector
-                             .get_steps(values_only=True)))   # StepVector -> {features}
+            feat_matches = set().union(
+                            *Features.chrom_vectors[al['Chrom']]['.']  # GenomicArrayOfSets -> ChromVector
+                                     .array[al['Start']:al['End']]     # ChromVector -> StepVector
+                                     .get_steps(values_only=True))     # StepVector -> {features}
         except KeyError as ke:
             self.stats.chrom_misses[ke.args[0]] += 1
+            return {}, 0
 
         # If features are associated with the alignment interval, perform selection
-        if len(feat_matches):
-            assignment = self.selector.choose(feat_matches, al)
-
+        assignment = self.selector.choose(feat_matches, al) if feat_matches else {}
         return assignment, len(feat_matches)
 
     def count_reads(self, library: dict):
