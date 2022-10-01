@@ -58,7 +58,7 @@ function setup_environment() {
   # Setup tinyRNA environment using our generated lock file
   status "Setting up $env_name environment (this may take a while)..."
   conda create --file $platform_lock_file --name $env_name 2>&1 | tee "env_install.log"
-  if ! grep -q "Executing transaction: ...working... done" env_install.log; then
+  if ! tr -d \\n < env_install.log | grep -q "Executing transaction: ...working... done"; then
     fail "$env_name environment setup failed"
     echo "Console output has been saved to env_install.log."
     exit 1
@@ -135,7 +135,7 @@ if conda env list | grep -q "$env_name"; then
     echo
     status "Updating $env_name environment..."
     conda update --file $platform_lock_file --name "$env_name" 2>&1 | tee "env_update.log"
-    if ! grep -q "Executing transaction: ...working... done" env_update.log; then
+    if ! tr -d \\n < env_install.log | grep -q "Executing transaction: ...working... done"; then
       fail "Failed to update the environment"
       echo "Check the env_update.log file for more information."
       exit 1

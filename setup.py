@@ -30,26 +30,27 @@ class PrereqAndExec(install):
         return all([os.getenv(conda_var) for conda_var in ["CONDA_PREFIX", "CONDA_DEFAULT_ENV"]])
 
 
-pyx_files = [
-    'tiny/rna/counter/stepvector/_stepvector.pyx',
-    'tests/cython_tests/stepvector/test_cython.pyx'
-]
-cxx_extension_args = {
-    'extra_compile_args': ['-stdlib=libc++', '-std=c++11', '-O3'],
-    'extra_link_args': [],
-    'language': 'c++'
-}
-if sys.platform == "darwin":
-    cxx_extension_args['extra_compile_args'] += ['-isystem', '/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include']
-    cxx_extension_args['extra_link_args'] += ['-L/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib']
-cython_extensions = [
-    setuptools.Extension(
-        pyx_filename.replace('/', '.').rstrip('.pyx'),
-        sources=[pyx_filename],
-        **cxx_extension_args
-    )
-    for pyx_filename in pyx_files
-]
+def get_cython_extension_defs():
+    pyx_files = [
+        'tiny/rna/counter/stepvector/_stepvector.pyx',
+        'tests/cython_tests/stepvector/test_cython.pyx'
+    ]
+
+    cxx_extension_args = {
+        'extra_compile_args': ['-std=c++11', '-O3'],
+        'extra_link_args': [],
+        'language': 'c++'
+    }
+
+    if sys.platform == "darwin":
+        cxx_extension_args['extra_compile_args'] += ['-isystem', '/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include']
+        cxx_extension_args['extra_link_args'] += ['-L/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib']
+
+    return [setuptools.Extension(
+                pyx_filename.replace('/', '.').rstrip('.pyx'),
+                sources=[pyx_filename],
+                **cxx_extension_args)
+            for pyx_filename in pyx_files]
 
 setuptools.setup(
     name=NAME,
@@ -71,7 +72,7 @@ setuptools.setup(
         ]
     },
     ext_modules=cythonize(
-        cython_extensions,
+        get_cython_extension_defs(),
         compiler_directives={'language_level': '3'},
         gdb_debug=False
     ),
