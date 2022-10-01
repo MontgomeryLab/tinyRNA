@@ -51,6 +51,12 @@ def get_args():
     optional_args.add_argument('-dc', '--decollapse', action='store_true',
                                help='Create a decollapsed copy of all SAM files listed in your '
                                     'Samples Sheet. This option is ignored for non-collapsed inputs.')
+    optional_args.add_argument('-sv', '--step-vector', choices=['Cython', 'HTSeq'], default='Cython',
+                               help='Select which StepVector implementation is used to find '
+                                    'features overlapping an interval.')
+    optional_args.add_argument('-md', '--multi-id', action='store_true',
+                               help="Don't treat features with multiple ID values as an error. "
+                                    "Only the first value will be used as the feature's ID.")
     optional_args.add_argument('-a', '--all-features', action='store_true',
                                help='Represent all features in output counts table, '
                                     'even if they did not match a Select for / with value.')
@@ -60,13 +66,6 @@ def get_args():
     optional_args.add_argument('-d', '--report-diags', action='store_true',
                                help='Produce diagnostic information about uncounted/eliminated '
                                     'selection elements.')
-
-    # Beta arguments
-    optional_args.add_argument('-sv', '--step-vector', choices=['Cython', 'HTSeq'], default='Cython',
-                               help='Select which StepVector is used for interval -> feature resolution.')
-    optional_args.add_argument('-md', '--multi-id', action='store_true',
-                               help="Don't treat features with multiple ID values as an error. "
-                                    "Only the first value will be used as the feature's ID.")
 
     args = arg_parser.parse_args()
     setattr(args, 'normalize_by_hits', args.normalize_by_hits.lower() in ['t', 'true'])
