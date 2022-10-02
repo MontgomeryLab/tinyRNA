@@ -6,7 +6,7 @@ from tiny.rna.counter.stepvector._stepvector import StepVector
 
 class StepVectorTests(unittest.TestCase):
 
-    """Does our Cython StepVector accept and return steps as expected?"""
+    """Does our Cython StepVector integrate with HTSeq's GenomicArray, and accept/return steps as expected?"""
 
     def test_genomicarray_with_cython_stepvec(self):
         # Patch the StepVector reference in the HTSeq module and use a GenomicArray
@@ -47,15 +47,16 @@ class StepVectorTests(unittest.TestCase):
             actual = list(gas['chr']['.'].array[iv.start:iv.end].get_steps())
             self.assertEqual(actual, expected)
 
+    """Does the Cython StepVector contain the expected steps/coordinates when called from a Cython .pyx file?"""
+
+    def test_native_cython_expected_steps(self):
+        from tests.cython_tests.stepvector.test_cython import main as cython_native_test
+        cython_native_test()
+
+    """Does the Cython StepVector's steps/coordinates match those in HTSeq's StepVector when called from a .py file?"""
+
     def test_compare_to_htseq_steps(self):
-        """Test currently doesn't work (and it won't be easy to get it to work)
-
-        This is because HTSeq's StepVector with typecode 'O' handles .add_value() using the
-        apply() function and a local function which copies the set OUT of the StepVector,
-        adds to it, then puts it back. This is exactly the kind of thing that our
-        specialized StepVector was intended to avoid.
-        """
-
+        # HTSeq setup
         from HTSeq.StepVector import StepVector as hStepVector
         def htseq_add(x):
             y = x.copy()
@@ -65,6 +66,7 @@ class StepVectorTests(unittest.TestCase):
         sv_len = 200
         ours = StepVector.create(length=sv_len)
         theirs = hStepVector.create(length=sv_len, typecode='O')
+        theirs[:] = set()
         
         iv1 = slice(0, 99)
         iv2 = slice(99, 101)
@@ -78,10 +80,16 @@ class StepVectorTests(unittest.TestCase):
         f4 = {'featE', 'featF', 'featG'}
         fs = [f1, f2, f3, f4]
 
-        for iv, feat in zip(ivs, fs):
-            value = feat
-            theirs[iv].apply(htseq_add)
-            ours[iv] += feat
+        for iv, feat_set in zip(ivs, fs):
+            ours[iv] += feat_set
+
+            # Emulating the behavior of ChromVector
+            # Can't add a set to a set; need to add item by item
+            for value in feat_set:
+                theirs[iv].apply(htseq_add)
+
+        for our_step, their_step in zip(ours.get_steps(), theirs.get_steps()):
+            self.assertEqual(our_step, their_step)
 
 
 if __name__ == '__main__':
