@@ -118,6 +118,7 @@ You may encounter the following cases when you have more than one unique GFF fil
 - If a feature is defined in one GFF file, then again but under a different **Alias by...**, then both aliases are retained and treated as a list. All aliases will be present in the `Feature Name` column of the Feature Counts output table. They will be comma separated.
 
 Discontinuous features and feature filtering support:
-- Discontinuous features are supported (as defined by the `Parent` attribute key, or by a shared `ID` attribute value). Rule and alias matches of descendents are merged with the root parent's.
+- Discontinuous features are supported (as defined by the `Parent` attribute key, or by a shared `ID`/`gene_id` attribute value). Rule and alias matches of descendents are merged with the root parent's.
+- If a feature contains both `ID` and `gene_id` attributes, only the value of `ID` is used as the feature's ID.
 - Features can be filtered during GFF parsing by their `source` and/or `type` columns, and these preferences can be specified in the Run Config file. These are inclusive filters. Only features matching the values specified will be retained for selection and listed in the output counts table. An empty list allows all values. See the [parameters documentation](Parameters.md#filters) for information about specifying these filters.
 - If a filtered feature breaks a feature lineage (that is, features chained via the `Parent` attribute), then the highest non-filtered ancestor is designated the root parent. The lineage is maintained transparently but the filtered feature does not contribute to the domains of selection.
