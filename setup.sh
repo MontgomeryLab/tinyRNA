@@ -67,6 +67,21 @@ function setup_environment() {
   fi
 }
 
+function setup_macOS_command_line_tools() {
+  # Install Xcode command line tools if necessary
+  if ! xcode-select --print-path > /dev/null 2>&1; then
+    status "Installing Xcode command line tools. Follow prompts in new window..."
+    if xcode-select --install; then
+      success "Command line tools setup complete"
+    else
+      fail "Command line tools installation failed"
+      exit 1
+    fi
+  else
+    success "Xcode command line tools are already installed"
+  fi
+}
+
 ################################################################################
 # Main Routine
 ################################################################################
@@ -82,6 +97,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
   shell=$(basename "$(dscl . -read ~/ UserShell | cut -f 2 -d " ")")
   miniconda_installer="Miniconda3-py${python_version/./}_${miniconda_version}-MacOSX-x86_64.sh"
   platform_lock_file="./conda/conda-osx-64.lock"
+  setup_macOS_command_line_tools
 elif [[ "$OSTYPE" == "linux-gnu" ]]; then
   success "Linux detected"
   shell="$(basename "$SHELL")"
