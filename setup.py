@@ -77,11 +77,10 @@ def get_macos_sdk_path():
     except Exception:
         sdk_path = None
 
-    if (
-            not sdk_path
-            or sdk_path == "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
-    ):
-        commandlinetools_sdk_path = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk"
+    xcode_sdk_path = "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
+    commandlinetools_sdk_path = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk"
+
+    if not sdk_path or sdk_path == xcode_sdk_path:
         if os.path.exists(commandlinetools_sdk_path):
             sdk_path = commandlinetools_sdk_path
         else:

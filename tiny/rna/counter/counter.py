@@ -51,7 +51,7 @@ def get_args():
     optional_args.add_argument('-dc', '--decollapse', action='store_true',
                                help='Create a decollapsed copy of all SAM files listed in your '
                                     'Samples Sheet. This option is ignored for non-collapsed inputs.')
-    optional_args.add_argument('-sv', '--step-vector', choices=['Cython', 'HTSeq'], default='Cython',
+    optional_args.add_argument('-sv', '--stepvector', choices=['Cython', 'HTSeq'], default='Cython',
                                help='Select which StepVector implementation is used to find '
                                     'features overlapping an interval.')
     optional_args.add_argument('-md', '--multi-id', action='store_true',

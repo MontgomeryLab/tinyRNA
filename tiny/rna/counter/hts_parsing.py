@@ -446,17 +446,18 @@ class ReferenceTables:
         self._set_filters(**prefs)
         self.gff_files = gff_files
         # ----------------------------------------------------------- Primary Key:
-        if prefs['step_vector'] == 'Cython':
+        if prefs['stepvector'] == 'Cython':
             try:
                 from tiny.rna.counter.stepvector import StepVector
                 setattr(HTSeq.StepVector, 'StepVector', StepVector)
                 self.feats = HTSeq.GenomicArray("auto", stranded=False)     # Root Match ID
             except ModuleNotFoundError:
-                print("The Cython StepVector has not yet been built.\n"
-                      "Run: python setup.py build_ext --inplace",
+                prefs['stepvector'] = 'HTSeq'
+                print("Failed to import Cython StepVector\n"
+                      "Falling back to HTSeq's StepVector",
                       file=sys.stderr)
-                sys.exit(1)
-        else:
+
+        if prefs['stepvector'] == 'HTSeq':
             self.feats = HTSeq.GenomicArrayOfSets("auto", stranded=False)   # Root Match ID
 
         self.parents, self.filtered = {}, set()                         # Original Feature ID
@@ -701,7 +702,8 @@ class ReferenceTables:
             self.feats.add_chrom(chrom)
 
     def get_feature_id(self, row):
-        id_collection = row.attr.get('ID', row.attr.get('gene_id', None))
+        id_collection = row.attr.get('ID', default=
+            row.attr.get('gene_id', default=None))
 
         if id_collection is None:
             raise ValueError(f"Feature {row.name} does not contain an ID attribute.")
