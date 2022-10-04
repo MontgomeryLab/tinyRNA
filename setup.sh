@@ -58,12 +58,27 @@ function setup_environment() {
   # Setup tinyRNA environment using our generated lock file
   status "Setting up $env_name environment (this may take a while)..."
   conda create --file $platform_lock_file --name $env_name 2>&1 | tee "env_install.log"
-  if ! grep -q "Executing transaction: ...working... done" env_install.log; then
+  if ! tr -d \\n < env_install.log | grep -q "Executing transaction: ...working... done"; then
     fail "$env_name environment setup failed"
     echo "Console output has been saved to env_install.log."
     exit 1
   else
     success "$env_name environment setup complete"
+  fi
+}
+
+function setup_macOS_command_line_tools() {
+  # Install Xcode command line tools if necessary
+  if ! xcode-select --print-path > /dev/null 2>&1; then
+    status "Installing Xcode command line tools. Follow prompts in new window..."
+    if xcode-select --install; then
+      success "Command line tools setup complete"
+    else
+      fail "Command line tools installation failed"
+      exit 1
+    fi
+  else
+    success "Xcode command line tools are already installed"
   fi
 }
 
@@ -82,6 +97,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
   shell=$(basename "$(dscl . -read ~/ UserShell | cut -f 2 -d " ")")
   miniconda_installer="Miniconda3-py${python_version/./}_${miniconda_version}-MacOSX-x86_64.sh"
   platform_lock_file="./conda/conda-osx-64.lock"
+  setup_macOS_command_line_tools
 elif [[ "$OSTYPE" == "linux-gnu" ]]; then
   success "Linux detected"
   shell="$(basename "$SHELL")"
@@ -135,7 +151,7 @@ if conda env list | grep -q "$env_name"; then
     echo
     status "Updating $env_name environment..."
     conda update --file $platform_lock_file --name "$env_name" 2>&1 | tee "env_update.log"
-    if ! grep -q "Executing transaction: ...working... done" env_update.log; then
+    if ! tr -d \\n < env_install.log | grep -q "Executing transaction: ...working... done"; then
       fail "Failed to update the environment"
       echo "Check the env_update.log file for more information."
       exit 1

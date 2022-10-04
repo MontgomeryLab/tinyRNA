@@ -70,8 +70,8 @@ Features can have multiple classes associated with them, so it is useful to see 
     <img src="../images/plots/class_chart.jpg" width="80%" alt="class_chart with 8 classes"/>
 </p>
 
-#### Class N
-Class **N** represents the percentage of mapped reads that were unassigned. Sources of unassigned reads include:
+#### Class \_UNASSIGNED_
+This category represents the percentage of mapped reads that were unassigned. Sources of unassigned reads include:
 - A lack of features passing selection at alignment loci
 - Alignments which do not overlap with any features
 

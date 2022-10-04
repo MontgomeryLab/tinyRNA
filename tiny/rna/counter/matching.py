@@ -27,8 +27,8 @@ class StrandMatch:
         self.strand = strand
         self.select = (self.strand == 'sense')
 
-    def __contains__(self, x):
-        return self.select == (x[0] == x[1])
+    def __contains__(self, x: bool):
+        return self.select ^ x
 
     def __repr__(self): return str(self.strand)
 
@@ -138,7 +138,7 @@ class IntervalFullMatch(IntervalSelector):
         super().__init__(iv)
 
     def __contains__(self, alignment):
-        return self.start <= alignment['start'] and alignment['end'] <= self.end
+        return self.start <= alignment['Start'] and alignment['End'] <= self.end
 
     def __repr__(self):
         return f"<Between [{self.start}, {self.end})>"
@@ -150,7 +150,7 @@ class IntervalExactMatch(IntervalSelector):
         super().__init__(iv)
 
     def __contains__(self, alignment):
-        return self.start == alignment['start'] and alignment['end'] == self.end
+        return self.start == alignment['Start'] and alignment['End'] == self.end
 
     def __repr__(self):
         return f"<Exactly [{self.start}, {self.end})>"
@@ -184,10 +184,10 @@ class Interval5pMatch(IntervalSelector):
             terminus of this feature's interval.
         """
 
-        if alignment['strand'] == '+':
-            return alignment['start'] == self.start
+        if alignment['Strand'] is True:
+            return alignment['Start'] == self.start
         else:
-            return alignment['end'] == self.end
+            return alignment['End'] == self.end
 
     def __repr__(self):
         return f"<5' anchored to {self.start} on (+) / {self.end} on (-)>"
@@ -221,10 +221,10 @@ class Interval3pMatch(IntervalSelector):
             terminus of this feature's interval.
         """
 
-        if alignment["strand"] == '+':
-            return alignment['end'] == self.end
+        if alignment['Strand'] is True:
+            return alignment['End'] == self.end
         else:
-            return alignment['start'] == self.start
+            return alignment['Start'] == self.start
 
     def __repr__(self):
         return f"<3' anchored to {self.end} on (+) / {self.start} on (-)>"

@@ -4,6 +4,7 @@ import sys
 import setuptools
 
 from setuptools.command.install import install
+from Cython.Build import cythonize
 
 # Package metadata
 NAME = 'tinyrna'
@@ -14,19 +15,79 @@ AUTHOR = 'Kristen Brown, Alex Tate'
 PLATFORM = 'Unix'
 REQUIRES_PYTHON = '>=3.9.0'
 VERSION = '1.0'
-
-# Required packages are installed via Conda's environment.yml
-# See PreFlight below...
-REQUIRED = []
+REQUIRED = []  # Required packages are installed via Conda's environment.yml
 
 
-class PreFlight(install):
+class PrereqAndExec(install):
+    """These checks are performed prior to installation to ensure that this setup routine
+    is only executed within a Conda environment. Users should perform installation via
+    setup.sh, not setup.py."""
+
     def run(self):
-        if not all([os.getenv(conda_var) for conda_var in ["CONDA_PREFIX", "CONDA_DEFAULT_ENV"]]):
-            sys.exit("CRITICAL ERROR: you appear to be installing %s outside of a conda environment.\n"
-                     "Instead, please run: ./setup.sh" % (NAME,))
+        if not self.in_conda_env():
+            sys.exit("CRITICAL ERROR: you appear to be installing %s outside of a conda environment.\n" % (NAME,) +
+                     "Instead, please run: ./setup.sh" )
         else:
             install.run(self)
+
+    def in_conda_env(self):
+        return all([os.getenv(conda_var) for conda_var in ["CONDA_PREFIX", "CONDA_DEFAULT_ENV"]])
+
+
+def get_cython_extension_defs():
+    """Returns a list of Extension objects corresponding to the contents of pyx_files.
+    Extensions indicated as optional in pyx_files will NOT cause the installation to
+    error out if there are build issues, and therefore must be used as optional imports."""
+
+    pyx_files = [
+        # (file path, optional)
+        ('tiny/rna/counter/stepvector/_stepvector.pyx', True),
+        ('tests/cython_tests/stepvector/test_cython.pyx', True)
+    ]
+
+    cxx_extension_args = {
+        'extra_compile_args': ['-std=c++11', '-O3'],
+        'extra_link_args': [],
+        'language': 'c++'
+    }
+
+    if sys.platform == "darwin" and os.getenv('SDKROOT') is None:
+        # If building with the environment variables set by Conda, this isn't necessary
+        # However build shortcuts in some IDEs will strip these vars
+        sdk_root = get_macos_sdk_path()
+        cxx_extension_args['extra_compile_args'] += ['-isystem', os.path.join(sdk_root, '/usr/include')]
+        cxx_extension_args['extra_link_args'] += ['-L' + os.path.join(sdk_root, '/usr/lib')]
+
+    return [setuptools.Extension(
+                pyx_filename.replace('./', '').replace('/', '.').rstrip('.pyx'),
+                sources=[pyx_filename],
+                optional=optional,
+                **cxx_extension_args)
+            for pyx_filename, optional in pyx_files]
+
+
+def get_macos_sdk_path():
+    """Determines the SDK path for compiler dependencies in a manner that will be
+    compatible with conda-build pipelines. The following code was copied from
+    https://github.com/python-pillow/Pillow/blob/main/setup.py """
+
+    try:
+        import subprocess
+        sdk_path = subprocess.check_output(["xcrun", "--show-sdk-path"]).strip().decode('latin1')
+    except Exception:
+        sdk_path = None
+
+    xcode_sdk_path = "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
+    commandlinetools_sdk_path = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk"
+
+    if not sdk_path or sdk_path == xcode_sdk_path:
+        if os.path.exists(commandlinetools_sdk_path):
+            sdk_path = commandlinetools_sdk_path
+        else:
+            raise RuntimeError("The macOS SDK path could not be found. This is required for Cython. "
+                               "Please run xcode-select --install in your terminal.")
+
+    return sdk_path
 
 
 setuptools.setup(
@@ -35,7 +96,7 @@ setuptools.setup(
     author=AUTHOR,
     author_email=EMAIL,
     description=DESCRIPTION,
-    cmdclass={'install': PreFlight},
+    cmdclass={'install': PrereqAndExec},
     include_package_data=True,
     packages=['tiny'],
     zip_safe=False,
@@ -48,6 +109,11 @@ setuptools.setup(
             'tiny-plot = tiny.rna.plotter:main'
         ]
     },
+    ext_modules=cythonize(
+        get_cython_extension_defs(),
+        compiler_directives={'language_level': '3'},
+        gdb_debug=False
+    ),
     scripts=['tiny/rna/tiny-deseq.r'],
     classifiers=[
         'Programming Language :: Python :: 3',

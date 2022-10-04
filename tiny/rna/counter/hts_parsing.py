@@ -3,7 +3,7 @@ import HTSeq
 import sys
 import re
 
-from collections import Counter, defaultdict, namedtuple
+from collections import Counter, defaultdict
 from typing import Tuple, List, Dict, Iterator, Optional, DefaultDict, Set, Union, IO
 from inspect import stack
 
@@ -47,7 +47,7 @@ class SAM_reader:
             bundle, read_count = self._new_bundle(next(aln_iter))
 
             for aln in aln_iter:
-                if aln['name'] != bundle[0]['name']:
+                if aln['Name'] != bundle[0]['Name']:
                     yield bundle, read_count
                     bundle, read_count = self._new_bundle(aln)
                 else:
@@ -62,7 +62,7 @@ class SAM_reader:
 
         if self.collapser_type is not None:
             token = self.collapser_token
-            count = int(aln['name'].split(token)[-1])
+            count = int(aln['Name'].split(token)[-1])
         else:
             count = 1
 
@@ -91,24 +91,24 @@ class SAM_reader:
 
                 # Note: we assume sRNA sequencing data is NOT reversely stranded
                 if (int(cols[1]) & 16):
-                    strand = '-'
+                    strand = False  # -
                     try:
                         nt5 = complement[seq[-1]]
                     except KeyError:
                         nt5 = chr(seq[-1])
                 else:
-                    strand = '+'
+                    strand = True  # +
                     nt5 = chr(seq[0])
 
                 yield {
-                    "name": cols[0],
-                    "len": length,
-                    "seq": seq,
-                    "nt5": nt5,
-                    "chrom": cols[2].decode(),
-                    "start": start,
-                    "end": start + length,
-                    "strand": strand
+                    "Name": cols[0],
+                    "Length": length,
+                    "Seq": seq,
+                    "nt5end": nt5,
+                    "Chrom": cols[2].decode(),
+                    "Start": start,
+                    "End": start + length,
+                    "Strand": strand
                 }
         except Exception as e:
             # Append to error message while preserving exception provenance and traceback
@@ -239,7 +239,7 @@ def infer_strandedness(sam_file: str, intervals: dict) -> str:
     for count in range(1, 20000):
         try:
             rec = next(sample_read)
-            strandless = HTSeq.GenomicInterval(rec['chrom'], rec['start'], rec['end'])
+            strandless = HTSeq.GenomicInterval(rec['Chrom'], rec['Start'], rec['End'])
             sam_strand = rec['strand']
             gff_strand = ':'.join(unstranded[strandless].get_steps())
             gff_sam_map[sam_strand + gff_strand] += 1
@@ -268,18 +268,15 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False, gff_vers
         ID."
     """
 
-    if attrStr.endswith("\n"):
-        attrStr = attrStr[:-1]
-
     # Modification: store attributes in a dict subclass that allows case-insensitive ops
     attribute_dict = CaseInsensitiveAttrs()
     first_val = "_unnamed_"
 
     if gff_version == 2:
-        iterator = HTSeq._HTSeq.quotesafe_split(attrStr.encode())
+        iterator = HTSeq._HTSeq.quotesafe_split(attrStr.rstrip().encode())
     else:
         # GFF3 does not care about quotes
-        iterator = attrStr.encode().split(b';')
+        iterator = attrStr.rstrip().encode().split(b';')
 
     for i, attr in enumerate(iterator):
         attr = attr.decode()
@@ -308,21 +305,36 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False, gff_vers
 
 
 class CaseInsensitiveAttrs(Dict[str, tuple]):
-    """A dictionary subclass that allows for case-insensitive queries against feature attributes"""
+    """A dictionary subclass that allows for case-insensitive queries against feature attributes
+
+    From a bird's eye view, this class holds the feature attribute's name as the key,
+    and a tuple of values associated with that attribute name. The attribute's values did
+    not contain any commas, this tuple will have a length of 1. Otherwise, the original value
+    is tokenized on comma and each token is stored in a separate tuple index.
+
+    Internally, each key is stored in lowercase form, and its associated value is a (nested) tuple
+    that contains (at the following indices):
+        [0]: The key (attribute name) in its original case
+        [1]: A tuple of values in their original case
+        [2]: A tuple of values in lowercase form
+
+    Interactions with the Dict base class involve handling the "internal" nested tuple described
+    above. Functions which call self[item] in turn call these methods, and therefore the handling of the
+    internal tuple is abstracted away; these functions only deal with the key/values in their original form.
+    """
 
     def __init__(self):
         super().__init__()
-        self.Entry = namedtuple("Entry", "orig_key orig_val ci_val")
 
-    def __setitem__(self, key: str, val: tuple):
-        lowercase_val = tuple(v.lower() for v in val)
-        super().__setitem__(key.lower(), self.Entry(key, val, lowercase_val))
+    def __setitem__(self, key: str, vals: tuple):
+        lowercase_vals = tuple(map(str.lower, vals))
+        super().__setitem__(key.lower(), (key, vals, lowercase_vals))
 
     def __getitem__(self, key: str):
         # Allows case-insensitive key lookups which return original case values
         # Ensure that KeyError contains the original key
         if key.lower() not in self: raise KeyError(key)
-        return super().__getitem__(key.lower()).orig_val
+        return super().__getitem__(key.lower())[1]
 
     def __contains__(self, key: str):
         # Allows case-insensitive membership queries by key
@@ -330,11 +342,11 @@ class CaseInsensitiveAttrs(Dict[str, tuple]):
 
     def __str__(self):
         # Returns original case keys/values
-        return str({v.orig_key: v.orig_val for v in super().values()})
+        return str({v[0]: v[1] for v in super().values()})
 
     def __repr__(self):
         # Returns both original case and lowercase keys/values
-        return str({f"{k}/{v.orig_key}": f"{v.ci_val}/{v.orig_val}" for k,v in super().items()})
+        return str({f"{k}/{v[0]}": f"{v[2]}/{v[1]}" for k,v in super().items()})
 
     def setdefault(self, key: str, value: Optional[Tuple]=None):
         if key not in self:
@@ -350,12 +362,12 @@ class CaseInsensitiveAttrs(Dict[str, tuple]):
     def keys(self):
         # Roughly mimics a KeysView with original case
         for v in super(CaseInsensitiveAttrs, self).values():
-            yield v.orig_key
+            yield v[0]
 
     def values(self):
         # Roughly mimics a ValuesView with original case
         for v in super(CaseInsensitiveAttrs, self).values():
-            yield v.orig_val
+            yield v[1]
 
     def items(self):
         # Roughly mimics an ItemsView with original case
@@ -376,12 +388,12 @@ class CaseInsensitiveAttrs(Dict[str, tuple]):
         if key_type is val_type is str:
             # Allows case-insensitive membership queries by (key, value)
             return key in self and \
-                   val in super(CaseInsensitiveAttrs, self).__getitem__(key).ci_val
+                   val in super(CaseInsensitiveAttrs, self).__getitem__(key)[2]
         if key_type is str and val_type is Wildcard:
             return key in self
         if key_type is Wildcard and val_type is str:
             for v in super(CaseInsensitiveAttrs, self).values():
-                if val in v.ci_val: return True
+                if val in v[2]: return True
             else: return False
 
     # Dict methods not implemented which are invalid if delegated to dict class
@@ -427,13 +439,27 @@ class ReferenceTables:
     source_filter = []
     type_filter = []
 
-    def __init__(self, gff_files: Dict[str, list], feature_selector, **kwargs):
-        self.all_features = kwargs.get('all_features', False)
+    def __init__(self, gff_files: Dict[str, list], feature_selector, **prefs):
+        self.all_features = prefs.get('all_features', False)
+        self.allow_multi_id = prefs.get('multi_id', False)
         self.selector = feature_selector
-        self._set_filters(**kwargs)
+        self._set_filters(**prefs)
         self.gff_files = gff_files
         # ----------------------------------------------------------- Primary Key:
-        self.feats = HTSeq.GenomicArrayOfSets("auto", stranded=False)   # Root Match ID
+        if prefs['stepvector'] == 'Cython':
+            try:
+                from tiny.rna.counter.stepvector import StepVector
+                setattr(HTSeq.StepVector, 'StepVector', StepVector)
+                self.feats = HTSeq.GenomicArray("auto", stranded=False)     # Root Match ID
+            except ModuleNotFoundError:
+                prefs['stepvector'] = 'HTSeq'
+                print("Failed to import Cython StepVector\n"
+                      "Falling back to HTSeq's StepVector",
+                      file=sys.stderr)
+
+        if prefs['stepvector'] == 'HTSeq':
+            self.feats = HTSeq.GenomicArrayOfSets("auto", stranded=False)   # Root Match ID
+
         self.parents, self.filtered = {}, set()                         # Original Feature ID
         self.intervals = defaultdict(list)                              # Root Feature ID
         self.matches = defaultdict(set)                                 # Root Match ID
@@ -535,7 +561,7 @@ class ReferenceTables:
                 self.alias[root_id].add(row_val)
 
     def get_matches_and_classes(self, row_attrs: CaseInsensitiveAttrs) -> Tuple[DefaultDict, set]:
-        """Grabs classes and match tuples from attributes that match identity rules"""
+        """Grabs classes and match tuples from attributes that match identity rules (Stage 1 Selection)"""
 
         row_attrs.setdefault("Class", ("_UNKNOWN_",))
         classes = {c for c in row_attrs["Class"]}
@@ -622,7 +648,7 @@ class ReferenceTables:
 
                 for sub_iv in merged_sub_ivs:
                     finalized_match_tuples = self.selector.build_interval_selectors(sub_iv, sorted_matches.copy())
-                    self.feats[sub_iv] += (tagged_id, sub_iv.strand, tuple(finalized_match_tuples))
+                    self.feats[sub_iv] += (tagged_id, sub_iv.strand == '+', tuple(finalized_match_tuples))
 
     @staticmethod
     def _merge_adjacent_subintervals(unmerged_sub_ivs: List[HTSeq.GenomicInterval]) -> list:
@@ -675,15 +701,15 @@ class ReferenceTables:
         if chrom not in self.feats.chrom_vectors:
             self.feats.add_chrom(chrom)
 
-    @staticmethod
-    def get_feature_id(row):
-        id_collection = row.attr.get("ID", None)
+    def get_feature_id(self, row):
+        id_collection = row.attr.get('ID', default=
+            row.attr.get('gene_id', default=None))
 
         if id_collection is None:
             raise ValueError(f"Feature {row.name} does not contain an ID attribute.")
         if len(id_collection) == 0:
             raise ValueError("A feature's ID attribute cannot be empty. This value is required.")
-        if len(id_collection) > 1:
+        if len(id_collection) > 1 and not self.allow_multi_id:
             err_msg = "A feature's ID attribute cannot contain multiple values. Only one ID per feature is allowed."
             raise ValueError(err_msg)
 
