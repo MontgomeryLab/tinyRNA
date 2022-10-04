@@ -32,9 +32,6 @@ Optional arguments:
 # 8170: https://github.com/wch/r-source/blob/tags/R-4-1-1/src/main/options.c#L626
 options(warning.length = min(getOption("warning.length") + nchar(usage), 8170))
 
-# Suppress conversion to scientific notation
-options(scipen = 999)
-
 
 #### ---- Validate commandline arguments ---- ####
 
@@ -68,23 +65,33 @@ if (count_file %in% all_args[all_args != '--input-file']){
 
 #### ---- Read in inputs ---- ####
 
-
-## Resolve relative paths and perform tilde expansion for input file path
+## Read unsanitized CSV header and save sample column names for use in final outputs
 count_file <- normalizePath(count_file)
+header_row <- read.csv(count_file, check.names = FALSE, row.names = 1, nrows = 1)
 
-## DESeq2 prefers R-safe column names. We want to preserve original sample names to use in final outputs
-orig_sample_names <- colnames(read.csv(count_file, check.names = FALSE, row.names = 1, nrows = 1))[0:-3]
-
-## Read counts CSV with sanitized column names for handling. Subset classes and aliases.
+## Read counts CSV with R-safe column names for handling.
 counts <- read.csv(count_file)
 
-## Set rownames to concatenated Feature ID and Tag, then drop these columns
-rownames(counts) <- split(counts[, c('Feature.ID', 'Tag')], seq(nrow(counts)))
-counts <- subset(counts, select = -c(Feature.ID, Tag))
+## Returns vec with names(vec) holding R-safe names
+with_names <- function(vec){
+  names(vec) <- make.names(vec)
+  return(vec)
+}
+
+## Original column names
+idx_cols <- with_names(c('Feature ID', 'Tag'))
+meta_cols <- with_names(c('Feature Name', 'Feature Class'))
+char_cols <- with_names(unique(c(idx_cols, meta_cols)))
+sample_cols <- with_names(colnames(header_row)[!(colnames(header_row) %in% char_cols)])
+
+## Concatenate index column contents, assign the result to rownames, then drop
+rownames(counts) <- split(counts[names(idx_cols)], seq(nrow(counts)))
+counts <- counts[!(colnames(counts) %in% names(idx_cols))]
 
 ## Copy feature metadata and drop these columns, leaving only integer columns
-metadata <- data.frame("Feature Name" = counts[[1]], "Feature Class" = counts[[2]], row.names = rownames(counts), check.names = FALSE)
-counts <- data.frame(sapply(counts[0:-2], as.integer), row.names = rownames(counts))
+metadata <- data.frame(counts[names(meta_cols)])
+counts <- counts[!(colnames(counts) %in% names(meta_cols))]
+counts[] <- lapply(counts, as.integer)
 
 ## Remove rows containing all zeros if user requests
 if (drop_zero){
@@ -96,8 +103,7 @@ if (drop_zero){
 
 
 ## Get sample conditions as a named vector where names are R safe names
-sampleConditions <- sapply(strsplit(as.character(orig_sample_names), '_rep_'), '[[', 1)
-names(sampleConditions) <- make.names(sampleConditions)
+sampleConditions <- with_names(sapply(strsplit(as.character(sample_cols), '_rep_'), '[[', 1))
 
 ## Ensure control group is present in samples, if specified
 if (has_control && !(control_grp %in% sampleConditions)){
@@ -109,18 +115,26 @@ library(DESeq2)
 library(ggplot2)
 library(utils)
 
+## Create the deseqdataset
+sample_table <- data.frame(row.names=names(sample_cols), condition=factor(names(sampleConditions)))
+deseq_ds <- DESeq2::DESeqDataSetFromMatrix(countData = counts, colData = sample_table, design = ~ condition)
+
+
+#### ---- Run DESeq2 & write outputs ---- ####
+
+
 ## Returns a new dataframe with metadata columns prepended
-## Columns are rounded according to host preference
-df_with_metadata <- function(classless_df){
-  prec <- getOption('digits')
-  classless_df <- data.frame(rbind(format(round(classless_df, prec), digits=prec, nsmall=prec)))
-  return(data.frame(
-    merge(metadata, data.frame(classless_df), by=0),
+df_with_metadata <- function(df_no_metadata){
+  with_md <- data.frame(
+    merge(metadata, df_no_metadata, by=0),
     row.names = "Row.names",
     check.names = FALSE
-  ))
+  )
+  colnames(with_md) <- c(meta_cols, colnames(df_no_metadata))
+  return(with_md)
 }
 
+## Splits concatenated index cols and restores them as normal cols
 restore_multiindex <- function(base_df){
   base_df[] <- sapply(base_df, as.character)
   base_matrix <- as.matrix(base_df)
@@ -131,18 +145,11 @@ restore_multiindex <- function(base_df){
 
   # Assign the MultiIndex columns and drop rownames
   multiidx_mx <- cbind(split_mx, base_matrix)
-  colnames(multiidx_mx) <- c("Feature ID", "Tag", colnames(base_matrix))
+  colnames(multiidx_mx) <- c(idx_cols, colnames(base_matrix))
   rownames(multiidx_mx) <- NULL
 
   return(multiidx_mx)
 }
-
-## Create the deseqdataset
-sample_table <- data.frame(row.names=names(orig_sample_names), condition=factor(names(sampleConditions)))
-deseq_ds <- DESeq2::DESeqDataSetFromMatrix(countData = counts, colData = sample_table, design = ~ condition)
-
-
-#### ---- Run DESeq2 & write outputs ---- ####
 
 
 ## Create the DESeq Object
@@ -162,7 +169,7 @@ if (plot_pca){
 
 ## Get normalized counts and write them to CSV with original sample names in header
 deseq_counts <- df_with_metadata(DESeq2::counts(deseq_run, normalized=TRUE))
-colnames(deseq_counts)[0:-2] <- orig_sample_names
+colnames(deseq_counts) <- c(meta_cols, sample_cols)
 write.csv(
   restore_multiindex(deseq_counts),
   paste(out_pref, "norm_counts.csv", sep="_"),
@@ -188,10 +195,10 @@ write_dge_table <- function (dge_df, cond1, cond2){
     paste(out_pref,
           "cond1", cond1,
           "cond2", cond2,
-          "deseq_table.csv", sep="_"),
+          "deseq_table.csv",
+          sep="_"),
     row.names=FALSE,
     quote=1:4,
-    na=""
   )
 }
 
