@@ -1,4 +1,5 @@
 include README.md
+exclude tests
 graft tiny
 prune **/__pycache__
 prune **/*_Outputs

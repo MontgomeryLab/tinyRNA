@@ -244,6 +244,13 @@ counter_source_filter: []
 ##-- If source AND type filters are given, a line must match both to be included --##
 counter_type_filter: []
 
+##-- Select the StepVector implementation that is used. Options: HTSeq or Cython --##
+counter_stepvector: 'Cython'
+
+##-- If False: a feature with multiple values in its ID attribute is treated as an error --##
+##-- If True: multiple ID values are allowed, but only the first value is used --##
+counter_allow_multi_id: True
+
 ##-- If True: produce diagnostic logs to indicate what was eliminated and why --##
 counter_diags: False
 

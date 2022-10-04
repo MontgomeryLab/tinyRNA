@@ -63,14 +63,14 @@ Optional arguments:
 
 ## tiny-count
 
-### All-Features
+### All Features
 | Run Config Key         | Commandline Argument   |
 |------------------------|------------------------|
 | counter_all_features:  | `--all-features`       |
 
 By default, tiny-count will only evaluate alignments to features which match a `Select for...` & `with value...` of at least one rule in your Features Sheet. It is this matching feature set, and only this set, which is included in `feature_counts.csv` and therefore available for analysis by tiny-deseq.r and tiny-plot. Switching this option "on" will include all features in every input GFF file, regardless of attribute matches, for tiny-count and downstream steps.
 
-### Normalize-by-Hits
+### Normalize by Hits
  | Run Config Key             | Commandline Argument      |
 |----------------------------|---------------------------|
 | counter-normalize-by-hits: | `--normalize-by-hits T/F` |
@@ -91,6 +91,20 @@ The SAM files produced by the tinyRNA pipeline are collapsed by default; alignme
 | counter_type_filter: [ ]       | `--type-filter TYPE TYPE TYPE ...`         |
 
 You can optionally filter features in your GFF files by specifying sources and/or types that are desired. Source and type refer to GFF columns 2 and 3 respectively. If source _and_ type filters are specified, each feature must match one of the sources _and_ one of the types in order to be included in the counting process. For both filters, an empty list is the same as "allow all."
+
+### StepVector
+| Run Config Key     | Commandline Argument |
+|--------------------|----------------------|
+| counter_stepvector | `--stepvector`       |
+
+A custom Cython implementation of HTSeq's StepVector is used for finding features that overlap each alignment interval. While the core C++ component of the StepVector is the same, we have found that our Cython implementation can result in runtimes up to 50% faster than HTSeq's implementation. This parameter allows you to use HTSeq's StepVector if you wish (for example, if the Cython StepVector is incompatible with your system)
+
+### Allow Features with Multiple ID Values
+ | Run Config Key         | Commandline Argument |
+|------------------------|----------------------|
+| counter_allow_multi_id | `--multi-id`         |
+
+By default, an error will be produced if a GFF file contains a feature with multiple comma separated values listed under its ID attribute. Switching this option "on" instructs tiny-count to accept these features without error, but only the first listed value is used as the ID.
 
 ### Is Pipeline
  | Run Config Key | Commandline Argument |
@@ -127,10 +141,10 @@ Required arguments:
 
 Optional arguments:
   -h, --help            show this help message and exit
-  -sf [SOURCE [SOURCE ...]], --source-filter [SOURCE [SOURCE ...]]
+  -sf [SOURCE ...], --source-filter [SOURCE ...]
                         Only produce counts for features whose GFF column 2
                         matches the source(s) listed
-  -tf [TYPE [TYPE ...]], --type-filter [TYPE [TYPE ...]]
+  -tf [TYPE ...], --type-filter [TYPE ...]
                         Only produce counts for features whose GFF column 3
                         matches the type(s) listed
   -nh T/F, --normalize-by-hits T/F
@@ -139,6 +153,12 @@ Optional arguments:
   -dc, --decollapse     Create a decollapsed copy of all SAM files listed in
                         your Samples Sheet. This option is ignored for non-
                         collapsed inputs.
+  -sv {Cython,HTSeq}, --stepvector {Cython,HTSeq}
+                        Select which StepVector implementation is used to find
+                        features overlapping an interval.
+  -md, --multi-id       Don't treat features with multiple ID values as an
+                        error. Only the first value will be used as the
+                        feature's ID.
   -a, --all-features    Represent all features in output counts table, even if
                         they did not match a Select for / with value.
   -p, --is-pipeline     Indicates that tiny-count was invoked as part of a
