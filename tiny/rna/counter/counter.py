@@ -13,6 +13,7 @@ import os
 from collections import defaultdict
 from typing import Tuple, List, Dict
 
+from tiny.rna.counter.validation import GFFValidator
 from tiny.rna.counter.features import Features, FeatureCounter
 from tiny.rna.counter.statistics import MergedStatsManager
 from tiny.rna.util import report_execution_time, from_here, ReadOnlyDict
@@ -157,6 +158,12 @@ def load_config(features_csv: str, is_pipeline: bool) -> Tuple[List[dict], Dict[
     return rules, gff_files
 
 
+def validate_inputs(gffs, libraries, prefs):
+    if prefs.get('is_pipeline'): return
+    libraries = [lib['File'] for lib in libraries]
+    GFFValidator(gffs, prefs, alignments=libraries).validate()
+
+
 @report_execution_time("Counting and merging")
 def map_and_reduce(libraries, prefs):
     """Assigns one worker process per library and merges the statistics they report"""
@@ -190,6 +197,7 @@ def main():
 
         # Load selection rules and feature sources from the Features Sheet
         selection_rules, gff_file_set = load_config(args['features_csv'], args['is_pipeline'])
+        validate_inputs(gff_file_set, libraries, args)
 
         # global for multiprocessing
         global counter

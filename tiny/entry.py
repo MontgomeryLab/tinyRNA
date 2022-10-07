@@ -87,7 +87,7 @@ def run(tinyrna_cwl_path: str, config_file: str) -> None:
     print("Running the end-to-end analysis...")
 
     # First get the configuration file set up for this run
-    config_object = Configuration(config_file)
+    config_object = Configuration(config_file, validate_inputs=True)
     run_directory = config_object.create_run_directory()
     config_object.save_run_profile()
 
