@@ -1,10 +1,11 @@
+import functools
 import os.path
 import HTSeq
 import sys
 import re
 
 from collections import Counter, defaultdict
-from typing import Tuple, List, Dict, Iterator, Optional, DefaultDict, Set, Union, IO
+from typing import Tuple, List, Dict, Iterator, Optional, DefaultDict, Set, Union, IO, Callable
 from inspect import stack
 
 from tiny.rna.counter.matching import Wildcard
@@ -254,6 +255,25 @@ def infer_strandedness(sam_file: str, intervals: dict) -> str:
     else: return "non-reverse"
 
 
+def parse_gff(file, row_fn: Callable, alias_keys=None):
+    if alias_keys is not None:
+        row_fn = functools.partial(row_fn, alias_keys=alias_keys)
+
+    gff = HTSeq.GFF_Reader(file)
+    try:
+        for row in gff:
+            row_fn(row)
+    except Exception as e:
+        # Append to error message while preserving exception provenance and traceback
+        extended_msg = f"Error occurred on line {gff.line_no} of {file}"
+        if type(e) is KeyError:
+            e.args += (extended_msg,)
+        else:
+            primary_msg = "%s\n%s" % (str(e.args[0]), extended_msg)
+            e.args = (primary_msg,) + e.args[1:]
+        raise e.with_traceback(sys.exc_info()[2]) from e
+
+
 def parse_GFF_attribute_string(attrStr, extra_return_first_value=False, gff_version=2):
     """Parses a GFF attribute string and returns it as a dictionary.
 
@@ -462,33 +482,29 @@ class ReferenceTables:
         """Initiates GFF parsing and returns the resulting reference tables"""
 
         for file, alias_keys in self.gff_files.items():
-            gff = HTSeq.GFF_Reader(file)
-            try:
-                for row in gff:
-                    if row.iv.strand == ".":
-                        raise ValueError(f"Feature {row.name} in {file} has no strand information.")
-                    if not self.filter_match(row):
-                        self.exclude_row(row)
-                        continue
-
-                    # Grab the primary key for this feature
-                    feature_id = self.get_feature_id(row)
-                    # Get feature's classes and identity match tuples
-                    matches, classes = self.get_matches_and_classes(row.attr)
-                    # Only add features with identity matches if all_features is False
-                    if not self.all_features and not len(matches):
-                        self.exclude_row(row)
-                        continue
-                    # Add feature data to root ancestor in the reference tables
-                    root_id = self.add_feature(feature_id, row, matches, classes)
-                    # Add alias to root ancestor if it is unique
-                    self.add_alias(root_id, alias_keys, row.attr)
-            except Exception as e:
-                # Append to error message while preserving exception provenance and traceback
-                e.args = (str(e.args[0]) + "\nError occurred on line %d of %s" % (gff.line_no, file),)
-                raise e.with_traceback(sys.exc_info()[2]) from e
+            parse_gff(file, self.parse_row, alias_keys=alias_keys)
 
         return self.finalize_tables()
+
+    def parse_row(self, row, alias_keys=None):
+        if row.type.lower() == "chromosome" or not self.filter_match(row):
+            self.exclude_row(row)
+            return
+        if row.iv.strand == ".":
+            raise ValueError(f"Feature {row.name} has no strand information.")
+
+        # Grab the primary key for this feature
+        feature_id = self.get_feature_id(row)
+        # Get feature's classes and identity match tuples
+        matches, classes = self.get_matches_and_classes(row.attr)
+        # Only add features with identity matches if all_features is False
+        if not self.all_features and not len(matches):
+            self.exclude_row(row)
+            return
+        # Add feature data to root ancestor in the reference tables
+        root_id = self.add_feature(feature_id, row, matches, classes)
+        # Add alias to root ancestor if it is unique
+        self.add_alias(root_id, alias_keys, row.attr)
 
     def get_root_feature(self, lineage: list) -> str:
         """Returns the highest feature ID in the ancestral tree which passed stage 1 selection.
