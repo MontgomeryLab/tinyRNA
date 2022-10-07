@@ -87,7 +87,6 @@ inputs:
   counter_all_features: boolean?
   counter_type_filter: string[]?
   counter_source_filter: string[]?
-  counter_allow_multi_id: boolean?
   counter_normalize_by_hits: boolean?
 
   # deseq inputs
@@ -215,7 +214,6 @@ steps:
         source: counter_normalize_by_hits
         valueFrom: $(String(self))  # convert boolean -> string
       decollapse: counter_decollapse
-      multi_id: counter_allow_multi_id
       stepvector: counter_stepvector
       is_pipeline: {default: true}
       diagnostics: counter_diags

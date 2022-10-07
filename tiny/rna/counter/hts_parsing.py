@@ -441,25 +441,12 @@ class ReferenceTables:
 
     def __init__(self, gff_files: Dict[str, list], feature_selector, **prefs):
         self.all_features = prefs.get('all_features', False)
-        self.allow_multi_id = prefs.get('multi_id', False)
+        self.stepvector = prefs.get('stepvector', 'HTSeq')
         self.selector = feature_selector
         self._set_filters(**prefs)
         self.gff_files = gff_files
         # ----------------------------------------------------------- Primary Key:
-        if prefs['stepvector'] == 'Cython':
-            try:
-                from tiny.rna.counter.stepvector import StepVector
-                setattr(HTSeq.StepVector, 'StepVector', StepVector)
-                self.feats = HTSeq.GenomicArray("auto", stranded=False)     # Root Match ID
-            except ModuleNotFoundError:
-                prefs['stepvector'] = 'HTSeq'
-                print("Failed to import Cython StepVector\n"
-                      "Falling back to HTSeq's StepVector",
-                      file=sys.stderr)
-
-        if prefs['stepvector'] == 'HTSeq':
-            self.feats = HTSeq.GenomicArrayOfSets("auto", stranded=False)   # Root Match ID
-
+        self.feats = self._init_genomic_array()                         # Root Match ID
         self.parents, self.filtered = {}, set()                         # Original Feature ID
         self.intervals = defaultdict(list)                              # Root Feature ID
         self.matches = defaultdict(set)                                 # Root Match ID
@@ -709,11 +696,25 @@ class ReferenceTables:
             raise ValueError(f"Feature {row.name} does not contain an ID attribute.")
         if len(id_collection) == 0:
             raise ValueError("A feature's ID attribute cannot be empty. This value is required.")
-        if len(id_collection) > 1 and not self.allow_multi_id:
-            err_msg = "A feature's ID attribute cannot contain multiple values. Only one ID per feature is allowed."
-            raise ValueError(err_msg)
+        if len(id_collection) > 1:
+            return ','.join(id_collection)
 
         return id_collection[0]
+
+    def _init_genomic_array(self):
+        if self.stepvector == 'Cython':
+            try:
+                from tiny.rna.counter.stepvector import StepVector
+                setattr(HTSeq.StepVector, 'StepVector', StepVector)
+                return HTSeq.GenomicArray("auto", stranded=False)
+            except ModuleNotFoundError:
+                self.stepvector = 'HTSeq'
+                print("Failed to import Cython StepVector\n"
+                      "Falling back to HTSeq's StepVector",
+                      file=sys.stderr)
+
+        if self.stepvector == 'HTSeq':
+            return HTSeq.GenomicArrayOfSets("auto", stranded=False)
 
     @classmethod
     def _set_filters(cls, **kwargs):

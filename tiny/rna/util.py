@@ -69,3 +69,16 @@ def get_r_safename(name: str) -> str:
     leading_char = lambda x: re.sub(r"^(?=[^a-zA-Z.]+|\.\d)", "X", x)
     special_char = lambda x: re.sub(r"[^a-zA-Z0-9_.]", ".", x)
     return special_char(leading_char(name))
+
+
+class ReadOnlyDict(dict):
+    """A very simple "read-only" wrapper for dictionaries. This will primarily be used
+    for passing around argparse's command line args as a dictionary, but ensuring that
+    preferences cannot be accidentally modified as they are passed around to a menagerie
+    of class constructors. All methods except __setitem__() are deferred to the base class."""
+
+    def __init__(self, rw_dict):
+        super().__init__(rw_dict)
+
+    def __setitem__(self, *_):
+        raise RuntimeError("Attempted to modify read-only dictionary after construction.")
