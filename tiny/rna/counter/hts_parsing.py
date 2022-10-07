@@ -688,12 +688,15 @@ class ReferenceTables:
         if chrom not in self.feats.chrom_vectors:
             self.feats.add_chrom(chrom)
 
-    def get_feature_id(self, row):
-        id_collection = row.attr.get('ID', default=
-            row.attr.get('gene_id', default=None))
+    @staticmethod
+    def get_feature_id(row):
+        id_collection = \
+            row.attr.get('ID',      default=
+            row.attr.get('gene_id', default=
+            row.attr.get('Parent',  default=None)))
 
         if id_collection is None:
-            raise ValueError(f"Feature {row.name} does not contain an ID attribute.")
+            raise ValueError(f"Feature {row.name} does not have an ID attribute.")
         if len(id_collection) == 0:
             raise ValueError("A feature's ID attribute cannot be empty. This value is required.")
         if len(id_collection) > 1:
