@@ -4,7 +4,7 @@ import sys
 
 from collections import Counter, defaultdict
 
-from rna.counter.hts_parsing import parse_gff, ReferenceTables
+from tiny.rna.counter.hts_parsing import parse_gff, ReferenceTables
 
 
 class ReportFormatter:
@@ -47,26 +47,27 @@ class ReportFormatter:
         report_lines = self.recursive_indent(summary, indent)
         return '\n'.join(report_lines)
 
-    def recursive_indent(self, mapping, indent):
+    def recursive_indent(self, mapping: dict, indent: str):
+        """Converts a nested dictionary into a properly indented list of lines
+
+        Args:
+            mapping: the nested dictionary to be formatted
+            indent: the indent string to prepend to lines on the current level
+        """
+
         lines = []
         for key, val in mapping.items():
-            if not val: return lines
+            if not val: continue
             key_header = f"{indent}{self.key_mapper.get(key, key)}: "
             if isinstance(val, dict):
                 lines.append(key_header)
                 lines.extend(self.recursive_indent(val, indent + '\t'))
-            elif isinstance(val, list):
+            elif isinstance(val, (list, set)):
                 lines.append(key_header)
-                lines.extend([indent + '\t' + line for line in val])
+                lines.extend([indent + '\t' + line for line in sorted(map(str, val))])
             else:
                 lines.append(key_header + str(val))
         return lines
-
-    def indent(self, lines, level=1, sep='\n'):
-        ind_token = '\t' * level
-        out = ind_token
-        out += (sep + ind_token).join(lines)
-        return out
 
 
 class GFFValidator:
@@ -75,6 +76,7 @@ class GFFValidator:
 
     targets = {
         "ID attribute": "Features missing a valid identifier attribute",
+        "sam files": "Potentially incompatible SAM alignment files",
         "seq chromosomes": "Chromosomes present in sequence files",
         "gff chromosomes": "Chromosomes present in GFF files",
         "strand": "Features missing strand information",
@@ -90,6 +92,7 @@ class GFFValidator:
         self.prefs = prefs
 
     def validate(self):
+        print("Validating annotation files...")
         self.parse_and_validate_gffs(self.gff_files)
         self.validate_chroms(*self.seq_files)
         self.report.print_report()
@@ -99,24 +102,23 @@ class GFFValidator:
     def parse_and_validate_gffs(self, file_set):
         gff_infractions = defaultdict(Counter)
         for file, *_ in file_set.items():
-            row_fn = functools.partial(self.validate_gff_row, report=gff_infractions[file])
+            row_fn = functools.partial(self.validate_gff_row, issues=gff_infractions, file=file)
             parse_gff(file, row_fn=row_fn)
 
-        if len(gff_infractions.values()):
+        if gff_infractions:
             self.generate_gff_report(gff_infractions)
 
-    def validate_gff_row(self, row, report):
-        # Check for reasons to normally skip row
+    def validate_gff_row(self, row, issues, file):
         if row.type.lower() == "chromosome": return             # Skip definitions of whole chromosomes regardless
         if not self.ReferenceTables.filter_match(row): return   # Obey source/type filters before validation
 
         if row.iv.strand not in ('+', '-'):
-            report["strand"] += 1
+            issues[file]["strand"] += 1
 
         try:
             self.ReferenceTables.get_feature_id(row)
         except:
-            report['ID attribute'] += 1
+            issues[file]['ID attribute'] += 1
 
         self.chrom_set.add(row.iv.chrom)
 
@@ -167,7 +169,7 @@ class GFFValidator:
         return shared, ebwt_chroms
 
     def chroms_shared_with_genomes(self, genome_fastas):
-        """Returns the set intersection between parsed GFF chromosomes and those in the bowtie index"""
+        """Returns the set intersection between parsed GFF chromosomes and those in the reference genome"""
 
         genome_chroms = set()
         for fasta in genome_fastas:
@@ -179,23 +181,22 @@ class GFFValidator:
         shared = genome_chroms & self.chrom_set
         return shared, genome_chroms
 
-    def alignment_chroms_mismatch_heuristic(self, sam_files):
+    def alignment_chroms_mismatch_heuristic(self, sam_files, subset_size=50000):
         """Since alignment files can be very large, we only check that there's at least one shared
         chromosome identifier and only the first subset_size lines are read from each file."""
 
-        subset_size = 5000
-        files_wo_overlap = []
+        files_wo_overlap = {}
 
         for file in sam_files:
             file_chroms = set()
             with open(file, 'rb') as f:
                 for line, i in zip(f, range(subset_size)):
-                    if line[0] == b"@": continue
-                    file_chroms.add(line.split(b'\t')[2])
-                    if i % 1000 == 0 and len(file_chroms & self.chrom_set): break
+                    if line[0] == ord('@'): continue
+                    file_chroms.add(line.split(b'\t')[2].strip().decode())
+                    if i % 10000 == 0 and len(file_chroms & self.chrom_set): break
 
             if not len(file_chroms & self.chrom_set):
-                files_wo_overlap.append(file)
+                files_wo_overlap[file] = file_chroms
 
         return files_wo_overlap
 
@@ -203,19 +204,23 @@ class GFFValidator:
         if shared: return
         header = "GFF files and sequence files don't share any chromosome identifiers."
         summary = {
-            "gff chromosomes": sorted(self.chrom_set),
-            "seq chromosomes": sorted(chroms)
+            "gff chromosomes": self.chrom_set,
+            "seq chromosomes": chroms
         }
 
         self.report.add_error_section(header, summary)
 
     def generate_chrom_heuristics_report(self, suspect_files):
         if not suspect_files: return
+
         header = "GFF files and sequence files might not contain the same chromosome identifiers.\n" \
                  "This is determined from a subset of each sequence file, so false positives may be reported."
+        chroms = {file: [f"Chromosomes sampled: {', '.join(sorted(chroms))}"]
+                  for file, chroms in suspect_files.items()}
+
         summary = {
-            "The following sequence files might be incompatible": sorted(suspect_files),
-            "The following chromosomes are present in GFF files": sorted(self.chrom_set)
+            "sam files": chroms,
+            "gff chromosomes": self.chrom_set
         }
 
         self.report.add_warning_section(header, summary)
