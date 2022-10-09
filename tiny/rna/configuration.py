@@ -12,7 +12,7 @@ from collections import Counter, OrderedDict
 from datetime import datetime
 from typing import Union, Any
 
-from rna.counter.validation import GFFValidator
+from tiny.rna.counter.validation import GFFValidator
 
 timestamp_format = re.compile(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}")
 
@@ -317,7 +317,7 @@ class Configuration(ConfigBase):
 
         gff_files = {gff['path']: [] for gff in self['gff_files']}
         prefs = {x: self[f'{x}_filter'] for x in ['source', 'type']}
-        ebwt = self['ebwt'] if not self['run_bowtie_build'] else None
+        ebwt = self.paths['ebwt'] if not self['run_bowtie_build'] else None
 
         GFFValidator(
             gff_files,
