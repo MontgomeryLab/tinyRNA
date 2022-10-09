@@ -208,7 +208,8 @@ def main():
 
         # Write final outputs
         merged_counts.write_report_files()
-    except:
+    except Exception as e:
+        if type(e) is SystemExit: return
         traceback.print_exception(*sys.exc_info())
         if args['is_pipeline']:
             print("\n\ntiny-count encountered an error. Don't worry! You don't have to start over.\n"
