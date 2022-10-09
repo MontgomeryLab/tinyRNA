@@ -1,4 +1,9 @@
+import contextlib
 import unittest
+import time
+import io
+
+from glob import glob
 from unittest.mock import patch, mock_open
 
 from rna.counter.validation import GFFValidator, ReportFormatter
@@ -80,7 +85,7 @@ class ValidationTests(unittest.TestCase):
             "\t\t" + f"{validator.targets['ID attribute']}: 3"
         ])
 
-        with self.mock_gff_open(mock_gff) as p:
+        with patch('tiny.rna.counter.hts_parsing.HTSeq.utils.open', mock_open(read_data=mock_gff)) as p:
             validator.parse_and_validate_gffs({mock_filename: []})
 
         self.assertListEqual(validator.report.errors, [expected])
@@ -122,6 +127,39 @@ class ValidationTests(unittest.TestCase):
         self.assertSetEqual(shared, set())
         self.assertSetEqual(genome_chroms, {'chr1', 'chr2', 'chr3'})
 
+    """Does GFFValidator's alignments heuristic identify potentially incompatible SAM files?"""
+
+    def test_alignments_heuristic(self):
+        validator = self.make_gff_validator()
+        sam_files = ['./testdata/counter/identity_choice_test.sam',
+                     './testdata/counter/single.sam']
+
+        sam_chroms = {
+            sam_files[0]: {'I', 'V', 'MtDNA'},
+            sam_files[1]: {'I'}
+        }
+
+        # Some chroms are shared
+        validator.chrom_set = {'I', 'not_shared', 'also_not_shared'}
+        bad_sams = validator.alignment_chroms_mismatch_heuristic(sam_files)
+        self.assertDictEqual(bad_sams, {})
+
+        # Some chroms aren't shared
+        validator.chrom_set = {'V', 'not_shared', 'also_not_shared'}
+        bad_sams = validator.alignment_chroms_mismatch_heuristic(sam_files)
+        self.assertDictEqual(bad_sams, {sam_files[1]: sam_chroms[sam_files[1]]})
+
+        # Chroms aren't shared
+        validator.chrom_set = {'not_shared', 'also_not_shared'}
+        bad_sams = validator.alignment_chroms_mismatch_heuristic(sam_files)
+        self.assertDictEqual(bad_sams, sam_chroms)
+
+        # Chroms aren't shared, single SAM file input
+        validator.chrom_set = {'V'}
+        sam_file = sam_files[1]
+        bad_sams = validator.alignment_chroms_mismatch_heuristic([sam_file])
+        self.assertDictEqual(bad_sams, {sam_file: sam_chroms[sam_file]})
+
     """Does GFFValidator.generate_gff_report() correctly process an infractions report?"""
 
     def test_gff_report_output(self):
@@ -135,17 +173,19 @@ class ValidationTests(unittest.TestCase):
 
         expected = '\n'.join([
             "The following issues were found in the GFF files provided:",
-            "\tgff1: ",
+            "\t" + "gff1: ",
             "\t\t" + f"{validator.targets['ID attribute']}: 10",
             "\t\t" + f"{validator.targets['strand']}: 5",
-            "\tgff2: ",
+            "\t" + "gff2: ",
             "\t\t" + f"{validator.targets['ID attribute']}: 1",
-            "\tgff3: ",
+            "\t" + "gff3: ",
             "\t\t" + f"{validator.targets['strand']}: 1"
         ])
 
         validator.generate_gff_report(infractions)
-        self.assertListEqual(validator.report.errors, [expected])
+        self.assertEqual(validator.report.errors[0], expected)
+
+    """Does GFFValidator.generate_chrom_report() correctly process an infractions report?"""
 
     def test_chrom_report_output(self):
         validator = self.make_gff_validator()
@@ -155,18 +195,94 @@ class ValidationTests(unittest.TestCase):
 
         exp_errors = '\n'.join([
             "GFF files and sequence files don't share any chromosome identifiers.",
-            "\tChromosomes are present in GFF files: ",
-            "\t\tchr1",
-            "\t\tchr2",
-            "\tThe following chromosomes are present in sequence files: ",
-            "\t\tchr3",
-            "\t\tchr4"
+            "\t" + f"{validator.targets['gff chromosomes']}: ",
+            "\t\t" + "chr1",
+            "\t\t" + "chr2",
+            "\t" + f"{validator.targets['seq chromosomes']}: ",
+            "\t\t" + "chr3",
+            "\t\t" + "chr4"
         ])
 
         validator.generate_chrom_report(shared_chroms, seq_chroms)
-        # self.assertEqual(validator.report.errors[0], exp_errors)
-        validator.report.errors *= 3
-        validator.report.print_report()
+        self.assertEqual(validator.report.errors[0], exp_errors)
+
+    """Does GFFValidator.generate_chrom_heuristics_report() correctly process an infractions report?"""
+
+    def test_chrom_heuristics_report_output(self):
+        validator = self.make_gff_validator()
+        validator.chrom_set = {'chr1', 'chr2'}
+        suspect_files = {
+            'sam1': {'chr3', 'chr4'},
+            'sam2': {'chr5', 'chr6'}
+        }
+
+        exp_warnings = '\n'.join([
+            "GFF files and sequence files might not contain the same chromosome identifiers.",
+            "This is determined from a subset of each sequence file, so false positives may be reported.",
+            "\t" + f"{validator.targets['sam files']}: ",
+            "\t\t" + "sam1: ",
+            "\t\t\t" + f"Chromosomes sampled: {', '.join(sorted(suspect_files['sam1']))}",
+            "\t\t" + "sam2: ",
+            "\t\t\t" + f"Chromosomes sampled: {', '.join(sorted(suspect_files['sam2']))}",
+            "\t" + f"{validator.targets['gff chromosomes']}: ",
+            "\t\t" + "chr1",
+            "\t\t" + "chr2",
+        ])
+
+        validator.generate_chrom_heuristics_report(suspect_files)
+        self.assertEqual(validator.report.warnings[0], exp_warnings)
+
+    """Does ReportFormatter add and print all sections with correct formatting?"""
+
+    def test_report_multi_section(self):
+        key_mapper = {'short': "long description"}
+        formatter = ReportFormatter(key_mapper)
+
+        formatter.add_warning_section("Header only")
+        formatter.add_warning_section("Header 2", {'short': 5, 'short2': [1,2,3]})
+        formatter.add_error_section("Header 3", {'short': {'level2a': {4,5,6}, 'level2b': 'msg'}})
+
+        expected_report = '\n'.join([
+            ReportFormatter.error_header,
+            "Header 3",
+            "\t" + "long description: ",
+            "\t\t" + "level2a: ",
+            *["\t\t\t" + str(i) for i in [4,5,6]],
+            "\t\t" + "level2b: msg",
+            "",
+            ReportFormatter.warning_header,
+            "Header only",
+            "",
+            ReportFormatter.warning_header,
+            "Header 2",
+            "\t" + "long description: 5",
+            "\t" + "short2: ",
+            *["\t\t" + str(i) for i in [1,2,3]],
+            "",
+            ""
+        ])
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            formatter.print_report()
+
+        self.assertEqual(stdout.getvalue(), expected_report)
+
+    """Do chromosome heuristics run in 2 seconds or less for a full-size test dataset?"""
+
+    def test_chrom_heuristics_runtime(self):
+        validator = self.make_gff_validator()
+        validator.chrom_set = {'none match'}
+        files = glob("./testdata/local_only/sam/full/*.sam")
+
+        start = time.time()
+        _ = validator.alignment_chroms_mismatch_heuristic(files)
+        end = time.time()
+
+        print(f"Chromosome heuristics runtime: {end-start:.2f}s")
+        self.assertLessEqual(end-start, 2)
+
+
 
 if __name__ == '__main__':
     unittest.main()
