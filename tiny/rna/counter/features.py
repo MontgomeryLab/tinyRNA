@@ -209,6 +209,7 @@ class FeatureSelector:
             'full': lambda: IntervalFullMatch(iv),
             'exact': lambda: IntervalExactMatch(iv),
             'partial': lambda: IntervalPartialMatch(iv),
+            'anchored': lambda: IntervalAnchorMatch(iv),
             "5' anchored": lambda: Interval5pMatch(iv) if iv.strand in ('+', '-') else IntervalAnchorMatch(iv),
             "3' anchored": lambda: Interval3pMatch(iv) if iv.strand in ('+', '-') else IntervalAnchorMatch(iv),
         }
