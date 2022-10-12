@@ -135,7 +135,8 @@ def reassemble_gz_w(mock_calls):
 
 # Converts strand character to a boolean value
 def strand_to_bool(strand):
-    assert strand in ['+', '-']
+    assert strand in ('+', '-', None)
+    if strand is None: return None
     return strand == '+'
 
 
