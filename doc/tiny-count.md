@@ -46,15 +46,23 @@ You can optionally specify a tag for each rule. Feature assignments resulting fr
 | _features.csv columns:_ | Hierarchy | Overlap |
 |-------------------------|-----------|---------|
 
-This stage of selection is concerned with the interval overlap between alignments and features. **Overlap is determined in a strandless fashion.** See the [Strand](#strand) section in Stage 3 for refinement of selections by strand.
+Features overlapping a read alignment are selected based on their overlap characteristics. These matches are then sorted by hierarchy value before proceeding to Stage 3.
 
 ### Overlap
-This column allows you to specify which read alignments should be assigned based on how their start and end points overlap with candidate features. Candidates for each matched rule can be selected using the following options:
+This column allows you to specify the extent of overlap required for candidate feature selection:
 - `partial`: alignment overlaps feature by at least one base
 - `full`: alignment does not extend beyond either terminus of the feature
 - `exact`: alignment termini are equal to the feature's
+- `anchored`: alignment's start and/or end is equal to the feature's
 - `5' anchored`: alignment's 5' end is equal to the corresponding terminus of the feature
 - `3' anchored`: alignment's 3' end is equal to the corresponding terminus of the feature
+
+In order to be a candidate, a feature must match a rule in Stage 1, reside on the same chromosome as the alignment, and must overlap the alignment by at least 1 nucleotide.
+
+#### Strandedness and the Overlap Selector
+A feature does not have to be on the same strand as the alignment in order to be a candidate. See the [Strand](#strand) section in Stage 3 for selection by strand. Unstranded features will have `5' anchored` and `3' anchored` overlap selectors downgraded to `anchored` selectors. Alignments overlapping these features are evaluated for shared start and/or end coordinates, but 5'/3' ends are not distinguished.
+
+#### Selector Demonstration
 
 The following diagrams demonstrate the strand semantics of these interval selectors. The first two options show separate illustrations for features on each strand for emphasis. All matches shown in the remaining three options apply to features on either strand.
 ![3'_anchored_5'_anchored](../images/3'_anchored_5'_anchored_interval.png)
@@ -79,9 +87,13 @@ You can use larger hierarchy values to exclude features that are not of interest
 The final stage of selection is concerned with the small RNA attributes of each alignment locus. Candidates are evaluated in order of hierarchy value where smaller values take precedence. Once a match has been found, reads are excluded from remaining candidates with larger hierarchy values.
 
 ### Strand
+This selector defines requirements for the alignment's strand relative to the feature's strand. Here, sense and antisense don't refer to the feature's or alignment's strand alone, but rather whether the alignment is sense/antisense to the feature.
 - `sense`: the alignment strand must match the feature's strand for a match
 - `antisense`: the alignment strand must not match the feature's strand for a match
 - `both`: strand is not evaluated
+
+#### Unstranded Features
+These features will match all strand selectors regardless of the alignment's strand.
 
 
 ### 5' End Nucleotide and Length
