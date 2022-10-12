@@ -706,10 +706,9 @@ class ReferenceTables:
 
     @staticmethod
     def get_feature_id(row):
-        id_collection = \
-            row.attr.get('ID',      default=
-            row.attr.get('gene_id', default=
-            row.attr.get('Parent',  default=None)))
+        id_collection = row.attr.get('ID') \
+                        or row.attr.get('gene_id') \
+                        or row.attr.get('Parent')
 
         if id_collection is None:
             raise ValueError(f"Feature {row.name} does not have an ID attribute.")
