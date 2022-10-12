@@ -82,3 +82,15 @@ class ReadOnlyDict(dict):
 
     def __setitem__(self, *_):
         raise RuntimeError("Attempted to modify read-only dictionary after construction.")
+
+def sorted_natural(lines, reverse=False):
+    """Sorts alphanumeric strings with entire numbers considered in the sorting order,
+    rather than the default behavior which is to sort by the individual ASCII values
+    of the given number. Returns a sorted copy of the list, just like sorted().
+
+    Not sure who to credit... it seems this snippet has been floating around for quite
+    some time. Strange that there isn't something in the standard library for this."""
+
+    convert = lambda text: int(text) if text.isdigit() else text.lower()
+    alphanum_key = lambda key: [convert(c) for c in re.split(r'(\d+)', key)]
+    return sorted(lines, key=alphanum_key, reverse=reverse)

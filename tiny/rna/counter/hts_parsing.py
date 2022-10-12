@@ -255,25 +255,6 @@ def infer_strandedness(sam_file: str, intervals: dict) -> str:
     else: return "non-reverse"
 
 
-def parse_gff(file, row_fn: Callable, alias_keys=None):
-    if alias_keys is not None:
-        row_fn = functools.partial(row_fn, alias_keys=alias_keys)
-
-    gff = HTSeq.GFF_Reader(file)
-    try:
-        for row in gff:
-            row_fn(row)
-    except Exception as e:
-        # Append to error message while preserving exception provenance and traceback
-        extended_msg = f"Error occurred on line {gff.line_no} of {file}"
-        if type(e) is KeyError:
-            e.args += (extended_msg,)
-        else:
-            primary_msg = "%s\n%s" % (str(e.args[0]), extended_msg)
-            e.args = (primary_msg,) + e.args[1:]
-        raise e.with_traceback(sys.exc_info()[2]) from e
-
-
 def parse_GFF_attribute_string(attrStr, extra_return_first_value=False, gff_version=2):
     """Parses a GFF attribute string and returns it as a dictionary.
 
@@ -426,6 +407,25 @@ class CaseInsensitiveAttrs(Dict[str, tuple]):
         raise NotImplementedError(f"CaseInsensitiveAttrs does not support {stack()[1].function}")
 
 
+def parse_gff(file, row_fn: Callable, alias_keys=None):
+    if alias_keys is not None:
+        row_fn = functools.partial(row_fn, alias_keys=alias_keys)
+
+    gff = HTSeq.GFF_Reader(file)
+    try:
+        for row in gff:
+            row_fn(row)
+    except Exception as e:
+        # Append to error message while preserving exception provenance and traceback
+        extended_msg = f"Error occurred on line {gff.line_no} of {file}"
+        if type(e) is KeyError:
+            e.args += (extended_msg,)
+        else:
+            primary_msg = "%s\n%s" % (str(e.args[0]), extended_msg)
+            e.args = (primary_msg,) + e.args[1:]
+        raise
+
+
 # Type aliases for human readability
 ClassTable = AliasTable = DefaultDict[str, Tuple[str]]
 StepVector = HTSeq.GenomicArrayOfSets
@@ -490,8 +490,6 @@ class ReferenceTables:
         if row.type.lower() == "chromosome" or not self.filter_match(row):
             self.exclude_row(row)
             return
-        if row.iv.strand == ".":
-            raise ValueError(f"Feature {row.name} has no strand information.")
 
         # Grab the primary key for this feature
         feature_id = self.get_feature_id(row)
@@ -651,7 +649,8 @@ class ReferenceTables:
 
                 for sub_iv in merged_sub_ivs:
                     finalized_match_tuples = self.selector.build_interval_selectors(sub_iv, sorted_matches.copy())
-                    self.feats[sub_iv] += (tagged_id, sub_iv.strand == '+', tuple(finalized_match_tuples))
+                    strand = self.map_strand(sub_iv.strand)
+                    self.feats[sub_iv] += (tagged_id, strand, tuple(finalized_match_tuples))
 
     @staticmethod
     def _merge_adjacent_subintervals(unmerged_sub_ivs: List[HTSeq.GenomicInterval]) -> list:
@@ -689,6 +688,15 @@ class ReferenceTables:
                 total_feats += self.feats.chrom_vectors[chrom][strand].array.num_steps() - empty_size
 
         return total_feats
+
+    def map_strand(self, gff_value: str):
+        """Maps HTSeq's strand representation (+/-/.) to
+        tinyRNA's strand representation (True/False/None)"""
+
+        return {
+            '+': True,
+            '-': False,
+        }.get(gff_value, None)
 
     def was_matched(self, untagged_id):
         """Checks if the feature ID previously matched on identity, regardless of whether

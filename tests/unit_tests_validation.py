@@ -13,6 +13,14 @@ class ValidationTests(unittest.TestCase):
 
     """======== Helper functions =========================== """
 
+    @classmethod
+    def setUpClass(self):
+        self.strand_ext_header = \
+            'Unstranded features are allowed, but they can lead to potentially unexpected results.\n' \
+            'These features will match "sense", "antisense", and "both" strand selectors. 5\'/3\' anchored\n' \
+            "overlap selectors for these features will evaluate for termini shared with the alignment,\n" \
+            "but will not distinguish between the alignment's 5' and 3' ends."
+
     def make_gff_row(self, **cols):
         template = {
             'seqid': "I",
@@ -54,16 +62,17 @@ class ValidationTests(unittest.TestCase):
         ])
 
         expected = '\n'.join([
-            "The following issues were found in the GFF files provided:",
-            "\t" + f"{mock_filename}: ",
-            "\t\t" + f"{validator.targets['strand']}: 1"
+            "The following issues were found in the GFF files provided. ",
+            self.strand_ext_header,
+            "\t" + f"{validator.targets['strand']}: ",
+            "\t\t" + f"1 missing in {mock_filename}"
         ])
 
         with self.mock_gff_open(mock_gff) as p:
             validator.parse_and_validate_gffs({mock_filename: []})
 
-        self.assertListEqual(validator.report.errors, [expected])
-        self.assertListEqual(validator.report.warnings, [])
+        self.assertListEqual(validator.report.warnings, [expected])
+        self.assertListEqual(validator.report.errors, [])
 
     """Does GFFValidator correctly validate ID attributes?"""
 
@@ -80,9 +89,9 @@ class ValidationTests(unittest.TestCase):
         ])
 
         expected = '\n'.join([
-            "The following issues were found in the GFF files provided:",
-            "\t" + f"{mock_filename}: ",
-            "\t\t" + f"{validator.targets['ID attribute']}: 3"
+            "The following issues were found in the GFF files provided. ",
+            "\t" + f"{validator.targets['ID attribute']}: ",
+            "\t\t" + f"3 missing in {mock_filename}"
         ])
 
         with patch('tiny.rna.counter.hts_parsing.HTSeq.utils.open', mock_open(read_data=mock_gff)) as p:
@@ -165,25 +174,28 @@ class ValidationTests(unittest.TestCase):
     def test_gff_report_output(self):
         validator = self.make_gff_validator()
         infractions = {
-            "gff1": {'ID attribute': 10, 'strand': 5},
-            "gff2": {'ID attribute': 1},
-            "gff3": {'strand': 1},
-            "gff4": {}
+            'ID attribute': {'gff1': 10, 'gff2': 1},
+            'strand': {'gff1': 5, 'gff3': 1}
         }
 
-        expected = '\n'.join([
-            "The following issues were found in the GFF files provided:",
-            "\t" + "gff1: ",
-            "\t\t" + f"{validator.targets['ID attribute']}: 10",
-            "\t\t" + f"{validator.targets['strand']}: 5",
-            "\t" + "gff2: ",
-            "\t\t" + f"{validator.targets['ID attribute']}: 1",
-            "\t" + "gff3: ",
-            "\t\t" + f"{validator.targets['strand']}: 1"
+        gff_sections_header = "The following issues were found in the GFF files provided. "
+        expected_errors = '\n'.join([
+            gff_sections_header,
+            "\t" + f"{validator.targets['ID attribute']}: ",
+            "\t\t" + "10 missing in gff1",
+            "\t\t" + "1 missing in gff2"
+        ])
+
+        expected_warnings = '\n'.join([
+            '\n'.join([gff_sections_header, self.strand_ext_header]),
+            "\t" + f"{validator.targets['strand']}: ",
+            "\t\t" + "5 missing in gff1",
+            "\t\t" + "1 missing in gff3"
         ])
 
         validator.generate_gff_report(infractions)
-        self.assertEqual(validator.report.errors[0], expected)
+        self.assertEqual(validator.report.errors[0], expected_errors)
+        self.assertEqual(validator.report.warnings[0], expected_warnings)
 
     """Does GFFValidator.generate_chrom_report() correctly process an infractions report?"""
 
@@ -226,7 +238,7 @@ class ValidationTests(unittest.TestCase):
             "\t\t\t" + f"Chromosomes sampled: {', '.join(sorted(suspect_files['sam2']))}",
             "\t" + f"{validator.targets['gff chromosomes']}: ",
             "\t\t" + "chr1",
-            "\t\t" + "chr2",
+            "\t\t" + "chr2"
         ])
 
         validator.generate_chrom_heuristics_report(suspect_files)

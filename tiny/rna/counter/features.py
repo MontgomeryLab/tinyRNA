@@ -9,7 +9,8 @@ from .statistics import LibraryStats
 from .matching import *
 
 # Type aliases for human readability
-match_tuple = Tuple[int, int, IntervalSelector]             # (rank, rule, interval selector)
+match_tuple = Tuple[int, int, IntervalSelector]             # (rank, rule, IntervalSelector)
+unbuilt_match_tuple = Tuple[int, int, str]                  # (rank, rule, interval selector keyword)
 feature_record_tuple = Tuple[str, str, Tuple[match_tuple]]  # (feature ID, strand, match tuple)
 
 
@@ -146,7 +147,7 @@ class FeatureSelector:
             rule_def = FeatureSelector.rules_table[rule]
             if alignment['nt5end'] not in rule_def["nt5end"]: continue
             if alignment['Length'] not in rule_def["Length"]: continue
-            if alignment['Strand'] ^ strand not in rule_def["Strand"]: continue
+            if (alignment['Strand'], strand) not in rule_def["Strand"]: continue
 
             selections[feat].add(rule)
             min_rank = rank
@@ -188,7 +189,7 @@ class FeatureSelector:
         return rules_table
 
     @staticmethod
-    def build_interval_selectors(iv: 'HTSeq.GenomicInterval', match_tuples: List[Tuple]):
+    def build_interval_selectors(iv: 'HTSeq.GenomicInterval', match_tuples: List[unbuilt_match_tuple]):
         """Builds partial/full/exact/3' anchored/5' anchored interval selectors
 
         Unlike build_selectors() and build_inverted_identities(), this function
@@ -208,8 +209,8 @@ class FeatureSelector:
             'full': lambda: IntervalFullMatch(iv),
             'exact': lambda: IntervalExactMatch(iv),
             'partial': lambda: IntervalPartialMatch(iv),
-            "5' anchored": lambda: Interval5pMatch(iv),
-            "3' anchored": lambda: Interval3pMatch(iv),
+            "5' anchored": lambda: Interval5pMatch(iv) if iv.strand in ('+', '-') else IntervalAnchorMatch(iv),
+            "3' anchored": lambda: Interval3pMatch(iv) if iv.strand in ('+', '-') else IntervalAnchorMatch(iv),
         }
 
         for i in range(len(match_tuples)):

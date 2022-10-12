@@ -4,6 +4,7 @@ import sys
 
 from collections import Counter, defaultdict
 
+from tiny.rna.util import sorted_natural
 from tiny.rna.counter.hts_parsing import parse_gff, ReferenceTables
 
 
@@ -64,7 +65,7 @@ class ReportFormatter:
                 lines.extend(self.recursive_indent(val, indent + '\t'))
             elif isinstance(val, (list, set)):
                 lines.append(key_header)
-                lines.extend([indent + '\t' + line for line in sorted(map(str, val))])
+                lines.extend([indent + '\t' + line for line in map(str, val)])
             else:
                 lines.append(key_header + str(val))
         return lines
@@ -113,18 +114,42 @@ class GFFValidator:
         if not self.ReferenceTables.filter_match(row): return   # Obey source/type filters before validation
 
         if row.iv.strand not in ('+', '-'):
-            issues[file]["strand"] += 1
+            issues['strand'][file] += 1
 
         try:
             self.ReferenceTables.get_feature_id(row)
         except:
-            issues[file]['ID attribute'] += 1
+            issues['ID attribute'][file] += 1
 
         self.chrom_set.add(row.iv.chrom)
 
     def generate_gff_report(self, infractions):
-        header = "The following issues were found in the GFF files provided:"
-        self.report.add_error_section(header, infractions)
+        header = "The following issues were found in the GFF files provided. "
+
+        if "strand" in infractions:
+            strand_issues = {"strand":
+                sorted_natural([
+                    f"{count} missing in {file}"
+                    for file, count in infractions['strand'].items()
+                ], reverse=True)
+            }
+
+            ext_header = 'Unstranded features are allowed, but they can lead to potentially unexpected results.\n' \
+                         'These features will match "sense", "antisense", and "both" strand selectors. 5\'/3\' anchored\n' \
+                         "overlap selectors for these features will evaluate for termini shared with the alignment,\n" \
+                         "but will not distinguish between the alignment's 5' and 3' ends."
+
+            self.report.add_warning_section('\n'.join([header, ext_header]), strand_issues)
+
+        if "ID attribute" in infractions:
+            idattr_issues = {"ID attribute":
+                sorted_natural([
+                    f"{count} missing in {file}"
+                    for file, count in infractions['ID attribute'].items()
+                ], reverse=True)
+            }
+
+            self.report.add_error_section(header, idattr_issues)
 
     def validate_chroms(self, ebwt=None, genomes=None, alignments=None):
         # First search bowtie indexes if they are available
@@ -204,8 +229,8 @@ class GFFValidator:
         if shared: return
         header = "GFF files and sequence files don't share any chromosome identifiers."
         summary = {
-            "gff chromosomes": self.chrom_set,
-            "seq chromosomes": chroms
+            "gff chromosomes": sorted(self.chrom_set),
+            "seq chromosomes": sorted(chroms)
         }
 
         self.report.add_error_section(header, summary)
@@ -220,7 +245,7 @@ class GFFValidator:
 
         summary = {
             "sam files": chroms,
-            "gff chromosomes": self.chrom_set
+            "gff chromosomes": sorted(self.chrom_set)
         }
 
         self.report.add_warning_section(header, summary)

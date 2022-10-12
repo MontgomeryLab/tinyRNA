@@ -204,7 +204,7 @@ class MyTestCase(unittest.TestCase):
         gff_row_without_id = helpers.read(self.short_gff_file).replace('ID=Gene:WBGene00023193;', '')
         mock_reader = mock_open(read_data=gff_row_without_id)
 
-        expected_err = f"Feature WBGene00023193 does not contain an ID attribute.\n"
+        expected_err = f"Feature WBGene00023193 does not have an ID attribute.\n"
         expected_err += f"Error occurred on line 1 of {self.short_gff_file}"
 
         with patch('tiny.rna.counter.hts_parsing.HTSeq.utils.open', new=mock_reader):
