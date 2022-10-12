@@ -132,7 +132,7 @@ The Features Sheet allows you to define selection rules that determine how featu
 
 Rules apply to features parsed from **all** Feature Sources, with the exception of "Alias by..." which only applies to the Feature Source on the same row. Selection first takes place against feature attributes (GFF column 9), and is directed by defining the attribute you want to be considered (Select for...) and the acceptable values for that attribute (with value...). 
 
-Rules that match features in the first stage of selection will be used in a second stage which performs elimination by hierarchy and interval overlap characteristics. Remaining candidates pass to the third and final stage of selection which examines characteristics of the alignment itself: strand relative to the feature of interest, 5' end nucleotide, and length. 
+Rules that match features in the first stage of selection will be used in a second stage which evaluates alignment vs. feature interval overlap. These matches are sorted by hierarchy value and passed to the third and final stage of selection which examines characteristics of the alignment itself: strand relative to the feature of interest, 5' end nucleotide, and length. 
 
 See [tiny-count's documentation](tiny-count.md#feature-selection) for an explanation of each column.
 
