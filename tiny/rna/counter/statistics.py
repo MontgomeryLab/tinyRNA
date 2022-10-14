@@ -375,7 +375,7 @@ class SummaryStats(MergedStat):
         if len(self.missing_collapser_outputs):
             missing = '\n\t'.join(self.missing_collapser_outputs)
             self.add_warning("The Unique Sequences stat could not be determined for the following libraries because "
-                             "their Collapser outputs were not found in the working directory:\n\t" + missing)
+                             "their tiny-collapse outputs were not found in the working directory:\n\t" + missing)
 
         # Only display conditional categories if they were collected for at least one library
         empty_rows = self.pipeline_stats_df.loc[self.conditional_categories].isna().all(axis='columns')

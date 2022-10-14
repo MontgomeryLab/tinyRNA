@@ -35,9 +35,9 @@ class MyTestCase(unittest.TestCase):
         self.output = {"file": {
             "out": {"exists": "mockPrefixExists_collapsed.fa", "dne": "mockPrefixDNE_collapsed.fa"},
             "low": {"exists": "mockPrefixExists_collapsed_lowcounts.fa", "dne": "mockPrefixDNE_collapsed_lowcounts.fa"}}}
-        self.output["msg"] = {k: "Collapser critical error: "+v['exists']+" already exists.\n"
+        self.output["msg"] = {k: "tiny-collapse critical error: "+v['exists']+" already exists.\n"
                               for k,v in self.output['file'].items()}
-        self.prefix_required_msg = "Collapser critical error: an output file must be specified.\n"
+        self.prefix_required_msg = "tiny-collapse critical error: an output file must be specified.\n"
 
         # Min-length fastq/fasta (single record)
         self.min_seq = "GTTTTGTTGGGCTTTCGCGAAGATCGGAAGAGCACACGTCTGAACTCCAGTCACATCACGATCTCGTATGCCGTCT"
@@ -351,7 +351,7 @@ class MyTestCase(unittest.TestCase):
             with ShellCapture(f'tiny-collapse -i /dev/null -o {prefix}') as test:
                 test()
                 self.assertEqual(test.get_stdout(), '')
-                self.assertIn(f"Collapser critical error: {expected_out_file} already exists.\n", test.get_stderr())
+                self.assertIn(f"tiny-collapse critical error: {expected_out_file} already exists.\n", test.get_stderr())
                 # (Very) roughly tests that the output file of the last test (same prefix) was not modified by this call
                 self.assertEqual(test_collapsed_fa_size, os.path.getsize(expected_out_file))
         finally:
