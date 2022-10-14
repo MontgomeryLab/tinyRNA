@@ -45,7 +45,7 @@ class ConfigBase:
     def __getitem__(self, key: str) -> Any:
         return self.get(key)
 
-    def __setitem__(self, key: str, val: Union[str, list, dict, bool]) -> Union[str, list, dict, bool]:
+    def __setitem__(self, key: str, val: Union[str, list, dict, bool, None]) -> Union[str, list, dict, bool, None]:
         return self.set(key, val)
 
     def __contains__(self, key: str) -> bool:
@@ -169,14 +169,14 @@ class Configuration(ConfigBase):
 
         self.paths = self.load_paths_config()
         self.process_paths_sheet()
-        
+
         self.setup_pipeline()
         self.setup_per_file()
         self.setup_ebwt_idx()
         self.process_sample_sheet()
         self.process_feature_sheet()
         if validate_inputs: self.validate_inputs()
-        
+
     def load_paths_config(self):
         """Constructs a sub-configuration object containing workflow file preferences"""
         path_sheet = self.from_here(self['paths_config'])
@@ -194,11 +194,12 @@ class Configuration(ConfigBase):
         self['run_directory'] = self.paths.from_here(self.paths['run_directory'])
 
         # Configurations that need to be converted from string to a CWL File object
-        self['samples_csv'] = to_cwl_file_class(self.paths.from_here(self.paths['samples_csv']))
-        self['features_csv'] = to_cwl_file_class(self.paths.from_here(self.paths['features_csv']))
+        self['samples_csv'] = to_cwl_file_class(self.paths['samples_csv'])
+        self['features_csv'] = to_cwl_file_class(self.paths['features_csv'])
         self['reference_genome_files'] = [
-            to_cwl_file_class(self.paths.from_here(genome))
+            to_cwl_file_class(genome)
             for genome in self.paths['reference_genome_files']
+            if genome is not None
         ]
 
     def process_sample_sheet(self):
@@ -280,7 +281,10 @@ class Configuration(ConfigBase):
         self.templates = resource_filename('tiny', 'templates/')
 
     def setup_ebwt_idx(self):
-        """Determines Bowtie index prefix and whether bowtie-build should run"""
+        """Determines Bowtie index prefix and whether bowtie-build should run.
+        self['ebwt'] is used for the bowtie commandline argument (see note below)
+        self.paths['ebwt'] is the actual prefix path
+        """
 
         # Empty values for ebwt (''/~/None) trigger bowtie-build
         self['run_bowtie_build'] = not bool(self.paths['ebwt'])
@@ -295,7 +299,7 @@ class Configuration(ConfigBase):
         # verify_bowtie_build_outputs() will check if these end up being long indexes
         self['bt_index_files'] = self.get_bt_index_files()
 
-        # When CWL copies bt_index_filex for the bowtie.cwl InitialWorkDirRequirement, it does not
+        # When CWL copies bt_index_files for the bowtie.cwl InitialWorkDirRequirement, it does not
         # preserve the prefix path. What the workflow "sees" is the ebwt files at working dir root
         self['ebwt'] = os.path.basename(self.paths['ebwt'])
 
