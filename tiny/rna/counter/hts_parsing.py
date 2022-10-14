@@ -6,6 +6,7 @@ import re
 
 from collections import Counter, defaultdict
 from typing import Tuple, List, Dict, Iterator, Optional, DefaultDict, Set, Union, IO, Callable
+from urllib.parse import unquote
 from inspect import stack
 
 from tiny.rna.counter.matching import Wildcard
@@ -258,10 +259,10 @@ def infer_strandedness(sam_file: str, intervals: dict) -> str:
 def parse_GFF_attribute_string(attrStr, extra_return_first_value=False, gff_version=2):
     """Parses a GFF attribute string and returns it as a dictionary.
 
-    This is a slight modification of the same method found in HTSeq.features.
-    It has been adapted to parse comma separated attribute values as separate values.
-    Values are stored in a set for ease of handling in ReferenceTables and because
-    duplicate values don't make sense in this context.
+    This slight modification of the same method found in HTSeq.features includes
+    the following for improved compliance with the GFF format:
+      - Attribute values containing commas are tokenized.
+      - Attribute keys are URL decoded. Values are URL decoded after tokenization.
 
     Per the original HTSeq docstring:
         "If 'extra_return_first_value' is set, a pair is returned: the dictionary
@@ -294,9 +295,9 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False, gff_vers
         if (gff_version == 2) and val.startswith('"') and val.endswith('"'):
             val = val[1:-1]
         # Modification: allow for comma separated attribute values
-        attribute_dict[key] = (val,) \
+        attribute_dict[unquote(key)] = (unquote(val),) \
             if ',' not in val \
-            else tuple(c.strip() for c in val.split(','))
+            else tuple(unquote(c.strip()) for c in val.split(','))
         if extra_return_first_value and i == 0:
             first_val = val
     if extra_return_first_value:
