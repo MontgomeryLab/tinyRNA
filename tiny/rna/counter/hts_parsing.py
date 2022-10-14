@@ -589,7 +589,7 @@ class ReferenceTables:
 
         if len(parent_attr) > 1:
             raise ValueError(f"{feature_id} defines multiple parents which is unsupported at this time.")
-        if len(parent_attr) == 0 or parent is None:
+        if parent in (None, feature_id):
             return feature_id
         if (parent not in self.tags                 # If parent is not a root feature
                 and parent not in self.parents      # If parent doesn't have a parent itself
