@@ -95,12 +95,11 @@ When the pipeline starts up, tinyRNA will process the Run Config based on the co
 If you don't have bowtie indexes already built for your reference genome, tinyRNA can build them for you at the beginning of an end-to-end run and reuse them on subsequent runs with the same Paths File.
 
 To build bowtie indexes:
-1. Open your Run Config in a text editor and find the `run_bowtie_build` key. Set its value to `true` and save it.
-2. Open your Paths File in a text editor and find the `reference_genome_files` key. Add your reference genome file(s) under this key, one per line with a `- ` in front.
-3. Find the `ebwt` key and delete its value.
-4. Execute an end-to-end pipeline run.
+1. Open your Paths File in a text editor and find the `reference_genome_files` key. Add your reference genome file(s) under this key, one per line with a `- ` in front.
+2. Find the `ebwt` key and delete its value.
+3. Execute an end-to-end pipeline run.
 
-Once your indexes have been built, your Paths File will be modified such that `ebwt` points to their location (prefix) within your Run Directory. This means that indexes will not be unnecessarily rebuilt on subsequent runs as long as the same Paths File is used. If you need them rebuilt, simply repeat steps 3 and 4 above.
+Once your indexes have been built, your Paths File will be modified such that `ebwt` points to their location (prefix) within your Run Directory. This means that indexes will not be unnecessarily rebuilt on subsequent runs as long as the same Paths File is used. If you need them rebuilt, simply repeat steps 2 and 3 above.
 
 ## Samples Sheet Details
 |  _Column:_ | Input FASTQ Files   | Sample/Group Name | Replicate Number | Control | Normalization |
