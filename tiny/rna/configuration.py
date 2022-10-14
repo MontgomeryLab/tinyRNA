@@ -11,6 +11,7 @@ from pkg_resources import resource_filename
 from collections import Counter, OrderedDict
 from datetime import datetime
 from typing import Union, Any
+from glob import glob
 
 from tiny.rna.counter.validation import GFFValidator
 
@@ -353,6 +354,28 @@ class Configuration(ConfigBase):
             genomes=self.paths['reference_genome_files'],
             alignments=None  # Used in tiny-count standalone runs
         ).validate()
+    
+    def execute_post_run_tasks(self, return_code):
+        if self['run_bowtie_build']:
+            self.verify_bowtie_build_outputs()
+
+    def verify_bowtie_build_outputs(self):
+        """Ensures that bowtie indexes were produced before saving the new ebwt prefix to the Paths File.
+        If large indexes were produced, paths under bt_index_files need to be updated in the processed Run Config"""
+
+        indexes = glob(os.path.join(self['run_directory'], self['dir_name_bt_build'], "*.ebwt*"))
+        large_indexes = [f for f in indexes if f.endswith(".ebwtl")]
+
+        # Update Paths File
+        if indexes:
+            self.paths.write_processed_config(self.paths.inf)
+
+        # Update Run Config
+        if large_indexes:
+            for expected in self['bt_index_files']:
+                expected['path'] += "l"
+                assert expected['path'] in large_indexes
+            self.write_processed_config()
 
     def save_run_profile(self, config_file_name=None) -> str:
         """Saves Samples Sheet and processed run config to the Run Directory for record keeping"""
