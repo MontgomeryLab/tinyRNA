@@ -288,16 +288,16 @@ class Configuration(ConfigBase):
         if self['run_bowtie_build']:
             # Set the prefix to the run directory outputs. This is necessary
             # because workflow requires bt_index_files to be a populated list.
-            prefix = self.get_ebwt_prefix()
+            self.paths['ebwt'] = self.get_ebwt_prefix()
         else:
-            prefix = self.paths.from_here(self.paths['ebwt'])
+            self.paths['ebwt'] = self.paths.from_here(self.paths['ebwt'])
 
         # verify_bowtie_build_outputs() will check if these end up being long indexes
-        self['bt_index_files'] = self.get_bt_index_files(prefix)
+        self['bt_index_files'] = self.get_bt_index_files()
 
         # When CWL copies bt_index_filex for the bowtie.cwl InitialWorkDirRequirement, it does not
         # preserve the prefix path. What the workflow "sees" is the ebwt files at working dir root
-        self["ebwt"] = os.path.basename(prefix)
+        self['ebwt'] = os.path.basename(self.paths['ebwt'])
 
     def get_ebwt_prefix(self):
         """Determines the output prefix path for bowtie indexes that haven't been built yet. The basename
@@ -314,13 +314,14 @@ class Configuration(ConfigBase):
             self['run_directory'], self['dir_name_bt_build'], genome_basename
         ))
 
-    def get_bt_index_files(self, prefix):
+    def get_bt_index_files(self):
         """Builds the list of expected bowtie index files from the ebwt prefix. If an index file
         doesn't exist then they will be automatically rebuilt from the user's reference genomes.
         File existence isn't checked if bowtie-build is already scheduled for this run."""
 
         try:
             verify_file_paths = not bool(self['run_bowtie_build'])
+            prefix = self.paths['ebwt']
             ext = "ebwt"
 
             return [
@@ -334,9 +335,9 @@ class Configuration(ConfigBase):
 
             if self['reference_genome_files']:
                 print(problem + rebuild, file=sys.stderr)
-                new_prefix = self.get_ebwt_prefix()
+                self.paths['ebwt'] = self.get_ebwt_prefix()
                 self['run_bowtie_build'] = True
-                return self.get_bt_index_files(new_prefix)
+                return self.get_bt_index_files()
             else:
                 sys.exit(problem + userfix)
 
