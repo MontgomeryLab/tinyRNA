@@ -129,8 +129,7 @@ def load_config(paths: 'ConfigBase', is_pipeline: bool) -> List[dict]:
 
     Args:
         paths: a loaded Paths File which provides a path to the Features Sheet
-        is_pipeline: helps locate GFF files defined in the Features Sheet. If true,
-            GFF files are assumed to reside in the working directory.
+        is_pipeline: not currently used; helps properly locate input files
 
     Returns:
         rules: a list of dictionaries, each representing a parsed row from input.
@@ -153,14 +152,26 @@ def load_config(paths: 'ConfigBase', is_pipeline: bool) -> List[dict]:
 
     return rules
 
-def load_annotations(paths, is_pipeline: bool):
+
+def load_gffs(paths, is_pipeline: bool) -> Dict[str, list]:
+    """Determines GFF file paths and the alias attributes for each
+
+    Args:
+        paths: a loaded Paths File which provides a list of GFFs
+        is_pipeline: helps locate GFF files defined in the Paths File. If true,
+            GFF files are assumed to reside in the working directory.
+
+    Returns:
+        gff: a dict of GFF files with lists of alias attribute keys
+    """
+
     gffs = {}
     for entry in paths['gff_files']:
         if is_pipeline:
             filename = os.path.basename(entry['path'])
         else:
             filename = paths.from_here(entry['path'])
-        gffs[filename] = entry['alias']
+        gffs[filename] = entry.get('alias', default=[])
 
     return gffs
 
@@ -200,17 +211,15 @@ def main():
 
     try:
         paths = ConfigBase(args['paths_file'])
-
-        # Determine SAM inputs and their associated library names
         libraries = load_samples(paths, args['is_pipeline'])
+        selection = load_config(paths, args['is_pipeline'])
+        gff_files = load_gffs(paths, args['is_pipeline'])
 
-        # Load selection rules and feature sources from the Features Sheet
-        selection_rules, gff_file_set = load_config(paths, args['is_pipeline'])
-        validate_inputs(gff_file_set, libraries, args)
+        validate_inputs(gff_files, libraries, args)
 
         # global for multiprocessing
         global counter
-        counter = FeatureCounter(gff_file_set, selection_rules, **args)
+        counter = FeatureCounter(gff_files, selection, **args)
 
         # Assign and count features using multiprocessing and merge results
         merged_counts = map_and_reduce(libraries, args)
