@@ -17,7 +17,7 @@ from tiny.rna.counter.validation import GFFValidator
 from tiny.rna.counter.features import Features, FeatureCounter
 from tiny.rna.counter.statistics import MergedStatsManager
 from tiny.rna.util import report_execution_time, from_here, ReadOnlyDict
-from tiny.rna.configuration import CSVReader
+from tiny.rna.configuration import CSVReader, ConfigBase
 
 # Global variables for multiprocessing
 counter: FeatureCounter
@@ -31,10 +31,8 @@ def get_args():
     optional_args = arg_parser.add_argument_group("Optional arguments")
 
     # Required arguments
-    required_args.add_argument('-i', '--samples-csv', metavar='SAMPLES', required=True,
-                               help='your Samples Sheet')
-    required_args.add_argument('-f', '--features-csv', metavar='FEATURES', required=True,
-                               help='your Features Sheet')
+    required_args.add_argument('-p', '--paths-file', metavar='PATHS', required=True,
+                               help='your Paths File')
     required_args.add_argument('-o', '--out-prefix', metavar='OUTPUTPREFIX', required=True,
                                help='output prefix to use for file names')
 
@@ -71,14 +69,14 @@ def get_args():
     return ReadOnlyDict(vars(args))
 
 
-def load_samples(samples_csv: str, is_pipeline: bool) -> List[Dict[str, str]]:
+def load_samples(paths: 'ConfigBase', is_pipeline: bool) -> List[Dict[str, str]]:
     """Parses the Samples Sheet to determine library names and alignment files for counting
 
     Sample files may have a .fastq(.gz) extension (i.e. when tiny-count is called as part of a
     pipeline run) or a .sam extension (i.e. when tiny-count is called as a standalone tool).
 
     Args:
-        samples_csv: a csv file which defines sample group, replicate, and file location
+        paths: a loaded Paths File which provides a path to the Samples Sheet
         is_pipeline: helps locate sample SAM files. If true, files are assumed to reside
             in the working directory. If false, files are assumed to reside in the same
             directory as their source FASTQ files with '_aligned_seqs.sam' appended
@@ -107,6 +105,7 @@ def load_samples(samples_csv: str, is_pipeline: bool) -> List[Dict[str, str]]:
                              "The following filename contained neither:\n%s" % (csv_row_file,))
         return csv_row_file
 
+    samples_csv = paths.from_here(paths['samples_csv'])
     inputs = list()
 
     for row in CSVReader(samples_csv, "Samples Sheet").rows():
@@ -125,11 +124,11 @@ def load_samples(samples_csv: str, is_pipeline: bool) -> List[Dict[str, str]]:
     return inputs
 
 
-def load_config(features_csv: str, is_pipeline: bool) -> Tuple[List[dict], Dict[str, list]]:
-    """Parses the Features Sheet to provide inputs to FeatureSelector and build_reference_tables
+def load_config(paths: 'ConfigBase', is_pipeline: bool) -> List[dict]:
+    """Parses the Features Sheet to provide inputs to FeatureSelector and ReferenceTables
 
     Args:
-        features_csv: a csv file which defines feature sources and selection rules
+        paths: a loaded Paths File which provides a path to the Features Sheet
         is_pipeline: helps locate GFF files defined in the Features Sheet. If true,
             GFF files are assumed to reside in the working directory.
 
@@ -137,11 +136,11 @@ def load_config(features_csv: str, is_pipeline: bool) -> Tuple[List[dict], Dict[
         rules: a list of dictionaries, each representing a parsed row from input.
             Note that these are just rule definitions which FeatureSelector will
             further digest to produce its rules table.
-        gff_files: a dict of GFF files and associated Name Attribute preferences
     """
 
-    rules, gff_files = list(), defaultdict(list)
+    rules = list()
 
+    features_csv = paths.from_here(paths['features_csv'])
     for row in CSVReader(features_csv, "Features Sheet").rows():
         rule = {col: row[col] for col in ["Tag", "Hierarchy", "Strand", "nt5end", "Length", "Overlap"]}
         rule['nt5end'] = rule['nt5end'].upper().translate({ord('U'): 'T'})  # Convert RNA base to cDNA base
@@ -149,13 +148,21 @@ def load_config(features_csv: str, is_pipeline: bool) -> Tuple[List[dict], Dict[
         rule['Hierarchy'] = int(rule['Hierarchy'])                          # Convert hierarchy to number
         rule['Overlap'] = rule['Overlap'].lower()                           # Built later in ReferenceTables
 
-        gff = os.path.basename(row['Source']) if is_pipeline else from_here(features_csv, row['Source'])
-
-        # Duplicate Name Attributes and rule entries are not allowed
-        if row['Name'] not in ["ID", *gff_files[gff]]: gff_files[gff].append(row['Name'])
+        # Duplicate rule entries are not allowed
         if rule not in rules: rules.append(rule)
 
-    return rules, gff_files
+    return rules
+
+def load_annotations(paths, is_pipeline: bool):
+    gffs = {}
+    for entry in paths['gff_files']:
+        if is_pipeline:
+            filename = os.path.basename(entry['path'])
+        else:
+            filename = paths.from_here(entry['path'])
+        gffs[filename] = entry['alias']
+
+    return gffs
 
 
 def validate_inputs(gffs, libraries, prefs):
@@ -192,11 +199,13 @@ def main():
     args = get_args()
 
     try:
+        paths = ConfigBase(args['paths_file'])
+
         # Determine SAM inputs and their associated library names
-        libraries = load_samples(args['samples_csv'], args['is_pipeline'])
+        libraries = load_samples(paths, args['is_pipeline'])
 
         # Load selection rules and feature sources from the Features Sheet
-        selection_rules, gff_file_set = load_config(args['features_csv'], args['is_pipeline'])
+        selection_rules, gff_file_set = load_config(paths, args['is_pipeline'])
         validate_inputs(gff_file_set, libraries, args)
 
         # global for multiprocessing
