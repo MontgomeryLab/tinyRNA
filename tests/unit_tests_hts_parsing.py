@@ -732,5 +732,59 @@ class MyTestCase(unittest.TestCase):
         self.assertFalse(cia.contains_ident(("attrkey4", Wildcard())))
         self.assertFalse(cia.contains_ident((Wildcard(), "attrval7")))
 
+
+@unittest.skip("Long-running test, execute manually")
+class GenomeParsingTests(unittest.TestCase):
+    """Runs full-scale, unmodified GFF3/GTF genomes for select species through the ReferenceTables class"""
+
+    @classmethod
+    def setUpClass(self):
+        import requests
+        release = "54"
+        baseurl = "http://ftp.ensemblgenomes.org/pub/release-"
+        self.data_dir = "./testdata/local_only/gff/"
+        if not os.path.exists(self.data_dir): os.makedirs(self.data_dir)
+
+        self.urls = {
+            'Arabidopsis':
+                baseurl + '%s/plants/{}/arabidopsis_thaliana/Arabidopsis_thaliana.TAIR10.%s.{}.gz' % (release, release),
+            'C. elegans':
+                baseurl + '%s/metazoa/{}/caenorhabditis_elegans/Caenorhabditis_elegans.WBcel235.%s.{}.gz' % (release, release)
+        }
+
+        self.genomes = {
+            species: os.path.join(self.data_dir, os.path.basename(url))
+            for species, url in self.urls.items()
+        }
+
+        # Download genome files if they aren't already in the data dir
+        for ftype in ('gff3', 'gtf'):
+            for species, file_template in self.genomes.items():
+                file = file_template.format(ftype)
+                if os.path.isfile(file): continue
+
+                print(f"Downloading {ftype} genome for {species} from Ensembl...")
+                url = self.urls[species].format(ftype, ftype)
+                with requests.get(url, stream=True) as r:
+                    r.raise_for_status()
+                    with open(file, 'wb') as f:
+                        for chunk in r.iter_content(chunk_size=16384):
+                            f.write(chunk)
+
+    """Does ReferenceTables.get() process all genomes without throwing any errors?"""
+    def test_gff_megazord(self):
+        print("Running GFF Megazord test. This will take a long time...")
+
+        # Single rule with all wildcard selectors, but only Identity is actually relevant within ReferenceTables
+        rules = [{'Identity': ('', ''), 'Tag': '', 'Hierarchy': 0, 'Overlap': 'partial', 'Strand': '', 'nt5end': '', 'Length': ''}]
+        files = {gff.format(ftype): [] for gff in self.genomes.values() for ftype in ('gff3', 'gtf')}
+
+        fs = FeatureSelector(rules, LibraryStats())
+        rt = ReferenceTables(files, fs)
+
+        # The test is passed if this command
+        # completes without throwing errors.
+        rt.get()
+
 if __name__ == '__main__':
     unittest.main()
