@@ -170,7 +170,7 @@ class Configuration(ConfigBase):
         self.process_paths_sheet()
         
         self.setup_pipeline()
-        self.setup_per_file()
+        self.setup_file_groups()
         self.setup_ebwt_idx()
         self.process_sample_sheet()
         self.process_feature_sheet()
@@ -182,23 +182,38 @@ class Configuration(ConfigBase):
         return ConfigBase(path_sheet)
 
     def process_paths_sheet(self):
-        """Loads the paths of all related config files and workflow inputs"""
+        """Loads file paths and groups from the Paths File and resolves relative paths"""
 
         def to_cwl_file_class(input_file_path):
             path_to_input = self.paths.from_here(input_file_path)
             return self.cwl_file(path_to_input)
 
-        for absorb_key in ['ebwt', 'plot_style_sheet', 'adapter_fasta', 'tmp_directory']:
-            self[absorb_key] = self.paths[absorb_key]
-        self['run_directory'] = self.paths.from_here(self.paths['run_directory'])
+        required = ('samples_csv', 'features_csv', 'gff_files')
+        single =   ('samples_csv', 'features_csv', 'plot_style_sheet', 'adapter_fasta')
+        groups =   ('reference_genome_files', 'gff_files')
 
-        # Configurations that need to be converted from string to a CWL File object
-        self['samples_csv'] = to_cwl_file_class(self.paths.from_here(self.paths['samples_csv']))
-        self['features_csv'] = to_cwl_file_class(self.paths.from_here(self.paths['features_csv']))
-        self['reference_genome_files'] = [
-            to_cwl_file_class(self.paths.from_here(genome))
-            for genome in self.paths['reference_genome_files']
-        ]
+        # Convert file path strings to CWL File objects where necessary
+        try:
+            # Individual path strings
+            for key in single:
+                if not self.paths[key] and key not in required: continue
+                self[key] = to_cwl_file_class(self.paths[key])
+    
+            # Lists of path strings
+            for key in groups:
+                self[key] = [
+                    to_cwl_file_class(file) for file in self.paths[key]
+                    if key in required or bool(file)
+                ]
+        except FileNotFoundError as e:
+            msg = f"The file provided for {key} in your Paths File could not be found"
+            msg += "\n\t" + e.filename
+            sys.exit(msg)
+
+        # Path strings that do not need to be converted to CWL File objects
+        for file_string in ['run_directory', 'tmp_directory', 'ebwt']:
+            path = self.paths[file_string]
+            self[file_string] = self.paths.from_here(path) if path else ''
 
     def process_sample_sheet(self):
         sample_sheet = self.paths.from_here(self['samples_csv']['path'])
@@ -242,20 +257,11 @@ class Configuration(ConfigBase):
                   file=sys.stderr)
 
     def process_feature_sheet(self):
-        feature_sheet = self.paths.from_here(self['features_csv']['path'])
-        feature_sheet_dir = os.path.dirname(feature_sheet)
+        # Configuration doesn't currently do anything with Feature Sheet contents
+        return
 
-        csv_reader = CSVReader(feature_sheet, "Features Sheet")
-        for row in csv_reader.rows():
-            gff_file = self.from_here(row['Source'], origin=feature_sheet_dir)
-            try:
-                self.append_if_absent('gff_files', self.cwl_file(gff_file))
-            except FileNotFoundError:
-                line = csv_reader.line_num
-                sys.exit("The GFF file on line %d of your Features Sheet was not found:\n%s" % (line, gff_file))
-
-    def setup_per_file(self):
-        """Per-library settings lists to be populated by entries from samples_csv"""
+    def setup_file_groups(self):
+        """Configuration keys that represent lists of files"""
 
         self.set_default_dict({per_file_setting_key: [] for per_file_setting_key in
             ['in_fq', 'sample_basenames', 'gff_files', 'fastp_report_titles']
@@ -271,10 +277,8 @@ class Configuration(ConfigBase):
         self['run_name'] = self.get('run_name', default=default_run_name) + "_" + self.dt
 
         # Create prefixed Run Directory name
-        run_dir_resolved = self.paths.from_here(self.get('run_directory', default='run_directory'))
-        run_dir_parent = os.path.dirname(run_dir_resolved)
-        run_dir_withdt = self['run_name'] + '_' + os.path.basename(run_dir_resolved)
-        self['run_directory'] = self.joinpath(run_dir_parent, run_dir_withdt)
+        run_dir_parent, run_dir = os.path.split(self['run_directory'].rstrip(os.sep))
+        self['run_directory'] = self.joinpath(run_dir_parent, self['run_name'] + run_dir)
 
         self.templates = resource_filename('tiny', 'templates/')
 
@@ -364,14 +368,12 @@ class CSVReader(csv.DictReader):
         "Features Sheet": OrderedDict({
            "Select for...":     "Key",
            "with value...":     "Value",
-           "Alias by...":       "Name",
            "Tag":               "Tag",
            "Hierarchy":         "Hierarchy",
            "Strand":            "Strand",
            "5' End Nucleotide": "nt5end",
            "Length":            "Length",
            "Overlap":           "Overlap",
-           "Feature Source":    "Source"
         }),
         "Samples Sheet": OrderedDict({
             "Input FASTQ Files": "File",
