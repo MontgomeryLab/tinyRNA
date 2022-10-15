@@ -5,14 +5,22 @@
 #
 # Directions:
 #   1. Fill out the Samples Sheet with files to process + naming scheme. [samples.csv]
-#   2. Fill out the Features Sheet with reference files and selection rules [features.csv]
-#   3. Set samples_csv and features_csv to point to these files
+#   2. Fill out the Features Sheet with selection rules [features.csv]
+#   3. Set samples_csv and features_csv (below) to point to these files
+#   4. Add annotation files and per-file alias preferences to gff_files
 #
 ######-------------------------------------------------------------------------------######
 
 ##-- Path to Sample & Features Sheets (relative paths are relative to this config file) --##
 samples_csv: ./samples.csv
 features_csv: ./features.csv
+
+##-- Each entry: 1. the file, 2. (optional) list of attribute keys for feature aliases --##
+gff_files:
+  - path: "./reference_data/ram1.gff3"
+    alias: [Alias]
+  - path:
+    alias: []
 
 ##-- The final output directory for files produced by the pipeline --#
 run_directory: run_directory

@@ -101,7 +101,7 @@ def run(tinyrna_cwl_path: str, config_file: str) -> None:
         return_code = run_cwltool_subprocess(config_object, workflow, run_directory)
 
     # If the workflow completed without errors, we want to update
-    # the Paths Sheet to point to the new bowtie index prefix
+    # the Paths File to point to the new bowtie index prefix
     if config_object['run_bowtie_build'] and return_code == 0:
         paths_sheet_filename = config_object.paths.inf
         config_object.paths.write_processed_config(paths_sheet_filename)

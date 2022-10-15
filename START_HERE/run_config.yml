@@ -324,7 +324,7 @@ dir_name_plotter: plots
 ###########################################################################################
 
 
-######--------------------------- DERIVED FROM PATHS SHEET --------------------------######
+######--------------------------- DERIVED FROM PATHS FILE ---------------------------######
 #
 # The following configuration settings are automatically derived from the sample sheet
 #
