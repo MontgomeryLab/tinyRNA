@@ -1,7 +1,9 @@
 """Selector classes which determine a match via __contains__()"""
 
-import re
 import HTSeq
+import re
+
+from typing import Optional, Tuple
 
 from tiny.rna.util import Singleton
 
@@ -27,8 +29,11 @@ class StrandMatch:
         self.strand = strand
         self.select = (self.strand == 'sense')
 
-    def __contains__(self, x: bool):
-        return self.select ^ x
+    def __contains__(self, strand_relationship: Tuple[bool, Optional[bool]]):
+        """If feature strand is None, a match is not possible for 'sense' or 'antisense'"""
+
+        aln_strand, feat_strand = strand_relationship
+        return feat_strand is None or aln_strand ^ feat_strand ^ self.select
 
     def __repr__(self): return str(self.strand)
 
@@ -155,6 +160,34 @@ class IntervalExactMatch(IntervalSelector):
     def __repr__(self):
         return f"<Exactly [{self.start}, {self.end})>"
 
+
+class IntervalAnchorMatch(IntervalSelector):
+    """Evaluates whether an alignment's start matches the feature's start, and vice versa for end."""
+
+    def __init__(self, iv: HTSeq.GenomicInterval):
+        super().__init__(iv)
+        assert iv.strand not in ('+', '-')
+
+    def __contains__(self, alignment: dict):
+        """The following diagram demonstrates unstranded anchored matching semantics.
+
+                    Match  |   <------->|
+                    Match  |<-----------|-->
+                    Match  |<---------->|
+                 No match  |  <---------|->
+               <-----------|<==feat_A==>|----------->
+
+        Args:
+            alignment: An alignment dictionary containing strand, start, and end
+
+        Returns: True if the alignment's 5' end is anchored to the strand-appropriate
+            terminus of this feature's interval.
+        """
+
+        return alignment['Start'] == self.start or alignment['End'] == self.end
+
+    def __repr__(self):
+        return f"<Unstranded anchor from {self.start} to {self.end}>"
 
 class Interval5pMatch(IntervalSelector):
     """Evaluates whether an alignment's 5' end is anchored to the corresponding terminus of the feature"""

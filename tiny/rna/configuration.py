@@ -12,6 +12,8 @@ from collections import Counter, OrderedDict
 from datetime import datetime
 from typing import Union, Any
 
+from tiny.rna.counter.validation import GFFValidator
+
 timestamp_format = re.compile(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}")
 
 
@@ -160,7 +162,7 @@ class Configuration(ConfigBase):
             appropriately if 'run_bowtie_index' is set to 'true'
     """
 
-    def __init__(self, config_file: str):
+    def __init__(self, config_file: str, validate_inputs=False):
         # Parse YAML configuration file
         super().__init__(config_file)
 
@@ -172,6 +174,7 @@ class Configuration(ConfigBase):
         self.setup_ebwt_idx()
         self.process_sample_sheet()
         self.process_feature_sheet()
+        if validate_inputs: self.validate_inputs()
         
     def load_paths_config(self):
         """Constructs a sub-configuration object containing workflow file preferences"""
@@ -308,6 +311,21 @@ class Configuration(ConfigBase):
         # When CWL copies bt_index_filex for the bowtie.cwl InitialWorkDirRequirement, it does not
         # preserve the prefix path. What the workflow "sees" is the ebwt files at working dir root
         self["ebwt"] = os.path.basename(self["ebwt"])
+
+    def validate_inputs(self):
+        """For now, only GFF files are validated here"""
+
+        gff_files = {gff['path']: [] for gff in self['gff_files']}
+        prefs = {x: self[f'{x}_filter'] for x in ['source', 'type']}
+        ebwt = self.paths['ebwt'] if not self['run_bowtie_build'] else None
+
+        GFFValidator(
+            gff_files,
+            prefs=prefs,
+            ebwt=ebwt,
+            genomes=self.paths['reference_genome_files'],
+            alignments=None  # Used in tiny-count standalone runs
+        ).validate()
 
     def save_run_profile(self, config_file_name=None) -> str:
         """Saves Samples Sheet and processed run config to the Run Directory for record keeping"""

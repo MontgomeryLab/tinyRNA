@@ -1,10 +1,12 @@
+import functools
 import os.path
 import HTSeq
 import sys
 import re
 
 from collections import Counter, defaultdict
-from typing import Tuple, List, Dict, Iterator, Optional, DefaultDict, Set, Union, IO
+from typing import Tuple, List, Dict, Iterator, Optional, DefaultDict, Set, Union, IO, Callable
+from urllib.parse import unquote
 from inspect import stack
 
 from tiny.rna.counter.matching import Wildcard
@@ -257,10 +259,10 @@ def infer_strandedness(sam_file: str, intervals: dict) -> str:
 def parse_GFF_attribute_string(attrStr, extra_return_first_value=False, gff_version=2):
     """Parses a GFF attribute string and returns it as a dictionary.
 
-    This is a slight modification of the same method found in HTSeq.features.
-    It has been adapted to parse comma separated attribute values as separate values.
-    Values are stored in a set for ease of handling in ReferenceTables and because
-    duplicate values don't make sense in this context.
+    This slight modification of the same method found in HTSeq.features includes
+    the following for improved compliance with the GFF format:
+      - Attribute values containing commas are tokenized.
+      - Attribute keys are URL decoded. Values are URL decoded after tokenization.
 
     Per the original HTSeq docstring:
         "If 'extra_return_first_value' is set, a pair is returned: the dictionary
@@ -293,9 +295,9 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False, gff_vers
         if (gff_version == 2) and val.startswith('"') and val.endswith('"'):
             val = val[1:-1]
         # Modification: allow for comma separated attribute values
-        attribute_dict[key] = (val,) \
+        attribute_dict[unquote(key)] = (unquote(val),) \
             if ',' not in val \
-            else tuple(c.strip() for c in val.split(','))
+            else tuple(unquote(c.strip()) for c in val.split(','))
         if extra_return_first_value and i == 0:
             first_val = val
     if extra_return_first_value:
@@ -406,6 +408,25 @@ class CaseInsensitiveAttrs(Dict[str, tuple]):
         raise NotImplementedError(f"CaseInsensitiveAttrs does not support {stack()[1].function}")
 
 
+def parse_gff(file, row_fn: Callable, alias_keys=None):
+    if alias_keys is not None:
+        row_fn = functools.partial(row_fn, alias_keys=alias_keys)
+
+    gff = HTSeq.GFF_Reader(file)
+    try:
+        for row in gff:
+            row_fn(row)
+    except Exception as e:
+        # Append to error message while preserving exception provenance and traceback
+        extended_msg = f"Error occurred on line {gff.line_no} of {file}"
+        if type(e) is KeyError:
+            e.args += (extended_msg,)
+        else:
+            primary_msg = "%s\n%s" % (str(e.args[0]), extended_msg)
+            e.args = (primary_msg,) + e.args[1:]
+        raise
+
+
 # Type aliases for human readability
 ClassTable = AliasTable = DefaultDict[str, Tuple[str]]
 StepVector = HTSeq.GenomicArrayOfSets
@@ -441,25 +462,12 @@ class ReferenceTables:
 
     def __init__(self, gff_files: Dict[str, list], feature_selector, **prefs):
         self.all_features = prefs.get('all_features', False)
-        self.allow_multi_id = prefs.get('multi_id', False)
+        self.stepvector = prefs.get('stepvector', 'HTSeq')
         self.selector = feature_selector
         self._set_filters(**prefs)
         self.gff_files = gff_files
         # ----------------------------------------------------------- Primary Key:
-        if prefs['stepvector'] == 'Cython':
-            try:
-                from tiny.rna.counter.stepvector import StepVector
-                setattr(HTSeq.StepVector, 'StepVector', StepVector)
-                self.feats = HTSeq.GenomicArray("auto", stranded=False)     # Root Match ID
-            except ModuleNotFoundError:
-                prefs['stepvector'] = 'HTSeq'
-                print("Failed to import Cython StepVector\n"
-                      "Falling back to HTSeq's StepVector",
-                      file=sys.stderr)
-
-        if prefs['stepvector'] == 'HTSeq':
-            self.feats = HTSeq.GenomicArrayOfSets("auto", stranded=False)   # Root Match ID
-
+        self.feats = self._init_genomic_array()                         # Root Match ID
         self.parents, self.filtered = {}, set()                         # Original Feature ID
         self.intervals = defaultdict(list)                              # Root Feature ID
         self.matches = defaultdict(set)                                 # Root Match ID
@@ -475,33 +483,27 @@ class ReferenceTables:
         """Initiates GFF parsing and returns the resulting reference tables"""
 
         for file, alias_keys in self.gff_files.items():
-            gff = HTSeq.GFF_Reader(file)
-            try:
-                for row in gff:
-                    if row.iv.strand == ".":
-                        raise ValueError(f"Feature {row.name} in {file} has no strand information.")
-                    if not self.filter_match(row):
-                        self.exclude_row(row)
-                        continue
-
-                    # Grab the primary key for this feature
-                    feature_id = self.get_feature_id(row)
-                    # Get feature's classes and identity match tuples
-                    matches, classes = self.get_matches_and_classes(row.attr)
-                    # Only add features with identity matches if all_features is False
-                    if not self.all_features and not len(matches):
-                        self.exclude_row(row)
-                        continue
-                    # Add feature data to root ancestor in the reference tables
-                    root_id = self.add_feature(feature_id, row, matches, classes)
-                    # Add alias to root ancestor if it is unique
-                    self.add_alias(root_id, alias_keys, row.attr)
-            except Exception as e:
-                # Append to error message while preserving exception provenance and traceback
-                e.args = (str(e.args[0]) + "\nError occurred on line %d of %s" % (gff.line_no, file),)
-                raise e.with_traceback(sys.exc_info()[2]) from e
+            parse_gff(file, self.parse_row, alias_keys=alias_keys)
 
         return self.finalize_tables()
+
+    def parse_row(self, row, alias_keys=None):
+        if row.type.lower() == "chromosome" or not self.filter_match(row):
+            self.exclude_row(row)
+            return
+
+        # Grab the primary key for this feature
+        feature_id = self.get_feature_id(row)
+        # Get feature's classes and identity match tuples
+        matches, classes = self.get_matches_and_classes(row.attr)
+        # Only add features with identity matches if all_features is False
+        if not self.all_features and not len(matches):
+            self.exclude_row(row)
+            return
+        # Add feature data to root ancestor in the reference tables
+        root_id = self.add_feature(feature_id, row, matches, classes)
+        # Add alias to root ancestor if it is unique
+        self.add_alias(root_id, alias_keys, row.attr)
 
     def get_root_feature(self, lineage: list) -> str:
         """Returns the highest feature ID in the ancestral tree which passed stage 1 selection.
@@ -588,7 +590,7 @@ class ReferenceTables:
 
         if len(parent_attr) > 1:
             raise ValueError(f"{feature_id} defines multiple parents which is unsupported at this time.")
-        if len(parent_attr) == 0 or parent is None:
+        if parent in (None, feature_id):
             return feature_id
         if (parent not in self.tags                 # If parent is not a root feature
                 and parent not in self.parents      # If parent doesn't have a parent itself
@@ -648,7 +650,8 @@ class ReferenceTables:
 
                 for sub_iv in merged_sub_ivs:
                     finalized_match_tuples = self.selector.build_interval_selectors(sub_iv, sorted_matches.copy())
-                    self.feats[sub_iv] += (tagged_id, sub_iv.strand == '+', tuple(finalized_match_tuples))
+                    strand = self.map_strand(sub_iv.strand)
+                    self.feats[sub_iv] += (tagged_id, strand, tuple(finalized_match_tuples))
 
     @staticmethod
     def _merge_adjacent_subintervals(unmerged_sub_ivs: List[HTSeq.GenomicInterval]) -> list:
@@ -687,6 +690,15 @@ class ReferenceTables:
 
         return total_feats
 
+    def map_strand(self, gff_value: str):
+        """Maps HTSeq's strand representation (+/-/.) to
+        tinyRNA's strand representation (True/False/None)"""
+
+        return {
+            '+': True,
+            '-': False,
+        }.get(gff_value, None)
+
     def was_matched(self, untagged_id):
         """Checks if the feature ID previously matched on identity, regardless of whether
         the matching rule was tagged or untagged."""
@@ -701,19 +713,35 @@ class ReferenceTables:
         if chrom not in self.feats.chrom_vectors:
             self.feats.add_chrom(chrom)
 
-    def get_feature_id(self, row):
-        id_collection = row.attr.get('ID', default=
-            row.attr.get('gene_id', default=None))
+    @staticmethod
+    def get_feature_id(row):
+        id_collection = row.attr.get('ID') \
+                        or row.attr.get('gene_id') \
+                        or row.attr.get('Parent')
 
         if id_collection is None:
-            raise ValueError(f"Feature {row.name} does not contain an ID attribute.")
+            raise ValueError(f"Feature {row.name} does not have an ID attribute.")
         if len(id_collection) == 0:
             raise ValueError("A feature's ID attribute cannot be empty. This value is required.")
-        if len(id_collection) > 1 and not self.allow_multi_id:
-            err_msg = "A feature's ID attribute cannot contain multiple values. Only one ID per feature is allowed."
-            raise ValueError(err_msg)
+        if len(id_collection) > 1:
+            return ','.join(id_collection)
 
         return id_collection[0]
+
+    def _init_genomic_array(self):
+        if self.stepvector == 'Cython':
+            try:
+                from tiny.rna.counter.stepvector import StepVector
+                setattr(HTSeq.StepVector, 'StepVector', StepVector)
+                return HTSeq.GenomicArray("auto", stranded=False)
+            except ModuleNotFoundError:
+                self.stepvector = 'HTSeq'
+                print("Failed to import Cython StepVector\n"
+                      "Falling back to HTSeq's StepVector",
+                      file=sys.stderr)
+
+        if self.stepvector == 'HTSeq':
+            return HTSeq.GenomicArrayOfSets("auto", stranded=False)
 
     @classmethod
     def _set_filters(cls, **kwargs):

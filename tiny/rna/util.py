@@ -69,3 +69,28 @@ def get_r_safename(name: str) -> str:
     leading_char = lambda x: re.sub(r"^(?=[^a-zA-Z.]+|\.\d)", "X", x)
     special_char = lambda x: re.sub(r"[^a-zA-Z0-9_.]", ".", x)
     return special_char(leading_char(name))
+
+
+class ReadOnlyDict(dict):
+    """A very simple "read-only" wrapper for dictionaries. This will primarily be used
+    for passing around argparse's command line args as a dictionary, but ensuring that
+    preferences cannot be accidentally modified as they are passed around to a menagerie
+    of class constructors. All methods except __setitem__() are deferred to the base class."""
+
+    def __init__(self, rw_dict):
+        super().__init__(rw_dict)
+
+    def __setitem__(self, *_):
+        raise RuntimeError("Attempted to modify read-only dictionary after construction.")
+
+def sorted_natural(lines, reverse=False):
+    """Sorts alphanumeric strings with entire numbers considered in the sorting order,
+    rather than the default behavior which is to sort by the individual ASCII values
+    of the given number. Returns a sorted copy of the list, just like sorted().
+
+    Not sure who to credit... it seems this snippet has been floating around for quite
+    some time. Strange that there isn't something in the standard library for this."""
+
+    convert = lambda text: int(text) if text.isdigit() else text.lower()
+    alphanum_key = lambda key: [convert(c) for c in re.split(r'(\d+)', key)]
+    return sorted(lines, key=alphanum_key, reverse=reverse)

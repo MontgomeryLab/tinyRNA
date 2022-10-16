@@ -58,11 +58,6 @@ inputs:
     inputBinding:
       prefix: -sv
 
-  multi_id:
-    type: boolean?
-    inputBinding:
-      prefix: -md
-
   all_features:
     type: boolean?
     inputBinding:

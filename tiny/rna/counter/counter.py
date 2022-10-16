@@ -13,9 +13,10 @@ import os
 from collections import defaultdict
 from typing import Tuple, List, Dict
 
+from tiny.rna.counter.validation import GFFValidator
 from tiny.rna.counter.features import Features, FeatureCounter
 from tiny.rna.counter.statistics import MergedStatsManager
-from tiny.rna.util import report_execution_time, from_here
+from tiny.rna.util import report_execution_time, from_here, ReadOnlyDict
 from tiny.rna.configuration import CSVReader
 
 # Global variables for multiprocessing
@@ -54,9 +55,6 @@ def get_args():
     optional_args.add_argument('-sv', '--stepvector', choices=['Cython', 'HTSeq'], default='Cython',
                                help='Select which StepVector implementation is used to find '
                                     'features overlapping an interval.')
-    optional_args.add_argument('-md', '--multi-id', action='store_true',
-                               help="Don't treat features with multiple ID values as an error. "
-                                    "Only the first value will be used as the feature's ID.")
     optional_args.add_argument('-a', '--all-features', action='store_true',
                                help='Represent all features in output counts table, '
                                     'even if they did not match a Select for / with value.')
@@ -70,7 +68,7 @@ def get_args():
     args = arg_parser.parse_args()
     setattr(args, 'normalize_by_hits', args.normalize_by_hits.lower() in ['t', 'true'])
 
-    return args
+    return ReadOnlyDict(vars(args))
 
 
 def load_samples(samples_csv: str, is_pipeline: bool) -> List[Dict[str, str]]:
@@ -160,6 +158,12 @@ def load_config(features_csv: str, is_pipeline: bool) -> Tuple[List[dict], Dict[
     return rules, gff_files
 
 
+def validate_inputs(gffs, libraries, prefs):
+    if prefs.get('is_pipeline'): return
+    libraries = [lib['File'] for lib in libraries]
+    GFFValidator(gffs, prefs, alignments=libraries).validate()
+
+
 @report_execution_time("Counting and merging")
 def map_and_reduce(libraries, prefs):
     """Assigns one worker process per library and merges the statistics they report"""
@@ -189,23 +193,25 @@ def main():
 
     try:
         # Determine SAM inputs and their associated library names
-        libraries = load_samples(args.samples_csv, args.is_pipeline)
+        libraries = load_samples(args['samples_csv'], args['is_pipeline'])
 
         # Load selection rules and feature sources from the Features Sheet
-        selection_rules, gff_file_set = load_config(args.features_csv, args.is_pipeline)
+        selection_rules, gff_file_set = load_config(args['features_csv'], args['is_pipeline'])
+        validate_inputs(gff_file_set, libraries, args)
 
         # global for multiprocessing
         global counter
-        counter = FeatureCounter(gff_file_set, selection_rules, **vars(args))
+        counter = FeatureCounter(gff_file_set, selection_rules, **args)
 
         # Assign and count features using multiprocessing and merge results
-        merged_counts = map_and_reduce(libraries, vars(args))
+        merged_counts = map_and_reduce(libraries, args)
 
         # Write final outputs
         merged_counts.write_report_files()
-    except:
+    except Exception as e:
+        if type(e) is SystemExit: return
         traceback.print_exception(*sys.exc_info())
-        if args.is_pipeline:
+        if args['is_pipeline']:
             print("\n\ntiny-count encountered an error. Don't worry! You don't have to start over.\n"
                   "You can resume the pipeline at tiny-count. To do so:\n\t"
                   "1. cd into your Run Directory\n\t"
