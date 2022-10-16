@@ -1,4 +1,4 @@
-Select for...,with value...,Alias by...,Tag,Hierarchy,Strand,5' End Nucleotide,Length,Overlap,Feature Source
+Select for...,with value...,Alias by...,Classify as...,Hierarchy,Strand,5' End Nucleotide,Length,Overlap,Feature Source
 Class,mask,Alias,,1,both,all,all,Partial,./reference_data/ram1.gff3
 Class,miRNA,Alias,,2,sense,all,16-22,Full,./reference_data/ram1.gff3
 Class,piRNA,Alias,5pA,2,both,A,24-32,Full,./reference_data/ram1.gff3

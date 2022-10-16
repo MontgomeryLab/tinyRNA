@@ -365,7 +365,7 @@ class CSVReader(csv.DictReader):
            "Select for...":     "Key",
            "with value...":     "Value",
            "Alias by...":       "Name",
-           "Tag":               "Tag",
+           "Classify as...":    "Class",
            "Hierarchy":         "Hierarchy",
            "Strand":            "Strand",
            "5' End Nucleotide": "nt5end",
