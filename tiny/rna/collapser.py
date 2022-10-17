@@ -159,7 +159,7 @@ def seq2fasta(seqs: dict, out_prefix: str, thresh: int = 0, gz: bool = False) ->
     Returns: None
     """
 
-    assert out_prefix is not None, "Collapser critical error: an output file prefix must be specified."
+    assert out_prefix is not None, "tiny-collapse critical error: an output file prefix must be specified."
     assert thresh >= 0, "An invalid threshold was specified."
 
     writer, encoder, mode = fasta_interface(gz)
@@ -189,7 +189,7 @@ def look_before_you_leap(out_prefix: str, gz: bool) -> (str, str):
     candidates = tuple(f"{out_prefix}{file}{ext}" for file in ["_collapsed", "_collapsed_lowcounts"])
     for file in candidates:
         if os.path.isfile(file):
-            raise FileExistsError(f"Collapser critical error: {file} already exists.")
+            raise FileExistsError(f"tiny-collapse critical error: {file} already exists.")
 
     return candidates
 
