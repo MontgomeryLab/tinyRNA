@@ -297,6 +297,12 @@ plot_vector_points: False
 plot_len_dist_min:
 plot_len_dist_max:
 
+##-- Use this label in class plots for counts assigned by rules lacking a classifier --##
+plot_unknown_class: "_UNKNOWN_"
+
+##-- Use this label in class plots for unassigned counts --##
+plot_unassigned_class: "_UNASSIGNED_"
+
 
 ######----------------------------- OUTPUT DIRECTORIES ------------------------------######
 #
