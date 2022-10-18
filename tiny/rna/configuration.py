@@ -406,6 +406,7 @@ class CSVReader(csv.DictReader):
         doc_reference = self.tinyrna_sheet_fields[self.doctype]
         expected = {key.lower() for key in doc_reference.keys()}
         read_vals = {val.lower() for val in header.values() if val is not None}
+        self.check_backward_compatibility(read_vals)
 
         unknown = {col_name for col_name in read_vals if col_name not in expected}
         missing = expected - read_vals
@@ -421,6 +422,17 @@ class CSVReader(csv.DictReader):
         if tuple(header_lowercase.values()) != tuple(doc_ref_lowercase.keys()):
             # Remap column order to match client's
             self.fieldnames = tuple(doc_ref_lowercase[key] for key in header_lowercase.values())
+
+    def check_backward_compatibility(self, header_vals):
+        if self.doctype == "Features Sheet" and "tag" in header_vals:
+            raise ValueError('\n'.join([
+                "It looks like you're using a Features Sheet from a version of tinyRNA",
+                'that offered "tagged counting". The "Tag" header has been repurposed as a feature',
+                "classifier and its meaning within the pipeline has changed. Additionally, feature",
+                "class is no longer determined by the Class= attribute. Please review the Stage 1",
+                'section in tiny-count\'s documentation, then rename the "Tag" column to',
+                '"Classify as..." to avoid this error.'
+            ]))
 
 
 if __name__ == '__main__':
