@@ -324,48 +324,35 @@ def load_dge_tables(comparisons: list) -> pd.DataFrame:
             print("Warning: multiple conditions matched in DGE filename. Using first match.")
 
         comparison_name = "_vs_".join(comparison[0])
-        table = pd.read_csv(dgefile).rename({"Unnamed: 0": "Feature ID"}, axis="columns")
-        table = table.set_index(
-            ["Feature ID", "Tag"]
-            # For backward compatability
-            if "Tag" in table.columns
-            else "Feature ID")
+        table = set_counts_table_multiindex(pd.read_csv(dgefile))
 
         de_table[comparison_name] = table['padj']
 
     return de_table
 
 
-def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, show_unknown=True, pval=0.05):
+def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, pval=0.05):
     """Creates PDFs of all pairwise comparison scatter plots from a count table.
     Can highlight classes and/or differentially expressed genes as different colors.
 
     Args:
-        count_df: A dataframe of counts per feature
+        count_df: A dataframe of counts per feature with multiindex (feature ID, classifier)
         dges: A dataframe of differential gene table output to highlight
         view_lims: A tuple of (min, max) data bounds for the plot view
         output_prefix: A string to use as a prefix for saving files
-        classes: An optional dataframe of class(es) per feature. If provided, points are grouped by class
-        show_unknown: If true, class "unknown" will be included if highlighting by classes
+        classes: An optional feature-class multiindex. If provided, points are grouped by class
         pval: The pvalue threshold for determining the outgroup
     """
 
     if classes is not None:
-        uniq_classes = sorted(list(pd.unique(classes)), key=str.lower)
+        uniq_classes = sorted(pd.unique(classes.get_level_values(1)), key=str.lower)
         class_colors = aqplt.assign_class_colors(uniq_classes)
         aqplt.set_dge_class_legend_style()
 
-        if not show_unknown and 'unknown' in uniq_classes:
-            uniq_classes.remove('unknown')
-
         for pair in dges:
             p1, p2 = pair.split("_vs_")
-            # Get list of differentially expressed features for this comparison pair
-            dge_list = list(dges.index[dges[pair] < pval])
-            # Create series of feature -> class relationships
-            class_dges = classes.loc[dge_list]
-            # Gather lists of features by class (listed in order corresponding to unique_classes)
-            grp_args = [class_dges.index[class_dges == cls].tolist() for cls in uniq_classes]
+            dge_dict = (dges[pair] < pval).groupby(level=1).groups
+            grp_args = [dge_dict[cls] for cls in uniq_classes]
 
             labels = uniq_classes
             sscat = aqplt.scatter_grouped(count_df.loc[:, p1], count_df.loc[:, p2], *grp_args, colors=class_colors,
@@ -400,15 +387,10 @@ def load_raw_counts(raw_counts_file: str) -> pd.DataFrame:
     Args:
         raw_counts_file: The raw counts CSV produced by tiny-count
     Returns:
-        The raw counts DataFrame (multiindex if it contains a Tag column)
+        The raw counts DataFrame with a multiindex of (feature id, classifier)
     """
 
-    raw_counts = pd.read_csv(raw_counts_file)
-    return tokenize_feature_classes(raw_counts)\
-        .set_index(["Feature ID", "Tag"]
-                    # For backward compatability
-                    if "Tag" in raw_counts.columns
-                    else "Feature ID")
+    return set_counts_table_multiindex(pd.read_csv(raw_counts_file))
 
 
 def load_rule_counts(rule_counts_file: str) -> pd.DataFrame:
@@ -416,7 +398,7 @@ def load_rule_counts(rule_counts_file: str) -> pd.DataFrame:
     Args:
         rule_counts_file: The rule counts CSV produced by tiny-count
     Returns:
-        The rule counts DataFrame
+        The raw counts DataFrame with a multiindex of (feature id, classifier)
     """
 
     return pd.read_csv(rule_counts_file, index_col=0)
@@ -427,104 +409,51 @@ def load_norm_counts(norm_counts_file: str) -> pd.DataFrame:
     Args:
         norm_counts_file: The norm counts CSV produced by DESeq2
     Returns:
-        The norm counts DataFrame (multiindex if it contains a Tag column)
+        The raw counts DataFrame with a multiindex of (feature id, classifier)
     """
 
-    norm_counts = pd.read_csv(norm_counts_file)\
-        .rename({"Unnamed: 0": "Feature ID"}, axis="columns")
-    return tokenize_feature_classes(norm_counts)\
-        .set_index(["Feature ID", "Tag"]
-                    # For backward compatability
-                    if "Tag" in norm_counts.columns
-                    else "Feature ID")
+    return set_counts_table_multiindex(pd.read_csv(norm_counts_file))
 
 
-def tokenize_feature_classes(counts_df: pd.DataFrame) -> pd.DataFrame:
-    """Parses each Feature Class element into a list. The resulting "lists" are
-    tuples to allow for .groupby() operations
+def set_counts_table_multiindex(counts: pd.DataFrame, fillna='_UNKNOWN_') -> pd.DataFrame:
+    """Assigns a multiindex composed of (Feature ID, Classifier) to the counts table,
+    and fills NaN values in the classifier"""
+
+    level0 = "Feature ID"
+    level1 = "Classifier"
+
+    counts[level1] = counts[level1].fillna(fillna)
+    return counts.set_index([level0, level1])
+
+
+def get_flat_classes(counts_df: pd.DataFrame) -> pd.Index:
+    """Features with multiple associated classes are returned in flattened form
+    with one class per entry, yielding multiple entries for these features. During
+    earlier versions this required some processing, but now we can simply return
+    the multiindex of the counts_df.
+
     Args:
-        counts_df: a DataFrame containing Feature Class list strings
-    Returns: a new DataFrame with tokenized Feature Class elements
-    """
-
-    tokenized = counts_df.copy()
-    tokenized["Feature Class"] = (
-        counts_df["Feature Class"]
-            .str.split(',')
-            .apply(lambda classes: tuple(c.strip() for c in classes))
-    )
-
-    return tokenized
-
-
-def get_flat_classes(counts_df: pd.DataFrame) -> pd.Series:
-    """Features with multiple associated classes must have these classes flattened
-    Args:
-        counts_df: A counts DataFrame with a list-parsed Feature Class column
+        counts_df: A DataFrame with a multiindex of (feature ID, feature class)
     Returns:
-        A Series with the same index as the input and (optionally tagged) single classes
-        per index entry. Index repetitions are allowed for accommodating all classes.
+        The counts_df multiindex
     """
 
-    # For backward compatability
-    if isinstance(counts_df.index, pd.MultiIndex):
-        counts_df["Feature Class"] = counts_df.apply(tag_classes, axis="columns")
-
-    return counts_df["Feature Class"].explode()
-
-
-def tag_classes(row: pd.Series) -> tuple:
-    """Appends a feature's tag to its (tokenized) classes, if present.
-    Intended for use with df.apply()
-    Args:
-        row: a series, as provided by .apply(... , axis="columns")
-    Returns: a tuple of tagged classes for a feature
-    """
-
-    # For backward compatability
-    tag = row.name[1] if type(row.name) is tuple else pd.NA
-    return tuple(
-        cls if pd.isna(tag) else f"{cls} ({tag})"
-        for cls in row["Feature Class"]
-    )
+    return counts_df.index
 
 
 def get_class_counts(raw_counts_df: pd.DataFrame) -> pd.DataFrame:
-    """Calculates class counts from the Raw Counts DataFrame
-
-    If there are multiple classes associated with a feature, then that feature's
-    counts are normalized across all associated classes.
+    """Calculates class counts from level 1 of the raw counts multiindex
 
     Args:
-        raw_counts_df: A DataFrame containing features and their associated classes and counts
+        raw_counts_df: A DataFrame with a multiindex of (feature ID, classifier)
     Returns:
         class_counts: A DataFrame with an index of classes and count entries, per comparison
     """
 
-    # 1. Tokenize Feature Class lists and label each with the feature's Tag (if provided)
-    tokenized = raw_counts_df.copy().drop("Feature Name", axis="columns", errors='ignore')
-    tokenized['Feature Class'] = raw_counts_df.apply(tag_classes, axis="columns")
-
-    # 2. Group and sum by Feature Class. Prepare for 3. by dividing by group's class count.
-    grouped = (tokenized.groupby("Feature Class")
-               .apply(lambda grp: grp.sum() / len(grp.name)))
-
-    """
-    # Sanity check!
-    tokenized.groupby("Feature Class").apply(
-        lambda x: print('\n' + str(x.name) + '\n'
-                        f"{x.iloc[:,1:].sum()} / {len(x.name)} =" + '\n' +
-                        f"{x.iloc[:,1:].sum() / len(x.name)}" + '\n' +
-                        f"Total: {(x.iloc[:,1:].sum() / len(x.name)).sum()}"
-                        )
-    )"""
-
-    # 3. Flatten class lists, regroup and sum by the normalized group counts from 2.
-    class_counts = grouped.reset_index().explode("Feature Class").groupby("Feature Class").sum()
-
-    # Sanity check. Tolerance of 1 is overprovisioned for floating point errors
-    assert -1 < (class_counts.sum().sum() - raw_counts_df.iloc[:,2:].sum().sum()) < 1
-    return class_counts
+    return (raw_counts_df
+            .drop("Feature Name", axis="columns", errors='ignore')
+            .groupby(level=1)
+            .sum())
 
 
 def validate_inputs(args: argparse.Namespace) -> None:
