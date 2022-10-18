@@ -64,19 +64,21 @@ Percentage label darkness and bar colors reflect the magnitude of the rule's con
 
 
 ## class_charts
-Features can have multiple classes associated with them, so it is useful to see the proportions of counts by class. The class_charts plot type shows the percentage of _mapped_ reads that were assigned to features by class. Each feature's associated classes are determined by the `Class=` attribute in your GFF files.
+Features can have multiple classes associated with them, so it is useful to see the proportions of counts by class. The class_charts plot type shows the percentage of _mapped_ reads that were assigned to features by class. Each feature's associated classes are determined by the rules that it matched during Stage 1 selection, and is therefore determined by its GFF annotations.
 
 <p float="left" align="center">
     <img src="../images/plots/class_chart.jpg" width="80%" alt="class_chart with 8 classes"/>
 </p>
 
 #### Class \_UNASSIGNED_
-This category represents the percentage of mapped reads that were unassigned. Sources of unassigned reads include:
+This category represents the percentage of mapped reads that weren't assigned to any features. Sources of unassigned reads include:
 - A lack of features passing selection at alignment loci
 - Alignments which do not overlap with any features
 
-#### Count Normalization
-A feature with multiple associated classes will have its counts split evenly across these classes before being grouped and summed.
+You can customize this label using the [unassigned class parameter.](Parameters.md#labels-for-class-related-plots)
+
+#### Class \_UNKNOWN_
+This category represents the percentage of mapped reads that matched rules which did not have a specified `Classify as...` value. You can customize this label using the [unknown class parameter.](Parameters.md#labels-for-class-related-plots)
 
 #### Class Chart Styles
 Proportions in rule_charts and class_charts are plotted using the same function. Styles are the same between the two. See [rule chart styles](#rule-chart-styles) for more info.
