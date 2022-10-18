@@ -126,7 +126,7 @@ def len_dist_plots(matrices: dict, out_prefix:str, vmin: int = None, vmax: int =
 
             # Save plot
             pdf_name = make_filename([out_prefix, condition_and_rep, "len_dist"], ext='.pdf')
-            plot.figure.savefig(pdf_name)
+            save_plot(plot, "len_dist", pdf_name)
 
 
 def get_len_dist_dict(files_list: list) -> DefaultDict[str, Dict[str, pd.DataFrame]]:
@@ -183,7 +183,7 @@ def class_charts(raw_class_counts: pd.DataFrame, mapped_reads: pd.Series, out_pr
 
         # Save the plot
         pdf_name = make_filename([out_prefix, library, 'class_chart'], ext='.pdf')
-        chart.figure.savefig(pdf_name)
+        save_plot(chart, "class_chart", pdf_name)
 
 
 def rule_charts(rule_counts: pd.DataFrame, out_prefix: str, scale=2, **kwargs):
@@ -211,7 +211,7 @@ def rule_charts(rule_counts: pd.DataFrame, out_prefix: str, scale=2, **kwargs):
 
         # Save the plot
         pdf_name = make_filename([out_prefix, library, 'rule_chart'], ext='.pdf')
-        chart.figure.savefig(pdf_name)
+        save_plot(chart, "rule_chart", pdf_name)
 
 
 def get_proportions_df(counts_df: pd.DataFrame, mapped_totals: pd.Series, un: str, scale=2):
@@ -307,7 +307,7 @@ def scatter_replicates(count_df: pd.DataFrame, samples: dict, output_prefix: str
             rscat.set_xlabel("Log$_{2}$ normalized reads in replicate " + rep1)
             rscat.set_ylabel("Log$_{2}$ normalized reads in replicate " + rep2)
             pdf_name = make_filename([output_prefix, samp, 'replicates', rep1, rep2, 'scatter'], ext='.pdf')
-            rscat.figure.savefig(pdf_name)
+            save_plot(rscat, "replicate_scatter", pdf_name)
 
 
 def load_dge_tables(comparisons: list, class_fillna: str) -> pd.DataFrame:
@@ -373,7 +373,7 @@ def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, pval=0.
             sscat.set_ylabel("Log$_{2}$ normalized reads in " + p2)
             sscat.get_legend().set_bbox_to_anchor((1, 1))
             pdf_name = make_filename([output_prefix, pair, 'scatter_by_dge_class'], ext='.pdf')
-            sscat.figure.savefig(pdf_name)
+            save_plot(sscat, "scatter_by_dge_class", pdf_name)
 
     else:
         for pair in dges:
@@ -390,7 +390,7 @@ def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, pval=0.
             sscat.set_xlabel("Log$_{2}$ normalized reads in " + p1)
             sscat.set_ylabel("Log$_{2}$ normalized reads in " + p2)
             pdf_name = make_filename([output_prefix, pair, 'scatter_by_dge'], ext='.pdf')
-            sscat.figure.savefig(pdf_name)
+            save_plot(sscat, 'scatter_by_dge', pdf_name)
 
 
 def load_raw_counts(raw_counts_file: str, class_fillna: str) -> pd.DataFrame:
@@ -467,6 +467,21 @@ def get_class_counts(raw_counts_df: pd.DataFrame) -> pd.DataFrame:
             .drop("Feature Name", axis="columns", errors='ignore')
             .groupby(level=1)
             .sum())
+
+
+def save_plot(plot, dir_name, filename):
+    """Complete plots are sent here for output patterns that apply to all plots
+    Args:
+        - plot: the finished axes object
+        - dir_name: all plots are placed in subdirectories by this name
+        - filename: the file basename for the plot, including extension
+    """
+
+    if not os.path.isdir(dir_name):
+        os.mkdir(dir_name)
+
+    final_save_path = os.path.join(dir_name, filename)
+    plot.figure.savefig(final_save_path)
 
 
 def validate_inputs(args: argparse.Namespace) -> None:

@@ -265,7 +265,14 @@ steps:
       out_prefix: run_name
       plot_requests: plot_requests
       vector_scatter: plot_vector_points
-    out: [plots, console_output]
+    out:
+      - console_output
+      - len_dist
+      - rule_chart
+      - class_chart
+      - replicate_scatter
+      - sample_avg_scatter_by_dge
+      - sample_avg_scatter_by_dge_class
 
   organize_bt_indexes:
     run: ../tools/make-subdir.cwl
@@ -329,7 +336,9 @@ steps:
     run: ../tools/make-subdir.cwl
     in:
       dir_files:
-        source: [ plotter/plots, plotter/console_output, dge/pca_plot ]
+        source: [plotter/len_dist, plotter/rule_chart, plotter/class_chart, plotter/replicate_scatter,
+                 plotter/sample_avg_scatter_by_dge, plotter/sample_avg_scatter_by_dge_class,
+                 dge/pca_plot, plotter/console_output]
         pickValue: all_non_null
       dir_name: dir_name_plotter
     out: [ subdir ]

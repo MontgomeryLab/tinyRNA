@@ -101,10 +101,36 @@ inputs:
     doc: "A list of desired plot types to produce"
 
 outputs:
-  plots:
-    type: File[]?
+
+  len_dist:
+    type: Directory?
     outputBinding:
-      glob: "*.pdf"
+      glob: len_dist
+
+  rule_chart:
+    type: Directory?
+    outputBinding:
+      glob: rule_chart
+
+  class_chart:
+    type: Directory?
+    outputBinding:
+      glob: class_chart
+
+  replicate_scatter:
+    type: Directory?
+    outputBinding:
+      glob: replicate_scatter
+
+  sample_avg_scatter_by_dge:
+    type: Directory?
+    outputBinding:
+      glob: scatter_by_dge
+
+  sample_avg_scatter_by_dge_class:
+    type: Directory?
+    outputBinding:
+      glob: scatter_by_dge_class
 
   console_output:
     type: stdout
