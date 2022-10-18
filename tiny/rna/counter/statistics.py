@@ -185,7 +185,7 @@ class MergedStatsManager:
 
 class FeatureCounts(MergedStat):
     def __init__(self, Features_obj):
-        self.feat_counts_df = pd.DataFrame(index=set.union(*Features_obj.tags.values()))
+        self.feat_counts_df = pd.DataFrame(index=set.union(*Features_obj.classes.values()))
         self.aliases = Features_obj.aliases
         self.norm_prefs = {}
 

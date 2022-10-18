@@ -495,7 +495,7 @@ class ReferenceTables:
         feature_id = self.get_feature_id(row)
         # Perform Stage 1 selection
         matches = self.get_matches(row.attr)
-        # Only add features with identity matches if all_features is False
+        # Skip features that lack matches unless all_features is True
         if not self.all_features and not len(matches):
             self.exclude_row(row)
             return
@@ -567,9 +567,9 @@ class ReferenceTables:
         for ident, rule_indexes in self.selector.inv_ident.items():
             if row_attrs.contains_ident(ident):
                 for index in rule_indexes:
-                    # Non-tagged matches are pooled under '' empty string
-                    tag = self.selector.rules_table[index]['Class']
-                    identity_matches[tag].add((
+                    # Unclassified matches are pooled under '' empty string
+                    classifier = self.selector.rules_table[index]['Class']
+                    identity_matches[classifier].add((
                         index,
                         self.selector.rules_table[index]['Hierarchy'],
                         self.selector.rules_table[index]['Overlap']
@@ -623,6 +623,9 @@ class ReferenceTables:
 
         return self.feats, self.alias, self.tags
 
+    def _finalize_aliases(self):
+        self.alias = {feat: tuple(sorted(aliases, key=str.lower)) for feat, aliases in self.alias.items()}
+
     def _finalize_features(self):
         """Assigns matches to their corresponding intervals by populating GenomicArray with match tuples"""
 
@@ -666,9 +669,6 @@ class ReferenceTables:
         merged_ivs.append(continuous_iv)
 
         return merged_ivs
-
-    def _finalize_aliases(self):
-        self.alias = {feat: tuple(sorted(aliases, key=str.lower)) for feat, aliases in self.alias.items()}
 
     def get_feats_table_size(self) -> int:
         """Returns the sum of features across all chromosomes and strands"""

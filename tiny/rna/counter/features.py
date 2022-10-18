@@ -17,12 +17,12 @@ feature_record_tuple = Tuple[str, str, Tuple[match_tuple]]  # (feature ID, stran
 class Features(metaclass=Singleton):
     chrom_vectors: HTSeq.ChromVector
     aliases: dict
-    tags: dict
+    classes: dict
 
-    def __init__(_, features: HTSeq.GenomicArrayOfSets, aliases: dict, tags: dict):
+    def __init__(_, features: HTSeq.GenomicArrayOfSets, aliases: dict, classes: dict):
         Features.chrom_vectors = features.chrom_vectors  # For interval -> feature record tuple lookups
         Features.aliases = aliases                       # For feature ID -> preferred feature name lookups
-        Features.tags = tags                             # For feature ID -> match IDs
+        Features.classes = classes                       # For feature ID -> match IDs
 
 
 class FeatureCounter:
