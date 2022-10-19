@@ -35,9 +35,7 @@ The output you see on your terminal is from `cwltool`, which coordinates the exe
 When the analysis is complete you'll notice a new folder has appeared whose name contains the date and time of the run. Inside you'll find subdirectories containing the file and terminal outputs for each step, and the processed Run Config file for auto-documentation of the run.
 
 ### Bowtie indexes
-Bowtie indexes were built during this run because paths.yml didn't define an `ebwt` prefix. Now, you'll see the `ebwt` points to the freshly built indexes in your run directory. This means that indexes won't be rebuilt during any subsequent runs that use this `paths.yml` file. If you need to rebuild your indexes:
-1. Change the value of ebwt to `ebwt: ''` in paths.yml
-2. Ensure that your Run Config file contains `run_bowtie_build: True`
+Bowtie indexes were built during this run because `paths.yml` didn't define an `ebwt` prefix. Now, you'll see the `ebwt` points to the freshly built indexes in your run directory. This means that indexes won't be rebuilt during any subsequent runs that use this `paths.yml` file. If you need to rebuild your indexes, simply delete the value to the right of `ebwt` in paths.yml
 
 ## Running Your Data
 Expected runtime: ~10-60 minutes (expect longer runtimes if a bowtie index must be built)

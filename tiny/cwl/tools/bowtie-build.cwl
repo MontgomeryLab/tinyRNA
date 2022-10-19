@@ -83,7 +83,7 @@ outputs:
   index_files:
     type: File[]
     outputBinding:
-      glob: $(inputs.ebwt_base).*.ebwt
+      glob: $(inputs.ebwt_base).*.ebwt*
 
   console_output:
     type: stdout

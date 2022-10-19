@@ -11,6 +11,7 @@ from pkg_resources import resource_filename
 from collections import Counter, OrderedDict
 from datetime import datetime
 from typing import Union, Any
+from glob import glob
 
 from tiny.rna.counter.validation import GFFValidator
 
@@ -44,7 +45,7 @@ class ConfigBase:
     def __getitem__(self, key: str) -> Any:
         return self.get(key)
 
-    def __setitem__(self, key: str, val: Union[str, list, dict, bool]) -> Union[str, list, dict, bool]:
+    def __setitem__(self, key: str, val: Union[str, list, dict, bool, None]) -> Union[str, list, dict, bool, None]:
         return self.set(key, val)
 
     def __contains__(self, key: str) -> bool:
@@ -168,14 +169,14 @@ class Configuration(ConfigBase):
 
         self.paths = self.load_paths_config()
         self.process_paths_sheet()
-        
+
         self.setup_pipeline()
         self.setup_per_file()
         self.setup_ebwt_idx()
         self.process_sample_sheet()
         self.process_feature_sheet()
         if validate_inputs: self.validate_inputs()
-        
+
     def load_paths_config(self):
         """Constructs a sub-configuration object containing workflow file preferences"""
         path_sheet = self.from_here(self['paths_config'])
@@ -193,11 +194,12 @@ class Configuration(ConfigBase):
         self['run_directory'] = self.paths.from_here(self.paths['run_directory'])
 
         # Configurations that need to be converted from string to a CWL File object
-        self['samples_csv'] = to_cwl_file_class(self.paths.from_here(self.paths['samples_csv']))
-        self['features_csv'] = to_cwl_file_class(self.paths.from_here(self.paths['features_csv']))
+        self['samples_csv'] = to_cwl_file_class(self.paths['samples_csv'])
+        self['features_csv'] = to_cwl_file_class(self.paths['features_csv'])
         self['reference_genome_files'] = [
-            to_cwl_file_class(self.paths.from_here(genome))
+            to_cwl_file_class(genome)
             for genome in self.paths['reference_genome_files']
+            if genome is not None
         ]
 
     def process_sample_sheet(self):
@@ -279,38 +281,69 @@ class Configuration(ConfigBase):
         self.templates = resource_filename('tiny', 'templates/')
 
     def setup_ebwt_idx(self):
-        """Bowtie index files and prefix"""
+        """Determines Bowtie index prefix and whether bowtie-build should run.
+        self['ebwt'] is used for the bowtie commandline argument (see note below)
+        self.paths['ebwt'] is the actual prefix path
+        """
 
-        # Determine if bowtie-build should run, and set Bowtie index prefix accordingly
-        bt_index_prefix = self.paths['ebwt']
-        if self['run_bowtie_build'] and not bt_index_prefix:
-            if not self['reference_genome_files']:
-                raise ValueError(f"If {self.basename} contains 'run_bowtie_build: True', you "
-                                 f"need to provide your reference genome files in {self.paths.basename}")
+        # Empty values for ebwt (''/~/None) trigger bowtie-build
+        self['run_bowtie_build'] = not bool(self.paths['ebwt'])
 
-            # Outputs are saved in {run_directory}/bowtie-build, within which prefix is first genome file's basename
-            first_genome_file = self.paths.from_here(self['reference_genome_files'][0]['path'])
-            bt_index_prefix = self.prefix(os.path.join(
-                self['run_directory'], "bowtie-build", os.path.basename(first_genome_file))
-            )
-
-            self['ebwt'] = self.paths['ebwt'] = bt_index_prefix
+        if self['run_bowtie_build']:
+            # Set the prefix to the run directory outputs. This is necessary
+            # because workflow requires bt_index_files to be a populated list.
+            self.paths['ebwt'] = self.get_ebwt_prefix()
         else:
-            # bowtie-build should only run if 'run_bowtie_build' is True AND ebwt (index prefix) is undefined
-            self['run_bowtie_build'] = False
-            bt_index_prefix = self.paths.from_here(bt_index_prefix)
+            self.paths['ebwt'] = self.paths.from_here(self.paths['ebwt'])
 
-        # Bowtie index files
-        try:
-            self['bt_index_files'] = [self.cwl_file(bt_index_prefix + postfix, verify=(not self['run_bowtie_build']))
-                            for postfix in ['.1.ebwt', '.2.ebwt', '.3.ebwt', '.4.ebwt', '.rev.1.ebwt', '.rev.2.ebwt']]
-        except FileNotFoundError as e:
-            sys.exit("The following file could not be found from the Bowtie index prefix defined in your Paths File:\n"
-                     "%s" % (e.filename,))
+        # verify_bowtie_build_outputs() will check if these end up being long indexes
+        self['bt_index_files'] = self.get_bt_index_files()
 
-        # When CWL copies bt_index_filex for the bowtie.cwl InitialWorkDirRequirement, it does not
+        # When CWL copies bt_index_files for the bowtie.cwl InitialWorkDirRequirement, it does not
         # preserve the prefix path. What the workflow "sees" is the ebwt files at working dir root
-        self["ebwt"] = os.path.basename(self["ebwt"])
+        self['ebwt'] = os.path.basename(self.paths['ebwt'])
+
+    def get_ebwt_prefix(self):
+        """Determines the output prefix path for bowtie indexes that haven't been built yet. The basename
+        of the prefix path is simply the basename of the reference genome sans file extension"""
+
+        genome_files = self['reference_genome_files']
+        if not genome_files:
+            raise ValueError("If your Paths Sheet doesn't have a value for \"ebtw:\", then bowtie indexes "
+                             "will be built, but you'll need to provide your reference genome files under "
+                             '"reference_genome_files:" (also in your Paths Sheet)')
+
+        genome_basename = os.path.basename(genome_files[0]['path'])
+        return self.prefix(os.path.join( # prefix path:
+            self['run_directory'], self['dir_name_bt_build'], genome_basename
+        ))
+
+    def get_bt_index_files(self):
+        """Builds the list of expected bowtie index files from the ebwt prefix. If an index file
+        doesn't exist then they will be automatically rebuilt from the user's reference genomes.
+        File existence isn't checked if bowtie-build is already scheduled for this run."""
+
+        try:
+            verify_file_paths = not bool(self['run_bowtie_build'])
+            prefix = self.paths['ebwt']
+            ext = "ebwt"
+
+            return [
+                self.cwl_file(f"{prefix}.{subext}.{ext}", verify=verify_file_paths)
+                for subext in ['1', '2', '3', '4', 'rev.1', 'rev.2']
+            ]
+        except FileNotFoundError as e:
+            problem = "The following Bowtie index file couldn't be found:\n\t%s\n\n" % (e.filename,)
+            rebuild = "Indexes will be built from your reference genome files during this run."
+            userfix = "Please either correct your ebwt prefix or add reference genomes in the Paths File."
+
+            if self['reference_genome_files']:
+                print(problem + rebuild, file=sys.stderr)
+                self.paths['ebwt'] = self.get_ebwt_prefix()
+                self['run_bowtie_build'] = True
+                return self.get_bt_index_files()
+            else:
+                sys.exit(problem + userfix)
 
     def validate_inputs(self):
         """For now, only GFF files are validated here"""
@@ -326,6 +359,28 @@ class Configuration(ConfigBase):
             genomes=self.paths['reference_genome_files'],
             alignments=None  # Used in tiny-count standalone runs
         ).validate()
+    
+    def execute_post_run_tasks(self, return_code):
+        if self['run_bowtie_build']:
+            self.verify_bowtie_build_outputs()
+
+    def verify_bowtie_build_outputs(self):
+        """Ensures that bowtie indexes were produced before saving the new ebwt prefix to the Paths File.
+        If large indexes were produced, paths under bt_index_files need to be updated in the processed Run Config"""
+
+        indexes = glob(os.path.join(self['run_directory'], self['dir_name_bt_build'], "*.ebwt*"))
+        large_indexes = [f for f in indexes if f.endswith(".ebwtl")]
+
+        # Update Paths File
+        if indexes:
+            self.paths.write_processed_config(self.paths.inf)
+
+        # Update Run Config
+        if large_indexes:
+            for expected in self['bt_index_files']:
+                expected['path'] += "l"
+                assert expected['path'] in large_indexes
+            self.write_processed_config()
 
     def save_run_profile(self, config_file_name=None) -> str:
         """Saves Samples Sheet and processed run config to the Run Directory for record keeping"""
