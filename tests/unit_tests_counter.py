@@ -33,7 +33,7 @@ class CounterTests(unittest.TestCase):
             'Select for...':     "Class",
             'with value...':     "CSR",
             'Alias by...':       "Alias",
-            'Tag':               '',
+            'Classify as...':    '',
             'Hierarchy':         "1",
             'Strand':            "antisense",
             "5' End Nucleotide": '"C,G,U"',  # Needs to be double-quoted due to commas
@@ -47,7 +47,7 @@ class CounterTests(unittest.TestCase):
         _row = self.csv_feat_row_dict
         self.parsed_feat_rule = [{
             'Identity':  (_row['Select for...'], _row['with value...']),
-            'Tag':       _row['Tag'],
+            'Class':     _row['Classify as...'],
             'Hierarchy': int(_row['Hierarchy']),
             'Strand':    _row['Strand'],
             'nt5end':    _row["5' End Nucleotide"].upper().translate({ord('U'): 'T'}),
@@ -81,7 +81,7 @@ class CounterTests(unittest.TestCase):
     @staticmethod
     def csv(type, rows, header=()):
         if type == "features.csv":
-            header = ['Select for...', 'with value...', 'Alias by...', 'Tag', 'Hierarchy',
+            header = ['Select for...', 'with value...', 'Alias by...', 'Classify as...', 'Hierarchy',
                       'Strand', "5' End Nucleotide", 'Length', 'Overlap', 'Feature Source']
         elif type == "samples.csv":
             header = ['Input FASTQ Files', 'Sample/Group Name', 'Replicate Number', 'Control', 'Normalization']
