@@ -415,10 +415,10 @@ class SamplesSheet:
 
         self.is_compatible_df = self.validate_deseq_compatibility(reps_per_group)
 
-    def validate_fastq_filepath(self, file):
+    def validate_fastq_filepath(self, file: str):
         """Checks file existence, extension, and duplicate entries.
         Args:
-            file: fastq path which has already been resolved relative to self.dir
+            file: fastq file path. For  which has already been resolved relative to self.dir
         """
 
         root, ext = os.path.splitext(file)
@@ -435,10 +435,10 @@ class SamplesSheet:
             "Fastq files cannot be listed more than once in {selfname} (row {row_num})"\
             .format(selfname=self.basename, row_num=self.csv.row_num)
 
-    def validate_group_rep(self, group, rep):
+    def validate_group_rep(self, group:str, rep:str):
         assert (group, rep) not in self.groups_reps, \
-            "The same group and replicate number cannot be assigned " \
-            "to more than one fastq file in {selfname} (row {row_num})"\
+            "The same group and replicate number cannot appear on " \
+            "more than one row in {selfname} (row {row_num})"\
             .format(selfname=self.basename, row_num=self.csv.row_num)
 
     def validate_control_group(self, is_control: bool, group: str):
@@ -447,10 +447,11 @@ class SamplesSheet:
             "tinyRNA does not support multiple control conditions " \
             "(row {row_num} in {selfname}).\nHowever, if the control condition " \
             "is unspecified, all possible comparisons will be made and this " \
-            "should accomplish your goal."
+            "should accomplish your goal."\
+            .format(row_num=self.csv.row_num, selfname=self.basename)
 
     @staticmethod
-    def validate_deseq_compatibility(sample_groups: Counter):
+    def validate_deseq_compatibility(sample_groups: Counter) -> bool:
         total_samples = sum(sample_groups.values())
         total_coefficients = len(sample_groups)
         degrees_of_freedom = total_samples - total_coefficients

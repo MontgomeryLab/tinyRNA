@@ -78,7 +78,7 @@ class CounterTests(unittest.TestCase):
 
     # === HELPERS ===
     
-    def get_parsed_samples_row(self, row, exp_file):
+    def get_loaded_samples_row(self, row, exp_file):
         return [{
             'Name': "_rep_".join(row[i] for i in ["Group", "Replicate"]),
             'File': exp_file,
@@ -100,7 +100,7 @@ class CounterTests(unittest.TestCase):
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
             inputs_step = counter.load_samples(mock_samp_sheet_path, is_pipeline=False)
 
-        expected_result = self.get_parsed_samples_row(row, exp_file)
+        expected_result = self.get_loaded_samples_row(row, exp_file)
         self.assertEqual(inputs_step, expected_result)
 
     """Does load_samples correctly parse a single record samples.csv for pipeline invocation?"""
@@ -116,7 +116,7 @@ class CounterTests(unittest.TestCase):
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
             inputs_pipeline = counter.load_samples(mock_samp_sheet_path, is_pipeline=True)
 
-        expected_result = self.get_parsed_samples_row(row, exp_file)
+        expected_result = self.get_loaded_samples_row(row, exp_file)
         self.assertEqual(inputs_pipeline, expected_result)
 
     """Does load_samples correctly handle duplicate samples? There should be no duplicates."""
@@ -142,7 +142,7 @@ class CounterTests(unittest.TestCase):
             dummy_file = '/dev/null'
             inputs = counter.load_samples(dummy_file, is_pipeline=False)
 
-        expected_result = self.get_parsed_samples_row(row, sam_filename)
+        expected_result = self.get_loaded_samples_row(row, sam_filename)
         self.assertEqual(inputs, expected_result)
 
     """Does load_samples throw ValueError if a non-absolute path to a SAM file is provided?"""
