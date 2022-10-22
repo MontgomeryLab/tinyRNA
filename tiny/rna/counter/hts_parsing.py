@@ -429,8 +429,8 @@ def parse_gff(file, row_fn: Callable, alias_keys=None):
 
 # Type aliases for human readability
 AliasTable = DefaultDict[str, Tuple[str]]
+TagTable = DefaultDict[str, Set[Tuple[str, str]]]
 GenomicArray = HTSeq.GenomicArrayOfSets
-Tags = DefaultDict[str, Set[str]]
 
 
 class ReferenceTables:
@@ -478,13 +478,20 @@ class ReferenceTables:
         setattr(HTSeq.features.GFF_Reader, 'parse_GFF_attribute_string', staticmethod(parse_GFF_attribute_string))
 
     @report_execution_time("GFF parsing")
-    def get(self) -> Tuple[GenomicArray, AliasTable, dict]:
-        """Initiates GFF parsing and returns the resulting reference tables"""
+    def get(self) -> Tuple[GenomicArray, AliasTable, TagTable]:
+        """Initiates GFF parsing and returns complete feature, alias, and tag tables"""
 
         for file, alias_keys in self.gff_files.items():
             parse_gff(file, self.parse_row, alias_keys=alias_keys)
 
-        return self.finalize_tables()
+        self._finalize_aliases()
+        self._finalize_features()
+
+        if self.get_feats_table_size() == 0 and self.all_features is False:
+            raise ValueError("No features were retained while parsing your GFF file.\n"
+                             "This may be due to a lack of features matching 'Select for...with value...'")
+
+        return self.feats, self.alias, self.tags
 
     def parse_row(self, row, alias_keys=None):
         if row.type.lower() == "chromosome" or not self.filter_match(row):
@@ -609,19 +616,6 @@ class ReferenceTables:
         if "Parent" in row.attr:
             self.parents[feature_id] = self.get_row_parent(feature_id, row.attr)
         self.chrom_vector_setdefault(row.iv.chrom)
-
-    def finalize_tables(self) -> Tuple[GenomicArray, AliasTable, dict]:
-        """Convert sets to sorted tuples for performance, hashability, and deterministic outputs
-        Matches must also be assigned to intervals now that all intervals are known"""
-
-        self._finalize_aliases()
-        self._finalize_features()
-
-        if self.get_feats_table_size() == 0 and self.all_features is False:
-            raise ValueError("No features were retained while parsing your GFF file.\n"
-                             "This may be due to a lack of features matching 'Select for...with value...'")
-
-        return self.feats, self.alias, self.tags
 
     def _finalize_aliases(self):
         self.alias = {feat: tuple(sorted(aliases, key=str.lower)) for feat, aliases in self.alias.items()}
