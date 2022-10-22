@@ -22,15 +22,11 @@
 user: ~
 run_date: ~
 run_time: ~
-paths_config: ../../START_HERE/paths.yml
+paths_config: paths.yml
 
 ##-- The label for final outputs --##
 ##-- If none provided, the default of user_tinyrna will be used --##
 run_name: my_first_run
-
-##-- If True: run bowtie-build before analyzing libraries --##
-##-- NOTE: this option may be ignored depending on your Paths file. See Paths file. --##
-run_bowtie_build: True
 
 ##-- Number of threads to use when a step supports multi-threading --##
 ##-- For best performance, this should be equal to your computer's processor core count --##
@@ -340,6 +336,7 @@ run_directory: ~
 tmp_directory: ~
 features_csv: { }
 samples_csv: { }
+run_bowtie_build: false
 reference_genome_files: [ ]
 plot_style_sheet: ~
 adapter_fasta: ~

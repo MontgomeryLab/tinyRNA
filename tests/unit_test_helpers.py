@@ -7,9 +7,14 @@ import hashlib
 import signal
 import psutil
 import shlex
+import csv
 import sys
 import io
 import os
+
+from typing import List
+
+from tiny.rna.configuration import CSVReader
 
 rules_template = [{'Identity': ("Name", "N/A"),
                    'Strand': "both",
@@ -18,6 +23,28 @@ rules_template = [{'Identity': ("Name", "N/A"),
                    'nt5end': "all",
                    'Length': "all",   # A string is expected by FeatureSelector due to support for lists and ranges
                    'Overlap': "partial"}]
+
+
+def csv_factory(type: str, rows: List[dict], header=()):
+    """Returns the file contents of the specified config csv. The written header does NOT match
+    the fieldnames expected in rows. Fieldnames are expected to be the internal
+    short names defined in Configuration.CSVReader (for brevity)"""
+
+    if type == "features.csv":
+        fields = list(CSVReader.tinyrna_sheet_fields['Features Sheet'].values())
+        header = {short: long for long, short in CSVReader.tinyrna_sheet_fields['Features Sheet'].items()}
+    elif type == "samples.csv":
+        fields = list(CSVReader.tinyrna_sheet_fields['Samples Sheet'].values())
+        header = {short: long for long, short in CSVReader.tinyrna_sheet_fields['Samples Sheet'].items()}
+    else:
+        sys.exit("Unsupported config file")
+
+    csv_string = io.StringIO()
+    writer = csv.DictWriter(csv_string, fieldnames=fields)
+    writer.writerow(header)
+    writer.writerows(rows)
+
+    return csv_string.getvalue()
 
 
 def get_dir_tree(root_path: str) -> dict:
