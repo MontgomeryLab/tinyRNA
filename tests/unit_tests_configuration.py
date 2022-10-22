@@ -4,10 +4,11 @@ import os
 import unittest
 from unittest.mock import patch, mock_open, call
 
-from tiny.rna.configuration import Configuration
+from tiny.rna.configuration import Configuration, SamplesSheet
+from unit_test_helpers import csv_factory
 
 
-class ConfigurationTests(unittest.TestCase):
+class BowtieIndexesTest(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         self.root_cfg_dir = os.path.abspath("../tiny/templates")
@@ -134,6 +135,70 @@ class ConfigurationTests(unittest.TestCase):
 
         self.assertListEqual(config['bt_index_files'], expected_ebwt)
         self.assertListEqual(mo.call_args_list, expected_writes)
+
+
+class SamplesSheetTest(unittest.TestCase):
+
+    """Does SamplesSheet catch multi-assignment of control condition?"""
+
+    def test_validate_control_group(self):
+        sheet = csv_factory("samples.csv", [
+            {'File': '1.fastq', 'Group': 'G1', 'Replicate': '1', 'Control': True, 'Normalization': ''},  # Good
+            {'File': '2.fastq', 'Group': 'G1', 'Replicate': '2', 'Control': True, 'Normalization': ''},  # Good
+            {'File': '3.fastq', 'Group': 'G2', 'Replicate': '1', 'Control': True, 'Normalization': ''}   # Bad
+        ])                                                                 # ^^^
+
+        exp_contains = r".*(multiple control conditions).*"
+        with self.assertRaisesRegex(AssertionError, exp_contains), \
+                patch('tiny.rna.configuration.open', mock_open(read_data=sheet)), \
+                patch('tiny.rna.configuration.os.path.isfile', return_value=True):
+            SamplesSheet('mock_filename')
+
+    """Does SamplesSheet catch duplicate entries for the same group and rep?"""
+    def test_validate_group_rep(self):
+        sheet = csv_factory("samples.csv", [
+            {'File': '1.fastq', 'Group': 'G1', 'Replicate': '1', 'Control': True, 'Normalization': ''},  # Good
+            {'File': '2.fastq', 'Group': 'G1', 'Replicate': '2', 'Control': True, 'Normalization': ''},  # Good
+            {'File': '3.fastq', 'Group': 'G1', 'Replicate': '2', 'Control': True, 'Normalization': ''}   # Bad
+        ])                             # ^^^                ^^^
+
+        exp_contains = r".*(same group and replicate).*"
+        with self.assertRaisesRegex(AssertionError, exp_contains), \
+                patch('tiny.rna.configuration.open', mock_open(read_data=sheet)), \
+                patch('tiny.rna.configuration.os.path.isfile', return_value=True):
+            SamplesSheet('mock_filename')
+
+    """Does SamplesSheet catch fastq files that don't exist, have a bad file extension, or are listed more than once?"""
+    def test_validate_fastq_filepath(self):
+        csv_rows = [
+            {'File': '1.fastq', 'Group': 'G1', 'Replicate': '1', 'Control': True, 'Normalization': ''},  # Good
+            {'File': '1.fastq', 'Group': 'G1', 'Replicate': '2', 'Control': True, 'Normalization': ''},  # Bad
+            {'File': '2.fasta', 'Group': 'G2', 'Replicate': '1', 'Control': True, 'Normalization': ''}   # Bad
+        ]           # ^^^^^^^
+        sheet = csv_factory("samples.csv", csv_rows)
+
+        # File doesn't exist
+        exp_contains = r".*(was not found).*"
+        with self.assertRaisesRegex(AssertionError, exp_contains), \
+                patch('tiny.rna.configuration.open', mock_open(read_data=sheet)):
+            SamplesSheet('mock_filename')
+
+        # Duplicate filename
+        exp_contains = r".*(listed more than once).*"
+        with self.assertRaisesRegex(AssertionError, exp_contains), \
+                patch('tiny.rna.configuration.open', mock_open(read_data=sheet)), \
+                patch('tiny.rna.configuration.os.path.isfile', return_value=True):
+            SamplesSheet('mock_filename')
+
+        # Bad file extension
+        exp_contains = r".*(\.fastq\(\.gz\) extension).*"
+        csv_rows.pop(0)
+        sheet = csv_factory("samples.csv", csv_rows)
+        with self.assertRaisesRegex(AssertionError, exp_contains), \
+                patch('tiny.rna.configuration.open', mock_open(read_data=sheet)), \
+                patch('tiny.rna.configuration.os.path.isfile', return_value=True):
+            SamplesSheet('mock_filename')
+
 
 if __name__ == '__main__':
     unittest.main()

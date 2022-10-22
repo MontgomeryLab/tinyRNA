@@ -128,7 +128,7 @@ class ConfigBase:
         return run_dir
 
     def get_outfile_path(self, infile: str = None) -> str:
-        """Returns the path and filename for the processed run config"""
+        """Returns the path and file for the processed run config"""
         if infile is None: infile = self.inf
         return self.joinpath(self['run_directory'], os.path.basename(infile))
 
@@ -173,8 +173,8 @@ class Configuration(ConfigBase):
         self.setup_pipeline()
         self.setup_per_file()
         self.setup_ebwt_idx()
-        self.process_sample_sheet()
-        self.process_feature_sheet()
+        self.process_samples_sheet()
+        self.process_features_sheet()
         if validate_inputs: self.validate_inputs()
 
     def load_paths_config(self):
@@ -202,59 +202,29 @@ class Configuration(ConfigBase):
             if genome is not None
         ]
 
-    def process_sample_sheet(self):
-        sample_sheet = self.paths.from_here(self['samples_csv']['path'])
-        sample_sheet_dir = os.path.dirname(sample_sheet)
-        groups_reps = Counter()
+    def process_samples_sheet(self):
+        samples_sheet_path = self.paths.from_here(self['samples_csv']['path'])
+        samples_sheet = SamplesSheet(samples_sheet_path)
 
-        csv_reader = CSVReader(sample_sheet, "Samples Sheet")
+        self['sample_basenames'] = samples_sheet.sample_basenames
+        self['control_condition'] = samples_sheet.control_condition
+        self['run_deseq'] = samples_sheet.is_compatible_df
+
+        self['in_fq'] = [self.cwl_file(fq, verify=False) for fq in samples_sheet.fastq_files]
+        self['fastp_report_titles'] = [f"{g}_rep_{r}" for g, r in samples_sheet.groups_reps]
+
+    def process_features_sheet(self):
+        features_sheet = self.paths.from_here(self['features_csv']['path'])
+        features_sheet_dir = os.path.dirname(features_sheet)
+
+        csv_reader = CSVReader(features_sheet, "Features Sheet")
         for row in csv_reader.rows():
-            if not os.path.splitext(row['File'])[1] in [".fastq", ".gz"]:
-                raise ValueError("Files in samples.csv must have a .fastq(.gz) extension:\n%s" % (row['File'],))
-
-            fastq_file = self.from_here(row['File'], origin=sample_sheet_dir)
-            sample_basename = self.prefix(os.path.basename(fastq_file))
-
-            group_name = row['Group']
-            rep_number = row['Replicate']
-            groups_reps[group_name] += 1
-
-            self.append_to('sample_basenames', sample_basename)
-            self.append_to('fastp_report_titles', f"{group_name}_rep_{rep_number}")
-            if row['Control'].lower() == 'true':
-                self['control_condition'] = group_name
-
-            try:
-                self.append_to('in_fq', self.cwl_file(fastq_file))
-            except FileNotFoundError:
-                line = csv_reader.line_num
-                sys.exit("The fastq file on line %d of your Samples Sheet was not found:\n%s" % (line, fastq_file))
-
-        self.check_deseq_compatibility(groups_reps)
-
-    def check_deseq_compatibility(self, sample_groups):
-        total_samples = sum(sample_groups.values())
-        total_coefficients = len(sample_groups)
-        degrees_of_freedom = total_samples - total_coefficients
-
-        if degrees_of_freedom < 1:
-            self['run_deseq'] = False
-            print("Your experiment design has less than one degree of freedom, which is incompatible "
-                  "with DESeq2. The DGE step will be skipped and most plots will not be produced.",
-                  file=sys.stderr)
-
-    def process_feature_sheet(self):
-        feature_sheet = self.paths.from_here(self['features_csv']['path'])
-        feature_sheet_dir = os.path.dirname(feature_sheet)
-
-        csv_reader = CSVReader(feature_sheet, "Features Sheet")
-        for row in csv_reader.rows():
-            gff_file = self.from_here(row['Source'], origin=feature_sheet_dir)
+            gff_file = self.from_here(row['Source'], origin=features_sheet_dir)
             try:
                 self.append_if_absent('gff_files', self.cwl_file(gff_file))
             except FileNotFoundError:
-                line = csv_reader.line_num
-                sys.exit("The GFF file on line %d of your Features Sheet was not found:\n%s" % (line, gff_file))
+                row_num = csv_reader.row_num
+                sys.exit("The GFF file on line %d of your Features Sheet was not found:\n%s" % (row_num, gff_file))
 
     def setup_per_file(self):
         """Per-library settings lists to be populated by entries from samples_csv"""
@@ -408,10 +378,104 @@ class Configuration(ConfigBase):
         config_object.write_processed_config(f"processed_{file_basename}")
 
 
+class SamplesSheet:
+    def __init__(self, file):
+        self.csv = CSVReader(file, "Samples Sheet")
+        self.basename = os.path.basename(file)
+        self.dir = os.path.dirname(file)
+        self.file = file
+
+        self.fastq_files = []
+        self.groups_reps = []
+        self.sample_basenames = []
+        self.control_condition = None
+        self.is_compatible_df = False
+
+        self.read_csv()
+
+    def read_csv(self):
+        reps_per_group = Counter()
+        for row in self.csv.rows():
+            fastq_file = Configuration.joinpath(self.dir, row['File'])
+            group_name = row['Group']
+            rep_number = row['Replicate']
+            is_control = row['Control'].lower() == 'true'
+            basename = self.get_sample_basename(fastq_file)
+
+            self.validate_fastq_filepath(fastq_file)
+            self.validate_group_rep(group_name, rep_number)
+            self.validate_control_group(is_control, group_name)
+
+            self.fastq_files.append(fastq_file)
+            self.sample_basenames.append(basename)
+            self.groups_reps.append((group_name, rep_number))
+            reps_per_group[group_name] += 1
+
+            if is_control: self.control_condition = group_name
+
+        self.is_compatible_df = self.validate_deseq_compatibility(reps_per_group)
+
+    def validate_fastq_filepath(self, file: str):
+        """Checks file existence, extension, and duplicate entries.
+        Args:
+            file: fastq file path. For  which has already been resolved relative to self.dir
+        """
+
+        root, ext = os.path.splitext(file)
+
+        assert os.path.isfile(file), \
+            "The fastq file on row {row_num} of {selfname} was not found:\n\t{file}" \
+            .format(row_num=self.csv.row_num, selfname=self.basename, file=file)
+
+        assert ext in (".fastq", ".gz"), \
+            "Files in {selfname} must have a .fastq(.gz) extension (row {row_num})"\
+            .format(selfname=self.basename, row_num=self.csv.row_num)
+
+        assert file not in self.fastq_files, \
+            "Fastq files cannot be listed more than once in {selfname} (row {row_num})"\
+            .format(selfname=self.basename, row_num=self.csv.row_num)
+
+    def validate_group_rep(self, group:str, rep:str):
+        assert (group, rep) not in self.groups_reps, \
+            "The same group and replicate number cannot appear on " \
+            "more than one row in {selfname} (row {row_num})"\
+            .format(selfname=self.basename, row_num=self.csv.row_num)
+
+    def validate_control_group(self, is_control: bool, group: str):
+        if not is_control: return
+        assert self.control_condition in (group, None), \
+            "tinyRNA does not support multiple control conditions " \
+            "(row {row_num} in {selfname}).\nHowever, if the control condition " \
+            "is unspecified, all possible comparisons will be made and this " \
+            "should accomplish your goal."\
+            .format(row_num=self.csv.row_num, selfname=self.basename)
+
+    @staticmethod
+    def validate_deseq_compatibility(sample_groups: Counter) -> bool:
+        total_samples = sum(sample_groups.values())
+        total_coefficients = len(sample_groups)
+        degrees_of_freedom = total_samples - total_coefficients
+
+        if degrees_of_freedom < 1:
+            print("Your experiment design has less than one degree of freedom, which is incompatible "
+                  "with DESeq2. The DGE step will be skipped and most plots will not be produced.",
+                  file=sys.stderr)
+            return False
+        else:
+            return True
+
+    @staticmethod
+    def get_sample_basename(filename):
+        root, _ = os.path.splitext(filename)
+        return os.path.basename(root)
+
 class CSVReader(csv.DictReader):
     """A simple wrapper class for csv.DictReader
 
-    This makes field labels consistent across the project and simplifies the code
+    This makes field labels consistent across the project, simplifies the code, and
+    allows for validation and reordering of column names. We also keep track of the
+    row number for diagnostic outputs; the base class offers the line_num attribute,
+    but line_num != row_num if a record spans multiple lines in the csv.
     """
 
     # user-facing name -> internal short name
@@ -440,6 +504,7 @@ class CSVReader(csv.DictReader):
     def __init__(self, filename: str, doctype: str = None):
         self.doctype = doctype
         self.tinyrna_file = filename
+        self.row_num = 0
         try:
             self.tinyrna_fields = tuple(CSVReader.tinyrna_sheet_fields[doctype].values())
         except KeyError as ke:
@@ -455,6 +520,7 @@ class CSVReader(csv.DictReader):
             self.validate_csv_header(header)
 
             for row in self:
+                self.row_num += 1
                 yield row
 
     def validate_csv_header(self, header: OrderedDict):
