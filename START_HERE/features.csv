@@ -1,7 +1,7 @@
-Select for...,with value...,Alias by...,Tag,Hierarchy,Strand,5' End Nucleotide,Length,Overlap,Feature Source
-Class,mask,Alias,,1,both,all,all,Partial,./reference_data/ram1.gff3
-Class,miRNA,Alias,,2,sense,all,16-22,Full,./reference_data/ram1.gff3
-Class,piRNA,Alias,5pA,2,both,A,24-32,Full,./reference_data/ram1.gff3
-Class,piRNA,Alias,5pT,2,both,T,24-32,Full,./reference_data/ram1.gff3
-Class,siRNA,Alias,,2,both,all,15-22,Full,./reference_data/ram1.gff3
-Class,unk,Alias,,3,both,all,all,Full,./reference_data/ram1.gff3
+Select for...,with value...,Tag,Hierarchy,Strand,5' End Nucleotide,Length,Overlap
+Class,mask,,1,both,all,all,Partial
+Class,miRNA,,2,sense,all,16-22,Full
+Class,piRNA,5pA,2,both,A,24-32,Full
+Class,piRNA,5pT,2,both,T,24-32,Full
+Class,siRNA,,2,both,all,15-22,Full
+Class,unk,,3,both,all,all,Full

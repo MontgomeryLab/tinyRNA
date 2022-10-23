@@ -19,8 +19,8 @@ features_csv: ./features.csv
 gff_files:
   - path: "./reference_data/ram1.gff3"
     alias: [Alias]
-  - path:
-    alias: []
+#  - path:
+#    alias: []
 
 ##-- The final output directory for files produced by the pipeline --#
 run_directory: run_directory
