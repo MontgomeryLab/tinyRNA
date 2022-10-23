@@ -31,9 +31,8 @@ tmp_directory:
 ######-------------------------------- BOWTIE-BUILD ---------------------------------######
 #
 # To build bowtie indexes:
-#   1. Your Run Config file must contain run_bowtie_build: true
-#   2. Your reference genome file(s) must be listed under reference_genome_files (below)
-#   3. ebwt (below) must be an empty string, or ''
+#   1. Your reference genome file(s) must be listed under reference_genome_files (below)
+#   2. ebwt (below) must be empty (nothing after ":")
 #
 # Once your indexes have been built, this config file will be modified such
 # that ebwt points to their location (prefix) within your Run Directory. This

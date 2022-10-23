@@ -1,6 +1,5 @@
 import io
 import os
-import csv
 import unittest
 
 from unittest.mock import patch, mock_open
@@ -26,31 +25,32 @@ class CounterTests(unittest.TestCase):
         self.short_sam = helpers.read(self.short_sam_file)
 
         self.strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
+        self.csv = staticmethod(helpers.csv_factory)
 
         # Represents an unparsed Features Sheet row
         # Key is the user-facing column header
         self.csv_feat_row_dict = {
-            'Select for...':     "Class",
-            'with value...':     "CSR",
-            'Alias by...':       "Alias",
-            'Tag':               '',
-            'Hierarchy':         "1",
-            'Strand':            "antisense",
-            "5' End Nucleotide": '"C,G,U"',  # Needs to be double-quoted due to commas
-            'Length':            "all",
-            'Overlap':           "Partial",
-            'Feature Source':    "test_file.gff3"
+            'Key':       "Class",
+            'Value':     "CSR",
+            'Name':      "Alias",
+            'Tag':       "",
+            'Hierarchy': "1",
+            'Strand':    "antisense",
+            "nt5end":    '"C,G,U"',  # Needs to be double-quoted due to commas
+            'Length':    "all",
+            'Overlap':   "Partial",
+            'Source':    "test_file.gff3"
         }
 
         # Represents the parsed Features Sheet row above
         # Key is the internal short name
         _row = self.csv_feat_row_dict
         self.parsed_feat_rule = [{
-            'Identity':  (_row['Select for...'], _row['with value...']),
+            'Identity':  (_row['Key'], _row['Value']),
             'Tag':       _row['Tag'],
             'Hierarchy': int(_row['Hierarchy']),
             'Strand':    _row['Strand'],
-            'nt5end':    _row["5' End Nucleotide"].upper().translate({ord('U'): 'T'}),
+            'nt5end':    _row["nt5end"].upper().translate({ord('U'): 'T'}),
             'Length':    _row['Length'],
             'Overlap':   _row['Overlap'].lower()
         }]
@@ -58,44 +58,29 @@ class CounterTests(unittest.TestCase):
         # Represents an unparsed Samples Sheet row
         # Key is the user-facing column header
         self.csv_samp_row_dict = {
-            'Input FASTQ Files': "test_file.fastq",
-            'Sample/Group Name': "test_group",
-            'Replicate Number':  "0",
-            'Control':           "",
-            'Normalization':     ''
+            'File':          "test_file.fastq",
+            'Group':         "test_group",
+            'Replicate':     "0",
+            'Control':       "",
+            'Normalization': ""
         }
 
         # This is the same Samples Sheet row above, but with internal names
         # It does NOT represent the parsed result of loading the Samples Sheet
         _row = self.csv_samp_row_dict
         self.parsed_samp_rule = {
-            'File':          _row['Input FASTQ Files'],
-            'Group':         _row['Sample/Group Name'],
-            'Replicate':     _row['Replicate Number'],
+            'File':          _row['File'],
+            'Group':         _row['Group'],
+            'Replicate':     _row['Replicate'],
             'Control':       _row['Control'],
             'Normalization': _row['Normalization']
         }
 
     # === HELPERS ===
-
-    @staticmethod
-    def csv(type, rows, header=()):
-        if type == "features.csv":
-            header = ['Select for...', 'with value...', 'Alias by...', 'Tag', 'Hierarchy',
-                      'Strand', "5' End Nucleotide", 'Length', 'Overlap', 'Feature Source']
-        elif type == "samples.csv":
-            header = ['Input FASTQ Files', 'Sample/Group Name', 'Replicate Number', 'Control', 'Normalization']
-
-        csv_string = io.StringIO()
-        writer = csv.DictWriter(csv_string, fieldnames=header)
-        writer.writeheader()
-        writer.writerows(rows)
-
-        return csv_string.getvalue()
     
-    def get_parsed_samples_row(self, row, exp_file):
+    def get_loaded_samples_row(self, row, exp_file):
         return [{
-            'Name': "_rep_".join(row[i] for i in ["Sample/Group Name", "Replicate Number"]),
+            'Name': "_rep_".join(row[i] for i in ["Group", "Replicate"]),
             'File': exp_file,
             'Norm': row['Normalization']
         }]
@@ -109,13 +94,13 @@ class CounterTests(unittest.TestCase):
         inp_file = "test.fastq"
         exp_file = from_here(mock_samp_sheet_path, "test_aligned_seqs.sam")
 
-        row = dict(self.csv_samp_row_dict, **{'Input FASTQ Files': inp_file})
+        row = dict(self.csv_samp_row_dict, **{'File': inp_file})
         csv = self.csv("samples.csv", [row])
 
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
             inputs_step = counter.load_samples(mock_samp_sheet_path, is_pipeline=False)
 
-        expected_result = self.get_parsed_samples_row(row, exp_file)
+        expected_result = self.get_loaded_samples_row(row, exp_file)
         self.assertEqual(inputs_step, expected_result)
 
     """Does load_samples correctly parse a single record samples.csv for pipeline invocation?"""
@@ -125,13 +110,13 @@ class CounterTests(unittest.TestCase):
         inp_file = "test.fastq"
         exp_file = "test_aligned_seqs.sam"
 
-        row = dict(self.csv_samp_row_dict, **{'Input FASTQ Files': inp_file})
+        row = dict(self.csv_samp_row_dict, **{'File': inp_file})
         csv = self.csv("samples.csv", [row])
 
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
             inputs_pipeline = counter.load_samples(mock_samp_sheet_path, is_pipeline=True)
 
-        expected_result = self.get_parsed_samples_row(row, exp_file)
+        expected_result = self.get_loaded_samples_row(row, exp_file)
         self.assertEqual(inputs_pipeline, expected_result)
 
     """Does load_samples correctly handle duplicate samples? There should be no duplicates."""
@@ -150,21 +135,21 @@ class CounterTests(unittest.TestCase):
 
     def test_load_samples_sam(self):
         sam_filename = "/fake/absolute/path/sample.sam"
-        row = dict(self.csv_samp_row_dict, **{'Input FASTQ Files': sam_filename})
+        row = dict(self.csv_samp_row_dict, **{'File': sam_filename})
         csv = self.csv("samples.csv", [row])
 
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
             dummy_file = '/dev/null'
             inputs = counter.load_samples(dummy_file, is_pipeline=False)
 
-        expected_result = self.get_parsed_samples_row(row, sam_filename)
+        expected_result = self.get_loaded_samples_row(row, sam_filename)
         self.assertEqual(inputs, expected_result)
 
     """Does load_samples throw ValueError if a non-absolute path to a SAM file is provided?"""
 
     def test_load_samples_nonabs_path(self):
         bad = "./dne.sam"
-        row = dict(self.csv_samp_row_dict, **{'Input FASTQ Files': bad})
+        row = dict(self.csv_samp_row_dict, **{'File': bad})
         csv = self.csv("samples.csv", [row])
 
         expected_error = "The following file must be expressed as an absolute path:\n" + bad
@@ -178,7 +163,7 @@ class CounterTests(unittest.TestCase):
 
     def test_load_samples_bad_extension(self):
         bad = "./bad_extension.xyz"
-        row = dict(self.csv_samp_row_dict, **{'Input FASTQ Files': bad})
+        row = dict(self.csv_samp_row_dict, **{'File': bad})
         csv = self.csv("samples.csv", [row])
 
         expected_error = r"The filenames defined in your Samples Sheet must have a \.fastq\(\.gz\) or \.sam extension\.\n" \
@@ -201,8 +186,8 @@ class CounterTests(unittest.TestCase):
             ruleset, gff_files = counter.load_config(dummy_file, is_pipeline=False)
 
         expected_ruleset = self.parsed_feat_rule
-        expected_gff_file = from_here(dummy_file, row['Feature Source'])
-        expected_gff_ret = defaultdict(list, zip([expected_gff_file], [[row['Alias by...']]]))
+        expected_gff_file = from_here(dummy_file, row['Source'])
+        expected_gff_ret = defaultdict(list, zip([expected_gff_file], [[row['Name']]]))
 
         self.assertEqual(gff_files, expected_gff_ret)
         self.assertEqual(ruleset, expected_ruleset)
@@ -219,8 +204,8 @@ class CounterTests(unittest.TestCase):
             ruleset, gff_files = counter.load_config(dummy_file, is_pipeline=True)
 
         expected_ruleset = self.parsed_feat_rule
-        expected_gff_file = os.path.basename(row['Feature Source'])
-        expected_gff_ret = defaultdict(list, zip([expected_gff_file], [[row['Alias by...']]]))
+        expected_gff_file = os.path.basename(row['Source'])
+        expected_gff_ret = defaultdict(list, zip([expected_gff_file], [[row['Name']]]))
 
         self.assertEqual(gff_files, expected_gff_ret)
         self.assertEqual(ruleset, expected_ruleset)
@@ -237,8 +222,8 @@ class CounterTests(unittest.TestCase):
             ruleset, gff_files = counter.load_config(dummy_filename, False)
 
         expected_ruleset = self.parsed_feat_rule
-        expected_gff_file = from_here(dummy_filename, row['Feature Source'])
-        expected_gff_ret = defaultdict(list, zip([expected_gff_file], [[row['Alias by...']]]))
+        expected_gff_file = from_here(dummy_filename, row['Source'])
+        expected_gff_ret = defaultdict(list, zip([expected_gff_file], [[row['Name']]]))
 
         self.assertEqual(gff_files, expected_gff_ret)
         self.assertEqual(ruleset, expected_ruleset)
@@ -247,7 +232,7 @@ class CounterTests(unittest.TestCase):
 
     def test_load_config_rna_to_cDNA(self):
         row = self.csv_feat_row_dict.copy()
-        row["5' End Nucleotide"] = 'U'
+        row["nt5end"] = 'U'
         csv = self.csv("features.csv", [row])
 
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
@@ -260,7 +245,7 @@ class CounterTests(unittest.TestCase):
 
     def test_load_config_id_name_attr(self):
         row = self.csv_feat_row_dict.copy()
-        row['Alias by...'] = 'ID'
+        row['Name'] = 'ID'
         csv = self.csv("features.csv", [row])
 
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
@@ -268,7 +253,7 @@ class CounterTests(unittest.TestCase):
             _, gff_files = counter.load_config(dummy_file, False)
 
         # Expect {file: [empty Name Attribute list]}
-        from_dummy = from_here(dummy_file, row['Feature Source'])
+        from_dummy = from_here(dummy_file, row['Source'])
         expected = defaultdict(list, zip([from_dummy], [[]]))
         self.assertEqual(gff_files, expected)
 

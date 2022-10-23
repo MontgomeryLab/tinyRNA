@@ -11,6 +11,7 @@ from pkg_resources import resource_filename
 from collections import Counter, OrderedDict
 from datetime import datetime
 from typing import Union, Any, Optional
+from glob import glob
 
 from tiny.rna.counter.validation import GFFValidator
 
@@ -44,7 +45,7 @@ class ConfigBase:
     def __getitem__(self, key: str) -> Any:
         return self.get(key)
 
-    def __setitem__(self, key: str, val: Union[str, list, dict, bool]) -> Union[str, list, dict, bool]:
+    def __setitem__(self, key: str, val: Union[str, list, dict, bool, None]) -> Union[str, list, dict, bool, None]:
         return self.set(key, val)
 
     def __contains__(self, key: str) -> bool:
@@ -130,7 +131,7 @@ class ConfigBase:
         return run_dir
 
     def get_outfile_path(self, infile: str = None) -> str:
-        """Returns the path and filename for the processed run config"""
+        """Returns the path and file for the processed run config"""
         if infile is None: infile = self.inf
         return self.joinpath(self['run_directory'], os.path.basename(infile))
 
@@ -171,14 +172,14 @@ class Configuration(ConfigBase):
 
         self.paths = self.load_paths_config()
         self.process_paths_sheet()
-        
+
         self.setup_pipeline()
         self.setup_file_groups()
         self.setup_ebwt_idx()
-        self.process_sample_sheet()
-        self.process_feature_sheet()
+        self.process_samples_sheet()
+        self.process_features_sheet()
         if validate_inputs: self.validate_inputs()
-        
+
     def load_paths_config(self):
         """Constructs a sub-configuration object containing workflow file preferences"""
         path_sheet = self.from_here(self['paths_config'])
@@ -203,7 +204,7 @@ class Configuration(ConfigBase):
             for key in single:
                 if not self.paths[key] and key not in required: continue
                 self[key] = to_cwl_file_class(self.paths[key])
-    
+
             # Lists of path strings
             for key in groups:
                 self[key] = [
@@ -220,49 +221,19 @@ class Configuration(ConfigBase):
             path = self.paths[file_string]
             self[file_string] = self.paths.from_here(path) if path else None
 
-    def process_sample_sheet(self):
-        sample_sheet = self.paths.from_here(self['samples_csv']['path'])
-        sample_sheet_dir = os.path.dirname(sample_sheet)
-        groups_reps = Counter()
+    def process_samples_sheet(self):
+        samples_sheet_path = self.paths.from_here(self['samples_csv']['path'])
+        samples_sheet = SamplesSheet(samples_sheet_path)
 
-        csv_reader = CSVReader(sample_sheet, "Samples Sheet")
-        for row in csv_reader.rows():
-            if not os.path.splitext(row['File'])[1] in [".fastq", ".gz"]:
-                raise ValueError("Files in samples.csv must have a .fastq(.gz) extension:\n%s" % (row['File'],))
+        self['sample_basenames'] = samples_sheet.sample_basenames
+        self['control_condition'] = samples_sheet.control_condition
+        self['run_deseq'] = samples_sheet.is_compatible_df
 
-            fastq_file = self.from_here(row['File'], origin=sample_sheet_dir)
-            sample_basename = self.prefix(os.path.basename(fastq_file))
+        self['in_fq'] = [self.cwl_file(fq, verify=False) for fq in samples_sheet.fastq_files]
+        self['fastp_report_titles'] = [f"{g}_rep_{r}" for g, r in samples_sheet.groups_reps]
 
-            group_name = row['Group']
-            rep_number = row['Replicate']
-            groups_reps[group_name] += 1
-
-            self.append_to('sample_basenames', sample_basename)
-            self.append_to('fastp_report_titles', f"{group_name}_rep_{rep_number}")
-            if row['Control'].lower() == 'true':
-                self['control_condition'] = group_name
-
-            try:
-                self.append_to('in_fq', self.cwl_file(fastq_file))
-            except FileNotFoundError:
-                line = csv_reader.line_num
-                sys.exit("The fastq file on line %d of your Samples Sheet was not found:\n%s" % (line, fastq_file))
-
-        self.check_deseq_compatibility(groups_reps)
-
-    def check_deseq_compatibility(self, sample_groups):
-        total_samples = sum(sample_groups.values())
-        total_coefficients = len(sample_groups)
-        degrees_of_freedom = total_samples - total_coefficients
-
-        if degrees_of_freedom < 1:
-            self['run_deseq'] = False
-            print("Your experiment design has less than one degree of freedom, which is incompatible "
-                  "with DESeq2. The DGE step will be skipped and most plots will not be produced.",
-                  file=sys.stderr)
-
-    def process_feature_sheet(self):
-        # Configuration doesn't currently do anything with Feature Sheet contents
+    def process_features_sheet(self):
+        # Configuration doesn't currently do anything with Features Sheet contents
         return
 
     def setup_file_groups(self):
@@ -288,38 +259,69 @@ class Configuration(ConfigBase):
         self.templates = resource_filename('tiny', 'templates/')
 
     def setup_ebwt_idx(self):
-        """Bowtie index files and prefix"""
+        """Determines Bowtie index prefix and whether bowtie-build should run.
+        self['ebwt'] is used for the bowtie commandline argument (see note below)
+        self.paths['ebwt'] is the actual prefix path
+        """
 
-        # Determine if bowtie-build should run, and set Bowtie index prefix accordingly
-        bt_index_prefix = self.paths['ebwt']
-        if self['run_bowtie_build'] and not bt_index_prefix:
-            if not self['reference_genome_files']:
-                raise ValueError(f"If {self.basename} contains 'run_bowtie_build: True', you "
-                                 f"need to provide your reference genome files in {self.paths.basename}")
+        # Empty values for ebwt (''/~/None) trigger bowtie-build
+        self['run_bowtie_build'] = not bool(self.paths['ebwt'])
 
-            # Outputs are saved in {run_directory}/bowtie-build, within which prefix is first genome file's basename
-            first_genome_file = self.paths.from_here(self['reference_genome_files'][0]['path'])
-            bt_index_prefix = self.prefix(os.path.join(
-                self['run_directory'], "bowtie-build", os.path.basename(first_genome_file))
-            )
-
-            self['ebwt'] = self.paths['ebwt'] = bt_index_prefix
+        if self['run_bowtie_build']:
+            # Set the prefix to the run directory outputs. This is necessary
+            # because workflow requires bt_index_files to be a populated list.
+            self.paths['ebwt'] = self.get_ebwt_prefix()
         else:
-            # bowtie-build should only run if 'run_bowtie_build' is True AND ebwt (index prefix) is undefined
-            self['run_bowtie_build'] = False
-            bt_index_prefix = self.paths.from_here(bt_index_prefix)
+            self.paths['ebwt'] = self.paths.from_here(self.paths['ebwt'])
 
-        # Bowtie index files
-        try:
-            self['bt_index_files'] = [self.cwl_file(bt_index_prefix + postfix, verify=(not self['run_bowtie_build']))
-                            for postfix in ['.1.ebwt', '.2.ebwt', '.3.ebwt', '.4.ebwt', '.rev.1.ebwt', '.rev.2.ebwt']]
-        except FileNotFoundError as e:
-            sys.exit("The following file could not be found from the Bowtie index prefix defined in your Paths File:\n"
-                     "%s" % (e.filename,))
+        # verify_bowtie_build_outputs() will check if these end up being long indexes
+        self['bt_index_files'] = self.get_bt_index_files()
 
-        # When CWL copies bt_index_filex for the bowtie.cwl InitialWorkDirRequirement, it does not
+        # When CWL copies bt_index_files for the bowtie.cwl InitialWorkDirRequirement, it does not
         # preserve the prefix path. What the workflow "sees" is the ebwt files at working dir root
-        self["ebwt"] = os.path.basename(self["ebwt"])
+        self['ebwt'] = os.path.basename(self.paths['ebwt'])
+
+    def get_ebwt_prefix(self):
+        """Determines the output prefix path for bowtie indexes that haven't been built yet. The basename
+        of the prefix path is simply the basename of the reference genome sans file extension"""
+
+        genome_files = self['reference_genome_files']
+        if not genome_files:
+            raise ValueError("If your Paths Sheet doesn't have a value for \"ebtw:\", then bowtie indexes "
+                             "will be built, but you'll need to provide your reference genome files under "
+                             '"reference_genome_files:" (also in your Paths Sheet)')
+
+        genome_basename = os.path.basename(genome_files[0]['path'])
+        return self.prefix(os.path.join( # prefix path:
+            self['run_directory'], self['dir_name_bt_build'], genome_basename
+        ))
+
+    def get_bt_index_files(self):
+        """Builds the list of expected bowtie index files from the ebwt prefix. If an index file
+        doesn't exist then they will be automatically rebuilt from the user's reference genomes.
+        File existence isn't checked if bowtie-build is already scheduled for this run."""
+
+        try:
+            verify_file_paths = not bool(self['run_bowtie_build'])
+            prefix = self.paths['ebwt']
+            ext = "ebwt"
+
+            return [
+                self.cwl_file(f"{prefix}.{subext}.{ext}", verify=verify_file_paths)
+                for subext in ['1', '2', '3', '4', 'rev.1', 'rev.2']
+            ]
+        except FileNotFoundError as e:
+            problem = "The following Bowtie index file couldn't be found:\n\t%s\n\n" % (e.filename,)
+            rebuild = "Indexes will be built from your reference genome files during this run."
+            userfix = "Please either correct your ebwt prefix or add reference genomes in the Paths File."
+
+            if self['reference_genome_files']:
+                print(problem + rebuild, file=sys.stderr)
+                self.paths['ebwt'] = self.get_ebwt_prefix()
+                self['run_bowtie_build'] = True
+                return self.get_bt_index_files()
+            else:
+                sys.exit(problem + userfix)
 
     def validate_inputs(self):
         """For now, only GFF files are validated here"""
@@ -335,6 +337,28 @@ class Configuration(ConfigBase):
             genomes=self.paths['reference_genome_files'],
             alignments=None  # Used in tiny-count standalone runs
         ).validate()
+
+    def execute_post_run_tasks(self, return_code):
+        if self['run_bowtie_build']:
+            self.verify_bowtie_build_outputs()
+
+    def verify_bowtie_build_outputs(self):
+        """Ensures that bowtie indexes were produced before saving the new ebwt prefix to the Paths File.
+        If large indexes were produced, paths under bt_index_files need to be updated in the processed Run Config"""
+
+        indexes = glob(os.path.join(self['run_directory'], self['dir_name_bt_build'], "*.ebwt*"))
+        large_indexes = [f for f in indexes if f.endswith(".ebwtl")]
+
+        # Update Paths File
+        if indexes:
+            self.paths.write_processed_config(self.paths.inf)
+
+        # Update Run Config
+        if large_indexes:
+            for expected in self['bt_index_files']:
+                expected['path'] += "l"
+                assert expected['path'] in large_indexes
+            self.write_processed_config()
 
     def save_run_profile(self, config_file_name=None) -> str:
         """Saves Samples Sheet and processed run config to the Run Directory for record keeping"""
@@ -362,10 +386,104 @@ class Configuration(ConfigBase):
         config_object.write_processed_config(f"processed_{file_basename}")
 
 
+class SamplesSheet:
+    def __init__(self, file):
+        self.csv = CSVReader(file, "Samples Sheet")
+        self.basename = os.path.basename(file)
+        self.dir = os.path.dirname(file)
+        self.file = file
+
+        self.fastq_files = []
+        self.groups_reps = []
+        self.sample_basenames = []
+        self.control_condition = None
+        self.is_compatible_df = False
+
+        self.read_csv()
+
+    def read_csv(self):
+        reps_per_group = Counter()
+        for row in self.csv.rows():
+            fastq_file = Configuration.joinpath(self.dir, row['File'])
+            group_name = row['Group']
+            rep_number = row['Replicate']
+            is_control = row['Control'].lower() == 'true'
+            basename = self.get_sample_basename(fastq_file)
+
+            self.validate_fastq_filepath(fastq_file)
+            self.validate_group_rep(group_name, rep_number)
+            self.validate_control_group(is_control, group_name)
+
+            self.fastq_files.append(fastq_file)
+            self.sample_basenames.append(basename)
+            self.groups_reps.append((group_name, rep_number))
+            reps_per_group[group_name] += 1
+
+            if is_control: self.control_condition = group_name
+
+        self.is_compatible_df = self.validate_deseq_compatibility(reps_per_group)
+
+    def validate_fastq_filepath(self, file: str):
+        """Checks file existence, extension, and duplicate entries.
+        Args:
+            file: fastq file path. For  which has already been resolved relative to self.dir
+        """
+
+        root, ext = os.path.splitext(file)
+
+        assert os.path.isfile(file), \
+            "The fastq file on row {row_num} of {selfname} was not found:\n\t{file}" \
+            .format(row_num=self.csv.row_num, selfname=self.basename, file=file)
+
+        assert ext in (".fastq", ".gz"), \
+            "Files in {selfname} must have a .fastq(.gz) extension (row {row_num})"\
+            .format(selfname=self.basename, row_num=self.csv.row_num)
+
+        assert file not in self.fastq_files, \
+            "Fastq files cannot be listed more than once in {selfname} (row {row_num})"\
+            .format(selfname=self.basename, row_num=self.csv.row_num)
+
+    def validate_group_rep(self, group:str, rep:str):
+        assert (group, rep) not in self.groups_reps, \
+            "The same group and replicate number cannot appear on " \
+            "more than one row in {selfname} (row {row_num})"\
+            .format(selfname=self.basename, row_num=self.csv.row_num)
+
+    def validate_control_group(self, is_control: bool, group: str):
+        if not is_control: return
+        assert self.control_condition in (group, None), \
+            "tinyRNA does not support multiple control conditions " \
+            "(row {row_num} in {selfname}).\nHowever, if the control condition " \
+            "is unspecified, all possible comparisons will be made and this " \
+            "should accomplish your goal."\
+            .format(row_num=self.csv.row_num, selfname=self.basename)
+
+    @staticmethod
+    def validate_deseq_compatibility(sample_groups: Counter) -> bool:
+        total_samples = sum(sample_groups.values())
+        total_coefficients = len(sample_groups)
+        degrees_of_freedom = total_samples - total_coefficients
+
+        if degrees_of_freedom < 1:
+            print("Your experiment design has less than one degree of freedom, which is incompatible "
+                  "with DESeq2. The DGE step will be skipped and most plots will not be produced.",
+                  file=sys.stderr)
+            return False
+        else:
+            return True
+
+    @staticmethod
+    def get_sample_basename(filename):
+        root, _ = os.path.splitext(filename)
+        return os.path.basename(root)
+
 class CSVReader(csv.DictReader):
     """A simple wrapper class for csv.DictReader
 
-    This makes field labels consistent across the project and simplifies the code
+    This makes field labels consistent across the project, simplifies the code, and
+    allows for validation and reordering of column names. We also keep track of the
+    row number for diagnostic outputs; the base class offers the line_num attribute,
+    but line_num != row_num if a record spans multiple lines in the csv.
     """
 
     # user-facing name -> internal short name
@@ -392,6 +510,7 @@ class CSVReader(csv.DictReader):
     def __init__(self, filename: str, doctype: str = None):
         self.doctype = doctype
         self.tinyrna_file = filename
+        self.row_num = 0
         try:
             self.tinyrna_fields = tuple(CSVReader.tinyrna_sheet_fields[doctype].values())
         except KeyError as ke:
@@ -407,6 +526,7 @@ class CSVReader(csv.DictReader):
             self.validate_csv_header(header)
 
             for row in self:
+                self.row_num += 1
                 yield row
 
     def validate_csv_header(self, header: OrderedDict):
