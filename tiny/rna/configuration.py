@@ -10,7 +10,7 @@ import re
 from pkg_resources import resource_filename
 from collections import Counter, OrderedDict
 from datetime import datetime
-from typing import Union, Any
+from typing import Union, Any, Optional
 
 from tiny.rna.counter.validation import GFFValidator
 
@@ -113,8 +113,11 @@ class ConfigBase:
         """Returns a minimal Directory object as defined by CWL"""
         return {'class': 'Directory', 'path': dir}
 
-    def from_here(self, destination: str, origin: str = None):
+    def from_here(self, destination: Union[str,dict], origin: Optional[Union[str,dict]] = None):
         """Calculates paths relative to the input config file"""
+        if isinstance(destination, dict): destination = destination['path']
+        if isinstance(origin, dict): origin = origin['path']
+
         origin = self.dir if origin is None else origin
         return self.joinpath(origin, destination)
 
@@ -192,6 +195,8 @@ class Configuration(ConfigBase):
         single =   ('samples_csv', 'features_csv', 'plot_style_sheet', 'adapter_fasta')
         groups =   ('reference_genome_files', 'gff_files')
 
+        assert all(self.paths[req] is not None for req in required)
+
         # Convert file path strings to CWL File objects where necessary
         try:
             # Individual path strings
@@ -213,7 +218,7 @@ class Configuration(ConfigBase):
         # Path strings that do not need to be converted to CWL File objects
         for file_string in ['run_directory', 'tmp_directory', 'ebwt']:
             path = self.paths[file_string]
-            self[file_string] = self.paths.from_here(path) if path else ''
+            self[file_string] = self.paths.from_here(path) if path else None
 
     def process_sample_sheet(self):
         sample_sheet = self.paths.from_here(self['samples_csv']['path'])
@@ -405,10 +410,15 @@ class CSVReader(csv.DictReader):
                 yield row
 
     def validate_csv_header(self, header: OrderedDict):
+        # The expected header values
         doc_reference = self.tinyrna_sheet_fields[self.doctype]
         expected = {key.lower() for key in doc_reference.keys()}
-        read_vals = {val.lower() for val in header.values() if val is not None}
 
+        # The header values that were read
+        read_vals = {val.lower() for key, val in header.items() if None not in (key, val)}
+        read_vals.update(val.lower() for val in header.get(None, ()))  # Extra headers
+
+        # Find differences between actual and expected headers
         unknown = {col_name for col_name in read_vals if col_name not in expected}
         missing = expected - read_vals
 
