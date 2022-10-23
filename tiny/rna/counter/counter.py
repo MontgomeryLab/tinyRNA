@@ -31,7 +31,7 @@ def get_args():
     optional_args = arg_parser.add_argument_group("Optional arguments")
 
     # Required arguments
-    required_args.add_argument('-p', '--paths-file', metavar='PATHS', required=True,
+    required_args.add_argument('-pf', '--paths-file', metavar='PATHS', required=True,
                                help='your Paths File')
     required_args.add_argument('-o', '--out-prefix', metavar='OUTPUTPREFIX', required=True,
                                help='output prefix to use for file names')
@@ -153,7 +153,7 @@ def load_config(paths: 'ConfigBase', is_pipeline: bool) -> List[dict]:
     return rules
 
 
-def load_gffs(paths, is_pipeline: bool) -> Dict[str, list]:
+def load_gffs(paths: 'ConfigBase', is_pipeline: bool) -> Dict[str, list]:
     """Determines GFF file paths and the alias attributes for each
 
     Args:
@@ -164,6 +164,9 @@ def load_gffs(paths, is_pipeline: bool) -> Dict[str, list]:
     Returns:
         gff: a dict of GFF files with lists of alias attribute keys
     """
+
+    if paths['gff_files'] is None:
+        raise ValueError("No GFF files were found in your Paths File")
 
     gffs = {}
     for entry in paths['gff_files']:
@@ -183,11 +186,11 @@ def validate_inputs(gffs, libraries, prefs):
 
 
 @report_execution_time("Counting and merging")
-def map_and_reduce(libraries, prefs):
+def map_and_reduce(libraries, features_csv, prefs):
     """Assigns one worker process per library and merges the statistics they report"""
 
     # MergedStatsManager handles final output files, regardless of multiprocessing status
-    summary = MergedStatsManager(Features, prefs)
+    summary = MergedStatsManager(Features, features_csv, prefs)
 
     # Use a multiprocessing pool if multiple sam files were provided
     if len(libraries) > 1:
@@ -222,7 +225,7 @@ def main():
         counter = FeatureCounter(gff_files, selection, **args)
 
         # Assign and count features using multiprocessing and merge results
-        merged_counts = map_and_reduce(libraries, args)
+        merged_counts = map_and_reduce(libraries, paths.from_here(paths['features_csv']), args)
 
         # Write final outputs
         merged_counts.write_report_files()

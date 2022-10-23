@@ -146,11 +146,11 @@ class MergedStatsManager:
     chrom_misses = Counter()
     warnings = []
 
-    def __init__(self, Features_obj, prefs):
+    def __init__(self, Features_obj, features_csv, prefs):
         MergedStat.prefix = prefs.get('out_prefix', '')
 
         self.merged_stats = [
-            FeatureCounts(Features_obj), RuleCounts(prefs['features_csv']),
+            FeatureCounts(Features_obj), RuleCounts(features_csv),
             AlignmentStats(), SummaryStats(),
             NtLenMatrices()
         ]
