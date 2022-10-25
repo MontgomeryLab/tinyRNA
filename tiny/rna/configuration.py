@@ -95,15 +95,9 @@ class ConfigBase:
         return os.path.splitext(path)[0]
 
     @staticmethod
-    def joinpath(path1: str, path2: str) -> str:
-        """Combines two relative paths intelligently"""
-        path1, path2 = (os.path.expanduser(p) for p in [path1, path2])
-        if os.path.isabs(path2): return path2
-        return os.path.normpath(os.path.join(path1, path2))
-
-    @staticmethod
-    def cwl_file(file: str, verify=True) -> dict:
+    def cwl_file(file: Union[str,dict], verify=True) -> dict:
         """Returns a minimal File object as defined by CWL"""
+        if isinstance(file, dict): file = file['path']
         if '~' in file: file = os.path.expanduser(file)
         if verify and not os.path.exists(file):
             raise(FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file))
@@ -114,13 +108,36 @@ class ConfigBase:
         """Returns a minimal Directory object as defined by CWL"""
         return {'class': 'Directory', 'path': dir}
 
-    def from_here(self, destination: Union[str,dict], origin: Optional[Union[str,dict]] = None):
-        """Calculates paths relative to the input config file"""
-        if isinstance(destination, dict): destination = destination['path']
-        if isinstance(origin, dict): origin = origin['path']
+    @staticmethod
+    def joinpath(path1: str, path2: str) -> str:
+        """Combines two relative paths intelligently"""
+        path1 = os.path.expanduser(path1) if path1 is not None else ""
+        path2 = os.path.expanduser(path2) if path2 is not None else ""
+        if os.path.isabs(path2): return path2
+        return os.path.normpath(os.path.join(path1, path2))
 
-        origin = self.dir if origin is None else origin
-        return self.joinpath(origin, destination)
+    def from_here(self, destination: Union[str,dict,None], origin: Union[str,dict,None] = None) -> Union[str,dict,None]:
+        """Calculates paths relative to the input config file. An empty destination returns an empty path.
+        If destination is an absolute path, then destination is returned without any further joining.
+        Args:
+            destination: the path to evaluate relative to the config file. Can be a string or CWL file dictionary.
+            origin: the starting point (default: the config file's directory)
+        """
+
+        if isinstance(origin, dict): origin = origin.get('path')
+        if origin is None: origin = self.dir
+
+        if isinstance(destination, dict):
+            dest_path = destination.get('path')
+            if dest_path:
+                return dict(destination, path=self.joinpath(origin, dest_path))
+            else:
+                return destination
+        else:
+            if destination:
+                return self.joinpath(origin, destination)
+            else:
+                return destination
 
     def create_run_directory(self) -> str:
         """Create the destination directory for pipeline outputs"""
@@ -287,9 +304,9 @@ class Configuration(ConfigBase):
 
         genome_files = self['reference_genome_files']
         if not genome_files:
-            raise ValueError("If your Paths Sheet doesn't have a value for \"ebtw:\", then bowtie indexes "
+            raise ValueError("If your Paths File doesn't have a value for \"ebtw:\", then bowtie indexes "
                              "will be built, but you'll need to provide your reference genome files under "
-                             '"reference_genome_files:" (also in your Paths Sheet)')
+                             '"reference_genome_files:" (also in your Paths File)')
 
         genome_basename = os.path.basename(genome_files[0]['path'])
         return self.prefix(os.path.join( # prefix path:
