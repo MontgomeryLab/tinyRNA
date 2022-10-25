@@ -188,7 +188,7 @@ class Configuration(ConfigBase):
         super().__init__(config_file)
 
         self.paths = self.load_paths_config()
-        self.process_paths_sheet()
+        self.assimilate_paths_file()
 
         self.setup_pipeline()
         self.setup_file_groups()
@@ -199,44 +199,14 @@ class Configuration(ConfigBase):
 
     def load_paths_config(self):
         """Constructs a sub-configuration object containing workflow file preferences"""
-        path_sheet = self.from_here(self['paths_config'])
-        return ConfigBase(path_sheet)
+        paths_file_path = self.from_here(self['paths_config'])
+        return PathsFile(paths_file_path)
 
-    def process_paths_sheet(self):
-        """Loads file paths and groups from the Paths File and resolves relative paths"""
-
-        def to_cwl_file_class(input_file_path):
-            path_to_input = self.paths.from_here(input_file_path)
-            return self.cwl_file(path_to_input)
-
-        required = ('samples_csv', 'features_csv', 'gff_files')
-        single =   ('samples_csv', 'features_csv', 'plot_style_sheet', 'adapter_fasta')
-        groups =   ('reference_genome_files', 'gff_files')
-
-        assert all(self.paths[req] is not None for req in required)
-
-        # Convert file path strings to CWL File objects where necessary
-        try:
-            # Individual path strings
-            for key in single:
-                if not self.paths[key] and key not in required: continue
-                self[key] = to_cwl_file_class(self.paths[key])
-
-            # Lists of path strings
-            for key in groups:
-                self[key] = [
-                    to_cwl_file_class(file) for file in self.paths[key]
-                    if key in required or bool(file)
-                ]
-        except FileNotFoundError as e:
-            msg = f"The file provided for {key} in your Paths File could not be found"
-            msg += "\n\t" + e.filename
-            sys.exit(msg)
-
-        # Path strings that do not need to be converted to CWL File objects
-        for file_string in ['run_directory', 'tmp_directory', 'ebwt']:
-            path = self.paths[file_string]
-            self[file_string] = self.paths.from_here(path) if path else None
+    def assimilate_paths_file(self):
+        for key in [*PathsFile.single, *PathsFile.groups]:
+            self[key] = self.paths.as_cwl_file_obj(key)
+        for key in PathsFile.prefix:
+            self[key] = self.paths[key]
 
     def process_samples_sheet(self):
         samples_sheet_path = self.paths.from_here(self['samples_csv']['path'])
@@ -401,6 +371,85 @@ class Configuration(ConfigBase):
         file_basename = os.path.basename(args.input_file)
         config_object = Configuration(args.input_file)
         config_object.write_processed_config(f"processed_{file_basename}")
+
+
+class PathsFile(ConfigBase):
+    required = ('samples_csv', 'features_csv', 'gff_files')
+    single =   ('samples_csv', 'features_csv', 'plot_style_sheet', 'adapter_fasta')
+    groups =   ('reference_genome_files', 'gff_files')
+    prefix =   ('ebwt', 'run_directory', 'tmp_directory')
+
+    def __init__(self, file: str):
+        super().__init__(file)
+        self.check_backward_compatibility()
+        self.validate_paths()
+
+    def __getitem__(self, key: str):
+        """Automatically performs path resolution for both single and group parameters.
+        Note that only keys listed in self.groups are guaranteed to be returned as lists."""
+
+        value = self.config.get(key)
+        if key in self.groups:
+            if value is None: return []
+            return [self.from_here(sub) for sub in value]
+        else:
+            return self.from_here(value)
+
+    def as_cwl_file_obj(self, key: str):
+        """Returns the specified parameter with file paths converted to CWL file objects."""
+
+        val = self[key]
+
+        if not val:
+            return val
+        elif key in self.single:
+            return self.cwl_file(val)
+        elif key in self.groups:
+            return [self.cwl_file(sub) for sub in val if sub]
+        elif key in self.prefix:
+            raise ValueError(f"The parameter {key} isn't meant to be a CWL file object.")
+        else:
+            raise ValueError(f'Unrecognized parameter: "{key}"')
+
+    def validate_paths(self):
+        assert all(self[req] for req in self.required), \
+            "The following parameters are required in {selfname}: {params}" \
+            .format(selfname=self.basename, params=', '.join(self.required))
+
+        assert any(gff.get('path') for gff in self['gff_files']), \
+            "At least one GFF file path must be specified under gff_files in {selfname}" \
+            .format(selfname=self.basename)
+
+        for key in self.single:
+            resolved_path = self[key]
+            if not resolved_path: continue
+            assert os.path.isfile(resolved_path), \
+                "The file provided for {key} in {selfname} could not be found:\n\t{file}" \
+                .format(key=key, selfname=self.basename, file=resolved_path)
+
+        for key in self.groups:
+            for entry in self[key]:
+                if isinstance(entry, dict): entry = entry['path']
+                assert os.path.isfile(entry), \
+                    "The following file provided under {key} in {selfname} could not be found:\n\t{file}" \
+                    .format(key=key, selfname=self.basename, file=entry)
+
+    def check_backward_compatibility(self):
+        assert 'gff_files' in self, \
+            "The gff_files parameter was not found in your Paths File. This likely means " \
+            "that you are using a Paths File from an earlier version of tinyRNA. Please " \
+            "check the release notes and update your configuration files."
+
+    # Override
+    def append_to(self, key: str, val: Any):
+        """Overrides method in the base class. This is necessary due to automatic
+        path resolution in __getitem__ which returns a *temporary* list value, and
+        items appended to the temporary list would otherwise be lost."""
+
+        assert key in self.groups, "Tried appending to a non-list type parameter"
+        target = self.config.get(key, [])
+        target.append(val)
+        return target
 
 
 class SamplesSheet:
