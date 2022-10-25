@@ -209,7 +209,7 @@ class Configuration(ConfigBase):
             self[key] = self.paths[key]
 
     def process_samples_sheet(self):
-        samples_sheet_path = self.paths.from_here(self['samples_csv']['path'])
+        samples_sheet_path = self.paths['samples_csv']
         samples_sheet = SamplesSheet(samples_sheet_path)
 
         self['sample_basenames'] = samples_sheet.sample_basenames
@@ -258,8 +258,6 @@ class Configuration(ConfigBase):
             # Set the prefix to the run directory outputs. This is necessary
             # because workflow requires bt_index_files to be a populated list.
             self.paths['ebwt'] = self.get_ebwt_prefix()
-        else:
-            self.paths['ebwt'] = self.paths.from_here(self.paths['ebwt'])
 
         # verify_bowtie_build_outputs() will check if these end up being long indexes
         self['bt_index_files'] = self.get_bt_index_files()
