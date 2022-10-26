@@ -17,7 +17,7 @@ from tiny.rna.counter.validation import GFFValidator
 from tiny.rna.counter.features import Features, FeatureCounter
 from tiny.rna.counter.statistics import MergedStatsManager
 from tiny.rna.util import report_execution_time, from_here, ReadOnlyDict
-from tiny.rna.configuration import CSVReader, ConfigBase
+from tiny.rna.configuration import CSVReader, PathsFile
 
 # Global variables for multiprocessing
 counter: FeatureCounter
@@ -69,14 +69,14 @@ def get_args():
     return ReadOnlyDict(vars(args))
 
 
-def load_samples(paths: 'ConfigBase', is_pipeline: bool) -> List[Dict[str, str]]:
+def load_samples(samples_csv: str, is_pipeline: bool) -> List[Dict[str, str]]:
     """Parses the Samples Sheet to determine library names and alignment files for counting
 
     Sample files may have a .fastq(.gz) extension (i.e. when tiny-count is called as part of a
     pipeline run) or a .sam extension (i.e. when tiny-count is called as a standalone tool).
 
     Args:
-        paths: a loaded Paths File which provides a path to the Samples Sheet
+        samples_csv: a csv file which defines sample group, replicate, and file location
         is_pipeline: helps locate sample SAM files. If true, files are assumed to reside
             in the working directory. If false, files are assumed to reside in the same
             directory as their source FASTQ files with '_aligned_seqs.sam' appended
@@ -105,7 +105,6 @@ def load_samples(paths: 'ConfigBase', is_pipeline: bool) -> List[Dict[str, str]]
                              "The following filename contained neither:\n%s" % (csv_row_file,))
         return csv_row_file
 
-    samples_csv = paths.from_here(paths['samples_csv'])
     inputs = list()
 
     for row in CSVReader(samples_csv, "Samples Sheet").rows():
@@ -124,11 +123,11 @@ def load_samples(paths: 'ConfigBase', is_pipeline: bool) -> List[Dict[str, str]]
     return inputs
 
 
-def load_config(paths: 'ConfigBase', is_pipeline: bool) -> List[dict]:
+def load_config(features_csv: str, is_pipeline: bool) -> List[dict]:
     """Parses the Features Sheet to provide inputs to FeatureSelector and ReferenceTables
 
     Args:
-        paths: a loaded Paths File which provides a path to the Features Sheet
+        features_csv: a csv file which defines feature sources and selection rules
         is_pipeline: not currently used; helps properly locate input files
 
     Returns:
@@ -139,7 +138,6 @@ def load_config(paths: 'ConfigBase', is_pipeline: bool) -> List[dict]:
 
     rules = list()
 
-    features_csv = paths.from_here(paths['features_csv'])
     for row in CSVReader(features_csv, "Features Sheet").rows():
         rule = {col: row[col] for col in ["Tag", "Hierarchy", "Strand", "nt5end", "Length", "Overlap"]}
         rule['nt5end'] = rule['nt5end'].upper().translate({ord('U'): 'T'})  # Convert RNA base to cDNA base
@@ -153,44 +151,44 @@ def load_config(paths: 'ConfigBase', is_pipeline: bool) -> List[dict]:
     return rules
 
 
-def load_gffs(paths: 'ConfigBase', is_pipeline: bool) -> Dict[str, list]:
-    """Determines GFF file paths and the alias attributes for each
+def load_gff_files(paths: PathsFile, libraries: List[dict], args: ReadOnlyDict) -> Dict[str, list]:
+    """Retrieves the appropriate file path and alias attributes for each GFF,
+    then validates
 
     Args:
-        paths: a loaded Paths File which provides a list of GFFs
-        is_pipeline: helps locate GFF files defined in the Paths File. If true,
-            GFF files are assumed to reside in the working directory.
+        paths: a loaded PathsFile with
+        gff_files: a list of gff files, each as a dict with keys `path` and `alias`
+        is_pipeline: helps locate inputs defined in the Paths File. If true, files
+            will be sourced from the working directory. Otherwise, original path.
 
     Returns:
         gff: a dict of GFF files with lists of alias attribute keys
     """
 
-    if paths['gff_files'] is None:
-        raise ValueError("No GFF files were found in your Paths File")
+    def map_path(x):
+        if args['is_pipeline']: return os.path.basename(x)
+        else: return x
 
-    gffs = {}
-    for entry in paths['gff_files']:
-        if is_pipeline:
-            filename = os.path.basename(entry['path'])
-        else:
-            filename = paths.from_here(entry['path'])
-        gffs[filename] = entry.get('alias', default=[])
+    # Get GFF definitions from Paths File
+    gff_files = {map_path(gff['path']): gff.get('alias', []) for gff in paths['gff_files']}
 
-    return gffs
+    # Prepare supporting file inputs for GFF validation
+    sam_files = [lib['File'] for lib in libraries]
+    ref_genomes = [map_path(fasta) for fasta in paths['reference_genome_files']]
+    ebwt_prefix = map_path(paths['ebwt'])
 
+    # Todo: update GFFValidator so that genomes and ebwt can be safely passed here
+    GFFValidator(gff_files, args, alignments=sam_files).validate()
 
-def validate_inputs(gffs, libraries, prefs):
-    if prefs.get('is_pipeline'): return
-    libraries = [lib['File'] for lib in libraries]
-    GFFValidator(gffs, prefs, alignments=libraries).validate()
+    return gff_files
 
 
 @report_execution_time("Counting and merging")
-def map_and_reduce(libraries, features_csv, prefs):
+def map_and_reduce(libraries, paths, prefs):
     """Assigns one worker process per library and merges the statistics they report"""
 
     # MergedStatsManager handles final output files, regardless of multiprocessing status
-    summary = MergedStatsManager(Features, features_csv, prefs)
+    summary = MergedStatsManager(Features, paths['features_csv'], prefs)
 
     # Use a multiprocessing pool if multiple sam files were provided
     if len(libraries) > 1:
@@ -213,19 +211,17 @@ def main():
     args = get_args()
 
     try:
-        paths = ConfigBase(args['paths_file'])
-        libraries = load_samples(paths, args['is_pipeline'])
-        selection = load_config(paths, args['is_pipeline'])
-        gff_files = load_gffs(paths, args['is_pipeline'])
-
-        validate_inputs(gff_files, libraries, args)
+        paths = PathsFile(args['paths_file'])
+        libraries = load_samples(paths['samples_csv'], args['is_pipeline'])
+        selection = load_config(paths['features_csv'], args['is_pipeline'])
+        gff_files = load_gff_files(paths, libraries, args)
 
         # global for multiprocessing
         global counter
         counter = FeatureCounter(gff_files, selection, **args)
 
         # Assign and count features using multiprocessing and merge results
-        merged_counts = map_and_reduce(libraries, paths.from_here(paths['features_csv']), args)
+        merged_counts = map_and_reduce(libraries, paths, args)
 
         # Write final outputs
         merged_counts.write_report_files()
