@@ -1,10 +1,11 @@
 import contextlib
 import io
 import os
+import random
 import unittest
 from unittest.mock import patch, mock_open, call
 
-from tiny.rna.configuration import Configuration, SamplesSheet
+from tiny.rna.configuration import Configuration, SamplesSheet, PathsFile
 from unit_test_helpers import csv_factory
 
 
@@ -199,6 +200,122 @@ class SamplesSheetTest(unittest.TestCase):
                 patch('tiny.rna.configuration.os.path.isfile', return_value=True):
             SamplesSheet('mock_filename')
 
+
+class PathsFileTest(unittest.TestCase):
+
+    """============ Helper functions ============"""
+
+    @classmethod
+    def setUpClass(self):
+        self.template_file = os.path.abspath('../tiny/templates/paths.yml')
+        self.template_dir = os.path.dirname(self.template_file)
+
+    def make_paths_file(self, prefs=None):
+        """IMPORTANT: relative file paths are evaluated relative to /tiny/templates/"""
+
+        paths_file = self.template_file
+        config = PathsFile(paths_file)
+        if prefs is None: return config
+
+        for key, val in prefs.items():
+            config[key] = val
+
+        return config
+
+    """Does PathsFile automatically resolve paths when queried?"""
+
+    def test_getitem_single(self):
+        config = self.make_paths_file()
+        config['mock_parameter'] = "./some/../file"
+        self.assertEqual(config['mock_parameter'], os.path.join(self.template_dir, "file"))
+
+    """Does PathsFile automatically resolve lists of paths when queried? What if some list items are
+    strings, others are mappings with a "path" key, and others are None/empty?"""
+
+    def test_getitem_group(self):
+        config = self.make_paths_file()
+        config.groups = ('mock_parameter',)
+
+        mapping_1 = {'path': "./some/../file", "other_key": "irrelevant"}
+        mapping_2 = {'path': "../templates/another_file"}
+        path_string = "../../START_HERE/reference_data/ram1.gff3"
+
+        config['mock_parameter'] = [mapping_1, mapping_2, path_string, None, '']
+
+        # Notice: only 'path' is modified in mappings and empty entries are returned unmodified
+        expected = [
+            dict(mapping_1, path=os.path.join(self.template_dir, "file")),
+            dict(mapping_2, path=os.path.join(self.template_dir, "another_file")),
+            os.path.normpath(os.path.join(self.template_dir, path_string)),
+            None,
+            ''
+        ]
+
+        self.assertListEqual(config['mock_parameter'], expected)
+
+    """Does PathsFile check for required parameters?"""
+
+    def test_validate_required_parameters(self):
+        config = self.make_paths_file()
+        for key in PathsFile.required:
+            oldval = config[key]
+
+            with self.assertRaisesRegex(AssertionError, r".*(parameters are required).*"):
+                config[key] = ''
+                config.validate_paths()
+
+            with self.assertRaisesRegex(AssertionError, r".*(parameters are required).*"):
+                config[key] = None
+                config.validate_paths()
+
+            with self.assertRaisesRegex(AssertionError, r".*(parameters are required).*"):
+                del config.config[key]
+                config.validate_paths()
+
+            config[key] = oldval
+
+    """Does PathsFile check that at least one GFF file has been provided?"""
+
+    def test_validate_gff_files(self):
+        config = self.make_paths_file()
+
+        with self.assertRaisesRegex(AssertionError, r".*(At least one GFF).*"):
+            config['gff_files'] = [{'path': "", 'alias': []}]
+            config.validate_paths()
+
+        with self.assertRaisesRegex(AssertionError, r".*(At least one GFF).*"):
+            config['gff_files'] = [{'irrelevant': "value"}]
+            config.validate_paths()
+
+    """Does PathsFile check for missing files for single entry parameters?"""
+
+    def test_validate_missing_file_single(self):
+        config = self.make_paths_file()
+        key = random.choice(PathsFile.single)
+        config[key] = '/dev/null/file_dne'
+
+        with self.assertRaisesRegex(AssertionError, f".*(file provided for {key}).*"):
+            config.validate_paths()
+
+    """Does PathsFile check for missing files under list-type parameters?"""
+
+    def test_validate_missing_file_group(self):
+        config = self.make_paths_file()
+        bad_path = "/dev/null/file_dne"
+        config.append_to('gff_files', {'path': bad_path, 'alias': []})
+
+        # Config now has one good entry and one bad entry; make sure the bad entry was specifically reported
+        with self.assertRaisesRegex(AssertionError, f".*(file provided under gff_files).*\n\t{bad_path}"):
+            config.validate_paths()
+
+    """Does PathsFile detect a backward compatibility issue?"""
+
+    def test_backward_incompatibility(self):
+        config = self.make_paths_file()
+        del config.config['gff_files']
+
+        with self.assertRaisesRegex(AssertionError, r".*(check the release notes).*"):
+            config.check_backward_compatibility()
 
 if __name__ == '__main__':
     unittest.main()
