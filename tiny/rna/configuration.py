@@ -127,17 +127,16 @@ class ConfigBase:
         if isinstance(origin, dict): origin = origin.get('path')
         if origin is None: origin = self.dir
 
-        if isinstance(destination, dict):
-            dest_path = destination.get('path')
-            if dest_path:
-                return dict(destination, path=self.joinpath(origin, dest_path))
-            else:
-                return destination
+        if (
+                isinstance(destination, dict) and
+                isinstance(destination.get("path"), (str, bytes)) and
+                len(destination['path'])
+        ):
+            return dict(destination, path=self.joinpath(origin, destination["path"]))
+        elif isinstance(destination, (str, bytes)) and bool(destination):
+            return self.joinpath(origin, destination)
         else:
-            if destination:
-                return self.joinpath(origin, destination)
-            else:
-                return destination
+            return destination
 
     def create_run_directory(self) -> str:
         """Create the destination directory for pipeline outputs"""
@@ -198,7 +197,9 @@ class Configuration(ConfigBase):
         if validate_inputs: self.validate_inputs()
 
     def load_paths_config(self):
-        """Constructs a sub-configuration object containing workflow file preferences"""
+        """Constructs a sub-configuration object containing workflow file preferences
+        self['paths_config'] is the user-facing file path (just the path string)
+        self['paths_file'] is a CWL file object used as a workflow input."""
         paths_file_path = self.from_here(self['paths_config'])
         return PathsFile(paths_file_path)
 
@@ -207,6 +208,7 @@ class Configuration(ConfigBase):
             self[key] = self.paths.as_cwl_file_obj(key)
         for key in PathsFile.prefix:
             self[key] = self.paths[key]
+        self['paths_file'] = self.cwl_file(self.paths.inf)
 
     def process_samples_sheet(self):
         samples_sheet_path = self.paths['samples_csv']
@@ -241,7 +243,7 @@ class Configuration(ConfigBase):
 
         # Create prefixed Run Directory name
         run_dir_parent, run_dir = os.path.split(self['run_directory'].rstrip(os.sep))
-        self['run_directory'] = self.joinpath(run_dir_parent, self['run_name'] + run_dir)
+        self['run_directory'] = self.joinpath(run_dir_parent, self['run_name'] + "_" + run_dir)
 
         self.templates = resource_filename('tiny', 'templates/')
 
