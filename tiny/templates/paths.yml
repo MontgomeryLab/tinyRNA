@@ -14,6 +14,11 @@
 samples_csv: './samples.csv'
 features_csv: './features.csv'
 
+##-- Each entry: 1. the file, 2. (optional) list of attribute keys for feature aliases --##
+gff_files:
+  - path: "../../START_HERE/reference_data/ram1.gff3"
+    alias: [ID]
+
 ##-- The final output directory for files produced by the pipeline --#
 run_directory: run_directory
 
