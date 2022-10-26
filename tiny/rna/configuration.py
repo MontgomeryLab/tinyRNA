@@ -374,15 +374,37 @@ class Configuration(ConfigBase):
 
 
 class PathsFile(ConfigBase):
+    """A configuration class for managing and validating Paths Files.
+    Relative paths are automatically resolved on lookup and list types are enforced.
+    While this is convenient, developers should be aware of the following caveats:
+        - Lookups that return list values do not return the original object; don't
+          append to them. Instead, use the append_to() helper function.
+        - Chained assignments can produce unexpected results.
+    """
+
     required = ('samples_csv', 'features_csv', 'gff_files')
     single =   ('samples_csv', 'features_csv', 'plot_style_sheet', 'adapter_fasta')
     groups =   ('reference_genome_files', 'gff_files')
     prefix =   ('ebwt', 'run_directory', 'tmp_directory')
 
-    def __init__(self, file: str):
+    def __init__(self, file: str, in_pipeline=False):
         super().__init__(file)
+        self.in_pipeline = in_pipeline
+        self.map_path = self.from_pipeline if in_pipeline else self.from_here
         self.check_backward_compatibility()
         self.validate_paths()
+
+    @staticmethod
+    def from_pipeline(value):
+        """When tiny-count runs as a pipeline step, all file inputs are
+        sourced from the working directory regardless of original path."""
+
+        if isinstance(value, dict) and value.get("path") is not None:
+            return dict(value, path=os.path.basename(value['path']))
+        elif isinstance(value, (str, bytes)):
+            return os.path.basename(value)
+        else:
+            return value
 
     def __getitem__(self, key: str):
         """Automatically performs path resolution for both single and group parameters.
@@ -391,9 +413,9 @@ class PathsFile(ConfigBase):
         value = self.config.get(key)
         if key in self.groups:
             if value is None: return []
-            return [self.from_here(sub) for sub in value]
+            return [self.map_path(p) for p in value]
         else:
-            return self.from_here(value)
+            return self.map_path(value)
 
     def as_cwl_file_obj(self, key: str):
         """Returns the specified parameter with file paths converted to CWL file objects."""
@@ -419,6 +441,10 @@ class PathsFile(ConfigBase):
         assert any(gff.get('path') for gff in self['gff_files']), \
             "At least one GFF file path must be specified under gff_files in {selfname}" \
             .format(selfname=self.basename)
+
+        # Some entries in Paths File are omitted from tiny-count's working directory during
+        #  pipeline runs. There is no advantage to checking file existence here vs. in load_*
+        if self.in_pipeline: return
 
         for key in self.single:
             resolved_path = self[key]
