@@ -16,6 +16,32 @@ class Wildcard(metaclass=Singleton):
     def __repr__(_): return "<all>"
 
 
+class GffColumnMatch(frozenset):
+    def __new__(cls, targets):
+        tokenized_lowercase = map(str.strip, targets.lower().split(','))
+        unique_non_empty = set(t for t in tokenized_lowercase if t)
+
+        return super().__new__(cls, unique_non_empty)
+
+
+class GffSourceMatch(GffColumnMatch):
+
+    # def __new__(cls, sources):
+    #     super().__new__(cls, sources)
+    
+    def __repr__(self):
+        return f'<Sources (col. 2) allowed: "{", ".join(self)}">'
+
+
+class GffTypeMatch(GffColumnMatch):
+
+    # def __new__(cls, sources):
+    #     super().__new__(cls, sources)
+
+    def __repr__(self):
+        return f'<Types (col. 3) allowed: "{", ".join(self)}">'
+
+
 class StrandMatch:
     """Evaluates BOTH the alignment's strand and the feature's strand for a match
 
