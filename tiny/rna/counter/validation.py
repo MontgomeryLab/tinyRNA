@@ -6,8 +6,9 @@ import os
 from collections import Counter, defaultdict
 from typing import List, Dict
 
-from tiny.rna.util import sorted_natural
 from tiny.rna.counter.hts_parsing import parse_gff, ReferenceTables
+from tiny.rna.counter.features import FeatureSelector
+from tiny.rna.util import sorted_natural
 
 
 class ReportFormatter:
@@ -85,14 +86,14 @@ class GFFValidator:
         "strand": "Features missing strand information",
     }
 
-    def __init__(self, gff_files, prefs, ebwt=None, genomes=None, alignments=None):
-        self.ReferenceTables = ReferenceTables(gff_files, None, **prefs)
+    def __init__(self, gff_files, rules, ebwt=None, genomes=None, alignments=None):
+        self.ReferenceTables = ReferenceTables(gff_files, None)
+        self.column_filters = self.build_column_filters(rules)
         self.report = ReportFormatter(self.targets)
         self.chrom_set = set()
 
         self.seq_files = [ebwt, genomes, alignments]
         self.gff_files = gff_files
-        self.prefs = prefs
 
     def validate(self):
         print("Validating annotation files...")
@@ -112,8 +113,9 @@ class GFFValidator:
             self.generate_gff_report(gff_infractions)
 
     def validate_gff_row(self, row, issues, file):
-        if row.type.lower() == "chromosome": return             # Skip definitions of whole chromosomes regardless
-        if not self.ReferenceTables.filter_match(row): return   # Obey source/type filters before validation
+        # Skip definitions of whole chromosomes and obey source/type filters
+        if row.type.lower() == "chromosome": return
+        if not self.ReferenceTables.column_filter_match(row, self.column_filters): return
 
         if row.iv.strand not in ('+', '-'):
             issues['strand'][file] += 1
@@ -268,3 +270,15 @@ class GFFValidator:
         }
 
         self.report.add_warning_section(header, summary)
+
+    @staticmethod
+    def build_column_filters(rules):
+        """Builds a "rules table" containing only GFF column selectors.
+        All listed filters are gathered and collapsed into a single rule"""
+
+        selector_defs = {
+            selector: ','.join([row[selector] for row in rules if row[selector]])
+            for selector in ["Filter_s", "Filter_t"]
+        }
+
+        return FeatureSelector.build_selectors([selector_defs])[0]
