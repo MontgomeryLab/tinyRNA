@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch, mock_open, call
 
 from tiny.rna.configuration import Configuration, SamplesSheet, PathsFile
-from unit_test_helpers import csv_factory
+from unit_test_helpers import csv_factory, paths_template_file, make_paths_file
 
 
 class BowtieIndexesTest(unittest.TestCase):
@@ -203,29 +203,14 @@ class SamplesSheetTest(unittest.TestCase):
 
 class PathsFileTest(unittest.TestCase):
 
-    """============ Helper functions ============"""
-
     @classmethod
     def setUpClass(self):
-        self.template_file = os.path.abspath('../tiny/templates/paths.yml')
-        self.template_dir = os.path.dirname(self.template_file)
-
-    def make_paths_file(self, prefs=None):
-        """IMPORTANT: relative file paths are evaluated relative to /tiny/templates/"""
-
-        paths_file = self.template_file
-        config = PathsFile(paths_file)
-        if prefs is None: return config
-
-        for key, val in prefs.items():
-            config[key] = val
-
-        return config
+        self.template_dir = os.path.dirname(paths_template_file)
 
     """Does PathsFile automatically resolve paths when queried?"""
 
     def test_getitem_single(self):
-        config = self.make_paths_file()
+        config = make_paths_file()
         config['mock_parameter'] = "./some/../file"
         self.assertEqual(config['mock_parameter'], os.path.join(self.template_dir, "file"))
 
@@ -233,7 +218,7 @@ class PathsFileTest(unittest.TestCase):
     strings, others are mappings with a "path" key, and others are None/empty?"""
 
     def test_getitem_group(self):
-        config = self.make_paths_file()
+        config = make_paths_file()
         config.groups = ('mock_parameter',)
 
         mapping_1 = {'path': "./some/../file", "other_key": "irrelevant"}
@@ -256,7 +241,7 @@ class PathsFileTest(unittest.TestCase):
     """Does PathsFile check for required parameters?"""
 
     def test_validate_required_parameters(self):
-        config = self.make_paths_file()
+        config = make_paths_file()
         for key in PathsFile.required:
             oldval = config[key]
 
@@ -277,7 +262,7 @@ class PathsFileTest(unittest.TestCase):
     """Does PathsFile check that at least one GFF file has been provided?"""
 
     def test_validate_gff_files(self):
-        config = self.make_paths_file()
+        config = make_paths_file()
 
         with self.assertRaisesRegex(AssertionError, r".*(At least one GFF).*"):
             config['gff_files'] = [{'path': "", 'alias': []}]
@@ -290,7 +275,7 @@ class PathsFileTest(unittest.TestCase):
     """Does PathsFile check for missing files for single entry parameters?"""
 
     def test_validate_missing_file_single(self):
-        config = self.make_paths_file()
+        config = make_paths_file()
         key = random.choice(PathsFile.single)
         config[key] = '/dev/null/file_dne'
 
@@ -300,7 +285,7 @@ class PathsFileTest(unittest.TestCase):
     """Does PathsFile check for missing files under list-type parameters?"""
 
     def test_validate_missing_file_group(self):
-        config = self.make_paths_file()
+        config = make_paths_file()
         bad_path = "/dev/null/file_dne"
         config.append_to('gff_files', {'path': bad_path, 'alias': []})
 
@@ -311,7 +296,7 @@ class PathsFileTest(unittest.TestCase):
     """Does PathsFile detect a backward compatibility issue?"""
 
     def test_backward_incompatibility(self):
-        config = self.make_paths_file()
+        config = make_paths_file()
         del config.config['gff_files']
 
         with self.assertRaisesRegex(AssertionError, r".*(check the release notes).*"):
