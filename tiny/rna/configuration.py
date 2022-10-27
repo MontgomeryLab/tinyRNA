@@ -584,6 +584,8 @@ class CSVReader(csv.DictReader):
            "Select for...":     "Key",
            "with value...":     "Value",
            "Tag":               "Tag",
+           "Source Filter":     "Filter_s",
+           "Type Filter":       "Filter_t",
            "Hierarchy":         "Hierarchy",
            "Strand":            "Strand",
            "5' End Nucleotide": "nt5end",
@@ -629,6 +631,7 @@ class CSVReader(csv.DictReader):
         # The header values that were read
         read_vals = {val.lower() for key, val in header.items() if None not in (key, val)}
         read_vals.update(val.lower() for val in header.get(None, ()))  # Extra headers
+        self.check_backward_compatibility(read_vals)
 
         # Find differences between actual and expected headers
         unknown = {col_name for col_name in read_vals if col_name not in expected}
@@ -645,6 +648,18 @@ class CSVReader(csv.DictReader):
         if tuple(header_lowercase.values()) != tuple(doc_ref_lowercase.keys()):
             # Remap column order to match client's
             self.fieldnames = tuple(doc_ref_lowercase[key] for key in header_lowercase.values())
+
+    def check_backward_compatibility(self, header_vals):
+        if self.doctype == "Features Sheet":
+            v1_2_0 = {'add': {'source filter', 'type filter'}, 'remove': {'tag'}}
+            if len(header_vals & v1_2_0['add']) != 2:
+                raise ValueError('\n'.join([
+                    "It looks like you're using a Features Sheet from an earlier version of",
+                    "tinyRNA. Source and type filters are now defined in the Features Sheet.",
+                    "They are no longer defined in the Run Config. Please review the Stage 1",
+                    "section in tiny-count's documentation, then add the new columns",
+                    '"Source Filter" and "Type Filter" to your Features Sheet.'
+                ]))
 
 
 if __name__ == '__main__':
