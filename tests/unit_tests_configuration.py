@@ -16,11 +16,6 @@ class BowtieIndexesTest(unittest.TestCase):
         self.run_config = self.root_cfg_dir + "/run_config_template.yml"
         self.paths = self.root_cfg_dir + "/paths.yml"
 
-        self.default_prefix = os.path.join(
-            self.root_cfg_dir,
-            Configuration(self.run_config)['run_directory'],
-            "bowtie-build/ram1"
-        )
         self.maxDiff = 1522
 
     """============ Helper functions ============"""
@@ -32,10 +27,20 @@ class BowtieIndexesTest(unittest.TestCase):
         return config
 
     def bt_idx_files_from_prefix(self, prefix):
+        if not os.path.abspath(prefix):
+            prefix = os.path.normpath(os.path.join(self.root_cfg_dir, prefix))
+
         return [
             {'path': f"{prefix}.{subext}.ebwt", 'class': 'File'}
             for subext in ['1', '2', '3', '4', 'rev.1', 'rev.2']
         ]
+
+    def get_default_prefix(self, config):
+        return os.path.join(
+            self.root_cfg_dir,
+            config['run_directory'],
+            "bowtie-build/ram1"
+        )
 
     """================ Tests =================="""
 
@@ -44,7 +49,7 @@ class BowtieIndexesTest(unittest.TestCase):
     def test_get_ebwt_prefix(self):
         config = Configuration(self.run_config)
         actual_prefix = config.get_ebwt_prefix()
-        expected_prefix = self.default_prefix
+        expected_prefix = self.get_default_prefix(config)
 
         self.assertEqual(actual_prefix, expected_prefix)
 
@@ -61,7 +66,8 @@ class BowtieIndexesTest(unittest.TestCase):
 
     def test_get_bt_index_files_prebuilt_indexes(self):
         config = self.config_with({'run_bowtie_build': False})
-        prefix = config.paths['ebwt'] = os.path.abspath("./testdata/counter/validation/ebwt/ram1")
+        prefix = os.path.abspath("./testdata/counter/validation/ebwt/ram1")
+        config.paths['ebwt'] = prefix
         expected = self.bt_idx_files_from_prefix(prefix)
         self.assertListEqual(config.get_bt_index_files(), expected)
 
@@ -70,7 +76,8 @@ class BowtieIndexesTest(unittest.TestCase):
 
     def test_get_bt_index_files_unbuilt_indexes_with_genome(self):
         config = self.config_with({'run_bowtie_build': True})
-        prefix = config.paths['ebwt'] = "mock_prefix"
+        config.paths['ebwt'] = "mock_prefix"
+        prefix = config.paths['ebwt']
         expected = self.bt_idx_files_from_prefix(prefix)
         self.assertListEqual(config.get_bt_index_files(), expected)
 
@@ -79,10 +86,11 @@ class BowtieIndexesTest(unittest.TestCase):
 
     def test_get_bt_index_files_missing_indexes_without_genome(self):
         config = self.config_with({'run_bowtie_build': False, 'reference_genome_files': None})
-        prefix = config.paths['ebwt'] = "missing"
+        prefix = "missing"
+        config.paths['ebwt'] = prefix
         errmsg = '\n'.join([
             "The following Bowtie index file couldn't be found:",
-            "\t" + f"{prefix}.1.ebwt",
+            "\t" + f"{self.root_cfg_dir}/{prefix}.1.ebwt",
             "\nPlease either correct your ebwt prefix or add reference genomes in the Paths File."
         ])
 
@@ -95,13 +103,14 @@ class BowtieIndexesTest(unittest.TestCase):
 
     def test_get_bt_index_files_missing_indexes_with_genome(self):
         config = self.config_with({'run_bowtie_build': False})
-        bad_prefix = config.paths['ebwt'] = "missing"
-        genome_prefix = self.default_prefix
+        bad_prefix = "missing"
+        config.paths['ebwt'] = bad_prefix
+        genome_prefix = self.get_default_prefix(config)
 
         expected_files = self.bt_idx_files_from_prefix(genome_prefix)
         expected_error = '\n'.join([
             "The following Bowtie index file couldn't be found:",
-            "\t" + f"{bad_prefix}.1.ebwt",
+            "\t" + f"{self.root_cfg_dir}/{bad_prefix}.1.ebwt",
             "\nIndexes will be built from your reference genome files during this run.",
             ""
         ])
@@ -301,6 +310,28 @@ class PathsFileTest(unittest.TestCase):
 
         with self.assertRaisesRegex(AssertionError, r".*(check the release notes).*"):
             config.check_backward_compatibility()
+
+    """Does PathsFile map all paths to the working directory when in_pipeline=True?"""
+
+    def test_pipeline_mapping(self):
+        # There are entries in the template Paths File that will cause FileNotFound
+        #  when in_pipeline=True (they're not in the template directory). Since
+        #  file existence isn't relevant for this test, we patch that out.
+        with patch('tiny.rna.configuration.os.path.isfile', return_value=True):
+            config = make_paths_file(in_pipeline=True)
+
+        config['mock_mapping'] = {'path': "/dev/null/file_dne", 'other': "irrelevant"}
+        config['mapping_no_path'] = {'nopath': True}
+        config['mock_path'] = "/a/very/long/path.gz"
+        config['empty_path'] = ""
+        config['none_path'] = None
+
+        self.assertDictEqual(config['mock_mapping'], {'path': "file_dne", 'other': "irrelevant"})
+        self.assertDictEqual(config['mapping_no_path'], {'nopath': True})
+        self.assertEqual(config['mock_path'], "path.gz")
+        self.assertEqual(config['empty_path'], "")
+        self.assertEqual(config['none_path'], None)
+
 
 if __name__ == '__main__':
     unittest.main()
