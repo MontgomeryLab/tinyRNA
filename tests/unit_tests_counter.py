@@ -32,14 +32,12 @@ class CounterTests(unittest.TestCase):
         self.csv_feat_row_dict = {
             'Key':       "Class",
             'Value':     "CSR",
-            'Name':      "Alias",
             'Tag':       "",
             'Hierarchy': "1",
             'Strand':    "antisense",
             "nt5end":    '"C,G,U"',  # Needs to be double-quoted due to commas
             'Length':    "all",
-            'Overlap':   "Partial",
-            'Source':    "test_file.gff3"
+            'Overlap':   "Partial"
         }
 
         # Represents the parsed Features Sheet row above
@@ -183,13 +181,9 @@ class CounterTests(unittest.TestCase):
 
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
             dummy_file = '/dev/null'
-            ruleset, gff_files = counter.load_config(dummy_file, is_pipeline=False)
+            ruleset = counter.load_config(dummy_file, is_pipeline=False)
 
         expected_ruleset = self.parsed_feat_rule
-        expected_gff_file = from_here(dummy_file, row['Source'])
-        expected_gff_ret = defaultdict(list, zip([expected_gff_file], [[row['Name']]]))
-
-        self.assertEqual(gff_files, expected_gff_ret)
         self.assertEqual(ruleset, expected_ruleset)
 
     """Does load_config correctly parse a single-entry features.csv config file for pipeline invocation?"""
@@ -201,13 +195,9 @@ class CounterTests(unittest.TestCase):
 
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
             dummy_file = '/dev/null'
-            ruleset, gff_files = counter.load_config(dummy_file, is_pipeline=True)
+            ruleset = counter.load_config(dummy_file, is_pipeline=True)
 
         expected_ruleset = self.parsed_feat_rule
-        expected_gff_file = os.path.basename(row['Source'])
-        expected_gff_ret = defaultdict(list, zip([expected_gff_file], [[row['Name']]]))
-
-        self.assertEqual(gff_files, expected_gff_ret)
         self.assertEqual(ruleset, expected_ruleset)
 
     """Does load_config correctly handle duplicate rules? Want: no duplicate rules and no duplicate Name Attributes."""
@@ -219,13 +209,9 @@ class CounterTests(unittest.TestCase):
         
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
             dummy_filename = '/dev/null'
-            ruleset, gff_files = counter.load_config(dummy_filename, False)
+            ruleset = counter.load_config(dummy_filename, False)
 
         expected_ruleset = self.parsed_feat_rule
-        expected_gff_file = from_here(dummy_filename, row['Source'])
-        expected_gff_ret = defaultdict(list, zip([expected_gff_file], [[row['Name']]]))
-
-        self.assertEqual(gff_files, expected_gff_ret)
         self.assertEqual(ruleset, expected_ruleset)
 
     """Does load_config convert uracil to thymine for proper matching with cDNA sequences?"""
@@ -237,26 +223,44 @@ class CounterTests(unittest.TestCase):
 
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
             dummy_file = '/dev/null'
-            ruleset, _ = counter.load_config(dummy_file, False)
+            ruleset = counter.load_config(dummy_file, False)
 
         self.assertEqual(ruleset[0]['nt5end'], 'T')
 
-    """Does load_config properly screen for "ID" Name Attributes?"""
+    """Does load_gff_files properly screen for "ID" alias attributes?"""
 
-    def test_load_config_id_name_attr(self):
-        row = self.csv_feat_row_dict.copy()
-        row['Name'] = 'ID'
-        csv = self.csv("features.csv", [row])
+    def test_load_gff_files_id_alias_attr(self):
+        config = helpers.make_paths_file()
+        config['gff_files'] = [{'path': "/irrelevant", 'alias': ['ID']}]
 
-        with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
-            dummy_file = '/dev/null'
-            _, gff_files = counter.load_config(dummy_file, False)
+        # Patch GFFValidator so that it isn't called (not relevant)
+        with patch('tiny.rna.counter.counter.GFFValidator'):
+            gff_files = counter.load_gff_files(config, [], {})
 
-        # Expect {file: [empty Name Attribute list]}
-        from_dummy = from_here(dummy_file, row['Source'])
-        expected = defaultdict(list, zip([from_dummy], [[]]))
-        self.assertEqual(gff_files, expected)
+        expected = {"/irrelevant": []}
+        self.assertDictEqual(gff_files, expected)
 
+    """Does load_gff_files merge aliases if the same GFF file is listed more than once? 
+    Are duplicates also removed and original order preserved?"""
+
+    def test_load_gff_files_merge_alias_attr(self):
+        config = helpers.make_paths_file()
+        config['gff_files'] = [
+            {'path': "/same/path", 'alias': ['attr1', 'attr2']},
+            {'path': "/same/path", 'alias': ['attr1', 'attrN']},
+            {'path': "/different/path", 'alias': ['attr3']}
+        ]
+
+        # Patch GFFValidator so that it isn't called (not relevant)
+        with patch('tiny.rna.counter.counter.GFFValidator'):
+            gff_files = counter.load_gff_files(config, [], {})
+
+        expected = {
+            "/same/path": ['attr1', 'attr2', 'attrN'],
+            "/different/path": ['attr3']
+        }
+
+        self.assertDictEqual(gff_files, expected)
 
 if __name__ == '__main__':
     unittest.main()
