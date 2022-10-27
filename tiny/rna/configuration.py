@@ -10,7 +10,7 @@ import re
 from pkg_resources import resource_filename
 from collections import Counter, OrderedDict
 from datetime import datetime
-from typing import Union, Any, Optional
+from typing import Union, Any, Optional, List
 from glob import glob
 
 from tiny.rna.counter.validation import GFFValidator
@@ -221,9 +221,14 @@ class Configuration(ConfigBase):
         self['in_fq'] = [self.cwl_file(fq, verify=False) for fq in samples_sheet.fastq_files]
         self['fastp_report_titles'] = [f"{g}_rep_{r}" for g, r in samples_sheet.groups_reps]
 
-    def process_features_sheet(self):
-        # Configuration doesn't currently do anything with Features Sheet contents
-        return
+    def process_features_sheet(self) -> List[dict]:
+        """Retrieves GFF Source and Type Filter definitions for use in GFFValidator"""
+        features_sheet_path = self.paths['features_csv']
+        reader = CSVReader(features_sheet_path, "Features Sheet").rows()
+
+        interests = ("Filter_s", "Filter_t")
+        return [{selector: rule[selector] for selector in interests}
+                for rule in reader]
 
     def setup_file_groups(self):
         """Configuration keys that represent lists of files"""
@@ -313,13 +318,13 @@ class Configuration(ConfigBase):
     def validate_inputs(self):
         """For now, only GFF files are validated here"""
 
+        selection_rules = self.process_features_sheet()
         gff_files = {gff['path']: [] for gff in self['gff_files']}
-        prefs = {x: self[f'{x}_filter'] for x in ['source', 'type']}
         ebwt = self.paths['ebwt'] if not self['run_bowtie_build'] else None
 
         GFFValidator(
             gff_files,
-            prefs=prefs,
+            selection_rules,
             ebwt=ebwt,
             genomes=self.paths['reference_genome_files'],
             alignments=None  # Used in tiny-count standalone runs
