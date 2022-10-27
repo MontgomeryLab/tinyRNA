@@ -86,8 +86,6 @@ inputs:
   counter_decollapse: boolean?
   counter_stepvector: string?
   counter_all_features: boolean?
-  counter_type_filter: string[]?
-  counter_source_filter: string[]?
   counter_normalize_by_hits: boolean?
 
   # deseq inputs
@@ -210,8 +208,6 @@ steps:
       gff_files: gff_files
       out_prefix: run_name
       all_features: counter_all_features
-      source_filter: counter_source_filter
-      type_filter: counter_type_filter
       normalize_by_hits:
         source: counter_normalize_by_hits
         valueFrom: $(String(self))  # convert boolean -> string

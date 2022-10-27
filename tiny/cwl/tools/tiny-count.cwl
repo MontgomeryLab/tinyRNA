@@ -30,16 +30,6 @@ inputs:
 
   # Optional inputs
 
-  source_filter:
-    type: string[]?
-    inputBinding:
-      prefix: -sf
-
-  type_filter:
-    type: string[]?
-    inputBinding:
-      prefix: -tf
-
   normalize_by_hits:
     type: string?
     inputBinding:
