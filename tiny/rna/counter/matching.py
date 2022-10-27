@@ -25,19 +25,11 @@ class GffColumnMatch(frozenset):
 
 
 class GffSourceMatch(GffColumnMatch):
-
-    # def __new__(cls, sources):
-    #     super().__new__(cls, sources)
-    
     def __repr__(self):
         return f'<Sources (col. 2) allowed: "{", ".join(self)}">'
 
 
 class GffTypeMatch(GffColumnMatch):
-
-    # def __new__(cls, sources):
-    #     super().__new__(cls, sources)
-
     def __repr__(self):
         return f'<Types (col. 3) allowed: "{", ".join(self)}">'
 

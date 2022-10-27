@@ -38,12 +38,6 @@ def get_args():
 
     # Optional arguments
     optional_args.add_argument('-h', '--help', action="help", help="show this help message and exit")
-    optional_args.add_argument('-sf', '--source-filter', metavar='SOURCE', nargs='*', default=[],
-                               help='Only produce counts for features whose '
-                                    'GFF column 2 matches the source(s) listed')
-    optional_args.add_argument('-tf', '--type-filter', metavar='TYPE', nargs='*', default=[],
-                               help='Only produce counts for features whose '
-                                    'GFF column 3 matches the type(s) listed')
     optional_args.add_argument('-nh', '--normalize-by-hits', metavar='T/F', default='T',
                                help='If T/true, normalize counts by (selected) '
                                     'overlapping feature counts. Default: true.')
