@@ -157,29 +157,36 @@ def load_gff_files(paths: PathsFile, libraries: List[dict], args: ReadOnlyDict) 
 
     Args:
         paths: a loaded PathsFile with
+        libraries: a list of library files, each as a dict with a 'File' key
         gff_files: a list of gff files, each as a dict with keys `path` and `alias`
-        is_pipeline: helps locate inputs defined in the Paths File. If true, files
-            will be sourced from the working directory. Otherwise, original path.
+        args: command line arguments passed to GFFValidator for source/type filters
 
     Returns:
         gff: a dict of GFF files with lists of alias attribute keys
     """
 
-    def map_path(x):
-        if args['is_pipeline']: return os.path.basename(x)
-        else: return x
+    gff_files = defaultdict(list)
+    screen_alias = ["id"]
 
-    # Get GFF definitions from Paths File
-    gff_files = {map_path(gff['path']): gff.get('alias', []) for gff in paths['gff_files']}
+    # Build dictionary of unique files and allowed aliases
+    for gff in paths['gff_files']:
+        gff_files[gff['path']].extend(
+            alias for alias in gff.get('alias', ())
+            if alias.lower() not in screen_alias
+        )
+
+    # Remove duplicate aliases (per file), keep original order
+    for file, alias in gff_files.items():
+        gff_files[file] = sorted(set(alias), key=alias.index)
 
     # Prepare supporting file inputs for GFF validation
     sam_files = [lib['File'] for lib in libraries]
-    ref_genomes = [map_path(fasta) for fasta in paths['reference_genome_files']]
-    ebwt_prefix = map_path(paths['ebwt'])
 
     # Todo: update GFFValidator so that genomes and ebwt can be safely passed here
-    GFFValidator(gff_files, args, alignments=sam_files).validate()
+    # ref_genomes = [map_path(fasta) for fasta in paths['reference_genome_files']]
+    # ebwt_prefix = map_path(paths['ebwt'])
 
+    GFFValidator(gff_files, args, alignments=sam_files).validate()
     return gff_files
 
 
@@ -209,11 +216,13 @@ def map_and_reduce(libraries, paths, prefs):
 def main():
     # Get command line arguments.
     args = get_args()
+    is_pipeline = args['is_pipeline']
 
     try:
-        paths = PathsFile(args['paths_file'])
-        libraries = load_samples(paths['samples_csv'], args['is_pipeline'])
-        selection = load_config(paths['features_csv'], args['is_pipeline'])
+        # Load and validate config files and input files
+        paths = PathsFile(args['paths_file'], is_pipeline)
+        libraries = load_samples(paths['samples_csv'], is_pipeline)
+        selection = load_config(paths['features_csv'], is_pipeline)
         gff_files = load_gff_files(paths, libraries, args)
 
         # global for multiprocessing
