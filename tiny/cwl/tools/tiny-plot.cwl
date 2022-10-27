@@ -74,6 +74,20 @@ inputs:
       prefix: -lda
     doc: "The last length to plot in the range for len_dist plots"
 
+  unknown_class_label:
+    type: string?
+    inputBinding:
+      prefix: -unk
+    doc: \
+      'Use this label in class-related plots for counts which were '
+      'assigned by rules lacking a "Classify as..." value'
+
+  unassigned_class_label:
+    type: string?
+    inputBinding:
+      prefix: -una
+    doc: 'Use this label in class-related plots for unassigned counts'
+
   out_prefix:
     type: string?
     inputBinding:

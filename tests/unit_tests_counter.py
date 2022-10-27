@@ -33,7 +33,7 @@ class CounterTests(unittest.TestCase):
             'Key':       "Class",
             'Value':     "CSR",
             'Name':      "Alias",
-            'Tag':       "",
+            'Class':     "",
             'Hierarchy': "1",
             'Strand':    "antisense",
             "nt5end":    '"C,G,U"',  # Needs to be double-quoted due to commas
@@ -47,7 +47,7 @@ class CounterTests(unittest.TestCase):
         _row = self.csv_feat_row_dict
         self.parsed_feat_rule = [{
             'Identity':  (_row['Key'], _row['Value']),
-            'Tag':       _row['Tag'],
+            'Class':     _row['Class'],
             'Hierarchy': int(_row['Hierarchy']),
             'Strand':    _row['Strand'],
             'nt5end':    _row["nt5end"].upper().translate({ord('U'): 'T'}),

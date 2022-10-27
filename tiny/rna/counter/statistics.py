@@ -185,8 +185,7 @@ class MergedStatsManager:
 
 class FeatureCounts(MergedStat):
     def __init__(self, Features_obj):
-        self.feat_counts_df = pd.DataFrame(index=set.union(*Features_obj.tags.values()))
-        self.classes = Features_obj.classes
+        self.feat_counts_df = pd.DataFrame(index=set.union(*Features_obj.classes.values()))
         self.aliases = Features_obj.aliases
         self.norm_prefs = {}
 
@@ -220,11 +219,8 @@ class FeatureCounts(MergedStat):
         summary = self.sort_cols_and_round(self.feat_counts_df)
         # Add Feature Name column, which is the feature alias (default is blank if no alias exists)
         summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(self.aliases.get(feat[0], ''))))
-        # Add Classes column for classes associated with the given feature
-        feat_class_map = lambda feat: ', '.join(self.classes[feat[0]])
-        summary.insert(1, "Feature Class", summary.index.map(feat_class_map))
         # Sort by index, make index its own column, and rename it to Feature ID
-        summary = summary.sort_index().reset_index().rename(columns={"level_0": "Feature ID", "level_1": "Tag"})
+        summary = summary.sort_index().reset_index().rename(columns={"level_0": "Feature ID", "level_1": "Classifier"})
 
         summary.to_csv(self.prefix + '_feature_counts.csv', index=False)
         return summary

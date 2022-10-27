@@ -123,9 +123,9 @@ Supported values are:
 DESeq2 requires that your experiment design has at least one degree of freedom. If your experiment doesn't include at least one sample group with more than one replicate, tiny-deseq.r will be skipped and DGE related plots will not be produced.
 
 ## Features Sheet Details
-| _Column:_  | Select for... | with value... | Alias by... | Tag | Hierarchy | Strand | 5' End Nucleotide | Length | Overlap     | Feature Source |
-|------------|---------------|---------------|-------------|-----|-----------|--------|-------------------|--------|-------------|----------------|
-| _Example:_ | Class         | miRNA         | Name        |     | 1         | sense  | all               | all    | 5' anchored | ram1.gff3      |
+| _Column:_  | Select for... | with value... | Alias by... | Classify as... | Hierarchy | Strand | 5' End Nucleotide | Length | Overlap     | Feature Source |
+|------------|---------------|---------------|-------------|----------------|-----------|--------|-------------------|--------|-------------|----------------|
+| _Example:_ | Class         | miRNA         | Name        | miRNA          | 1         | sense  | all               | all    | 5' anchored | ram1.gff3      |
 
 The Features Sheet allows you to define selection rules that determine how features are chosen when multiple features are found overlap an alignment locus. Selected features are "assigned" a portion of the reads associated with the alignment.
 

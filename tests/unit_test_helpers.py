@@ -19,7 +19,7 @@ from tiny.rna.configuration import CSVReader
 rules_template = [{'Identity': ("Name", "N/A"),
                    'Strand': "both",
                    'Hierarchy': 0,
-                   'Tag': '',
+                   'Class': '',
                    'nt5end': "all",
                    'Length': "all",   # A string is expected by FeatureSelector due to support for lists and ranges
                    'Overlap': "partial"}]

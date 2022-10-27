@@ -136,23 +136,22 @@ class MyTestCase(unittest.TestCase):
         feature_source = {self.short_gff_file: ["sequence_name"]}
         feature_selector = self.selector_with_template([
             # Fails to match due to Identity selector
-            {'Identity': ("Class", "CSR"), 'Strand': "sense", 'Hierarchy': 1, 'Tag': '', 'nt5end': "all",
+            {'Identity': ("Class", "CSR"), 'Strand': "sense", 'Hierarchy': 1, 'Class': 'none', 'nt5end': "all",
              'Overlap': 'full', 'Length': "20"},
             # Match
-            {'Identity': ("biotype", "snoRNA"), 'Strand': "antisense", 'Hierarchy': 2, 'Tag': '', 'nt5end': "all",
+            {'Identity': ("biotype", "snoRNA"), 'Strand': "antisense", 'Hierarchy': 2, 'Class': 'tag', 'nt5end': "all",
              'Overlap': 'partial', 'Length': "30"}
         ])
         iv = HTSeq.GenomicInterval("I", 3746, 3909, "-")
         kwargs = {'all_features': True}
 
-        feats, alias, classes, _ = ReferenceTables(feature_source, feature_selector, **kwargs).get()
+        feats, alias, tags = ReferenceTables(feature_source, feature_selector, **kwargs).get()
         steps = list(feats[iv].array[iv.start:iv.end].get_steps(values_only=True))
 
-        tagged_feat_id = ("Gene:WBGene00023193", '')
-        self.assertEqual((type(feats), type(alias), type(classes)), (HTSeq.GenomicArrayOfSets, dict, dict))
-        self.assertEqual(steps, [{(("Gene:WBGene00023193", ''), False, ((1, 2, IntervalPartialMatch(iv)),))}])
+        self.assertEqual((type(feats), type(alias), type(tags)), (HTSeq.GenomicArrayOfSets, dict, defaultdict))
+        self.assertEqual(steps, [{(("Gene:WBGene00023193", 'tag'), False, ((1, 2, IntervalPartialMatch(iv)),))}])
         self.assertEqual(alias, {"Gene:WBGene00023193": ('Y74C9A.6',)})
-        self.assertEqual(classes, {"Gene:WBGene00023193": ('additional_class', 'unknown')})
+        self.assertDictEqual(tags, {"Gene:WBGene00023193": {('Gene:WBGene00023193', 'tag')}})
 
     """Repeating the previous test with all_features=False should produce the same result for this test."""
 
@@ -161,21 +160,22 @@ class MyTestCase(unittest.TestCase):
         feature_source = {self.short_gff_file: ["sequence_name"]}
         feature_selector = self.selector_with_template([
             # Fails to match due to Identity selector
-            {'Identity': ("Class", "CSR"), 'Strand': "sense", 'Hierarchy': 1, 'Tag': '', 'nt5end': "all", 'Length': "20",
-             'Overlap': 'full'},
+            {'Identity': ("Class", "CSR"), 'Strand': "sense", 'Hierarchy': 1, 'Class': 'none', 'nt5end': "all",
+             'Overlap': 'full', 'Length': "20"},
             # Match
-            {'Identity': ("biotype", "snoRNA"), 'Strand': "antisense", 'Hierarchy': 2, 'Tag': '', 'nt5end': "all",
+            {'Identity': ("biotype", "snoRNA"), 'Strand': "antisense", 'Hierarchy': 2, 'Class': 'tag', 'nt5end': "all",
              'Overlap': 'partial', 'Length': "30"}
         ])
         iv = HTSeq.GenomicInterval("I", 3746, 3909, "-")
+        kwargs = {'all_features': True}
 
-        feats, alias, classes, _ = ReferenceTables(feature_source, feature_selector, **kwargs).get()
+        feats, alias, tags = ReferenceTables(feature_source, feature_selector, **kwargs).get()
         steps = list(feats[iv].array[iv.start:iv.end].get_steps(values_only=True))
 
-        self.assertEqual((type(feats), type(alias), type(classes)), (HTSeq.GenomicArrayOfSets, dict, dict))
-        self.assertEqual(steps, [{(("Gene:WBGene00023193", ''), False, ((1, 2, IntervalPartialMatch(iv)),))}])
-        self.assertEqual(alias, {"Gene:WBGene00023193": ('Y74C9A.6',)})
-        self.assertEqual(classes, {"Gene:WBGene00023193": ('additional_class', 'unknown')})
+        self.assertEqual((type(feats), type(alias), type(tags)), (HTSeq.GenomicArrayOfSets, dict, defaultdict))
+        self.assertEqual(steps, [{(("Gene:WBGene00023193", 'tag'), False, ((1, 2, IntervalPartialMatch(iv)),))}])
+        self.assertDictEqual(alias, {"Gene:WBGene00023193": ('Y74C9A.6',)})
+        self.assertDictEqual(tags, {"Gene:WBGene00023193": {('Gene:WBGene00023193', 'tag')}})
 
     """Repeating previous test with all_features=False as this yields different results"""
 
@@ -221,7 +221,7 @@ class MyTestCase(unittest.TestCase):
 
         # Notice: screening for "ID" name attribute happens earlier in counter.load_config()
         expected_alias = {"Gene:WBGene00023193": ("additional_class", "Gene:WBGene00023193", "unknown")}
-        _, alias, _, _ = ReferenceTables(feature_source, MockFeatureSelector([]), **kwargs).get()
+        _, alias, _ = ReferenceTables(feature_source, MockFeatureSelector([]), **kwargs).get()
 
         self.assertDictEqual(alias, expected_alias)
 
@@ -262,7 +262,7 @@ class MyTestCase(unittest.TestCase):
             set()
         ]
 
-        feats, _, _, _ = ReferenceTables(feature_source, feature_selector, **kwargs).get()
+        feats, _, _ = ReferenceTables(feature_source, feature_selector, **kwargs).get()
 
         actual_matches = list(feats.chrom_vectors['I']['.'].array.get_steps(values_only=True))
         self.assertListEqual(actual_matches, expected_matches)
@@ -274,7 +274,7 @@ class MyTestCase(unittest.TestCase):
         feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
         mock_selector = self.selector_with_template(helpers.rules_template)
 
-        _, alias, _, _ = ReferenceTables(feature_source, mock_selector, **kwargs).get()
+        _, alias, _ = ReferenceTables(feature_source, mock_selector, **kwargs).get()
 
         # Ancestor depth of 1, distinct aliases
         self.assertEqual(alias['Parent2'], ('Child2Name', 'Parent2Name'))
@@ -362,7 +362,7 @@ class MyTestCase(unittest.TestCase):
                     {(Sibling,     False, (rule3_sib['139:150'], rule2_sib['139:150']))},
                     set()]
 
-        feats, _, _, _ = ReferenceTables(feature_source, feature_selector, **rt_kwargs).get()
+        feats, _, _ = ReferenceTables(feature_source, feature_selector, **rt_kwargs).get()
         actual_steps = list(feats.chrom_vectors["I"]["."].array.get_steps(values_only=True))
         self.assertListEqual(actual_steps, expected)
 
@@ -379,7 +379,7 @@ class MyTestCase(unittest.TestCase):
         # being evaluated during stage 2 selection.
         expected = [set()]
 
-        feats, _, _, _ = ReferenceTables(feature_source, feature_selector, **kwargs).get()
+        feats, _, _ = ReferenceTables(feature_source, feature_selector, **kwargs).get()
         actual = list(feats.chrom_vectors["I"]["."].array.get_steps(values_only=True))
         self.assertListEqual(actual, expected)
 
@@ -402,12 +402,11 @@ class MyTestCase(unittest.TestCase):
         exp_parents =   {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'}
 
         rt = ReferenceTables(feature_source, feature_selector, **kwargs)
-        feats, alias, classes, _ = rt.get()
+        feats, alias, _ = rt.get()
 
         self.assertEqual(alias, exp_alias)
         self.assertEqual(rt.parents, exp_parents)
         self.assertEqual(rt.filtered, exp_filtered)
-        self.assertEqual(classes, exp_classes)
         self.assertEqual(list(feats.chrom_vectors['I']['.'].array.get_steps(values_only=True)), exp_feats)
         self.assertDictEqual(rt.intervals, exp_intervals)
         self.clear_filters()
@@ -430,13 +429,12 @@ class MyTestCase(unittest.TestCase):
         exp_parents =   {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'}
 
         rt = ReferenceTables(feature_source, feature_selector, **kwargs)
-        feats, alias, classes, _ = rt.get()
+        feats, alias, _ = rt.get()
 
         self.assertEqual(alias, exp_alias)
         self.assertEqual(rt.intervals, exp_intervals)
         self.assertEqual(rt.parents, exp_parents)
         self.assertEqual(rt.filtered, exp_filtered)
-        self.assertEqual(classes, exp_classes)
         self.assertEqual(list(feats.chrom_vectors['I']['.'].array.get_steps(values_only=True)), exp_feats)
         self.clear_filters()
 
@@ -449,11 +447,10 @@ class MyTestCase(unittest.TestCase):
         feature_selector = self.selector_with_template(helpers.rules_template)
 
         rt = ReferenceTables(feature_source, feature_selector, **kwargs)
-        feats, alias, classes, _ = rt.get()
+        feats, alias, _ = rt.get()
 
         self.assertEqual(rt.filtered, {'Child1', 'Child2'})
         self.assertEqual(rt.parents, {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'})
-        self.assertEqual(list(classes.keys()), ['GrandParent', 'Parent2', 'Sibling'])
         self.assertEqual(list(alias.keys()), ['GrandParent', 'Parent2', 'Sibling'])
         self.assertEqual(len(list(feats.chrom_vectors['I']['.'].array.get_steps(values_only=True))), 1)  # single empty set
         self.clear_filters()
@@ -472,13 +469,12 @@ class MyTestCase(unittest.TestCase):
         feat_id = "Gene:WBGene00023193"
         feature_source = {f"{resources}/single.gff3": ["sequence_name"]}
         feature_selector = self.selector_with_template([
-            {'Identity': ("ID", feat_id), 'Tag': "tagged_match", 'Hierarchy': 1},
-            {'Identity': ("ID", feat_id), 'Tag': "",             'Hierarchy': 2}
+            {'Identity': ("ID", feat_id), 'Class': "tagged_match", 'Hierarchy': 1},
+            {'Identity': ("ID", feat_id), 'Class': "",             'Hierarchy': 2}
         ])
 
         expected_tags = {feat_id: {(feat_id, "tagged_match"), (feat_id, '')}}
         expected_aliases = {feat_id: ('Y74C9A.6',)}
-        expected_classes = {feat_id: ('additional_class', 'unknown')}
         iv = IntervalPartialMatch(HTSeq.GenomicInterval('n/a', 3746, 3909))
         expected_feats = [
             set(), {
@@ -488,12 +484,11 @@ class MyTestCase(unittest.TestCase):
             set()
         ]
 
-        feats, aliases, classes, tags = ReferenceTables(feature_source, feature_selector, **kwargs).get()
+        feats, aliases, tags = ReferenceTables(feature_source, feature_selector, **kwargs).get()
 
         actual_feats = list(feats.chrom_vectors['I']['.'].array.get_steps(values_only=True))
         self.assertListEqual(actual_feats, expected_feats)
         self.assertDictEqual(aliases, expected_aliases)
-        self.assertDictEqual(classes, expected_classes)
         self.assertDictEqual(tags, expected_tags)
 
     """Does ReferenceTables.get() correctly merge records for discontinuous features matching multiple tagged rules?"""
@@ -503,14 +498,13 @@ class MyTestCase(unittest.TestCase):
 
         # All rules match the same root feature
         feature_selector = self.selector_with_template([
-            {'Identity': ("UniqueAttr", "child2"), 'Tag': "shared", 'Hierarchy': 1},
-            {'Identity': ("ID", "Parent2"),        'Tag': "shared", 'Hierarchy': 2},
-            {'Identity': ("ID", "Child2"),         'Tag': "",       'Hierarchy': 3}
+            {'Identity': ("UniqueAttr", "child2"), 'Class': "shared", 'Hierarchy': 1},
+            {'Identity': ("ID", "Parent2"),        'Class': "shared", 'Hierarchy': 2},
+            {'Identity': ("ID", "Child2"),         'Class': "",       'Hierarchy': 3}
         ])
 
         expected_tags = {'Parent2': {('Parent2', 'shared'), ('Parent2', '')}}
         expected_aliases = {'Parent2': ('Child2Name', 'Parent2Name')}
-        expected_classes = {'Parent2': ('NA',)}
 
         Parent2_iv = IntervalPartialMatch(HTSeq.GenomicInterval('n/a', 19, 30))
         Child2_iv = IntervalPartialMatch(HTSeq.GenomicInterval('n/a', 39, 50))
@@ -526,12 +520,11 @@ class MyTestCase(unittest.TestCase):
             set()
         ]
 
-        feats, aliases, classes, tags = ReferenceTables(feature_source, feature_selector).get()
+        feats, aliases, tags = ReferenceTables(feature_source, feature_selector).get()
 
         stepvec = list(feats.chrom_vectors['I']['.'].array.get_steps(values_only=True))
         self.assertListEqual(stepvec, expected_feats)
         self.assertDictEqual(aliases, expected_aliases)
-        self.assertDictEqual(classes, expected_classes)
         self.assertDictEqual(tags, expected_tags)
 
     """Does SAM_reader._get_decollapsed_filename() create an appropriate filename?"""
