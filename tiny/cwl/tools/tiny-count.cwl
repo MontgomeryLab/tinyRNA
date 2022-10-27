@@ -6,6 +6,8 @@ class: CommandLineTool
 requirements:
   - class: InitialWorkDirRequirement
     listing: [
+      $(inputs.samples_csv),
+      $(inputs.features_csv),
       $(inputs.gff_files),
       $(inputs.aligned_seqs),
       $(inputs.fastp_logs),
@@ -16,15 +18,10 @@ baseCommand: tiny-count
 stdout: console_output.log
 
 inputs:
-  samples_csv:
+  paths_file:
     type: File
     inputBinding:
-      prefix: -i
-
-  features_csv:
-    type: File
-    inputBinding:
-      prefix: -f
+      prefix: -pf
 
   out_prefix:
     type: string
@@ -74,6 +71,12 @@ inputs:
       prefix: -d
 
   # The following optional inputs are for staging InitialWorkingDir files for pipeline execution
+
+  samples_csv:
+    type: File
+
+  features_csv:
+    type: File
 
   # Specifies the GFF files defined in features.csv
   gff_files:
