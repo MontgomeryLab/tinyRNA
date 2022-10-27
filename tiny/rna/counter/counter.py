@@ -138,10 +138,9 @@ def load_config(features_csv: str, is_pipeline: bool) -> List[dict]:
 
     rules = list()
 
-    for row in CSVReader(features_csv, "Features Sheet").rows():
-        rule = {col: row[col] for col in ["Tag", "Hierarchy", "Strand", "nt5end", "Length", "Overlap"]}
+    for rule in CSVReader(features_csv, "Features Sheet").rows():
         rule['nt5end'] = rule['nt5end'].upper().translate({ord('U'): 'T'})  # Convert RNA base to cDNA base
-        rule['Identity'] = (row['Key'], row['Value'])                       # Create identity tuple
+        rule['Identity'] = (rule.pop('Key'), rule.pop('Value'))             # Create identity tuple
         rule['Hierarchy'] = int(rule['Hierarchy'])                          # Convert hierarchy to number
         rule['Overlap'] = rule['Overlap'].lower()                           # Built later in ReferenceTables
 
@@ -151,28 +150,27 @@ def load_config(features_csv: str, is_pipeline: bool) -> List[dict]:
     return rules
 
 
-def load_gff_files(paths: PathsFile, libraries: List[dict], args: ReadOnlyDict) -> Dict[str, list]:
+def load_gff_files(paths: PathsFile, libraries: List[dict], rules: List[dict]) -> Dict[str, list]:
     """Retrieves the appropriate file path and alias attributes for each GFF,
     then validates
 
     Args:
-        paths: a loaded PathsFile with
-        libraries: a list of library files, each as a dict with a 'File' key
-        gff_files: a list of gff files, each as a dict with keys `path` and `alias`
-        args: command line arguments passed to GFFValidator for source/type filters
+        paths: a loaded PathsFile with a populated gff_files parameter
+        libraries: libraries parsed from Samples Sheet, each as a dict with a 'File' key
+        rules: selection rules parsed from Features Sheet
 
     Returns:
         gff: a dict of GFF files with lists of alias attribute keys
     """
 
     gff_files = defaultdict(list)
-    screen_alias = ["id"]
+    ignore_alias = ["id"]
 
     # Build dictionary of unique files and allowed aliases
     for gff in paths['gff_files']:
         gff_files[gff['path']].extend(
             alias for alias in gff.get('alias', ())
-            if alias.lower() not in screen_alias
+            if alias.lower() not in ignore_alias
         )
 
     # Remove duplicate aliases (per file), keep original order
@@ -186,7 +184,7 @@ def load_gff_files(paths: PathsFile, libraries: List[dict], args: ReadOnlyDict) 
     # ref_genomes = [map_path(fasta) for fasta in paths['reference_genome_files']]
     # ebwt_prefix = map_path(paths['ebwt'])
 
-    GFFValidator(gff_files, args, alignments=sam_files).validate()
+    GFFValidator(gff_files, rules, alignments=sam_files).validate()
     return gff_files
 
 
@@ -223,7 +221,7 @@ def main():
         paths = PathsFile(args['paths_file'], is_pipeline)
         libraries = load_samples(paths['samples_csv'], is_pipeline)
         selection = load_config(paths['features_csv'], is_pipeline)
-        gff_files = load_gff_files(paths, libraries, args)
+        gff_files = load_gff_files(paths, libraries, selection)
 
         # global for multiprocessing
         global counter
