@@ -1,21 +1,21 @@
 ######----------------------------- tinyRNA Configuration -----------------------------######
 #
-# In this file you may specify your configuration preferences for the workflow and
+# In this file you can specify your configuration preferences for the workflow and
 # each workflow step.
 #
 # If you want to use DEFAULT settings for the workflow, all you need to do is provide the path
-# to your Samples Sheet and Features Sheet in your Paths file, then make sure that the
-# 'paths_config' setting below points to your Paths file.
+# to your Samples Sheet and Features Sheet in your Paths File, then make sure that the
+# 'paths_config' setting below points to your Paths File.
 #
 # We suggest that you also:
 #   1. Add a username to identify the person performing runs, if desired for record keeping
-#   2. Add a run directory name in your Paths file. If not provided, "run_directory" is used
+#   2. Add a run directory name in your Paths File. If not provided, "run_directory" is used
 #   3. Add a run name to label your run directory and run-specific summary reports.
 #      If not provided, user_tinyrna will be used.
 #
 # This file will be further processed at run time to generate the appropriate pipeline
 # settings for each workflow step. A copy of this processed configuration will be stored
-# in your run directory (as specified by your Paths configuration file).
+# in your run directory.
 #
 ######-------------------------------------------------------------------------------######
 
@@ -48,7 +48,7 @@ run_native: false
 # paths_config file.
 #
 # We have specified default parameters for small RNA data based on our own "best practices".
-# You may change the parameters here.
+# You can change the parameters here.
 #
 ######-------------------------------------------------------------------------------######
 
@@ -75,7 +75,7 @@ ftabchars: ~
 # pipeline github: https://github.com/MontgomeryLab/tinyrna
 #
 # We have specified default parameters for small RNA data based on our own "best practices".
-# You may change the parameters here.
+# You can change the parameters here.
 #
 ######-------------------------------------------------------------------------------######
 
@@ -135,7 +135,7 @@ compression: 4
 # Trimming takes place prior to counting/collapsing.
 #
 # We have specified default parameters for small RNA data based on our own "best practices".
-# You may change the parameters here.
+# You can change the parameters here.
 #
 ######-------------------------------------------------------------------------------######
 
@@ -157,7 +157,7 @@ compress: False
 # We use bowtie for read alignment to a genome.
 #
 # We have specified default parameters for small RNA data based on our own "best practices".
-# You may change the parameters here.
+# You can change the parameters here.
 #
 ######-------------------------------------------------------------------------------######
 
@@ -263,12 +263,11 @@ dge_drop_zero: False
 
 ######-------------------------------- PLOTTING OPTIONS -----------------------------######
 #
-# We use a custom Python script for creating all plots. The default base style is called
-# 'smrna-light'. If you wish to use another matplotlib stylesheet you may specify that in
-# the Paths File.
+# We use a custom Python script for creating all plots. If you wish to use another matplotlib
+# stylesheet you can specify that in the Paths File.
 #
 # We have specified default parameters for small RNA data based on our own "best practices".
-# You may change the parameters here.
+# You can change the parameters here.
 #
 ######-------------------------------------------------------------------------------######
 
@@ -297,7 +296,7 @@ plot_len_dist_max:
 ######----------------------------- OUTPUT DIRECTORIES ------------------------------######
 #
 # Outputs for each step are organized into their own subdirectories in your run
-# directory. You may set these folder names here.
+# directory. You can set these folder names here.
 #
 ######-------------------------------------------------------------------------------######
 
@@ -314,7 +313,7 @@ dir_name_plotter: plots
 #########################  AUTOMATICALLY GENERATED CONFIGURATIONS #########################
 #
 # Do not make any changes to the following sections. These options are automatically
-# generated using your Paths file, your Samples and Features sheets, and the above
+# generated using your Paths File, your Samples and Features sheets, and the above
 # settings in this file.
 #
 ###########################################################################################
@@ -322,7 +321,7 @@ dir_name_plotter: plots
 
 ######--------------------------- DERIVED FROM PATHS FILE ---------------------------######
 #
-# The following configuration settings are automatically derived from the sample sheet
+# The following configuration settings are automatically derived from the Paths File
 #
 ######-------------------------------------------------------------------------------######
 
@@ -330,6 +329,8 @@ run_directory: ~
 tmp_directory: ~
 features_csv: { }
 samples_csv: { }
+paths_file: { }
+gff_files: [ ]
 run_bowtie_build: false
 reference_genome_files: [ ]
 plot_style_sheet: ~
@@ -337,9 +338,9 @@ adapter_fasta: ~
 ebwt: ~
 
 
-######-------------------------- DERIVED FROM SAMPLE SHEET --------------------------######
+######------------------------- DERIVED FROM SAMPLES SHEET --------------------------######
 #
-# The following configuration settings are automatically derived from the sample sheet
+# The following configuration settings are automatically derived from the Samples Sheet
 #
 ######-------------------------------------------------------------------------------######
 
@@ -364,10 +365,6 @@ run_deseq: True
 
 ######------------------------- DERIVED FROM FEATURES SHEET -------------------------######
 #
-# The following configuration settings are automatically derived from the sample sheet
+# The following configuration settings are automatically derived from the Features Sheet
 #
 ######-------------------------------------------------------------------------------######
-
-###-- Utilized by tiny-count --###
-# a list of only unique GFF files
-gff_files: [ ]
