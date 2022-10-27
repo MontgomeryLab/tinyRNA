@@ -14,15 +14,15 @@ tiny get-template
 
 ## Overview
 
->**Tip**: Each of the following will allow you to map out paths to your input files for analysis. You can use either relative or absolute paths to do so. **Relative paths will be evaluated relative to the file in which they are defined.** This allows you to flexibly organize and share configurations between projects.
+>**Tip**: You can use either relative or absolute paths for your file inputs. **Relative paths will be evaluated relative to the file in which they are defined.** This allows you to flexibly organize and share configurations between projects.
 
 #### Run Config
 
-The overall behavior of the pipeline and its steps is determined by the Run Config file (`run_config.yml`). This YAML file can be edited using a simple text editor. Within it you must specify the location of your Paths file (`paths.yml`). All other settings are optional. [More info](#run-config-details).
+The overall behavior of the pipeline and its steps is determined by the Run Config file (`run_config.yml`). This YAML file can be edited using a simple text editor. Within it you must specify the location of your Paths File (`paths.yml`). All other settings are optional. [More info](#run-config-details).
 
 #### Paths File
 
-The locations of pipeline file inputs are defined in the Paths file (`paths.yml`). This YAML file includes paths to your Samples and Features Sheets, in addition to your bowtie index prefix (optional) and the final run directory name. The final run directory will contain all pipeline outputs. The directory name is prepended with the `run_name` and current date and time to keep outputs separate. [More info](#paths-file-details).
+The locations of pipeline file inputs are defined in the Paths file (`paths.yml`). This YAML file includes paths to your configuration files, your GFF files, and your bowtie indexes and/or reference genome. [More info](#paths-file-details).
 
 #### Samples Sheet
 
@@ -91,6 +91,15 @@ When the pipeline starts up, tinyRNA will process the Run Config based on the co
 
 ## Paths File Details
 
+### GFF Files
+GFF annotations are required by tinyRNA. For each file, you can provide an `alias` which is a list of attributes to represent each feature in the Feature Name column of output counts tables. Each entry under the `gff_files` parameter must look something like the following mock example:
+```yaml
+  - path: 'a/path/to/your/file.gff'         # 0 spaces before -
+    alias: [optional, list, of attributes]  # 2 spaces before alias
+
+# ^ Each new GFF path must begin with -
+```
+
 ### Building Bowtie Indexes
 If you don't have bowtie indexes already built for your reference genome, tinyRNA can build them for you at the beginning of an end-to-end run and reuse them on subsequent runs with the same Paths File.
 
@@ -100,6 +109,12 @@ To build bowtie indexes:
 3. Execute an end-to-end pipeline run.
 
 Once your indexes have been built, your Paths File will be modified such that `ebwt` points to their location (prefix) within your Run Directory. This means that indexes will not be unnecessarily rebuilt on subsequent runs as long as the same Paths File is used. If you need them rebuilt, simply repeat steps 2 and 3 above.
+
+### The Run Directory
+The final output directory name has three components: 
+- The `run_name` defined in your Run Config
+- The date and time at pipeline startup
+- The `run_directory` basename defined in your Paths File
 
 ## Samples Sheet Details
 |  _Column:_ | Input FASTQ Files   | Sample/Group Name | Replicate Number | Control | Normalization |
@@ -123,19 +138,17 @@ Supported values are:
 DESeq2 requires that your experiment design has at least one degree of freedom. If your experiment doesn't include at least one sample group with more than one replicate, tiny-deseq.r will be skipped and DGE related plots will not be produced.
 
 ## Features Sheet Details
-| _Column:_  | Select for... | with value... | Alias by... | Tag | Hierarchy | Strand | 5' End Nucleotide | Length | Overlap     | Feature Source |
-|------------|---------------|---------------|-------------|-----|-----------|--------|-------------------|--------|-------------|----------------|
-| _Example:_ | Class         | miRNA         | Name        |     | 1         | sense  | all               | all    | 5' anchored | ram1.gff3      |
+| _Column:_  | Select for... | with value... | Tag | Hierarchy | Strand | 5' End Nucleotide | Length | Overlap     |
+|------------|---------------|---------------|-----|-----------|--------|-------------------|--------|-------------|
+| _Example:_ | Class         | miRNA         |     | 1         | sense  | all               | all    | 5' anchored |
 
 The Features Sheet allows you to define selection rules that determine how features are chosen when multiple features are found overlap an alignment locus. Selected features are "assigned" a portion of the reads associated with the alignment.
 
-Rules apply to features parsed from **all** Feature Sources, with the exception of "Alias by..." which only applies to the Feature Source on the same row. Selection first takes place against feature attributes (GFF column 9), and is directed by defining the attribute you want to be considered (Select for...) and the acceptable values for that attribute (with value...). 
+Selection first takes place against the feature attributes defined in your GFF files, and is directed by defining the attribute you want to be considered (Select for...) and the acceptable values for that attribute (with value...). 
 
 Rules that match features in the first stage of selection will be used in a second stage which evaluates alignment vs. feature interval overlap. These matches are sorted by hierarchy value and passed to the third and final stage of selection which examines characteristics of the alignment itself: strand relative to the feature of interest, 5' end nucleotide, and length. 
 
 See [tiny-count's documentation](tiny-count.md#feature-selection) for an explanation of each column.
-
->**Tip**: Don't worry about having duplicate Feature Source entries. Each GFF file is parsed only once.
 
 ## Plot Stylesheet Details
 Matplotlib uses key-value "rc parameters" to allow for customization of its properties and styles, and one way these parameters can be specified is with a [matplotlibrc file](https://matplotlib.org/3.4.3/tutorials/introductory/customizing.html#a-sample-matplotlibrc-file), which we simply refer to as the Plot Stylesheet. You can obtain a copy of the default stylesheet used by tiny-plot with the command `tiny get-template`. Please keep in mind that tiny-plot overrides these defaults for a few specific elements of certain plots. Feel free to reach out if there is a plot style you wish to override but find you are unable to.
