@@ -23,6 +23,9 @@ class GffColumnMatch(frozenset):
 
         return super().__new__(cls, unique_non_empty)
 
+    def __contains__(self, column_value):
+        return super().__contains__(column_value.lower())
+
 
 class GffSourceMatch(GffColumnMatch):
     def __repr__(self):
