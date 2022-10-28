@@ -657,17 +657,25 @@ class CSVReader(csv.DictReader):
     def check_backward_compatibility(self, header_vals):
         compat_errors = []
         if self.doctype == "Features Sheet":
-            v1_2_0 = {'add': {'source filter', 'type filter'}, 'remove': {'tag'}}
-            if len(header_vals & v1_2_0['add']) != 2:
+            if len(header_vals & {'alias by...', 'feature source'}):
+                compat_errors.append('\n'.join([
+                    "It looks like you're using a Features Sheet from an earlier version of",
+                    "tinyRNA. Feature aliases and GFF files are now defined in the Paths File.",
+                    "Please review the Paths File documentation in Configuration.md, update your",
+                    'Paths File, and remove the "Alias by..." and "Feature Source" columns from',
+                    "your Features Sheet to avoid this error."
+                ]))
+
+            if len(header_vals & {'source filter', 'type filter'}) != 2:
                 compat_errors.append('\n'.join([
                     "It looks like you're using a Features Sheet from an earlier version of",
                     "tinyRNA. Source and type filters are now defined in the Features Sheet.",
                     "They are no longer defined in the Run Config. Please review the Stage 1",
                     "section in tiny-count's documentation, then add the new columns",
-                    '"Source Filter" and "Type Filter" to your Features Sheet.'
+                    '"Source Filter" and "Type Filter" to your Features Sheet to avoid this error.'
                 ]))
 
-            if len(header_vals & v1_2_0['remove']):
+            if 'tag' in header_vals:
                 compat_errors.append('\n'.join([
                     "It looks like you're using a Features Sheet from a version of tinyRNA",
                     'that offered "tagged counting". The "Tag" header has been repurposed as a feature',
