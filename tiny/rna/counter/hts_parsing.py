@@ -499,8 +499,8 @@ class ReferenceTables:
 
         # Perform Stage 1 selection
         matches = self.get_matches(row)
-        # Skip features that lack matches unless all_features is True
-        if not self.all_features and not len(matches):
+        # Skip non-matching rows unless all_features=True
+        if not (len(matches) or self.all_features):
             self.exclude_row(row)
             return
         # Grab the primary key for this feature
