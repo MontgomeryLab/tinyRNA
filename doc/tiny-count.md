@@ -26,10 +26,13 @@ Selection occurs in three stages, with the output of each stage as input to the 
 3. Finally, features are selected for read assignment based on the small RNA attributes of the alignment locus. Once reads are assigned to a feature, they are excluded from matches with larger hierarchy values.
  
 ## Stage 1: Feature Attribute Parameters
-| _features.csv columns:_ | Select for... | with value... | Tag |
-|-------------------------|---------------|---------------|-----|
+| _features.csv columns:_ | Select for... | with value... | Classify as... |
+|-------------------------|---------------|---------------|----------------|
 
 Each feature's column 9 attributes are searched for the key-value combinations defined in the `Select for...` and `with value...` columns. Features, and the rules they matched, are retained for later evaluation at alignment loci in Stages 2 and 3.
+
+#### Feature Classification
+You can optionally specify a classifier for each rule. These classifiers are later used to group and label counts in class-related plots. Features that match rules with a classifier are counted separately; the classifier becomes part of the feature's ID to create a distinct "sub-feature", and these sub-features continue to be treated as distinct in downstream DGE analysis. Classified features receive counts exclusively from the rule(s) which hold the same `Classify as...` value. Counts from multiple rules can be pooled by using the same classifier. In the final counts table, this value is displayed in the Classifier column of features matching the rule, and each feature-classifier pair is shown on its own row.
 
 #### Value Lists
 Attribute keys are allowed to have multiple comma separated values, and these values are treated as a list; only one of the listed values needs to match the `with value...` to be considered a valid match to the rule. For example, if a rule contained `Class` and `WAGO` in these columns, then a feature with attributes `... ;Class=CSR,WAGO; ...` would be considered a match for the rule.
@@ -38,9 +41,6 @@ Attribute keys are allowed to have multiple comma separated values, and these va
 
 #### Wildcard Support
 Wildcard values (`all`, `*`, or an empty cell) can be used in the `Select for...` / `with value...` fields. With this functionality you can evaluate features for the presence of an attribute key without regarding its values, or you can check all attribute keys for the presence of a specific value, or you can skip Stage 1 selection altogether to permit the evaluation of the complete feature set in Stage 2. In the later case, feature-rule matching pairs still serve as the basis for selection; each rule still applies only to its matching subset from previous Stages.
-
-#### Tagged Counting (advanced)
-You can optionally specify a tag for each rule. Feature assignments resulting from tagged rules will have reads counted separately from those assigned by non-tagged rules. This essentially creates a new "sub-feature" for each feature that a tagged rule matches, and these "sub-features" are treated as distinct during downstream DGE analysis. Additionally, these counts subsets can be pooled across any number of rules by specifying the same tag. We recommend using tag names which _do not_ pertain to the `Select for...` / `with value...` in order to avoid potentially confusing results in class-related plots. 
 
 ## Stage 2: Overlap and Hierarchy Parameters
 | _features.csv columns:_ | Hierarchy | Overlap |

@@ -79,8 +79,8 @@ with_names <- function(vec){
 }
 
 ## Original column names
-idx_cols <- with_names(c('Feature ID', 'Tag'))
-meta_cols <- with_names(c('Feature Name', 'Feature Class'))
+idx_cols <- with_names(c('Feature ID', 'Classifier'))
+meta_cols <- with_names('Feature Name')
 char_cols <- with_names(unique(c(idx_cols, meta_cols)))
 sample_cols <- with_names(colnames(header_row)[!(colnames(header_row) %in% char_cols)])
 
@@ -168,13 +168,13 @@ if (plot_pca){
 }
 
 ## Get normalized counts and write them to CSV with original sample names in header
-deseq_counts <- df_with_metadata(DESeq2::counts(deseq_run, normalized=TRUE))
-colnames(deseq_counts) <- c(meta_cols, sample_cols)
+deseq_counts <- restore_multiindex(df_with_metadata(DESeq2::counts(deseq_run, normalized=TRUE)))
+colnames(deseq_counts) <- c(idx_cols, meta_cols, sample_cols)
 write.csv(
-  restore_multiindex(deseq_counts),
+  deseq_counts,
   paste(out_pref, "norm_counts.csv", sep="_"),
   row.names=FALSE,
-  quote=1:4,
+  quote=which(colnames(deseq_counts) %in% char_cols),
 )
 
 if (has_control){
@@ -190,15 +190,16 @@ if (has_control){
 }
 
 write_dge_table <- function (dge_df, cond1, cond2){
+  dge_df <- restore_multiindex(dge_df)
   write.csv(
-    restore_multiindex(dge_df),
+    dge_df,
     paste(out_pref,
           "cond1", cond1,
           "cond2", cond2,
           "deseq_table.csv",
           sep="_"),
     row.names=FALSE,
-    quote=1:4,
+    quote=which(colnames(dge_df) %in% char_cols),
   )
 }
 

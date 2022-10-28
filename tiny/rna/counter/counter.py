@@ -139,7 +139,7 @@ def load_config(features_csv: str, is_pipeline: bool) -> List[dict]:
     rules = list()
 
     for row in CSVReader(features_csv, "Features Sheet").rows():
-        rule = {col: row[col] for col in ["Tag", "Hierarchy", "Strand", "nt5end", "Length", "Overlap"]}
+        rule = {col: row[col] for col in ["Class", "Hierarchy", "Strand", "nt5end", "Length", "Overlap"]}
         rule['nt5end'] = rule['nt5end'].upper().translate({ord('U'): 'T'})  # Convert RNA base to cDNA base
         rule['Identity'] = (row['Key'], row['Value'])                       # Create identity tuple
         rule['Hierarchy'] = int(rule['Hierarchy'])                          # Convert hierarchy to number

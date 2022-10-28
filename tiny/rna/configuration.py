@@ -324,7 +324,7 @@ class Configuration(ConfigBase):
             genomes=self.paths['reference_genome_files'],
             alignments=None  # Used in tiny-count standalone runs
         ).validate()
-
+    
     def execute_post_run_tasks(self, return_code):
         if self['run_bowtie_build']:
             self.verify_bowtie_build_outputs()
@@ -583,7 +583,7 @@ class CSVReader(csv.DictReader):
         "Features Sheet": OrderedDict({
            "Select for...":     "Key",
            "with value...":     "Value",
-           "Tag":               "Tag",
+           "Classify as...":    "Class",
            "Hierarchy":         "Hierarchy",
            "Strand":            "Strand",
            "5' End Nucleotide": "nt5end",
@@ -629,6 +629,7 @@ class CSVReader(csv.DictReader):
         # The header values that were read
         read_vals = {val.lower() for key, val in header.items() if None not in (key, val)}
         read_vals.update(val.lower() for val in header.get(None, ()))  # Extra headers
+        self.check_backward_compatibility(read_vals)
 
         # Find differences between actual and expected headers
         unknown = {col_name for col_name in read_vals if col_name not in expected}
@@ -645,6 +646,17 @@ class CSVReader(csv.DictReader):
         if tuple(header_lowercase.values()) != tuple(doc_ref_lowercase.keys()):
             # Remap column order to match client's
             self.fieldnames = tuple(doc_ref_lowercase[key] for key in header_lowercase.values())
+
+    def check_backward_compatibility(self, header_vals):
+        if self.doctype == "Features Sheet" and "tag" in header_vals:
+            raise ValueError('\n'.join([
+                "It looks like you're using a Features Sheet from a version of tinyRNA",
+                'that offered "tagged counting". The "Tag" header has been repurposed as a feature',
+                "classifier and its meaning within the pipeline has changed. Additionally, feature",
+                "class is no longer determined by the Class= attribute. Please review the Stage 1",
+                'section in tiny-count\'s documentation, then rename the "Tag" column to',
+                '"Classify as..." to avoid this error.'
+            ]))
 
 
 if __name__ == '__main__':
