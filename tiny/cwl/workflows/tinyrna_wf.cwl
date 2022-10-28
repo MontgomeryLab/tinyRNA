@@ -101,6 +101,8 @@ inputs:
   plot_len_dist_max: int?
   plot_style_sheet: File?
   plot_pval: float?
+  plot_unknown_class: string?
+  plot_unassigned_class: string?
 
   # output directory names
   dir_name_bt_build: string
@@ -254,6 +256,8 @@ steps:
         pickValue: all_non_null
         valueFrom: |
           $(self.length ? self[0] : null)
+      unknown_class_label: plot_unknown_class
+      unassigned_class_label: plot_unassigned_class
       dge_pval: plot_pval
       style_sheet: plot_style_sheet
       out_prefix: run_name

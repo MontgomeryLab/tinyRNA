@@ -1,4 +1,4 @@
-Select for...,with value...,Tag,Source Filter,Type Filter,Hierarchy,Strand,5' End Nucleotide,Length,Overlap
+Select for...,with value...,Classify as...,Source Filter,Type Filter,Hierarchy,Strand,5' End Nucleotide,Length,Overlap
 Class,mask,,,,1,both,all,all,Partial
 Class,miRNA,,,,2,sense,all,16-22,Full
 Class,piRNA,5pA,,,2,both,A,24-32,Full

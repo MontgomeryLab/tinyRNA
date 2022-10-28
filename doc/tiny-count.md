@@ -26,10 +26,13 @@ Selection occurs in three stages, with the output of each stage as input to the 
 3. Finally, features are selected for read assignment based on the small RNA attributes of the alignment locus. Once reads are assigned to a feature, they are excluded from matches with larger hierarchy values.
  
 ## Stage 1: Feature Attribute Parameters
-| _features.csv columns:_ | Select for... | with value... | Tag | Source Filter | Type Filter |
-|-------------------------|---------------|---------------|-----|---------------|-------------|
+| _features.csv columns:_ | Select for... | with value... | Classify as... | Source Filter | Type Filter |
+|-------------------------|---------------|---------------|----------------|---------------|-------------|
 
 Each feature's column 9 attributes are searched for the key-value combinations defined in the `Select for...` and `with value...` columns. These matches are then filtered based on their source (GFF column 2) and type (GFF column 3) according to the corresponding rule's `Source Filter`, and `Type Filter`. Features, and the rules they matched, are retained for later evaluation at alignment loci in Stages 2 and 3.
+
+#### Feature Classification
+You can optionally specify a classifier for each rule. These classifiers are later used to group and label counts in class-related plots. Features that match rules with a classifier are counted separately; the classifier becomes part of the feature's ID to create a distinct "sub-feature", and these sub-features continue to be treated as distinct in downstream DGE analysis. Classified features receive counts exclusively from the rule(s) which hold the same `Classify as...` value. Counts from multiple rules can be pooled by using the same classifier. In the final counts table, this value is displayed in the Classifier column of features matching the rule, and each feature-classifier pair is shown on its own row.
 
 #### Source and Type Filters
 These are inclusive filters, meaning a feature's source/type must match one of the values in these columns to pass Stage 1 selection. If these fields are left empty, or any wildcard value is used, then the feature's source/type is not evaluated.
@@ -41,9 +44,6 @@ Attribute keys are allowed to have multiple comma separated values, and these va
 
 #### Wildcard Support
 Wildcard values (`all`, `*`, or an empty cell) can be used in the `Select for...`, `with value...`, `Source Filter`, and `Type Filter` fields. With this functionality you can evaluate features for the presence of an attribute key without regarding its values, or you can check all attribute keys for the presence of a specific value, or you can skip Stage 1 selection altogether to permit the evaluation of the complete feature set in Stage 2. In the later case, feature-rule matching pairs still serve as the basis for selection; each rule still applies only to its matching subset from previous Stages.
-
-#### Tagged Counting (advanced)
-You can optionally specify a tag for each rule. Feature assignments resulting from tagged rules will have reads counted separately from those assigned by non-tagged rules. This essentially creates a new "sub-feature" for each feature that a tagged rule matches, and these "sub-features" are treated as distinct during downstream DGE analysis. Additionally, these counts subsets can be pooled across any number of rules by specifying the same tag. We recommend using tag names which _do not_ pertain to the `Select for...` / `with value...` in order to avoid potentially confusing results in class-related plots. 
 
 ## Stage 2: Overlap and Hierarchy Parameters
 | _features.csv columns:_ | Hierarchy | Overlap |
@@ -114,23 +114,15 @@ Examples:
 
 >**Tip:** you may specify U and T bases in your rules. Uracil bases will be converted to thymine when your Features Sheet is loaded. N bases are also allowed.
 
-### Misc
-| features.csv columns: | Alias by... | Feature Source |
-|-----------------------|-------------|----------------|
-
-You may specify an **Alias by...** which is a GFF column 9 attribute key you wish to represent each feature. The intention of this column is to provide a human-friendly name for each feature. The value associated with each feature's **Alias by...** attribute will be shown in the `Feature Name` column of the Feature Counts output table.  For example, if one of your rules specifies an alias of `sequence_name` and gene1's `sequence_name` attribute is "abc123", then gene1's `Feature Name` column in the Feature Counts table will read "abc123".
-
-The **Feature Source** field of a rule is tied only to the **Alias by...**; rules are _not_ partitioned on a GFF file basis, and features parsed from these GFF files are similarly not partitioned as they all go into the same lookup table regardless of source. For each rule, aliases are built on a per-GFF file basis; that is, **Alias by...** values will only be gathered from their corresponding **Feature Source**. Additionally, each GFF file is parsed only once regardless of the number of times it occurs in the Features Sheet.
-
 ## Count Normalization
 Small RNA reads passing selection will receive a normalized count increment. By default, read counts are normalized twice before being assigned to a feature. The second normalization step can be disabled in `run_config.yml` if desired. Counts for each small RNA sequence are divided: 
 1. By the number of loci it aligns to in the genome.
 2. By the number of _selected_ features for each of its alignments.
 
 ## The Details
-You may encounter the following cases when you have more than one unique GFF file listed in your **Feature Source**s:
+You may encounter the following cases when you have more than one unique GFF file listed in your Paths File:
 - If a feature is defined in one GFF file, then again in another but with differing attributes, rule and alias matches will be merged for the feature
-- If a feature is defined in one GFF file, then again but under a different **Alias by...**, then both aliases are retained and treated as a list. All aliases will be present in the `Feature Name` column of the Feature Counts output table. They will be comma separated.
+- If a feature is defined in one GFF file, then again but with a different `alias` parameter, then all unique aliases are retained for the feature and listed in its `Feature Name` column.
 
 Discontinuous features and feature filtering support:
 - Discontinuous features are supported (as defined by the `Parent` attribute key, or by a shared `ID`/`gene_id` attribute value). Rule and alias matches of descendents are merged with the root parent's.

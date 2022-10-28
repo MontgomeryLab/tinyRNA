@@ -428,9 +428,9 @@ def parse_gff(file, row_fn: Callable, alias_keys=None):
 
 
 # Type aliases for human readability
-ClassTable = AliasTable = DefaultDict[str, Tuple[str]]
-StepVector = HTSeq.GenomicArrayOfSets
-Tags = DefaultDict[str, Set[str]]
+AliasTable = DefaultDict[str, Tuple[str]]
+TagTable = DefaultDict[str, Set[Tuple[str, str]]]
+GenomicArray = HTSeq.GenomicArrayOfSets
 
 
 class ReferenceTables:
@@ -470,7 +470,6 @@ class ReferenceTables:
         self.parents, self.filtered = {}, set()                         # Original Feature ID
         self.intervals = defaultdict(list)                              # Root Feature ID
         self.matches = defaultdict(set)                                 # Root Match ID
-        self.classes = defaultdict(set)                                 # Root Feature ID
         self.alias = defaultdict(set)                                   # Root Feature ID
         self.tags = defaultdict(set)                                    # Root Feature ID -> Root Match ID
 
@@ -478,29 +477,36 @@ class ReferenceTables:
         setattr(HTSeq.features.GFF_Reader, 'parse_GFF_attribute_string', staticmethod(parse_GFF_attribute_string))
 
     @report_execution_time("GFF parsing")
-    def get(self) -> Tuple[StepVector, AliasTable, ClassTable, dict]:
-        """Initiates GFF parsing and returns the resulting reference tables"""
+    def get(self) -> Tuple[GenomicArray, AliasTable, TagTable]:
+        """Initiates GFF parsing and returns complete feature, alias, and tag tables"""
 
         for file, alias_keys in self.gff_files.items():
             parse_gff(file, self.parse_row, alias_keys=alias_keys)
 
-        return self.finalize_tables()
+        self._finalize_aliases()
+        self._finalize_features()
+
+        if self.get_feats_table_size() == 0 and self.all_features is False:
+            raise ValueError("No features were retained while parsing your GFF file.\n"
+                             "This may be due to a lack of features matching 'Select for...with value...'")
+
+        return self.feats, self.alias, self.tags
 
     def parse_row(self, row, alias_keys=None):
         if row.type.lower() == "chromosome":
             self.exclude_row(row)
             return
 
-        # Get feature's classes and identity match tuples
-        matches, classes = self.get_matches_and_classes(row)
-        # Only add features with identity matches if all_features is False
+        # Perform Stage 1 selection
+        matches = self.get_matches(row)
+        # Skip features that lack matches unless all_features is True
         if not self.all_features and not len(matches):
             self.exclude_row(row)
             return
         # Grab the primary key for this feature
         feature_id = self.get_feature_id(row)
         # Add feature data to root ancestor in the reference tables
-        root_id = self.add_feature(feature_id, row, matches, classes)
+        root_id = self.add_feature(feature_id, row, matches)
         # Add alias to root ancestor if it is unique
         self.add_alias(root_id, alias_keys, row.attr)
 
@@ -530,14 +536,13 @@ class ReferenceTables:
 
         return lineage
 
-    def add_feature(self, feature_id: str, row, matches: defaultdict, classes: set) -> str:
-        """Adds the feature to classes and intervals tables under its root ID, and to the matches table
+    def add_feature(self, feature_id: str, row, matches: defaultdict) -> str:
+        """Adds the feature to the intervals table under its root ID, and to the matches table
         under its tagged ID. Note: matches are later assigned to intervals in _finalize_features()"""
 
         lineage = self.get_feature_ancestors(feature_id, row.attr)
         root_id = self.get_root_feature(lineage)
 
-        self.classes[root_id] |= classes
         if row.iv not in self.intervals[root_id]:
             self.intervals[root_id].append(row.iv)
 
@@ -561,11 +566,8 @@ class ReferenceTables:
             for row_val in row_attrs.get(alias_key, ()):
                 self.alias[root_id].add(row_val)
 
-    def get_matches_and_classes(self, row: HTSeq.GenomicFeature) -> Tuple[DefaultDict, set]:
-        """Grabs classes and match tuples from attributes that match identity rules (Stage 1 Selection)"""
-
-        row.attr.setdefault("Class", ("_UNKNOWN_",))
-        classes = {c for c in row.attr["Class"]}
+    def get_matches(self, row: HTSeq.GenomicFeature) -> DefaultDict:
+        """Performs Stage 1 selection and returns match tuples under their associated classifier"""
 
         identity_matches = defaultdict(set)
         for ident, rule_indexes in self.selector.inv_ident.items():
@@ -573,13 +575,13 @@ class ReferenceTables:
                 for index in rule_indexes:
                     rule = self.selector.rules_table[index]
                     if self.column_filter_match(row, rule):
-                        # Non-tagged matches are pooled under '' empty string
-                        identity_matches[rule['Tag']].add(
+                        # Unclassified matches are pooled under '' empty string
+                        identity_matches[rule['Class']].add(
                             (index, rule['Hierarchy'], rule['Overlap'])
                         )
 
-        # -> identity_matches: {tag: (rule, rank, overlap), ...}
-        return identity_matches, classes
+        # -> identity_matches: {class: (rule, rank, overlap), ...}
+        return identity_matches
 
     def get_row_parent(self, feature_id: str, row_attrs: CaseInsensitiveAttrs) -> str:
         """Get the current feature's parent while cooperating with filtered features"""
@@ -614,22 +616,11 @@ class ReferenceTables:
             self.parents[feature_id] = self.get_row_parent(feature_id, row.attr)
         self.chrom_vector_setdefault(row.iv.chrom)
 
-    def finalize_tables(self) -> Tuple[StepVector, AliasTable, ClassTable, dict]:
-        """Convert sets to sorted tuples for performance, hashability, and deterministic outputs
-        Matches must also be assigned to intervals now that all intervals are known"""
-
-        self._finalize_classes()
-        self._finalize_aliases()
-        self._finalize_features()
-
-        if self.get_feats_table_size() == 0 and self.all_features is False:
-            raise ValueError("No features were retained while parsing your GFF file.\n"
-                             "This may be due to a lack of features matching 'Select for...with value...'")
-
-        return self.feats, self.alias, self.classes, self.tags
+    def _finalize_aliases(self):
+        self.alias = {feat: tuple(sorted(aliases, key=str.lower)) for feat, aliases in self.alias.items()}
 
     def _finalize_features(self):
-        """Assigns matches to their corresponding intervals by populating StepVector with match tuples"""
+        """Assigns matches to their corresponding intervals by populating GenomicArray with match tuples"""
 
         for root_id, unmerged_sub_ivs in self.intervals.items():
             merged_sub_ivs = self._merge_adjacent_subintervals(unmerged_sub_ivs)
@@ -671,12 +662,6 @@ class ReferenceTables:
         merged_ivs.append(continuous_iv)
 
         return merged_ivs
-
-    def _finalize_aliases(self):
-        self.alias = {feat: tuple(sorted(aliases, key=str.lower)) for feat, aliases in self.alias.items()}
-
-    def _finalize_classes(self):
-        self.classes = {feat: tuple(sorted(classes, key=str.lower)) for feat, classes in self.classes.items()}
 
     def get_feats_table_size(self) -> int:
         """Returns the sum of features across all chromosomes and strands"""

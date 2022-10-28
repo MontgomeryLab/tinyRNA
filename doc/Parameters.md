@@ -234,6 +234,14 @@ The scatter plots produced by tiny-plot have rasterized points by default. This 
 
 The min and/or max bounds for plotted lengths can be set with this option. See [tiny-plot's documentation](tiny-plot.md#length-bounds) for more information about how these values are determined if they aren't set.
 
+### Labels for Class-related Plots
+| Run Config Key         | Commandline Argument |
+|------------------------|----------------------|
+| plot_unknown_class:    | `--unknown-class`    | 
+| plot_unassigned_class: | `--unassigned-class` |
+
+The labels that should be used for special groups in `class_charts` and `sample_avg_scatter_by_dge_class` plots. The "unknown" class group represents counts which were assigned by a Features Sheet rule which lacked a "Classify as..." label. The "unassigned" class group represents counts which weren't assigned to a feature.
+
 ### Full tiny-plot Help String
 ```
 tiny-plot [-rc RAW_COUNTS] [-nc NORM_COUNTS] [-uc RULE_COUNTS]
@@ -298,4 +306,11 @@ Optional arguments:
                         len_dist plots will start at this value
   -lda VALUE, --len-dist-max VALUE
                         len_dist plots will end at this value
+  -una LABEL, --unassigned-class LABEL
+                        Use this label in class-related plots for unassigned
+                        counts
+  -unk LABEL, --unknown-class LABEL
+                        Use this label in class-related plots for counts which
+                        were assigned by rules lacking a "Classify as..."
+                        value
 ```

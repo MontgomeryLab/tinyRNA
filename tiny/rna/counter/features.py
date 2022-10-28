@@ -18,13 +18,11 @@ class Features(metaclass=Singleton):
     chrom_vectors: HTSeq.ChromVector
     aliases: dict
     classes: dict
-    tags: dict
 
-    def __init__(_, features: HTSeq.GenomicArrayOfSets, aliases: dict, classes: dict, tags: dict):
+    def __init__(_, features: HTSeq.GenomicArrayOfSets, aliases: dict, classes: dict):
         Features.chrom_vectors = features.chrom_vectors  # For interval -> feature record tuple lookups
         Features.aliases = aliases                       # For feature ID -> preferred feature name lookups
-        Features.classes = classes                       # For feature ID -> class lookups
-        Features.tags = tags                             # For feature ID -> match IDs
+        Features.classes = classes                       # For feature ID -> match IDs
 
 
 class FeatureCounter:

@@ -90,11 +90,11 @@ tiny get-template
 
 ### Requirements for User-Provided Input Files
 
-| Input Type                                                                 | File Extension    | Requirements                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-|----------------------------------------------------------------------------|-------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Reference annotations<br/>[(example)](START_HERE/reference_data/ram1.gff3) | GFF3 / GFF2 / GTF | Column 9 attributes (defined as "tag=value" or "tag "):<ul><li>Each feature must have an `ID` or `gene_id`  or `Parent` tag (referred to as `ID` henceforth).</li><li>Feature classes can be defined with the `Class` tag. If undefined, the default value \__UNKNOWN_\_ will be used.</li><li>Discontinuous features must be defined with the `Parent` tag whose value is the logical parent's `ID`, or by sharing the same `ID`.</li><li>Attribute values containing commas must represent lists.</li><li>`Parent` tags with multiple values are not yet supported.</li><li>See the example link (left) for col. 9 formatting.</li></ul> |
-| Sequencing data<br/>[(example)](START_HERE/fastq_files)                    | FASTQ(.gz)        | Files must be demultiplexed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| Reference genome<br/>[(example)](START_HERE/reference_data/ram1.fa)        | FASTA             | Chromosome identifiers (e.g. Chr1): <ul><li>Must match your reference annotation file chromosome identifiers</li><li>Are case sensitive</li></ul>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Input Type                                                                 | File Extension    | Requirements                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+|----------------------------------------------------------------------------|-------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Reference annotations<br/>[(example)](START_HERE/reference_data/ram1.gff3) | GFF3 / GFF2 / GTF | Column 9 attributes (defined as "tag=value" or "tag "):<ul><li>Each feature must have an `ID` or `gene_id`  or `Parent` tag (referred to as `ID` henceforth).</li><li>Discontinuous features must be defined with the `Parent` tag whose value is the logical parent's `ID`, or by sharing the same `ID`.</li><li>Attribute values containing commas must represent lists.</li><li>`Parent` tags with multiple values are not yet supported.</li><li>See the example link (left) for col. 9 formatting.</li></ul> |
+| Sequencing data<br/>[(example)](START_HERE/fastq_files)                    | FASTQ(.gz)        | Files must be demultiplexed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Reference genome<br/>[(example)](START_HERE/reference_data/ram1.fa)        | FASTA             | Chromosome identifiers (e.g. Chr1): <ul><li>Should match your reference annotation file chromosome identifiers</li><li>Are case sensitive</li></ul>                                                                                                                                                                                                                                                                                                                                                               |
 
 
 
@@ -105,8 +105,8 @@ In most cases you will use this toolset as an end-to-end pipeline. This will run
 2. The genome sequence of interest in fasta format.
 3. Genome coordinates of small RNA features of interest in GFF format.
 4. A completed Samples Sheet (`samples.csv`) with paths to the fastq files.
-5. A completed Features Sheet (`features.csv`) with paths to the GFF file(s).
-6. An updated Paths File (`paths.yml`) with the path to the genome sequence and/or your bowtie index prefix.
+5. A completed Features Sheet (`features.csv`) with feature selection rules.
+6. An updated Paths File (`paths.yml`) with paths to your GFF files, the genome sequence and/or your bowtie index prefix, as well as the paths to `samples.csv` and `features.csv`.
 7. A Run Config file (`run_config.yml`) located in your working directory or the path to the file. The template provided does not need to be updated if you wish to use the default settings.
 
 To run an end-to-end analysis, be sure that you're working within the conda tinyrna environment ([instructions above](#usage)) in your terminal and optionally navigate to the location of your Run Config file. Then, simply run the following in your terminal:
@@ -174,17 +174,20 @@ A "collapsed" FASTA contains unique reads found in fastp's quality filtered FAST
 The tiny-count step produces a variety of outputs
 
 #### Feature Counts
-Custom Python scripts and HTSeq are used to generate a single table of feature counts that includes columns for each library analyzed. A feature's _Feature ID_ and _Feature Class_ are simply the values of its `ID` and `Class` attributes. Features lacking a Class attribute will be assigned class `_UNKNOWN_`. We have also included a _Feature Name_ column which displays aliases of your choice, as specified in the _Alias by..._ column of the Features Sheet. If _Alias by..._ is set to`ID`, the _Feature Name_ column is left empty.
+Custom Python scripts and HTSeq are used to generate a single table of feature counts which includes each counted library. Each matched feature is represented with the following metadata columns:
+- **_Feature ID_** is determined, in order of preference, by one of the following GFF column 9 attributes: `ID`, `gene_id`, `Parent`. 
+- **_Classifier_** is determined by the rules in your Features Sheet. It is the _Classify as..._ value of each matching rule. Since multiple rules can match a feature, some Feature IDs will be listed multiple times with different classifiers.
+- **_Feature Name_** displays aliases of your choice, as specified in the `alias` key under each GFF listed in your Paths File. If `alias` is set to `ID`, the _Feature Name_ column is left empty.
 
-For example, if your Features Sheet has a rule which specifies _Alias by..._ `sequence_name` and the GFF entry for this feature has the following attributes column:
+For example, if your Paths File has a GFF entry which specifies `alias: [sequence_name]`, and the corresponding GFF file has a feature with the following attributes column:
 ```
-... ID=406904;sequence_name=mir-1,hsa-miR-1;Class=miRNA; ...
+... ID=406904;sequence_name=mir-1,hsa-miR-1; ...
 ```
-The row for this feature in the feature counts table would read:
+And this feature matched a rule in your Features Sheet defining _Classify as..._ `miRNA`, then the entry for this feature in the final counts table would read:
 
-| Feature ID | Feature Name     | Feature Class | Group1_rep_1 | Group1_rep_2 | ... |
-|------------|------------------|---------------|--------------|--------------|-----|
-| 406904     | mir-1, hsa-miR-1 | miRNA         | 1234         | 999          | ... |
+| Feature ID | Classifier | Feature Name     | Group1_rep_1 | Group1_rep_2 | ... |
+|------------|------------|------------------|--------------|--------------|-----|
+| 406904     | miRNA      | mir-1, hsa-miR-1 | 1234         | 999          | ... |
 
 #### Normalized Counts
 If your Samples Sheet has settings for Normalization, an additional copy of the Feature Counts table is produced with the specified per-library normalizations applied.

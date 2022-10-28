@@ -6,7 +6,6 @@ directory, you may find it easier to instead run `tiny replot` within that run d
 """
 import multiprocessing as mp
 import pandas as pd
-import numpy as np
 import itertools
 import traceback
 import argparse
@@ -15,12 +14,15 @@ import sys
 import re
 
 from collections import defaultdict
-from typing import Optional, Dict, Union, Tuple, DefaultDict
+from typing import Dict, Union, Tuple, DefaultDict
 from pkg_resources import resource_filename
 
 from tiny.rna.configuration import timestamp_format
-from tiny.rna.plotterlib import plotterlib as lib
+from tiny.rna.plotterlib import plotterlib
 from tiny.rna.util import report_execution_time, make_filename, SmartFormatter
+
+aqplt: plotterlib
+RASTER: bool
 
 
 def get_args():
@@ -65,7 +67,11 @@ def get_args():
                                help='len_dist plots will start at this value')
     optional_args.add_argument('-lda', '--len-dist-max', metavar='VALUE', type=int,
                                help='len_dist plots will end at this value')
-
+    optional_args.add_argument('-una', '--unassigned-class', metavar='LABEL', default='_UNASSIGNED_',
+                               help='Use this label in class-related plots for unassigned counts'),
+    optional_args.add_argument('-unk', '--unknown-class', metavar='LABEL', default='_UNKNOWN_',
+                               help='Use this label in class-related plots for counts which were '
+                                    'assigned by rules lacking a "Classify as..." value')
 
     # Required arguments
     required_args.add_argument('-p', '--plots', metavar='PLOT', required=True, nargs='+',
@@ -155,17 +161,19 @@ def get_len_dist_dict(files_list: list) -> DefaultDict[str, Dict[str, pd.DataFra
     return matrices
 
 
-def class_charts(raw_class_counts: pd.DataFrame, mapped_reads: pd.Series, out_prefix: str, scale=2, **kwargs):
+def class_charts(raw_class_counts: pd.DataFrame, mapped_reads: pd.Series, out_prefix: str, class_na: str, scale=2, **kwargs):
     """Create a PDF of the proportion of raw assigned counts vs total mapped reads for each class
 
     Args:
         raw_class_counts: A dataframe containing RAW class counts per library
         mapped_reads: A Series containing the total number of mapped reads per library
         out_prefix: The prefix to use when naming output PDF plots
+        class_na: The label to use for representing unassigned reads
+        scale: The decimal scale for table percentages, and for determining inclusion of "unassigned"
         kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
     """
 
-    class_props = get_proportions_df(raw_class_counts, mapped_reads, "_UNASSIGNED_", scale)
+    class_props = get_proportions_df(raw_class_counts, mapped_reads, class_na, scale).sort_index()
     max_prop = class_props.max().max()
 
     for library in raw_class_counts:
@@ -248,7 +256,7 @@ def get_sample_rep_dict(df: pd.DataFrame) -> dict:
     """
 
     sample_dict = defaultdict(list)
-    non_numeric_cols = ["Feature Class", "Feature Name"]
+    non_numeric_cols = ["Feature Name"]
 
     for col in df.columns:
         if col in non_numeric_cols: continue
@@ -302,12 +310,13 @@ def scatter_replicates(count_df: pd.DataFrame, samples: dict, output_prefix: str
             save_plot(rscat, "replicate_scatter", pdf_name)
 
 
-def load_dge_tables(comparisons: list) -> pd.DataFrame:
+def load_dge_tables(comparisons: list, class_fillna: str) -> pd.DataFrame:
     """Creates a new dataframe containing all features and padj values for each comparison
     from a list of DGE tables.
 
     Args:
         comparisons: DGE tables (files) produced by DESeq2
+        class_fillna: the value to fill for NaN values in multiindex level 1
 
     Returns:
         de_table: A single table of padj values per feature/comparison
@@ -324,52 +333,40 @@ def load_dge_tables(comparisons: list) -> pd.DataFrame:
             print("Warning: multiple conditions matched in DGE filename. Using first match.")
 
         comparison_name = "_vs_".join(comparison[0])
-        table = pd.read_csv(dgefile).rename({"Unnamed: 0": "Feature ID"}, axis="columns")
-        table = table.set_index(
-            ["Feature ID", "Tag"]
-            # For backward compatability
-            if "Tag" in table.columns
-            else "Feature ID")
+        table = set_counts_table_multiindex(pd.read_csv(dgefile), class_fillna)
 
         de_table[comparison_name] = table['padj']
 
     return de_table
 
 
-def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, show_unknown=True, pval=0.05):
+def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, pval=0.05):
     """Creates PDFs of all pairwise comparison scatter plots from a count table.
     Can highlight classes and/or differentially expressed genes as different colors.
 
     Args:
-        count_df: A dataframe of counts per feature
+        count_df: A dataframe of counts per feature with multiindex (feature ID, classifier)
         dges: A dataframe of differential gene table output to highlight
         view_lims: A tuple of (min, max) data bounds for the plot view
         output_prefix: A string to use as a prefix for saving files
-        classes: An optional dataframe of class(es) per feature. If provided, points are grouped by class
-        show_unknown: If true, class "unknown" will be included if highlighting by classes
+        classes: An optional feature-class multiindex. If provided, points are grouped by class
         pval: The pvalue threshold for determining the outgroup
     """
 
     if classes is not None:
-        uniq_classes = sorted(list(pd.unique(classes)), key=str.lower)
+        uniq_classes = sorted(pd.unique(classes.get_level_values(1)), key=str.lower)
         class_colors = aqplt.assign_class_colors(uniq_classes)
         aqplt.set_dge_class_legend_style()
 
-        if not show_unknown and 'unknown' in uniq_classes:
-            uniq_classes.remove('unknown')
-
         for pair in dges:
             p1, p2 = pair.split("_vs_")
-            # Get list of differentially expressed features for this comparison pair
-            dge_list = list(dges.index[dges[pair] < pval])
-            # Create series of feature -> class relationships
-            class_dges = classes.loc[dge_list]
-            # Gather lists of features by class (listed in order corresponding to unique_classes)
-            grp_args = [class_dges.index[class_dges == cls].tolist() for cls in uniq_classes]
+            dge_dict = (dges[pair] < pval).groupby(level=1).groups
+            grp_args = [dge_dict[cls] for cls in uniq_classes]
 
             labels = uniq_classes
-            sscat = aqplt.scatter_grouped(count_df.loc[:, p1], count_df.loc[:, p2], *grp_args, colors=class_colors,
-                                          pval=pval, view_lims=view_lims, labels=labels, rasterized=RASTER)
+            sscat = aqplt.scatter_grouped(count_df.loc[:, p1], count_df.loc[:, p2], *grp_args,
+                                          colors=class_colors, pval=pval, view_lims=view_lims, labels=labels,
+                                          rasterized=RASTER)
 
             sscat.set_title('%s vs %s' % (p1, p2))
             sscat.set_xlabel("Log$_{2}$ normalized reads in " + p1)
@@ -385,8 +382,9 @@ def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, show_un
 
             labels = ['p < %g' % pval]
             colors = aqplt.assign_class_colors(labels)
-            sscat = aqplt.scatter_grouped(count_df.loc[:, p1], count_df.loc[:, p2], grp_args, colors=colors, alpha=0.5,
-                                          pval=pval, view_lims=view_lims, labels=labels, rasterized=RASTER)
+            sscat = aqplt.scatter_grouped(count_df.loc[:, p1], count_df.loc[:, p2], grp_args,
+                                          colors=colors, alpha=0.5, pval=pval, view_lims=view_lims, labels=labels,
+                                          rasterized=RASTER)
 
             sscat.set_title('%s vs %s' % (p1, p2))
             sscat.set_xlabel("Log$_{2}$ normalized reads in " + p1)
@@ -395,20 +393,16 @@ def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, show_un
             save_plot(sscat, 'scatter_by_dge', pdf_name)
 
 
-def load_raw_counts(raw_counts_file: str) -> pd.DataFrame:
+def load_raw_counts(raw_counts_file: str, class_fillna: str) -> pd.DataFrame:
     """Loads a raw_counts CSV as a DataFrame
     Args:
         raw_counts_file: The raw counts CSV produced by tiny-count
+        class_fillna: the value to fill for NaN values in multiindex level 1
     Returns:
-        The raw counts DataFrame (multiindex if it contains a Tag column)
+        The raw counts DataFrame with a multiindex of (feature id, classifier)
     """
 
-    raw_counts = pd.read_csv(raw_counts_file)
-    return tokenize_feature_classes(raw_counts)\
-        .set_index(["Feature ID", "Tag"]
-                    # For backward compatability
-                    if "Tag" in raw_counts.columns
-                    else "Feature ID")
+    return set_counts_table_multiindex(pd.read_csv(raw_counts_file), class_fillna)
 
 
 def load_rule_counts(rule_counts_file: str) -> pd.DataFrame:
@@ -416,115 +410,63 @@ def load_rule_counts(rule_counts_file: str) -> pd.DataFrame:
     Args:
         rule_counts_file: The rule counts CSV produced by tiny-count
     Returns:
-        The rule counts DataFrame
+        The raw counts DataFrame with a multiindex of (feature id, classifier)
     """
 
     return pd.read_csv(rule_counts_file, index_col=0)
 
 
-def load_norm_counts(norm_counts_file: str) -> pd.DataFrame:
+def load_norm_counts(norm_counts_file: str, class_fillna: str) -> pd.DataFrame:
     """Loads a norm_counts CSV as a DataFrame
     Args:
         norm_counts_file: The norm counts CSV produced by DESeq2
+        class_fillna: the value to fill for NaN values in multiindex level 1
     Returns:
-        The norm counts DataFrame (multiindex if it contains a Tag column)
+        The raw counts DataFrame with a multiindex of (feature id, classifier)
     """
 
-    norm_counts = pd.read_csv(norm_counts_file)\
-        .rename({"Unnamed: 0": "Feature ID"}, axis="columns")
-    return tokenize_feature_classes(norm_counts)\
-        .set_index(["Feature ID", "Tag"]
-                    # For backward compatability
-                    if "Tag" in norm_counts.columns
-                    else "Feature ID")
+    return set_counts_table_multiindex(pd.read_csv(norm_counts_file), class_fillna)
 
 
-def tokenize_feature_classes(counts_df: pd.DataFrame) -> pd.DataFrame:
-    """Parses each Feature Class element into a list. The resulting "lists" are
-    tuples to allow for .groupby() operations
+def set_counts_table_multiindex(counts: pd.DataFrame, fillna: str) -> pd.DataFrame:
+    """Assigns a multiindex composed of (Feature ID, Classifier) to the counts table,
+    and fills NaN values in the classifier column"""
+
+    level0 = "Feature ID"
+    level1 = "Classifier"
+
+    counts[level1] = counts[level1].fillna(fillna)
+    return counts.set_index([level0, level1])
+
+
+def get_flat_classes(counts_df: pd.DataFrame) -> pd.Index:
+    """Features with multiple associated classes are returned in flattened form
+    with one class per entry, yielding multiple entries for these features. During
+    earlier versions this required some processing, but now we can simply return
+    the multiindex of the counts_df.
+
     Args:
-        counts_df: a DataFrame containing Feature Class list strings
-    Returns: a new DataFrame with tokenized Feature Class elements
-    """
-
-    tokenized = counts_df.copy()
-    tokenized["Feature Class"] = (
-        counts_df["Feature Class"]
-            .str.split(',')
-            .apply(lambda classes: tuple(c.strip() for c in classes))
-    )
-
-    return tokenized
-
-
-def get_flat_classes(counts_df: pd.DataFrame) -> pd.Series:
-    """Features with multiple associated classes must have these classes flattened
-    Args:
-        counts_df: A counts DataFrame with a list-parsed Feature Class column
+        counts_df: A DataFrame with a multiindex of (feature ID, feature class)
     Returns:
-        A Series with the same index as the input and (optionally tagged) single classes
-        per index entry. Index repetitions are allowed for accommodating all classes.
+        The counts_df multiindex
     """
 
-    # For backward compatability
-    if isinstance(counts_df.index, pd.MultiIndex):
-        counts_df["Feature Class"] = counts_df.apply(tag_classes, axis="columns")
-
-    return counts_df["Feature Class"].explode()
-
-
-def tag_classes(row: pd.Series) -> tuple:
-    """Appends a feature's tag to its (tokenized) classes, if present.
-    Intended for use with df.apply()
-    Args:
-        row: a series, as provided by .apply(... , axis="columns")
-    Returns: a tuple of tagged classes for a feature
-    """
-
-    # For backward compatability
-    tag = row.name[1] if type(row.name) is tuple else pd.NA
-    return tuple(
-        cls if pd.isna(tag) else f"{cls} ({tag})"
-        for cls in row["Feature Class"]
-    )
+    return counts_df.index
 
 
 def get_class_counts(raw_counts_df: pd.DataFrame) -> pd.DataFrame:
-    """Calculates class counts from the Raw Counts DataFrame
-
-    If there are multiple classes associated with a feature, then that feature's
-    counts are normalized across all associated classes.
+    """Calculates class counts from level 1 of the raw counts multiindex
 
     Args:
-        raw_counts_df: A DataFrame containing features and their associated classes and counts
+        raw_counts_df: A DataFrame with a multiindex of (feature ID, classifier)
     Returns:
         class_counts: A DataFrame with an index of classes and count entries, per comparison
     """
 
-    # 1. Tokenize Feature Class lists and label each with the feature's Tag (if provided)
-    tokenized = raw_counts_df.copy().drop("Feature Name", axis="columns", errors='ignore')
-    tokenized['Feature Class'] = raw_counts_df.apply(tag_classes, axis="columns")
-
-    # 2. Group and sum by Feature Class. Prepare for 3. by dividing by group's class count.
-    grouped = (tokenized.groupby("Feature Class")
-               .apply(lambda grp: grp.sum() / len(grp.name)))
-
-    """
-    # Sanity check!
-    tokenized.groupby("Feature Class").apply(
-        lambda x: print('\n' + str(x.name) + '\n'
-                        f"{x.iloc[:,1:].sum()} / {len(x.name)} =" + '\n' +
-                        f"{x.iloc[:,1:].sum() / len(x.name)}" + '\n' +
-                        f"Total: {(x.iloc[:,1:].sum() / len(x.name)).sum()}"
-                        )
-    )"""
-
-    # 3. Flatten class lists, regroup and sum by the normalized group counts from 2.
-    class_counts = grouped.reset_index().explode("Feature Class").groupby("Feature Class").sum()
-
-    # Sanity check. Tolerance of 1 is overprovisioned for floating point errors
-    assert -1 < (class_counts.sum().sum() - raw_counts_df.iloc[:,2:].sum().sum()) < 1
-    return class_counts
+    return (raw_counts_df
+            .drop("Feature Name", axis="columns", errors='ignore')
+            .groupby(level=1)
+            .sum())
 
 
 def save_plot(plot, dir_name, filename):
@@ -616,11 +558,11 @@ def setup(args: argparse.Namespace) -> dict:
     fetched: Dict[str, Union[pd.DataFrame, pd.Series, dict, None]] = {}
     input_getters = {
         'ld_matrices_dict': lambda: get_len_dist_dict(args.len_dist),
-        'raw_counts_df': lambda: load_raw_counts(args.raw_counts),
         'mapped_reads_ds': lambda: load_mapped_reads(args.summary_stats),
-        'norm_counts_df': lambda: load_norm_counts(args.norm_counts),
         'rule_counts_df': lambda: load_rule_counts(args.rule_counts),
-        'de_table_df': lambda: load_dge_tables(args.dge_tables),
+        'norm_counts_df': lambda: load_norm_counts(args.norm_counts, args.unknown_class),
+        'raw_counts_df': lambda: load_raw_counts(args.raw_counts, args.unknown_class),
+        'de_table_df': lambda: load_dge_tables(args.dge_tables, args.unknown_class),
         'sample_rep_dict': lambda: get_sample_rep_dict(fetched["norm_counts_df"]),
         'norm_counts_avg_df': lambda: get_sample_averages(fetched["norm_counts_df"], fetched["sample_rep_dict"]),
         'feat_classes_df': lambda: get_flat_classes(fetched["norm_counts_df"]),
@@ -640,14 +582,12 @@ def setup(args: argparse.Namespace) -> dict:
 
 @report_execution_time("Plotter runtime")
 def main():
-    """
-    Main routine
-    """
+
     args = get_args()
     validate_inputs(args)
 
     global aqplt, RASTER
-    aqplt = lib(args.style_sheet)
+    aqplt = plotterlib(args.style_sheet)
     RASTER = not args.vector_scatter
     inputs = setup(args)
 
@@ -662,7 +602,7 @@ def main():
             kwd = {}
         elif plot == 'class_charts':
             func = class_charts
-            arg = (inputs["class_counts_df"], inputs['mapped_reads_ds'], args.out_prefix)
+            arg = (inputs["class_counts_df"], inputs['mapped_reads_ds'], args.out_prefix, args.unassigned_class)
             kwd = {}
         elif plot == 'rule_charts':
             func = rule_charts
@@ -709,6 +649,6 @@ def err(e):
               '2. Run "tiny replot --config your_run_config.yml"\n\t'
               '   (that\'s the processed run config) ^^^\n\n', file=sys.stderr)
 
+
 if __name__ == '__main__':
     main()
-

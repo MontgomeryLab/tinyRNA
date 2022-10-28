@@ -588,7 +588,7 @@ class CSVReader(csv.DictReader):
         "Features Sheet": OrderedDict({
            "Select for...":     "Key",
            "with value...":     "Value",
-           "Tag":               "Tag",
+           "Classify as...":    "Class",
            "Source Filter":     "Filter_s",
            "Type Filter":       "Filter_t",
            "Hierarchy":         "Hierarchy",
@@ -655,10 +655,11 @@ class CSVReader(csv.DictReader):
             self.fieldnames = tuple(doc_ref_lowercase[key] for key in header_lowercase.values())
 
     def check_backward_compatibility(self, header_vals):
+        compat_errors = []
         if self.doctype == "Features Sheet":
             v1_2_0 = {'add': {'source filter', 'type filter'}, 'remove': {'tag'}}
             if len(header_vals & v1_2_0['add']) != 2:
-                raise ValueError('\n'.join([
+                compat_errors.append('\n'.join([
                     "It looks like you're using a Features Sheet from an earlier version of",
                     "tinyRNA. Source and type filters are now defined in the Features Sheet.",
                     "They are no longer defined in the Run Config. Please review the Stage 1",
@@ -666,6 +667,17 @@ class CSVReader(csv.DictReader):
                     '"Source Filter" and "Type Filter" to your Features Sheet.'
                 ]))
 
+            if len(header_vals & v1_2_0['remove']):
+                compat_errors.append('\n'.join([
+                    "It looks like you're using a Features Sheet from a version of tinyRNA",
+                    'that offered "tagged counting". The "Tag" header has been repurposed as a feature',
+                    "classifier and its meaning within the pipeline has changed. Additionally, feature",
+                    "class is no longer determined by the Class= attribute. Please review the Stage 1",
+                    'section in tiny-count\'s documentation, then rename the "Tag" column to',
+                    '"Classify as..." to avoid this error.'
+                ]))
+
+        if compat_errors: raise ValueError('\n\n'.join(compat_errors))
 
 if __name__ == '__main__':
     Configuration.main()
