@@ -33,6 +33,8 @@ class CounterTests(unittest.TestCase):
             'Key':       "Class",
             'Value':     "CSR",
             'Class':     "",
+            'Filter_s':  "",
+            'Filter_t':  "",
             'Hierarchy': "1",
             'Strand':    "antisense",
             "nt5end":    '"C,G,U"',  # Needs to be double-quoted due to commas
@@ -46,6 +48,8 @@ class CounterTests(unittest.TestCase):
         self.parsed_feat_rule = [{
             'Identity':  (_row['Key'], _row['Value']),
             'Class':     _row['Class'],
+            'Filter_s':  _row['Filter_s'],
+            'Filter_t':  _row['Filter_t'],
             'Hierarchy': int(_row['Hierarchy']),
             'Strand':    _row['Strand'],
             'nt5end':    _row["nt5end"].upper().translate({ord('U'): 'T'}),
