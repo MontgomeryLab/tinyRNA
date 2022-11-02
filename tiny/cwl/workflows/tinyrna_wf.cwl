@@ -76,6 +76,7 @@ inputs:
   shared_memory: boolean?
 
   # counter inputs
+  paths_file: File
   samples_csv: File
   features_csv: File
   gff_files: File[]?
@@ -204,6 +205,7 @@ steps:
   counter:
     run: ../tools/tiny-count.cwl
     in:
+      paths_file: paths_file
       samples_csv: samples_csv
       features_csv: features_csv
       aligned_seqs: bowtie/sam_out

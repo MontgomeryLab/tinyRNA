@@ -10,7 +10,7 @@ import re
 from pkg_resources import resource_filename
 from collections import Counter, OrderedDict
 from datetime import datetime
-from typing import Union, Any
+from typing import Union, Any, Optional
 from glob import glob
 
 from tiny.rna.counter.validation import GFFValidator
@@ -95,15 +95,9 @@ class ConfigBase:
         return os.path.splitext(path)[0]
 
     @staticmethod
-    def joinpath(path1: str, path2: str) -> str:
-        """Combines two relative paths intelligently"""
-        path1, path2 = (os.path.expanduser(p) for p in [path1, path2])
-        if os.path.isabs(path2): return path2
-        return os.path.normpath(os.path.join(path1, path2))
-
-    @staticmethod
-    def cwl_file(file: str, verify=True) -> dict:
+    def cwl_file(file: Union[str,dict], verify=True) -> dict:
         """Returns a minimal File object as defined by CWL"""
+        if isinstance(file, dict): file = file['path']
         if '~' in file: file = os.path.expanduser(file)
         if verify and not os.path.exists(file):
             raise(FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file))
@@ -114,10 +108,35 @@ class ConfigBase:
         """Returns a minimal Directory object as defined by CWL"""
         return {'class': 'Directory', 'path': dir}
 
-    def from_here(self, destination: str, origin: str = None):
-        """Calculates paths relative to the input config file"""
-        origin = self.dir if origin is None else origin
-        return self.joinpath(origin, destination)
+    @staticmethod
+    def joinpath(path1: str, path2: str) -> str:
+        """Combines two relative paths intelligently"""
+        path1 = os.path.expanduser(path1) if path1 is not None else ""
+        path2 = os.path.expanduser(path2) if path2 is not None else ""
+        if os.path.isabs(path2): return path2
+        return os.path.normpath(os.path.join(path1, path2))
+
+    def from_here(self, destination: Union[str,dict,None], origin: Union[str,dict,None] = None) -> Union[str,dict,None]:
+        """Calculates paths relative to the input config file. An empty destination returns an empty path.
+        If destination is an absolute path, then destination is returned without any further joining.
+        Args:
+            destination: the path to evaluate relative to the config file. Can be a string or CWL file dictionary.
+            origin: the starting point (default: the config file's directory)
+        """
+
+        if isinstance(origin, dict): origin = origin.get('path')
+        if origin is None: origin = self.dir
+
+        if (
+                isinstance(destination, dict) and
+                isinstance(destination.get("path"), (str, bytes)) and
+                len(destination['path'])
+        ):
+            return dict(destination, path=self.joinpath(origin, destination["path"]))
+        elif isinstance(destination, (str, bytes)) and bool(destination):
+            return self.joinpath(origin, destination)
+        else:
+            return destination
 
     def create_run_directory(self) -> str:
         """Create the destination directory for pipeline outputs"""
@@ -168,42 +187,31 @@ class Configuration(ConfigBase):
         super().__init__(config_file)
 
         self.paths = self.load_paths_config()
-        self.process_paths_sheet()
+        self.assimilate_paths_file()
 
         self.setup_pipeline()
-        self.setup_per_file()
+        self.setup_file_groups()
         self.setup_ebwt_idx()
         self.process_samples_sheet()
         self.process_features_sheet()
         if validate_inputs: self.validate_inputs()
 
     def load_paths_config(self):
-        """Constructs a sub-configuration object containing workflow file preferences"""
-        path_sheet = self.from_here(self['paths_config'])
-        return ConfigBase(path_sheet)
+        """Constructs a sub-configuration object containing workflow file preferences
+        self['paths_config'] is the user-facing file path (just the path string)
+        self['paths_file'] is a CWL file object used as a workflow input."""
+        paths_file_path = self.from_here(self['paths_config'])
+        return PathsFile(paths_file_path)
 
-    def process_paths_sheet(self):
-        """Loads the paths of all related config files and workflow inputs"""
-
-        def to_cwl_file_class(input_file_path):
-            path_to_input = self.paths.from_here(input_file_path)
-            return self.cwl_file(path_to_input)
-
-        for absorb_key in ['ebwt', 'plot_style_sheet', 'adapter_fasta', 'tmp_directory']:
-            self[absorb_key] = self.paths[absorb_key]
-        self['run_directory'] = self.paths.from_here(self.paths['run_directory'])
-
-        # Configurations that need to be converted from string to a CWL File object
-        self['samples_csv'] = to_cwl_file_class(self.paths['samples_csv'])
-        self['features_csv'] = to_cwl_file_class(self.paths['features_csv'])
-        self['reference_genome_files'] = [
-            to_cwl_file_class(genome)
-            for genome in self.paths['reference_genome_files']
-            if genome is not None
-        ]
+    def assimilate_paths_file(self):
+        for key in [*PathsFile.single, *PathsFile.groups]:
+            self[key] = self.paths.as_cwl_file_obj(key)
+        for key in PathsFile.prefix:
+            self[key] = self.paths[key]
+        self['paths_file'] = self.cwl_file(self.paths.inf)
 
     def process_samples_sheet(self):
-        samples_sheet_path = self.paths.from_here(self['samples_csv']['path'])
+        samples_sheet_path = self.paths['samples_csv']
         samples_sheet = SamplesSheet(samples_sheet_path)
 
         self['sample_basenames'] = samples_sheet.sample_basenames
@@ -214,20 +222,11 @@ class Configuration(ConfigBase):
         self['fastp_report_titles'] = [f"{g}_rep_{r}" for g, r in samples_sheet.groups_reps]
 
     def process_features_sheet(self):
-        features_sheet = self.paths.from_here(self['features_csv']['path'])
-        features_sheet_dir = os.path.dirname(features_sheet)
+        # Configuration doesn't currently do anything with Features Sheet contents
+        return
 
-        csv_reader = CSVReader(features_sheet, "Features Sheet")
-        for row in csv_reader.rows():
-            gff_file = self.from_here(row['Source'], origin=features_sheet_dir)
-            try:
-                self.append_if_absent('gff_files', self.cwl_file(gff_file))
-            except FileNotFoundError:
-                row_num = csv_reader.row_num
-                sys.exit("The GFF file on line %d of your Features Sheet was not found:\n%s" % (row_num, gff_file))
-
-    def setup_per_file(self):
-        """Per-library settings lists to be populated by entries from samples_csv"""
+    def setup_file_groups(self):
+        """Configuration keys that represent lists of files"""
 
         self.set_default_dict({per_file_setting_key: [] for per_file_setting_key in
             ['in_fq', 'sample_basenames', 'gff_files', 'fastp_report_titles']
@@ -243,10 +242,8 @@ class Configuration(ConfigBase):
         self['run_name'] = self.get('run_name', default=default_run_name) + "_" + self.dt
 
         # Create prefixed Run Directory name
-        run_dir_resolved = self.paths.from_here(self.get('run_directory', default='run_directory'))
-        run_dir_parent = os.path.dirname(run_dir_resolved)
-        run_dir_withdt = self['run_name'] + '_' + os.path.basename(run_dir_resolved)
-        self['run_directory'] = self.joinpath(run_dir_parent, run_dir_withdt)
+        run_dir_parent, run_dir = os.path.split(self['run_directory'].rstrip(os.sep))
+        self['run_directory'] = self.joinpath(run_dir_parent, self['run_name'] + "_" + run_dir)
 
         self.templates = resource_filename('tiny', 'templates/')
 
@@ -263,8 +260,6 @@ class Configuration(ConfigBase):
             # Set the prefix to the run directory outputs. This is necessary
             # because workflow requires bt_index_files to be a populated list.
             self.paths['ebwt'] = self.get_ebwt_prefix()
-        else:
-            self.paths['ebwt'] = self.paths.from_here(self.paths['ebwt'])
 
         # verify_bowtie_build_outputs() will check if these end up being long indexes
         self['bt_index_files'] = self.get_bt_index_files()
@@ -279,9 +274,9 @@ class Configuration(ConfigBase):
 
         genome_files = self['reference_genome_files']
         if not genome_files:
-            raise ValueError("If your Paths Sheet doesn't have a value for \"ebtw:\", then bowtie indexes "
+            raise ValueError("If your Paths File doesn't have a value for \"ebtw:\", then bowtie indexes "
                              "will be built, but you'll need to provide your reference genome files under "
-                             '"reference_genome_files:" (also in your Paths Sheet)')
+                             '"reference_genome_files:" (also in your Paths File)')
 
         genome_basename = os.path.basename(genome_files[0]['path'])
         return self.prefix(os.path.join( # prefix path:
@@ -376,6 +371,111 @@ class Configuration(ConfigBase):
         file_basename = os.path.basename(args.input_file)
         config_object = Configuration(args.input_file)
         config_object.write_processed_config(f"processed_{file_basename}")
+
+
+class PathsFile(ConfigBase):
+    """A configuration class for managing and validating Paths Files.
+    Relative paths are automatically resolved on lookup and list types are enforced.
+    While this is convenient, developers should be aware of the following caveats:
+        - Lookups that return list values do not return the original object; don't
+          append to them. Instead, use the append_to() helper function.
+        - Chained assignments can produce unexpected results.
+    """
+
+    required = ('samples_csv', 'features_csv', 'gff_files')
+    single =   ('samples_csv', 'features_csv', 'plot_style_sheet', 'adapter_fasta')
+    groups =   ('reference_genome_files', 'gff_files')
+    prefix =   ('ebwt', 'run_directory', 'tmp_directory')
+
+    def __init__(self, file: str, in_pipeline=False):
+        super().__init__(file)
+        self.in_pipeline = in_pipeline
+        self.map_path = self.from_pipeline if in_pipeline else self.from_here
+        self.check_backward_compatibility()
+        self.validate_paths()
+
+    @staticmethod
+    def from_pipeline(value):
+        """When tiny-count runs as a pipeline step, all file inputs are
+        sourced from the working directory regardless of original path."""
+
+        if isinstance(value, dict) and value.get("path") is not None:
+            return dict(value, path=os.path.basename(value['path']))
+        elif isinstance(value, (str, bytes)):
+            return os.path.basename(value)
+        else:
+            return value
+
+    def __getitem__(self, key: str):
+        """Automatically performs path resolution for both single and group parameters.
+        Note that only keys listed in self.groups are guaranteed to be returned as lists."""
+
+        value = self.config.get(key)
+        if key in self.groups:
+            if value is None: return []
+            return [self.map_path(p) for p in value]
+        else:
+            return self.map_path(value)
+
+    def as_cwl_file_obj(self, key: str):
+        """Returns the specified parameter with file paths converted to CWL file objects."""
+
+        val = self[key]
+
+        if not val:
+            return val
+        elif key in self.single:
+            return self.cwl_file(val)
+        elif key in self.groups:
+            return [self.cwl_file(sub) for sub in val if sub]
+        elif key in self.prefix:
+            raise ValueError(f"The parameter {key} isn't meant to be a CWL file object.")
+        else:
+            raise ValueError(f'Unrecognized parameter: "{key}"')
+
+    def validate_paths(self):
+        assert all(self[req] for req in self.required), \
+            "The following parameters are required in {selfname}: {params}" \
+            .format(selfname=self.basename, params=', '.join(self.required))
+
+        assert any(gff.get('path') for gff in self['gff_files']), \
+            "At least one GFF file path must be specified under gff_files in {selfname}" \
+            .format(selfname=self.basename)
+
+        # Some entries in Paths File are omitted from tiny-count's working directory during
+        #  pipeline runs. There is no advantage to checking file existence here vs. in load_*
+        if self.in_pipeline: return
+
+        for key in self.single:
+            resolved_path = self[key]
+            if not resolved_path: continue
+            assert os.path.isfile(resolved_path), \
+                "The file provided for {key} in {selfname} could not be found:\n\t{file}" \
+                .format(key=key, selfname=self.basename, file=resolved_path)
+
+        for key in self.groups:
+            for entry in self[key]:
+                if isinstance(entry, dict): entry = entry['path']
+                assert os.path.isfile(entry), \
+                    "The following file provided under {key} in {selfname} could not be found:\n\t{file}" \
+                    .format(key=key, selfname=self.basename, file=entry)
+
+    def check_backward_compatibility(self):
+        assert 'gff_files' in self, \
+            "The gff_files parameter was not found in your Paths File. This likely means " \
+            "that you are using a Paths File from an earlier version of tinyRNA. Please " \
+            "check the release notes and update your configuration files."
+
+    # Override
+    def append_to(self, key: str, val: Any):
+        """Overrides method in the base class. This is necessary due to automatic
+        path resolution in __getitem__ which returns a *temporary* list value, and
+        items appended to the temporary list would otherwise be lost."""
+
+        assert key in self.groups, "Tried appending to a non-list type parameter"
+        target = self.config.get(key, [])
+        target.append(val)
+        return target
 
 
 class SamplesSheet:
@@ -483,14 +583,12 @@ class CSVReader(csv.DictReader):
         "Features Sheet": OrderedDict({
            "Select for...":     "Key",
            "with value...":     "Value",
-           "Alias by...":       "Name",
            "Classify as...":    "Class",
            "Hierarchy":         "Hierarchy",
            "Strand":            "Strand",
            "5' End Nucleotide": "nt5end",
            "Length":            "Length",
            "Overlap":           "Overlap",
-           "Feature Source":    "Source"
         }),
         "Samples Sheet": OrderedDict({
             "Input FASTQ Files": "File",
@@ -524,11 +622,16 @@ class CSVReader(csv.DictReader):
                 yield row
 
     def validate_csv_header(self, header: OrderedDict):
+        # The expected header values
         doc_reference = self.tinyrna_sheet_fields[self.doctype]
         expected = {key.lower() for key in doc_reference.keys()}
-        read_vals = {val.lower() for val in header.values() if val is not None}
+
+        # The header values that were read
+        read_vals = {val.lower() for key, val in header.items() if None not in (key, val)}
+        read_vals.update(val.lower() for val in header.get(None, ()))  # Extra headers
         self.check_backward_compatibility(read_vals)
 
+        # Find differences between actual and expected headers
         unknown = {col_name for col_name in read_vals if col_name not in expected}
         missing = expected - read_vals
 

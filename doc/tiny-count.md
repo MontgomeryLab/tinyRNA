@@ -111,23 +111,15 @@ Examples:
 
 >**Tip:** you may specify U and T bases in your rules. Uracil bases will be converted to thymine when your Features Sheet is loaded. N bases are also allowed.
 
-### Misc
-| features.csv columns: | Alias by... | Feature Source |
-|-----------------------|-------------|----------------|
-
-You may specify an **Alias by...** which is a GFF column 9 attribute key you wish to represent each feature. The intention of this column is to provide a human-friendly name for each feature. The value associated with each feature's **Alias by...** attribute will be shown in the `Feature Name` column of the Feature Counts output table.  For example, if one of your rules specifies an alias of `sequence_name` and gene1's `sequence_name` attribute is "abc123", then gene1's `Feature Name` column in the Feature Counts table will read "abc123".
-
-The **Feature Source** field of a rule is tied only to the **Alias by...**; rules are _not_ partitioned on a GFF file basis, and features parsed from these GFF files are similarly not partitioned as they all go into the same lookup table regardless of source. For each rule, aliases are built on a per-GFF file basis; that is, **Alias by...** values will only be gathered from their corresponding **Feature Source**. Additionally, each GFF file is parsed only once regardless of the number of times it occurs in the Features Sheet.
-
 ## Count Normalization
 Small RNA reads passing selection will receive a normalized count increment. By default, read counts are normalized twice before being assigned to a feature. The second normalization step can be disabled in `run_config.yml` if desired. Counts for each small RNA sequence are divided: 
 1. By the number of loci it aligns to in the genome.
 2. By the number of _selected_ features for each of its alignments.
 
 ## The Details
-You may encounter the following cases when you have more than one unique GFF file listed in your **Feature Source**s:
+You may encounter the following cases when you have more than one unique GFF file listed in your Paths File:
 - If a feature is defined in one GFF file, then again in another but with differing attributes, rule and alias matches will be merged for the feature
-- If a feature is defined in one GFF file, then again but under a different **Alias by...**, then both aliases are retained and treated as a list. All aliases will be present in the `Feature Name` column of the Feature Counts output table. They will be comma separated.
+- If a feature is defined in one GFF file, then again but with a different `alias` parameter, then all unique aliases are retained for the feature and listed in its `Feature Name` column.
 
 Discontinuous features and feature filtering support:
 - Discontinuous features are supported (as defined by the `Parent` attribute key, or by a shared `ID`/`gene_id` attribute value). Rule and alias matches of descendents are merged with the root parent's.

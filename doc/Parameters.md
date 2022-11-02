@@ -122,8 +122,8 @@ Diagnostic information will include intermediate alignment files for each librar
 
 ### Full tiny-count Help String
 ```
-tiny-count -i SAMPLES -f FEATURES -o OUTPUTPREFIX [-h]
-           [-sf [SOURCE ...]] [-tf [TYPE ...]] [-nh T/F] [-dc] [-a]
+tiny-count -pf PATHS -o OUTPUTPREFIX [-h] [-sf [SOURCE ...]]
+           [-tf [TYPE ...]] [-nh T/F] [-dc] [-sv {Cython,HTSeq}] [-a]
            [-p] [-d]
 
 This submodule assigns feature counts for SAM alignments using a Feature Sheet
@@ -132,10 +132,8 @@ prior run, we recommend that you instead run `tiny recount` within that run's
 directory.
 
 Required arguments:
-  -i SAMPLES, --samples-csv SAMPLES
-                        your Samples Sheet
-  -f FEATURES, --features-csv FEATURES
-                        your Features Sheet
+  -pf PATHS, --paths-file PATHS
+                        your Paths File
   -o OUTPUTPREFIX, --out-prefix OUTPUTPREFIX
                         output prefix to use for file names
 
