@@ -166,22 +166,29 @@ class FeatureSelector:
         Precondition: rules_table preserves original row order
         """
 
-        selector_builders = {"Strand": StrandMatch, "nt5end": NtMatch, "Length": NumericalMatch, "Identity": lambda x:x}
+        selector_builders = {
+            "Filter_s": GffSourceMatch,
+            "Filter_t": GffTypeMatch,
+            "Strand": StrandMatch,
+            "nt5end": NtMatch,
+            "Length": NumericalMatch,
+            "Identity": lambda x:x
+        }
 
         for i, row in enumerate(rules_table):
             try:
-                for selector, build_fn in selector_builders.items():
-                    defn = row[selector]
-
+                for selector, defn in row.items():
+                    if selector not in selector_builders:
+                        continue
                     if type(defn) is str and defn.lower().strip() in Wildcard.kwds:
                         row[selector] = Wildcard()
                     elif type(defn) is tuple:
                         row[selector] = tuple(Wildcard() if x.lower().strip() in Wildcard.kwds else x for x in defn)
                     else:
-                        row[selector] = build_fn(defn)
+                        row[selector] = selector_builders[selector](defn)
             except Exception as e:
                 # Append to error message while preserving exception provenance and traceback
-                e.args = (str(e.args[0]) + '\n' + f"Error occurred while processing rule number {i + 2}",)
+                e.args = (str(e.args[0]) + '\n' + f"Error occurred while processing rule number {i + 1}",)
                 raise e.with_traceback(sys.exc_info()[2]) from e
 
         return rules_table

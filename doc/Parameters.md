@@ -84,14 +84,6 @@ By default, tiny-count will divide the number of counts associated with each seq
 
 The SAM files produced by the tinyRNA pipeline are collapsed by default; alignments sharing a SEQ field are strictly multi-alignments and do not reflect original sequence counts. If this option is switched "on", tiny-count will produce a decollapsed copy of each input SAM file. Each alignment in the decollapsed SAM will be duplicated by the sequence's original count. This is useful for browsing in IGV. If non-collapsed inputs are provided to tiny-count in standalone mode, this option will be ignored.
 
-### Filters
- | Run Config Key                 | Commandline Argument                       |
-|--------------------------------|--------------------------------------------|
-| counter_source_filter: [ ]     | `--source-filter SOURCE SOURCE SOURCE ...` | 
-| counter_type_filter: [ ]       | `--type-filter TYPE TYPE TYPE ...`         |
-
-You can optionally filter features in your GFF files by specifying sources and/or types that are desired. Source and type refer to GFF columns 2 and 3 respectively. If source _and_ type filters are specified, each feature must match one of the sources _and_ one of the types in order to be included in the counting process. For both filters, an empty list is the same as "allow all."
-
 ### StepVector
 | Run Config Key     | Commandline Argument |
 |--------------------|----------------------|
@@ -122,9 +114,8 @@ Diagnostic information will include intermediate alignment files for each librar
 
 ### Full tiny-count Help String
 ```
-tiny-count -pf PATHS -o OUTPUTPREFIX [-h] [-sf [SOURCE ...]]
-           [-tf [TYPE ...]] [-nh T/F] [-dc] [-sv {Cython,HTSeq}] [-a]
-           [-p] [-d]
+tiny-count -pf PATHS -o OUTPUTPREFIX [-h] [-nh T/F] [-dc]
+           [-sv {Cython,HTSeq}] [-a] [-p] [-d]
 
 This submodule assigns feature counts for SAM alignments using a Feature Sheet
 ruleset. If you find that you are sourcing all of your input files from a
@@ -139,12 +130,6 @@ Required arguments:
 
 Optional arguments:
   -h, --help            show this help message and exit
-  -sf [SOURCE ...], --source-filter [SOURCE ...]
-                        Only produce counts for features whose GFF column 2
-                        matches the source(s) listed
-  -tf [TYPE ...], --type-filter [TYPE ...]
-                        Only produce counts for features whose GFF column 3
-                        matches the type(s) listed
   -nh T/F, --normalize-by-hits T/F
                         If T/true, normalize counts by (selected) overlapping
                         feature counts. Default: true.
@@ -154,9 +139,6 @@ Optional arguments:
   -sv {Cython,HTSeq}, --stepvector {Cython,HTSeq}
                         Select which StepVector implementation is used to find
                         features overlapping an interval.
-  -md, --multi-id       Don't treat features with multiple ID values as an
-                        error. Only the first value will be used as the
-                        feature's ID.
   -a, --all-features    Represent all features in output counts table, even if
                         they did not match a Select for / with value.
   -p, --is-pipeline     Indicates that tiny-count was invoked as part of a

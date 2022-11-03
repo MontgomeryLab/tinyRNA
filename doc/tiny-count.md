@@ -21,26 +21,29 @@ We provide a Features Sheet (`features.csv`) in which you can define selection r
 >**Important**: candidate features do not receive counts if they do not pass the selection process described below
 
 Selection occurs in three stages, with the output of each stage as input to the next:
-1. Features are matched to rules based on their GFF column 9 attributes
+1. Features are matched to rules based on their attributes defined in GFF files
 2. At each alignment locus, overlapping features are selected based on the overlap requirements of their matched rules. Selected features are sorted by hierarchy value so that smaller values take precedence in the next stage.
 3. Finally, features are selected for read assignment based on the small RNA attributes of the alignment locus. Once reads are assigned to a feature, they are excluded from matches with larger hierarchy values.
  
 ## Stage 1: Feature Attribute Parameters
-| _features.csv columns:_ | Select for... | with value... | Classify as... |
-|-------------------------|---------------|---------------|----------------|
+| _features.csv columns:_ | Select for... | with value... | Classify as... | Source Filter | Type Filter |
+|-------------------------|---------------|---------------|----------------|---------------|-------------|
 
-Each feature's column 9 attributes are searched for the key-value combinations defined in the `Select for...` and `with value...` columns. Features, and the rules they matched, are retained for later evaluation at alignment loci in Stages 2 and 3.
+Each feature's column 9 attributes are searched for the key-value combinations defined in the `Select for...` and `with value...` columns. These matches are then filtered based on their source (GFF column 2) and type (GFF column 3) according to the corresponding rule's `Source Filter`, and `Type Filter`. Features, and the rules they matched, are retained for later evaluation at alignment loci in Stages 2 and 3.
 
 #### Feature Classification
 You can optionally specify a classifier for each rule. These classifiers are later used to group and label counts in class-related plots. Features that match rules with a classifier are counted separately; the classifier becomes part of the feature's ID to create a distinct "sub-feature", and these sub-features continue to be treated as distinct in downstream DGE analysis. Classified features receive counts exclusively from the rule(s) which hold the same `Classify as...` value. Counts from multiple rules can be pooled by using the same classifier. In the final counts table, this value is displayed in the Classifier column of features matching the rule, and each feature-classifier pair is shown on its own row.
 
+#### Source and Type Filters
+These are inclusive filters, meaning a feature's source/type must match one of the values in these columns to pass Stage 1 selection. If these fields are left empty, or any wildcard value is used, then the feature's source/type is not evaluated.
+
 #### Value Lists
-Attribute keys are allowed to have multiple comma separated values, and these values are treated as a list; only one of the listed values needs to match the `with value...` to be considered a valid match to the rule. For example, if a rule contained `Class` and `WAGO` in these columns, then a feature with attributes `... ;Class=CSR,WAGO; ...` would be considered a match for the rule.
+Attribute keys are allowed to have multiple comma separated values, and these values are treated as a list; only one of the listed values needs to match the `with value...` to be considered a valid match to the rule. For example, if a rule contained `Class` and `WAGO` in these columns, then a feature with attributes `... ;Class=CSR,WAGO; ...` would be considered a match for the rule. Value lists can also be used in the `Source/Type Filter` fields.
 
 >**Tip**: The rules defined in your Features Sheet are case-insensitive. You do not need to match the capitalization of your target attributes.
 
 #### Wildcard Support
-Wildcard values (`all`, `*`, or an empty cell) can be used in the `Select for...` / `with value...` fields. With this functionality you can evaluate features for the presence of an attribute key without regarding its values, or you can check all attribute keys for the presence of a specific value, or you can skip Stage 1 selection altogether to permit the evaluation of the complete feature set in Stage 2. In the later case, feature-rule matching pairs still serve as the basis for selection; each rule still applies only to its matching subset from previous Stages.
+Wildcard values (`all`, `*`, or an empty cell) can be used in the `Select for...`, `with value...`, `Source Filter`, and `Type Filter` fields. With this functionality you can evaluate features for the presence of an attribute key without regarding its values, or you can check all attribute keys for the presence of a specific value, or you can skip Stage 1 selection altogether to permit the evaluation of the complete feature set in Stage 2. In the later case, feature-rule matching pairs still serve as the basis for selection; each rule still applies only to its matching subset from previous Stages.
 
 ## Stage 2: Overlap and Hierarchy Parameters
 | _features.csv columns:_ | Hierarchy | Overlap |
@@ -124,5 +127,4 @@ You may encounter the following cases when you have more than one unique GFF fil
 Discontinuous features and feature filtering support:
 - Discontinuous features are supported (as defined by the `Parent` attribute key, or by a shared `ID`/`gene_id` attribute value). Rule and alias matches of descendents are merged with the root parent's.
 - If a feature contains both `ID` and `gene_id` attributes, only the value of `ID` is used as the feature's ID.
-- Features can be filtered during GFF parsing by their `source` and/or `type` columns, and these preferences can be specified in the Run Config file. These are inclusive filters. Only features matching the values specified will be retained for selection and listed in the output counts table. An empty list allows all values. See the [parameters documentation](Parameters.md#filters) for information about specifying these filters.
-- If a filtered feature breaks a feature lineage (that is, features chained via the `Parent` attribute), then the highest non-filtered ancestor is designated the root parent. The lineage is maintained transparently but the filtered feature does not contribute to the domains of selection.
+- If a filtered feature breaks a feature lineage (that is, features chained via the `Parent` attribute), then the highest non-filtered ancestor is designated the root parent. The lineage is maintained transparently but the filtered feature does not contribute to the domains of selection. A feature is considered "filtered" when it fails to match a rule's `Source Filter` **and** `Type Filter`

@@ -67,7 +67,7 @@ reference_genome_files:
 - /absolute/path/genome2.fasta
 
 # Brackets can be used for more compact lists
-source_filter: [source1, source2, source3]
+alias: [attribute1, attribute2, attribute3]
 ```
 
 #### Strings
@@ -138,9 +138,9 @@ Supported values are:
 DESeq2 requires that your experiment design has at least one degree of freedom. If your experiment doesn't include at least one sample group with more than one replicate, tiny-deseq.r will be skipped and DGE related plots will not be produced.
 
 ## Features Sheet Details
-| _Column:_  | Select for... | with value... | Classify as... | Hierarchy | Strand | 5' End Nucleotide | Length | Overlap     |
-|------------|---------------|---------------|----------------|-----------|--------|-------------------|--------|-------------|
-| _Example:_ | Class         | miRNA         | miRNA          | 1         | sense  | all               | all    | 5' anchored |
+| _Column:_  | Select for... | with value... | Classify as... |  Source Filter | Type Filter | Hierarchy | Strand | 5' End Nucleotide | Length | Overlap     |
+|------------|---------------|---------------|----------------|----------------|-------------|-----------|--------|-------------------|--------|-------------|
+| _Example:_ | Class         | miRNA         | miRNA          |                |             | 1         | sense  | all               | all    | 5' anchored |
 
 The Features Sheet allows you to define selection rules that determine how features are chosen when multiple features are found overlap an alignment locus. Selected features are "assigned" a portion of the reads associated with the alignment.
 

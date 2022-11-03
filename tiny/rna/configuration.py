@@ -10,7 +10,7 @@ import re
 from pkg_resources import resource_filename
 from collections import Counter, OrderedDict
 from datetime import datetime
-from typing import Union, Any, Optional
+from typing import Union, Any, Optional, List
 from glob import glob
 
 from tiny.rna.counter.validation import GFFValidator
@@ -221,9 +221,14 @@ class Configuration(ConfigBase):
         self['in_fq'] = [self.cwl_file(fq, verify=False) for fq in samples_sheet.fastq_files]
         self['fastp_report_titles'] = [f"{g}_rep_{r}" for g, r in samples_sheet.groups_reps]
 
-    def process_features_sheet(self):
-        # Configuration doesn't currently do anything with Features Sheet contents
-        return
+    def process_features_sheet(self) -> List[dict]:
+        """Retrieves GFF Source and Type Filter definitions for use in GFFValidator"""
+        features_sheet_path = self.paths['features_csv']
+        reader = CSVReader(features_sheet_path, "Features Sheet").rows()
+
+        interests = ("Filter_s", "Filter_t")
+        return [{selector: rule[selector] for selector in interests}
+                for rule in reader]
 
     def setup_file_groups(self):
         """Configuration keys that represent lists of files"""
@@ -313,18 +318,18 @@ class Configuration(ConfigBase):
     def validate_inputs(self):
         """For now, only GFF files are validated here"""
 
+        selection_rules = self.process_features_sheet()
         gff_files = {gff['path']: [] for gff in self['gff_files']}
-        prefs = {x: self[f'{x}_filter'] for x in ['source', 'type']}
         ebwt = self.paths['ebwt'] if not self['run_bowtie_build'] else None
 
         GFFValidator(
             gff_files,
-            prefs=prefs,
+            selection_rules,
             ebwt=ebwt,
             genomes=self.paths['reference_genome_files'],
             alignments=None  # Used in tiny-count standalone runs
         ).validate()
-    
+
     def execute_post_run_tasks(self, return_code):
         if self['run_bowtie_build']:
             self.verify_bowtie_build_outputs()
@@ -584,6 +589,8 @@ class CSVReader(csv.DictReader):
            "Select for...":     "Key",
            "with value...":     "Value",
            "Classify as...":    "Class",
+           "Source Filter":     "Filter_s",
+           "Type Filter":       "Filter_t",
            "Hierarchy":         "Hierarchy",
            "Strand":            "Strand",
            "5' End Nucleotide": "nt5end",
@@ -648,16 +655,37 @@ class CSVReader(csv.DictReader):
             self.fieldnames = tuple(doc_ref_lowercase[key] for key in header_lowercase.values())
 
     def check_backward_compatibility(self, header_vals):
-        if self.doctype == "Features Sheet" and "tag" in header_vals:
-            raise ValueError('\n'.join([
-                "It looks like you're using a Features Sheet from a version of tinyRNA",
-                'that offered "tagged counting". The "Tag" header has been repurposed as a feature',
-                "classifier and its meaning within the pipeline has changed. Additionally, feature",
-                "class is no longer determined by the Class= attribute. Please review the Stage 1",
-                'section in tiny-count\'s documentation, then rename the "Tag" column to',
-                '"Classify as..." to avoid this error.'
-            ]))
+        compat_errors = []
+        if self.doctype == "Features Sheet":
+            if len(header_vals & {'alias by...', 'feature source'}):
+                compat_errors.append('\n'.join([
+                    "It looks like you're using a Features Sheet from an earlier version of",
+                    "tinyRNA. Feature aliases and GFF files are now defined in the Paths File.",
+                    "Please review the Paths File documentation in Configuration.md, update your",
+                    'Paths File, and remove the "Alias by..." and "Feature Source" columns from',
+                    "your Features Sheet to avoid this error."
+                ]))
 
+            if len(header_vals & {'source filter', 'type filter'}) != 2:
+                compat_errors.append('\n'.join([
+                    "It looks like you're using a Features Sheet from an earlier version of",
+                    "tinyRNA. Source and type filters are now defined in the Features Sheet.",
+                    "They are no longer defined in the Run Config. Please review the Stage 1",
+                    "section in tiny-count's documentation, then add the new columns",
+                    '"Source Filter" and "Type Filter" to your Features Sheet to avoid this error.'
+                ]))
+
+            if 'tag' in header_vals:
+                compat_errors.append('\n'.join([
+                    "It looks like you're using a Features Sheet from a version of tinyRNA",
+                    'that offered "tagged counting". The "Tag" header has been repurposed as a feature',
+                    "classifier and its meaning within the pipeline has changed. Additionally, feature",
+                    "class is no longer determined by the Class= attribute. Please review the Stage 1",
+                    'section in tiny-count\'s documentation, then rename the "Tag" column to',
+                    '"Classify as..." to avoid this error.'
+                ]))
+
+        if compat_errors: raise ValueError('\n\n'.join(compat_errors))
 
 if __name__ == '__main__':
     Configuration.main()

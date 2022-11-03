@@ -16,10 +16,12 @@ from typing import List
 
 from tiny.rna.configuration import CSVReader, PathsFile
 
-rules_template = [{'Identity': ("Name", "N/A"),
+rules_template = [{'Identity': ("*", "*"),
+                   'Class': '',
+                   'Filter_s': "",
+                   'Filter_t': "",
                    'Strand': "both",
                    'Hierarchy': 0,
-                   'Class': '',
                    'nt5end': "all",
                    'Length': "all",   # A string is expected by FeatureSelector due to support for lists and ranges
                    'Overlap': "partial"}]
