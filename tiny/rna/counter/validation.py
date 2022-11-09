@@ -8,7 +8,7 @@ from typing import List, Dict
 
 from tiny.rna.counter.hts_parsing import parse_gff, ReferenceTables
 from tiny.rna.counter.features import FeatureSelector
-from tiny.rna.util import sorted_natural
+from tiny.rna.util import sorted_natural, gzip_open
 
 
 class ReportFormatter:
@@ -215,7 +215,12 @@ class GFFValidator:
         for fasta in genome_fastas:
             if not os.path.isfile(fasta):
                 continue
-            with open(fasta, 'rb') as f:
+            elif fasta.endswith('.gz'):
+                file_if = gzip_open
+            else:
+                file_if = open
+
+            with file_if(fasta, 'rb') as f:
                 for line in f:
                     if line[0] == ord('>'):
                         genome_chroms.add(line[1:].strip().decode())
