@@ -464,7 +464,6 @@ class ReferenceTables:
         self.all_features = prefs.get('all_features', False)
         self.stepvector = prefs.get('stepvector', 'HTSeq')
         self.selector = feature_selector
-        self._set_filters(**prefs)
         self.gff_files = gff_files
         # ----------------------------------------------------------- Primary Key:
         self.feats = self._init_genomic_array()                         # Root Match ID
@@ -494,18 +493,18 @@ class ReferenceTables:
         return self.feats, self.alias, self.tags
 
     def parse_row(self, row, alias_keys=None):
-        if row.type.lower() == "chromosome" or not self.filter_match(row):
+        if row.type.lower() == "chromosome":
             self.exclude_row(row)
             return
 
-        # Grab the primary key for this feature
-        feature_id = self.get_feature_id(row)
         # Perform Stage 1 selection
-        matches = self.get_matches(row.attr)
-        # Skip features that lack matches unless all_features is True
-        if not self.all_features and not len(matches):
+        matches = self.get_matches(row)
+        # Skip non-matching rows unless all_features=True
+        if not (len(matches) or self.all_features):
             self.exclude_row(row)
             return
+        # Grab the primary key for this feature
+        feature_id = self.get_feature_id(row)
         # Add feature data to root ancestor in the reference tables
         root_id = self.add_feature(feature_id, row, matches)
         # Add alias to root ancestor if it is unique
@@ -567,21 +566,21 @@ class ReferenceTables:
             for row_val in row_attrs.get(alias_key, ()):
                 self.alias[root_id].add(row_val)
 
-    def get_matches(self, row_attrs: CaseInsensitiveAttrs) -> DefaultDict:
+    def get_matches(self, row: HTSeq.GenomicFeature) -> DefaultDict:
         """Performs Stage 1 selection and returns match tuples under their associated classifier"""
 
         identity_matches = defaultdict(set)
         for ident, rule_indexes in self.selector.inv_ident.items():
-            if row_attrs.contains_ident(ident):
+            if row.attr.contains_ident(ident):
                 for index in rule_indexes:
-                    # Unclassified matches are pooled under '' empty string
-                    classifier = self.selector.rules_table[index]['Class']
-                    identity_matches[classifier].add((
-                        index,
-                        self.selector.rules_table[index]['Hierarchy'],
-                        self.selector.rules_table[index]['Overlap']
-                    ))
-        # -> identity_matches: {tag: (rule, rank, overlap), ...}
+                    rule = self.selector.rules_table[index]
+                    if self.column_filter_match(row, rule):
+                        # Unclassified matches are pooled under '' empty string
+                        identity_matches[rule['Class']].add(
+                            (index, rule['Hierarchy'], rule['Overlap'])
+                        )
+
+        # -> identity_matches: {class: (rule, rank, overlap), ...}
         return identity_matches
 
     def get_row_parent(self, feature_id: str, row_attrs: CaseInsensitiveAttrs) -> str:
@@ -728,22 +727,9 @@ class ReferenceTables:
         if self.stepvector == 'HTSeq':
             return HTSeq.GenomicArrayOfSets("auto", stranded=False)
 
-    @classmethod
-    def _set_filters(cls, **kwargs):
-        """Assigns inclusive filter values"""
-
-        for filt in ["source_filter", "type_filter"]:
-            setattr(cls, filt, kwargs.get(filt, []))
-
-    @classmethod
-    def filter_match(cls, row):
+    @staticmethod
+    def column_filter_match(row, rule):
         """Checks if the GFF row passes the inclusive filter(s)
-
         If both filters are defined then they must both evaluate to true for a match"""
 
-        select = True
-        if len(cls.source_filter):
-            select &= row.source in cls.source_filter
-        if len(cls.type_filter):
-            select &= row.type in cls.type_filter
-        return select
+        return row.source in rule['Filter_s'] and row.type in rule['Filter_t']

@@ -14,12 +14,14 @@ import os
 
 from typing import List
 
-from tiny.rna.configuration import CSVReader
+from tiny.rna.configuration import CSVReader, PathsFile
 
-rules_template = [{'Identity': ("Name", "N/A"),
+rules_template = [{'Identity': ("*", "*"),
+                   'Class': '',
+                   'Filter_s': "",
+                   'Filter_t': "",
                    'Strand': "both",
                    'Hierarchy': 0,
-                   'Class': '',
                    'nt5end': "all",
                    'Length': "all",   # A string is expected by FeatureSelector due to support for lists and ranges
                    'Overlap': "partial"}]
@@ -45,6 +47,22 @@ def csv_factory(type: str, rows: List[dict], header=()):
     writer.writerows(rows)
 
     return csv_string.getvalue()
+
+
+paths_template_file = os.path.abspath('../tiny/templates/paths.yml')
+
+
+def make_paths_file(in_pipeline=False, prefs=None):
+    """IMPORTANT: relative file paths are evaluated relative to /tiny/templates/"""
+
+    paths_file = paths_template_file
+    config = PathsFile(paths_file, in_pipeline)
+    if prefs is None: return config
+
+    for key, val in prefs.items():
+        config[key] = val
+
+    return config
 
 
 def get_dir_tree(root_path: str) -> dict:

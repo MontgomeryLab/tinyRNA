@@ -76,6 +76,7 @@ inputs:
   shared_memory: boolean?
 
   # counter inputs
+  paths_file: File
   samples_csv: File
   features_csv: File
   gff_files: File[]?
@@ -85,8 +86,6 @@ inputs:
   counter_decollapse: boolean?
   counter_stepvector: string?
   counter_all_features: boolean?
-  counter_type_filter: string[]?
-  counter_source_filter: string[]?
   counter_normalize_by_hits: boolean?
 
   # deseq inputs
@@ -204,14 +203,13 @@ steps:
   counter:
     run: ../tools/tiny-count.cwl
     in:
+      paths_file: paths_file
       samples_csv: samples_csv
       features_csv: features_csv
       aligned_seqs: bowtie/sam_out
       gff_files: gff_files
       out_prefix: run_name
       all_features: counter_all_features
-      source_filter: counter_source_filter
-      type_filter: counter_type_filter
       normalize_by_hits:
         source: counter_normalize_by_hits
         valueFrom: $(String(self))  # convert boolean -> string

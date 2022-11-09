@@ -288,13 +288,32 @@ class MyTestCase(unittest.TestCase):
     def test_ref_tables_discontinuous_no_match_all_features_false(self):
         kwargs = {'all_features': False}
         feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
-        mock_selector = self.selector_with_template(helpers.rules_template)
+        mock_selector = self.selector_with_template([{'Identity': ('No', 'Match')}])
 
         expected_err = "No features were retained while parsing your GFF file.\n" \
                        "This may be due to a lack of features matching 'Select for...with value...'"
 
         with self.assertRaisesRegex(ValueError, expected_err):
             ReferenceTables(feature_source, mock_selector, **kwargs).get()
+
+    """Does ReferenceTables.get() properly build a GenomicArrayOfSets for discontinuous features
+        where no features match but all_features is True? If the feature didn't match we only want to
+        display it in the Feature ID column of counts table with 0 counts. We DON'T want it to pop
+        up as a candidate in Stage 2 selection."""
+
+    def test_ref_tables_discontinuous_features(self):
+
+        kwargs = {'all_features': True}
+        feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
+        feature_selector = self.selector_with_template([{'Identity': ('No', 'Match')}])
+
+        # Features that fail to match on identity are not added to the StepVector,
+        # EVEN if all_features = True.
+        expected = [set()]
+
+        feats, _, _ = ReferenceTables(feature_source, feature_selector, **kwargs).get()
+        actual = list(feats.chrom_vectors["I"]["."].array.get_steps(values_only=True))
+        self.assertListEqual(actual, expected)
 
     """Does ReferenceTables.get() properly handle intervals for discontinous features?"""
 
@@ -366,32 +385,13 @@ class MyTestCase(unittest.TestCase):
         actual_steps = list(feats.chrom_vectors["I"]["."].array.get_steps(values_only=True))
         self.assertListEqual(actual_steps, expected)
 
-    """Does ReferenceTables.get() properly build a GenomicArrayOfSets for discontinuous features?"""
-
-    def test_ref_tables_discontinuous_features(self):
-
-        kwargs = {'all_features': True}
-        feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
-        feature_selector = self.selector_with_template(helpers.rules_template)
-
-        # Features that fail to match on identity are not added to the StepVector,
-        # EVEN if all_features = True. This is to prevent non-matching intervals from
-        # being evaluated during stage 2 selection.
-        expected = [set()]
-
-        feats, _, _ = ReferenceTables(feature_source, feature_selector, **kwargs).get()
-        actual = list(feats.chrom_vectors["I"]["."].array.get_steps(values_only=True))
-        self.assertListEqual(actual, expected)
-
-
     """Does ReferenceTables.get() properly handle source filters for discontinuous features?"""
 
     def test_ref_tables_source_filter(self):
 
-        kwargs = {'source_filter': ["Source2Name"], 'all_features': False}
+        kwargs = {'all_features': False}
         feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
-        selection_rule = dict(helpers.rules_template[0], Identity=('Parent', 'Parent2'))
-        feature_selector = self.selector_with_template([selection_rule])
+        feature_selector = self.selector_with_template([{'Filter_s': "Source2Name"}])
 
         child2_iv =     HTSeq.GenomicInterval('I', 39, 50, '-')
         exp_alias =     {'Child2': ('Child2Name',)}
@@ -409,16 +409,14 @@ class MyTestCase(unittest.TestCase):
         self.assertEqual(rt.filtered, exp_filtered)
         self.assertEqual(list(feats.chrom_vectors['I']['.'].array.get_steps(values_only=True)), exp_feats)
         self.assertDictEqual(rt.intervals, exp_intervals)
-        self.clear_filters()
 
     """Does ReferenceTables.get() properly handle type filters for discontinuous features?"""
 
     def test_ref_tables_type_filter(self):
 
-        kwargs = {'type_filter': ["CDS"], 'all_features': False}
+        kwargs = {'all_features': False}
         feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
-        selection_rule = dict(helpers.rules_template[0], Identity=('Parent', 'ParentWithGrandparent'))
-        feature_selector = self.selector_with_template([selection_rule])
+        feature_selector = self.selector_with_template([{'Filter_t': "CDS"}])
 
         child1_iv =     HTSeq.GenomicInterval('I', 29, 40, '-')
         exp_alias =     {'Child1': ('SharedName',)}
@@ -436,15 +434,14 @@ class MyTestCase(unittest.TestCase):
         self.assertEqual(rt.parents, exp_parents)
         self.assertEqual(rt.filtered, exp_filtered)
         self.assertEqual(list(feats.chrom_vectors['I']['.'].array.get_steps(values_only=True)), exp_feats)
-        self.clear_filters()
 
     """Does ReferenceTables.get() properly handle both source and type filters for discontinuous features?"""
 
     def test_ref_tables_both_filter(self):
 
-        kwargs = {'source_filter': ["SourceName"], 'type_filter': ["gene"], 'all_features': True}
+        kwargs = {'all_features': False}
         feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
-        feature_selector = self.selector_with_template(helpers.rules_template)
+        feature_selector = self.selector_with_template([{'Filter_s': "SourceName", 'Filter_t': "gene"}])
 
         rt = ReferenceTables(feature_source, feature_selector, **kwargs)
         feats, alias, _ = rt.get()
@@ -452,15 +449,7 @@ class MyTestCase(unittest.TestCase):
         self.assertEqual(rt.filtered, {'Child1', 'Child2'})
         self.assertEqual(rt.parents, {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'})
         self.assertEqual(list(alias.keys()), ['GrandParent', 'Parent2', 'Sibling'])
-        self.assertEqual(len(list(feats.chrom_vectors['I']['.'].array.get_steps(values_only=True))), 1)  # single empty set
-        self.clear_filters()
-
-    def clear_filters(self):
-        """Since the filters in ReferenceTables are class attributes, they must be cleared.
-        Otherwise they will interfere with subsequent tests."""
-
-        ReferenceTables.source_filter = []
-        ReferenceTables.type_filter = []
+        self.assertEqual(len(list(feats.chrom_vectors['I']['.'].array.get_steps(values_only=True))), 9)
 
     """Does ReferenceTables.get() maintain correct records for a single feature matching tagged rules?"""
 

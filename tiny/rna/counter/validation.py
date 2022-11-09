@@ -4,8 +4,10 @@ import sys
 import os
 
 from collections import Counter, defaultdict
+from typing import List, Dict
 
 from tiny.rna.counter.hts_parsing import parse_gff, ReferenceTables
+from tiny.rna.counter.features import FeatureSelector
 from tiny.rna.util import sorted_natural, gzip_open
 
 
@@ -84,14 +86,14 @@ class GFFValidator:
         "strand": "Features missing strand information",
     }
 
-    def __init__(self, gff_files, prefs, ebwt=None, genomes=None, alignments=None):
-        self.ReferenceTables = ReferenceTables(gff_files, None, **prefs)
+    def __init__(self, gff_files, rules, ebwt=None, genomes=None, alignments=None):
+        self.ReferenceTables = ReferenceTables(gff_files, None)
+        self.column_filters = self.build_column_filters(rules)
         self.report = ReportFormatter(self.targets)
         self.chrom_set = set()
 
         self.seq_files = [ebwt, genomes, alignments]
         self.gff_files = gff_files
-        self.prefs = prefs
 
     def validate(self):
         print("Validating annotation files...")
@@ -111,8 +113,9 @@ class GFFValidator:
             self.generate_gff_report(gff_infractions)
 
     def validate_gff_row(self, row, issues, file):
-        if row.type.lower() == "chromosome": return             # Skip definitions of whole chromosomes regardless
-        if not self.ReferenceTables.filter_match(row): return   # Obey source/type filters before validation
+        # Skip definitions of whole chromosomes and obey source/type filters
+        if row.type.lower() == "chromosome": return
+        if not self.ReferenceTables.column_filter_match(row, self.column_filters): return
 
         if row.iv.strand not in ('+', '-'):
             issues['strand'][file] += 1
@@ -156,17 +159,19 @@ class GFFValidator:
         # First search bowtie indexes if they are available
         if ebwt is not None:
             try:
-                chroms, shared = self.chroms_shared_with_ebwt(ebwt)
-                self.generate_chrom_report(chroms, shared)
+                shared, chroms = self.chroms_shared_with_ebwt(ebwt)
+                self.generate_chrom_report(shared, chroms)
                 return
             except Exception:
                 pass # Fallback to other input options
 
         # Next search the genome fasta(s) if available
         if genomes is not None:
-            chroms, shared = self.chroms_shared_with_genomes(genomes)
-            self.generate_chrom_report(chroms, shared)
-            return
+            shared, chroms = self.chroms_shared_with_genomes(genomes)
+            if chroms:
+                self.generate_chrom_report(shared, chroms)
+                return
+            # Continue search if chroms weren't gathered from genomes
 
         # Preferred inputs aren't available; continue testing with heuristic options
         if alignments is not None:
@@ -179,11 +184,17 @@ class GFFValidator:
         self.generate_chrom_heuristics_report(suspect_files)
 
     def chroms_shared_with_ebwt(self, index_prefix):
-        """Returns the set intersection between parsed GFF chromosomes and those in the bowtie index"""
+        """Determines the complete set of chromosomes in the bowtie index, then finds
+        their set intersection with the chromosomes parsed from GFF files.
+        Returns:
+            a tuple of (shared chromosomes, index chromosomes)"""
 
-        summary = subprocess.check_output(['bowtie-inspect', index_prefix, '-s']).decode('latin1').splitlines()
+        summary = subprocess.check_output(
+            ['bowtie-inspect', index_prefix, '-s'],
+            stderr=subprocess.DEVNULL
+        ).decode('latin1').splitlines()
+
         ebwt_chroms = set()
-
         for line in summary:
             if line.startswith("Sequence-"):
                 try:
@@ -195,12 +206,18 @@ class GFFValidator:
         return shared, ebwt_chroms
 
     def chroms_shared_with_genomes(self, genome_fastas):
-        """Returns the set intersection between parsed GFF chromosomes and those in the reference genome"""
+        """Determines the complete set of chromosomes defined in each genome file,
+        then finds their set intersection with the chromosomes parsed from GFF files.
+        Returns:
+            a tuple of (shared chromosomes, genome chromosomes)"""
 
         genome_chroms = set()
         for fasta in genome_fastas:
+            if not os.path.isfile(fasta): continue
+
             _, ext = os.path.splitext(fasta)
             file_if = gzip_open if ext == '.gz' else open
+
             with file_if(fasta, 'rb') as f:
                 for line in f:
                     if line[0] == ord('>'):
@@ -209,9 +226,13 @@ class GFFValidator:
         shared = genome_chroms & self.chrom_set
         return shared, genome_chroms
 
-    def alignment_chroms_mismatch_heuristic(self, sam_files, subset_size=50000):
+    def alignment_chroms_mismatch_heuristic(self, sam_files: List[str], subset_size=50000) -> Dict[str, set]:
         """Since alignment files can be very large, we only check that there's at least one shared
-        chromosome identifier and only the first subset_size lines are read from each file."""
+        chromosome identifier and only the first subset_size lines are read from each file. The
+        returned dictionary contains only the SAM files whose sampled chromosome set failed to
+        intersect with the chromosomes parsed from GFF files.
+        Returns:
+            a dictionary of {SAM filename: SAM chromosomes sampled}"""
 
         files_wo_overlap = {}
 
@@ -252,3 +273,15 @@ class GFFValidator:
         }
 
         self.report.add_warning_section(header, summary)
+
+    @staticmethod
+    def build_column_filters(rules):
+        """Builds a "rules table" containing only GFF column selectors.
+        All listed filters are gathered and collapsed into a single rule"""
+
+        selector_defs = {
+            selector: ','.join([row[selector] for row in rules if row[selector]])
+            for selector in ["Filter_s", "Filter_t"]
+        }
+
+        return FeatureSelector.build_selectors([selector_defs])[0]

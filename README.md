@@ -105,8 +105,8 @@ In most cases you will use this toolset as an end-to-end pipeline. This will run
 2. The genome sequence of interest in fasta format.
 3. Genome coordinates of small RNA features of interest in GFF format.
 4. A completed Samples Sheet (`samples.csv`) with paths to the fastq files.
-5. A completed Features Sheet (`features.csv`) with paths to the GFF file(s).
-6. An updated Paths File (`paths.yml`) with the path to the genome sequence and/or your bowtie index prefix.
+5. A completed Features Sheet (`features.csv`) with feature selection rules.
+6. An updated Paths File (`paths.yml`) with paths to your GFF files, the genome sequence and/or your bowtie index prefix, as well as the paths to `samples.csv` and `features.csv`.
 7. A Run Config file (`run_config.yml`) located in your working directory or the path to the file. The template provided does not need to be updated if you wish to use the default settings.
 
 To run an end-to-end analysis, be sure that you're working within the conda tinyrna environment ([instructions above](#usage)) in your terminal and optionally navigate to the location of your Run Config file. Then, simply run the following in your terminal:
@@ -177,13 +177,13 @@ The tiny-count step produces a variety of outputs
 Custom Python scripts and HTSeq are used to generate a single table of feature counts which includes each counted library. Each matched feature is represented with the following metadata columns:
 - **_Feature ID_** is determined, in order of preference, by one of the following GFF column 9 attributes: `ID`, `gene_id`, `Parent`. 
 - **_Classifier_** is determined by the rules in your Features Sheet. It is the _Classify as..._ value of each matching rule. Since multiple rules can match a feature, some Feature IDs will be listed multiple times with different classifiers.
-- **_Feature Name_** displays aliases of your choice, as specified in the _Alias by..._ column of the Features Sheet. If _Alias by..._ is set to`ID`, the _Feature Name_ column is left empty.
+- **_Feature Name_** displays aliases of your choice, as specified in the `alias` key under each GFF listed in your Paths File. If `alias` is set to `ID`, the _Feature Name_ column is left empty.
 
-For example, if your Features Sheet has a rule which specifies _Alias by..._ `sequence_name`, _Classify as..._ `miRNA`, and the GFF entry for this feature has the following attributes column:
+For example, if your Paths File has a GFF entry which specifies `alias: [sequence_name]`, and the corresponding GFF file has a feature with the following attributes column:
 ```
 ... ID=406904;sequence_name=mir-1,hsa-miR-1; ...
 ```
-The row for this feature in the feature counts table would read:
+And this feature matched a rule in your Features Sheet defining _Classify as..._ `miRNA`, then the entry for this feature in the final counts table would read:
 
 | Feature ID | Classifier | Feature Name     | Group1_rep_1 | Group1_rep_2 | ... |
 |------------|------------|------------------|--------------|--------------|-----|
