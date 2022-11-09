@@ -213,10 +213,12 @@ class GFFValidator:
 
         genome_chroms = set()
         for fasta in genome_fastas:
-            if not os.path.isfile(fasta): continue
-
-            _, ext = os.path.splitext(fasta)
-            file_if = gzip_open if ext == '.gz' else open
+            if not os.path.isfile(fasta):
+                continue
+            elif fasta.endswith('.gz'):
+                file_if = gzip_open
+            else:
+                file_if = open
 
             with file_if(fasta, 'rb') as f:
                 for line in f:
