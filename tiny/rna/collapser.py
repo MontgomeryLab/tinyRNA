@@ -8,20 +8,17 @@ are available by request.
 
 import argparse
 import builtins
-import gzip
 import os
 
 from collections import Counter
-from functools import partial
 from typing import Tuple, Iterable
+
+from tiny.rna.util import gzip_open as gz_f
 
 try:
     from _collections import _count_elements  # Load Counter's C helper function if it is available
 except ImportError:
     from collections import _count_elements   # Slower mapping[elem] = mapping.get(elem,default_val)+1
-
-# The GZIP read/write interface used by seq_counter() and seq2fasta()
-gz_f = partial(gzip.GzipFile, compresslevel=6, fileobj=None, mtime=0)
 
 
 def get_args() -> 'argparse.NameSpace':

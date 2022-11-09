@@ -1,11 +1,12 @@
 import functools
 import subprocess
 import sys
+import os
 
 from collections import Counter, defaultdict
 
-from tiny.rna.util import sorted_natural
 from tiny.rna.counter.hts_parsing import parse_gff, ReferenceTables
+from tiny.rna.util import sorted_natural, gzip_open
 
 
 class ReportFormatter:
@@ -198,7 +199,9 @@ class GFFValidator:
 
         genome_chroms = set()
         for fasta in genome_fastas:
-            with open(fasta, 'rb') as f:
+            _, ext = os.path.splitext(fasta)
+            file_if = gzip_open if ext == '.gz' else open
+            with file_if(fasta, 'rb') as f:
                 for line in f:
                     if line[0] == ord('>'):
                         genome_chroms.add(line[1:].strip().decode())

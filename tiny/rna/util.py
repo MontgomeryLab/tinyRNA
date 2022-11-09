@@ -1,6 +1,7 @@
 import argparse
 import functools
 import textwrap
+import gzip
 import time
 import os
 import re
@@ -94,3 +95,7 @@ def sorted_natural(lines, reverse=False):
     convert = lambda text: int(text) if text.isdigit() else text.lower()
     alphanum_key = lambda key: [convert(c) for c in re.split(r'(\d+)', key)]
     return sorted(lines, key=alphanum_key, reverse=reverse)
+
+
+# File IO interface for reading and writing Gzip files
+gzip_open = functools.partial(gzip.GzipFile, compresslevel=6, fileobj=None, mtime=0)
