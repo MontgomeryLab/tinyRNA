@@ -32,7 +32,7 @@ A setup script has been provided for easy installation of tinyRNA. First, downlo
 
 ```shell
 # Change into the tinyRNA directory (include path relative to your working directory)
- cd tinyRNA-1.0.1
+ cd tinyRNA-1.1.0
 
 # Install the tinyrna environment and dependencies
  ./setup.sh
