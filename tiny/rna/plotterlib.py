@@ -13,6 +13,7 @@ import locale
 import math
 import sys
 import os
+import re
 
 # cwltool appears to unset all environment variables including those related to locale
 # This leads to warnings from plt's FontConfig manager, but only for pipeline/cwl runs
@@ -246,8 +247,19 @@ class plotterlib:
             gscat = self.scatter_simple(count_x.loc[group], count_y.loc[group], **kwargs)
 
         # Add any remaining groups to the plot
-        for group in group_it:
-            gscat.scatter(count_x.loc[group], count_y.loc[group], edgecolor='none', **kwargs)
+        zero_count_groups = []
+        for i, group in enumerate(group_it):
+            x, y = count_x.loc[group], count_y.loc[group]
+            x_is_zeros = x.replace(0, pd.NA).dropna().empty
+            y_is_zeros = y.replace(0, pd.NA).dropna().empty
+            if x_is_zeros or y_is_zeros:
+                # This group and label won't be plotted
+                zero_count_groups.append(i)
+                continue
+            gscat.scatter(x, y, edgecolor='none', **kwargs)
+
+        labels = [l for i, l in enumerate(labels) if i not in zero_count_groups]
+        groups = [g for i, g in enumerate(groups) if i not in zero_count_groups]
 
         self.sort_point_groups_and_label(gscat, groups, labels, colors, outgroup, pval)
         self.set_square_scatter_view_lims(gscat, view_lims)
@@ -260,26 +272,24 @@ class plotterlib:
         """Sorts scatter groups so that less abundant groups are plotted on top to maximize visual representation.
         After sorting, group colors and labels are assigned, and the legend is created."""
 
-        lorder = np.argsort([len(grp) for grp in groups])[::-1]   # Label index of groups sorted largest -> smallest
-        ordmax = lorder.max()                                     # Length of groups, sans outgroup
-        zorder = ordmax - lorder                                  # Z-order for groups (largest values on top)
-        gorder = lorder + 1 if outgroup else lorder               # Group index of sorted groups, sans outgroup
+        lorder = np.argsort([len(grp) for grp in groups if len(grp)])[::-1]   # Label index of groups sorted largest -> smallest
+        offset = int(bool(outgroup and len(groups)))                          # For shifting indices to allow optional outgroup
+        layers = axes.collections
 
         if outgroup:
-            axes.collections[0].set_label('p ≥ %g' % pval)
+            layers[0].set_label('p ≥ %g' % pval)
         if labels is None:
             labels = list(range(len(groups)))
 
-        for G, L, Z in zip(gorder, lorder, zorder):
-            points = axes.collections[G]
-            label = labels[L]
-            points.set_facecolor(colors[label])
-            points.set_label(label)
-            points.set_zorder(Z)
+        groupsize_sorted = [(labels[i], layers[i + offset]) for i in lorder]
+        for i, (label, layer) in enumerate(groupsize_sorted, start=1):
+            layer.set_label(re.sub(r'^_', ' _', label))                       # To allow labels that start with _
+            layer.set_facecolor(colors[label])
+            layer.set_zorder(i)                                               # Plot in order of group size
 
         # Ensure lines remain on top of points
         for line in axes.lines:
-            line.set_zorder(ordmax + 1)
+            line.set_zorder(len(groupsize_sorted) + 1)
 
         axes.legend()
 
