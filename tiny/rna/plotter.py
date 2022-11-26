@@ -354,16 +354,15 @@ def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, pval=0.
     """
 
     if classes is not None:
-        uniq_classes = sorted(pd.unique(classes.get_level_values(1)), key=str.lower)
+        uniq_classes = pd.unique(classes.get_level_values(1))
         class_colors = aqplt.assign_class_colors(uniq_classes)
         aqplt.set_dge_class_legend_style()
 
         for pair in dges:
             p1, p2 = pair.split("_vs_")
-            dge_dict = (dges[pair] < pval).groupby(level=1).groups
-            grp_args = [dge_dict[cls] for cls in uniq_classes]
+            dge_dict = dges[dges[pair] < pval].groupby(level=1).groups
 
-            labels = uniq_classes
+            labels, grp_args = zip(*dge_dict.items()) if dge_dict else ((), ())
             sscat = aqplt.scatter_grouped(count_df.loc[:, p1], count_df.loc[:, p2], *grp_args,
                                           colors=class_colors, pval=pval, view_lims=view_lims, labels=labels,
                                           rasterized=RASTER)
@@ -380,7 +379,7 @@ def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, pval=0.
             grp_args = list(dges.index[dges[pair] < pval])
             p1, p2 = pair.split("_vs_")
 
-            labels = ['p < %g' % pval]
+            labels = ['p < %g' % pval] if grp_args else []
             colors = aqplt.assign_class_colors(labels)
             sscat = aqplt.scatter_grouped(count_df.loc[:, p1], count_df.loc[:, p2], grp_args,
                                           colors=colors, alpha=0.5, pval=pval, view_lims=view_lims, labels=labels,

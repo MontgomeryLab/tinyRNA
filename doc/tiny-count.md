@@ -16,6 +16,8 @@ While third-party SAM files from non-collapsed reads are supported, there are so
 
 
 # Feature Selection
+![Feature Selection Diagram](../images/tiny-count_selection.png)
+
 We provide a Features Sheet (`features.csv`) in which you can define selection rules to more accurately capture counts for the small RNAs of interest. The parameters for these rules include attributes commonly used in the classification of small RNAs, such as length, strandedness, and 5' nucleotide.
 
 >**Important**: candidate features do not receive counts if they do not pass the selection process described below

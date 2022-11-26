@@ -151,6 +151,8 @@ At the core of tinyRNA is tiny-count, a highly flexible counting utility that al
 
 [Full documentation for tiny-count can be found here.](doc/tiny-count.md)
 
+![Feature Selection Diagram](images/tiny-count_selection.png)
+
 ### `tiny-deseq.r`
 A wrapper R script for DESeq2 facilitates DGE analysis of counted sample files.
 
@@ -161,7 +163,7 @@ The results of feature counting and DGE are visualized with high resolution plot
 
 ## Outputs
 
-The files produced by each pipeline step will be included in the final run directory by default. These intermediate files are organized into subdirectories by step.
+The files produced by each pipeline step are included in the final output directory where they are organized into subdirectories by step.
 
 ### Data Pre-Processing
 
@@ -268,6 +270,17 @@ Simple static plots are generated from the outputs of tiny-count and tiny-deseq.
 
 
 tiny-deseq.r will produce a standard **PCA plot** from variance stabilizing transformed feature counts. This output is controlled by the `dge_pca_plot` key in the Run Config and by your experiment design. DGE outputs, including the PCA plot, will not be produced for experiments with less than 1 degree of freedom.
+
+### Reducing Storage Usage
+The files produced by certain steps can be very large and after several runs this may present significant storage usage. You can remove the following subdirectories from a Run Directory to free up space, but **you will no longer be able to perform repeat analyses within it (i.e. `tiny recount` or `tiny replot`)**:
+- fastp (though we recommend keeping the reports)
+- collapser
+- bowtie
+
+Cleanup commands will be added to tinyRNA in a future release, but for now the following command will remove commonly large files while preserving report files:
+```shell
+rm {fastp/*.fastq,{collapser,bowtie}/*.fa,bowtie/*.sam}
+```
 
 
 ## Contributing

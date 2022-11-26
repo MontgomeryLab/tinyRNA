@@ -667,7 +667,7 @@ class ReferenceTables:
         """Returns the sum of features across all chromosomes and strands"""
 
         total_feats = 0
-        empty_size = 3  # steps: start, empty set, end
+        empty_size = {"Cython": 1, "HTSeq": 3}[self.stepvector]
         for chrom in self.feats.chrom_vectors:
             for strand in self.feats.chrom_vectors[chrom]:
                 total_feats += self.feats.chrom_vectors[chrom][strand].array.num_steps() - empty_size

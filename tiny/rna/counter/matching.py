@@ -9,7 +9,7 @@ from tiny.rna.util import Singleton
 
 
 class Wildcard(metaclass=Singleton):
-    kwds = ('all', 'both', '*', '')
+    kwds = ('any', 'all', 'both', '*', '')
 
     @staticmethod
     def __contains__(*_): return True

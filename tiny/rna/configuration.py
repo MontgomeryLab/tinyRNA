@@ -355,6 +355,9 @@ class Configuration(ConfigBase):
     def save_run_profile(self, config_file_name=None) -> str:
         """Saves Samples Sheet and processed run config to the Run Directory for record keeping"""
 
+        from importlib.metadata import version
+        self['version'] = version('tinyrna')
+
         samples_sheet_name = os.path.basename(self['samples_csv']['path'])
         shutil.copyfile(self['samples_csv']['path'], f"{self['run_directory']}/{samples_sheet_name}")
         return self.write_processed_config(config_file_name)
