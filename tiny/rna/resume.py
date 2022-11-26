@@ -172,7 +172,7 @@ class ResumePlotterConfig(ResumeConfig):
             'raw_counts': {'var': "resume_raw", 'type': "File"},
             'rule_counts': {'var': "resume_rule", 'type': "File"},
             'summ_stats': {'var': "resume_stat", 'type': "File"},
-            'len_dist': {'var': "resume_len_dist", 'type': "File[]"}
+            'len_dist_tables': {'var': "resume_len_dist", 'type': "File[]"}
         }
 
         dge_outputs = {

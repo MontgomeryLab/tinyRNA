@@ -243,7 +243,7 @@ steps:
       raw_counts: counter/feature_counts
       rule_counts: counter/rule_counts
       summ_stats: counter/summary_stats
-      len_dist:
+      len_dist_tables:
         source: [ counter/mapped_nt_len_dist, counter/assigned_nt_len_dist ]
         linkMerge: merge_flattened
       len_dist_min:

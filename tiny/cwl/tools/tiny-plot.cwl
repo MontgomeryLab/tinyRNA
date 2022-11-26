@@ -38,7 +38,7 @@ inputs:
       prefix: -ss
     doc: "The summary stats csv from Counter"
 
-  len_dist:
+  len_dist_tables:
     type: File[]
     inputBinding:
       prefix: -len
