@@ -390,10 +390,14 @@ class PathsFile(ConfigBase):
         - Chained assignments can produce unexpected results.
     """
 
+    # Parameter types
     required = ('samples_csv', 'features_csv', 'gff_files')
     single =   ('samples_csv', 'features_csv', 'plot_style_sheet', 'adapter_fasta')
     groups =   ('reference_genome_files', 'gff_files')
     prefix =   ('ebwt', 'run_directory', 'tmp_directory')
+
+    # Parameters that need to be held constant between resume runs for analysis integrity
+    resume_forbidden = ('samples_csv', 'run_directory', 'ebwt', 'reference_genome_files')
 
     def __init__(self, file: str, in_pipeline=False):
         super().__init__(file)

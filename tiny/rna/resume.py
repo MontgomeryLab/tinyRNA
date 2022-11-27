@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from glob import glob
 
-from tiny.rna.configuration import ConfigBase, timestamp_format
+from tiny.rna.configuration import ConfigBase, timestamp_format, PathsFile
 
 
 class ResumeConfig(ConfigBase, ABC):
@@ -36,6 +36,9 @@ class ResumeConfig(ConfigBase, ABC):
         self.dt = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         self.entry_inputs = entry_inputs
         self.steps = steps + [f"organize_{s}" for s in steps]
+
+        self.paths = self.load_paths_config()
+        self.assimilate_paths_file()
 
         self._create_truncated_workflow()
         self._rebuild_entry_inputs()
@@ -85,6 +88,20 @@ class ResumeConfig(ConfigBase, ABC):
             wf_inputs[new_input['var']] = new_input['type']
             # Update WorkflowStepInputs (entry step)
             wf_steps[self.steps[0]]['in'][param] = new_input['var']
+
+    def load_paths_config(self):
+        """Constructs a sub-configuration object containing workflow file preferences"""
+        paths_file_path = self.from_here(self['paths_config'])
+        return PathsFile(paths_file_path)
+
+    def assimilate_paths_file(self):
+        """Updates the processed workflow with resume-safe Paths File parameters"""
+        for key in [*PathsFile.single, *PathsFile.groups]:
+            if key in PathsFile.resume_forbidden: continue
+            self[key] = self.paths.as_cwl_file_obj(key)
+        for key in PathsFile.prefix:
+            if key in PathsFile.resume_forbidden: continue
+            self[key] = self.paths[key]
 
     def _add_timestamps(self, steps):
         """Differentiates resume-run output subdirs by adding a timestamp to them"""
@@ -155,7 +172,7 @@ class ResumePlotterConfig(ResumeConfig):
             'raw_counts': {'var': "resume_raw", 'type': "File"},
             'rule_counts': {'var': "resume_rule", 'type': "File"},
             'summ_stats': {'var': "resume_stat", 'type': "File"},
-            'len_dist': {'var': "resume_len_dist", 'type': "File[]"}
+            'len_dist_tables': {'var': "resume_len_dist", 'type': "File[]"}
         }
 
         dge_outputs = {
