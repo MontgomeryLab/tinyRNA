@@ -117,7 +117,8 @@ class ResumeConfig(ConfigBase, ABC):
     # Override
     def get_outfile_path(self, infile: str = None) -> str:
         if infile is None: infile = self.inf
-        return "resume_" + os.path.basename(infile)
+        root, ext = os.path.splitext(os.path.basename(infile))
+        return '_'.join(["resume", root, self.dt]) + ext
 
     def write_workflow(self, workflow_outfile: str) -> None:
         with open(workflow_outfile, "w") as wf:
