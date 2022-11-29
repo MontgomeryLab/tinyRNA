@@ -5,11 +5,11 @@
 #### Figure basics ####
 savefig.dpi: 300
 figure.autolayout: true
-figure.facecolor: white
-figure.edgecolor: 0.50
+figure.facecolor: None
+figure.edgecolor: None
 
 #### Scatter Styles ####
-scatter.marker: o
+scatter.marker: .
 
 #### Tick styles ####
 xtick.color: 333333
@@ -17,29 +17,29 @@ xtick.direction: out
 ytick.color: 333333
 ytick.direction: out
 
-xtick.major.size: 3.0
-ytick.major.size: 3.0
+xtick.major.size: 5.0
+ytick.major.size: 5.0
 xtick.minor.size: 1.5
 ytick.minor.size: 1.5
-xtick.major.width: 0.8
-ytick.major.width: 0.8
-xtick.minor.width: 0.6
-ytick.minor.width: 0.6
+xtick.major.width: 0.4
+ytick.major.width: 0.4
+xtick.minor.width: 0.4
+ytick.minor.width: 0.4
 
 xtick.major.pad: 3.5
 ytick.major.pad: 3.5
 
-xtick.labelsize: 16
-ytick.labelsize: 16
+xtick.labelsize: 20
+ytick.labelsize: 20
 
 #### Axes basics ####
-axes.labelsize: 16
-axes.titlesize: 16
+axes.labelsize: 20
+axes.titlesize: 20
 axes.facecolor: white
 axes.edgecolor: 333333
-axes.linewidth: 1
+axes.linewidth: 0.4
 axes.grid: True
-axes.labelcolor: 333333
+axes.labelcolor: 000000
 axes.labelpad: 4.0
 axes.axisbelow: True
 axes.autolimit_mode: round_numbers
@@ -47,7 +47,7 @@ axes.xmargin: 0.04
 axes.ymargin: 0.04
 
 #### Legend ####
-legend.fontsize: 16
+legend.fontsize: 20
 legend.framealpha: 0.8
 legend.edgecolor: 0.8
 legend.markerscale: 3.0
@@ -71,29 +71,29 @@ font.size: 10
 mathtext.default: regular
 
 #### Line style ####
-lines.linewidth: 1.0
-lines.markersize: 3.25
+lines.linewidth: 0.4
+lines.markersize: 7.5
 lines.markeredgewidth: 0
 
 #### Color cycle Default ####
 #### Default colors used when color isn't specified in code
-axes.prop_cycle: cycler('color', ['F1605D', '51B9CF', 'FDC010', 'A5D38E', 'ED2891', '09535B', 'F0732A', '971BF0', '17D1C9', '82C046', 'A32225', 'E9D9A3'])
+axes.prop_cycle: cycler('color', ['F1605D', '2980B9', 'FDC010', 'A5D38E', 'ED2891', '09535B', 'A32225', '971BF0', '17D1C9', '82C046', 'F0732A', 'E9D9A3'])
                    # F1605D : light red
-                   # 51B9CF : light blue
+                   # 2980B9 : blue
                    # FDC010 : gold-yellow
                    # A5D38E : light green
                    # ED2891 : hot pink
                    # 09535B : dark blue
-                   # F0732A : orange
+                   # A32225 : deep red
                    # 971BF0 : purple
                    # 17D1C9 : turquoise
                    # 82C046 : green
-                   # A32225 : deep red
+                   # F0732A : orange
                    # E9D9A3 : tan
 
 #### Grid style ####
 grid.color: 333333
-grid.linestyle: --
-grid.linewidth: 0.8
+grid.linestyle: :
+grid.linewidth: 0.4
 grid.alpha: 0.2
 
