@@ -90,6 +90,22 @@ def get_macos_sdk_path():
     return sdk_path
 
 
+if os.getenv('tiny_count_only') == '1':
+    print("Only tiny-count will be installed because the environment variable \n"
+          '"tiny_count_only" is set to 1', file=sys.stderr)
+
+    console_scripts = ['tiny-count = tiny.rna.counter.counter:main']
+    scripts = []
+else:
+    console_scripts = [
+        'tiny = tiny.entry:main',
+        'tiny-config = tiny.rna.configuration:Configuration.main',
+        'tiny-collapse = tiny.rna.collapser:main',
+        'tiny-count = tiny.rna.counter.counter:main',
+        'tiny-plot = tiny.rna.plotter:main'
+    ]
+    scripts = ['tiny/rna/tiny-deseq.r']
+
 setuptools.setup(
     name=NAME,
     version=VERSION,
@@ -100,21 +116,13 @@ setuptools.setup(
     include_package_data=True,
     packages=['tiny'],
     zip_safe=False,
-    entry_points={
-        'console_scripts': [
-            'tiny = tiny.entry:main',
-            'tiny-config = tiny.rna.configuration:Configuration.main',
-            'tiny-collapse = tiny.rna.collapser:main',
-            'tiny-count = tiny.rna.counter.counter:main',
-            'tiny-plot = tiny.rna.plotter:main'
-        ]
-    },
+    entry_points={'console_scripts': console_scripts},
     ext_modules=cythonize(
         get_cython_extension_defs(),
         compiler_directives={'language_level': '3'},
         gdb_debug=False
     ),
-    scripts=['tiny/rna/tiny-deseq.r'],
+    scripts=scripts,
     classifiers=[
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
