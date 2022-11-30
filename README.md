@@ -59,7 +59,7 @@ conda install -c bioconda -c conda-forge tiny-count
 
 ## Usage
 
-The `tinyrna` conda environment must be activated before use.
+The `tinyrna` conda environment must be activated before using the tinyRNA workflow.
 ```shell
 # Activate the tinyrna environment
  conda activate tinyrna
