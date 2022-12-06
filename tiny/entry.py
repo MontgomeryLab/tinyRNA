@@ -5,7 +5,7 @@ This tool provides an end-to-end workflow for analyzing small RNA sequencing
 data. This entry point also provides options for only
 returning template files and workflows that can be used separately.
 
-Subcommands: get-template, setup-cwl, recount, replot, run.
+Subcommands: get-templates, setup-cwl, recount, replot, run.
 
 When installed, run, recount and setup-cwl should be invoked with:
     tiny <subcommand> --config <config-file>
@@ -46,7 +46,7 @@ def get_args():
 
     parser = ArgumentParser(description=__doc__)
 
-    # Parser for subcommands: (run, recount, replot, setup-cwl, get-template, etc.)
+    # Parser for subcommands: (run, recount, replot, setup-cwl, get-templates, etc.)
     subparsers = parser.add_subparsers(required=True, dest='command')
     subcommands_with_configfile = {
         "run": "Processes the provided config file and executes the workflow it specifies.",
@@ -61,8 +61,8 @@ def get_args():
             '--config', metavar='configFile', required=True, help=desc
         )
 
-    # Subcommand get-template has no additional arguments
-    subparsers.add_parser("get-template",
+    # Subcommand get-templates has no additional arguments
+    subparsers.add_parser("get-templates",
                           help="Copies run config, sample, and reference templates to current directory")
 
     return parser.parse_args()
@@ -257,7 +257,7 @@ def run_cwltool_native(config_object: 'ConfigBase', workflow: str, run_directory
     return 0
 
 
-def get_template(templates_path: str) -> None:
+def get_templates(templates_path: str) -> None:
     """Copies all configuration file templates to the current working directory
 
     Args:
@@ -310,7 +310,7 @@ def main():
         run: Run the end-to-end analysis based on a config file.
         recount: Resume pipeline execution at the tiny-count step
         replot: Resume pipeline execution at the tiny-plot step
-        get-template: Get the input sheets & template config files.
+        get-templates: Get the input sheets & template config files.
         setup-cwl: Get the CWL workflow for a run
     """
 
@@ -327,7 +327,7 @@ def main():
         "replot": lambda: resume(cwl_path, args.config, "tiny-plot"),
         "recount": lambda: resume(cwl_path, args.config, "tiny-count"),
         "setup-cwl": lambda: setup_cwl(cwl_path, args.config),
-        "get-template": lambda: get_template(templates_path)
+        "get-templates": lambda: get_templates(templates_path)
     }
 
     command_map[args.command]()

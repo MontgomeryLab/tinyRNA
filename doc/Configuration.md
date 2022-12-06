@@ -9,7 +9,7 @@ The pipeline requires that you identify:
 
 The `START_HERE` directory demonstrates a working configuration using these files. You can also get a copy of them (and other optional template files) with:
 ```
-tiny get-template
+tiny get-templates
 ```
 
 ## Overview
@@ -151,4 +151,4 @@ Rules that match features in the first stage of selection will be used in a seco
 See [tiny-count's documentation](tiny-count.md#feature-selection) for an explanation of each column.
 
 ## Plot Stylesheet Details
-Matplotlib uses key-value "rc parameters" to allow for customization of its properties and styles, and one way these parameters can be specified is with a [matplotlibrc file](https://matplotlib.org/3.4.3/tutorials/introductory/customizing.html#a-sample-matplotlibrc-file), which we simply refer to as the Plot Stylesheet. You can obtain a copy of the default stylesheet used by tiny-plot with the command `tiny get-template`. Please keep in mind that tiny-plot overrides these defaults for a few specific elements of certain plots. Feel free to reach out if there is a plot style you wish to override but find you are unable to.
+Matplotlib uses key-value "rc parameters" to allow for customization of its properties and styles, and one way these parameters can be specified is with a [matplotlibrc file](https://matplotlib.org/3.4.3/tutorials/introductory/customizing.html#a-sample-matplotlibrc-file), which we simply refer to as the Plot Stylesheet. You can obtain a copy of the default stylesheet used by tiny-plot with the command `tiny get-templates`. Please keep in mind that tiny-plot overrides these defaults for a few specific elements of certain plots. Feel free to reach out if there is a plot style you wish to override but find you are unable to.

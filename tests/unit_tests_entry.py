@@ -49,13 +49,13 @@ class test_entry(unittest.TestCase):
         }
 
     """
-    Testing that get-template copies the correct files to the current directory.
+    Testing that get-templates copies the correct files to the current directory.
     """
 
-    def test_get_template(self):
+    def test_get_templates(self):
         test_functions = [
-            helpers.LambdaCapture(lambda: entry.get_template(self.templates_path)),  # The pre-install invocation
-            helpers.ShellCapture("tiny get-template")                                # The post-install command
+            helpers.LambdaCapture(lambda: entry.get_templates(self.templates_path)),  # The pre-install invocation
+            helpers.ShellCapture("tiny get-templates")                                # The post-install command
         ]
         template_files = ['run_config_template.yml', 'samples.csv', 'features.csv',
                           'paths.yml', 'tinyrna-light.mplstyle']
