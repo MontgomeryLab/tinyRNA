@@ -47,7 +47,8 @@ def get_args():
     # Optional arguments
     optional_args.add_argument('-h', '--help', action="help", help=argparse.SUPPRESS)
     optional_args.add_argument('-o', '--out-prefix', metavar='PREFIX', default='tiny-count_{timestamp}',
-                               help='The output prefix to use for file names.')
+                               help='The output prefix to use for file names. All occurrences of the '
+                                    'substring {timestamp} will be replaced with the current date and time.')
     optional_args.add_argument('-nh', '--normalize-by-hits', metavar='T/F', default='T',
                                help='If T/true, normalize counts by (selected) overlapping feature counts.')
     optional_args.add_argument('-dc', '--decollapse', action='store_true',

@@ -115,7 +115,7 @@ Diagnostic information will include intermediate alignment files for each librar
 ### Full tiny-count Help String
 ```
 tiny-count (-pf FILE | --get-templates) [-o PREFIX] [-nh T/F] [-dc]
-                  [-sv {Cython,HTSeq}] [-p] [-d]
+           [-sv {Cython,HTSeq}] [-p] [-d]
 
 tiny-count is a precision counting tool for hierarchical classification and
 quantification of small RNA-seq reads
@@ -135,7 +135,9 @@ Optional arguments:
   argument mentioned above.
 
   -o PREFIX, --out-prefix PREFIX
-                        The output prefix to use for file names. (default:
+                        The output prefix to use for file names. All
+                        occurrences of the substring {timestamp} will be
+                        replaced with the current date and time. (default:
                         tiny-count_{timestamp})
   -nh T/F, --normalize-by-hits T/F
                         If T/true, normalize counts by (selected) overlapping
