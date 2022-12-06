@@ -63,12 +63,12 @@ Optional arguments:
 
 ## tiny-count
 
-### All Features
-| Run Config Key         | Commandline Argument   |
-|------------------------|------------------------|
-| counter_all_features:  | `--all-features`       |
+### Get Templates
+ | Run Config Key | Commandline Argument |
+|----------------|----------------------|
+|                | `--get-template`     |
 
-By default, tiny-count will only evaluate alignments to features which match a `Select for...` & `with value...` of at least one rule in your Features Sheet. It is this matching feature set, and only this set, which is included in `feature_counts.csv` and therefore available for analysis by tiny-deseq.r and tiny-plot. Switching this option "on" will include all features in every input GFF file, regardless of attribute matches, for tiny-count and downstream steps.
+Copies the template configuration files required by tiny-count into the current directory. This argument can't be combined with `--paths-file`. All other arguments are ignored when provided, and once the templates have been copied tiny-count exits.
 
 ### Normalize by Hits
  | Run Config Key             | Commandline Argument      |
@@ -114,38 +114,44 @@ Diagnostic information will include intermediate alignment files for each librar
 
 ### Full tiny-count Help String
 ```
-tiny-count -pf PATHS -o OUTPUTPREFIX [-h] [-nh T/F] [-dc]
-           [-sv {Cython,HTSeq}] [-a] [-p] [-d]
+tiny-count (-pf FILE | --get-templates) [-o PREFIX] [-nh T/F] [-dc]
+                  [-sv {Cython,HTSeq}] [-p] [-d]
 
-This submodule assigns feature counts for SAM alignments using a Feature Sheet
-ruleset. If you find that you are sourcing all of your input files from a
-prior run, we recommend that you instead run `tiny recount` within that run's
-directory.
+tiny-count is a precision counting tool for hierarchical classification and
+quantification of small RNA-seq reads
 
 Required arguments:
-  -pf PATHS, --paths-file PATHS
-                        your Paths File
-  -o OUTPUTPREFIX, --out-prefix OUTPUTPREFIX
-                        output prefix to use for file names
+  You must either provide a Paths File or request templates for detailing
+  your configuration.
+
+  -pf FILE, --paths-file FILE
+                        your Paths File (default: None)
+  --get-templates       Copies the template configuration files required by
+                        tiny-count into the current directory. (default:
+                        False)
 
 Optional arguments:
-  -h, --help            show this help message and exit
+  These options can be used in conjunction with the Paths File (-pf)
+  argument mentioned above.
+
+  -o PREFIX, --out-prefix PREFIX
+                        The output prefix to use for file names. (default:
+                        tiny-count_{timestamp})
   -nh T/F, --normalize-by-hits T/F
                         If T/true, normalize counts by (selected) overlapping
-                        feature counts. Default: true.
+                        feature counts. (default: T)
   -dc, --decollapse     Create a decollapsed copy of all SAM files listed in
                         your Samples Sheet. This option is ignored for non-
-                        collapsed inputs.
+                        collapsed inputs. (default: False)
   -sv {Cython,HTSeq}, --stepvector {Cython,HTSeq}
                         Select which StepVector implementation is used to find
-                        features overlapping an interval.
-  -a, --all-features    Represent all features in output counts table, even if
-                        they did not match a Select for / with value.
+                        features overlapping an interval. (default: Cython)
   -p, --is-pipeline     Indicates that tiny-count was invoked as part of a
                         pipeline run and that input files should be sourced as
-                        such.
+                        such. (default: False)
   -d, --report-diags    Produce diagnostic information about
-                        uncounted/eliminated selection elements.
+                        uncounted/eliminated selection elements. (default:
+                        False)
 ```
 ## tiny-deseq.r
 
