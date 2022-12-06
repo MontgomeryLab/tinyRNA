@@ -117,7 +117,7 @@ The final output directory name has three components:
 - The `run_directory` basename defined in your Paths File
 
 ## Samples Sheet Details
-|  _Column:_ | Input FASTQ Files   | Sample/Group Name | Replicate Number | Control | Normalization |
+|  _Column:_ | FASTQ/SAM Files     | Sample/Group Name | Replicate Number | Control | Normalization |
 |-----------:|---------------------|-------------------|------------------|---------|---------------|
 | _Example:_ | cond1_rep1.fastq.gz | condition1        | 1                | True    | RPM           |
 

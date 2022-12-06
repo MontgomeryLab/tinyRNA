@@ -1,7 +1,2 @@
-﻿Input FASTQ Files,Sample/Group Name,Replicate Number,Control,Normalization
-../../START_HERE/fastq_files/cond1_rep1.fastq.gz,condition1,1,TRUE,
-../../START_HERE/fastq_files/cond1_rep2.fastq.gz,condition1,2,,
-../../START_HERE/fastq_files/cond1_rep3.fastq.gz,condition1,3,,
-../../START_HERE/fastq_files/cond2_rep1.fastq.gz,condition2,1,,
-../../START_HERE/fastq_files/cond2_rep2.fastq.gz,condition2,2,,
-../../START_HERE/fastq_files/cond2_rep3.fastq.gz,condition2,3,,
+﻿FASTQ/SAM Files,Sample/Group Name,Replicate Number,Control,Normalization
+,,,,

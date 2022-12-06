@@ -605,7 +605,7 @@ class CSVReader(csv.DictReader):
            "Overlap":           "Overlap",
         }),
         "Samples Sheet": OrderedDict({
-            "Input FASTQ Files": "File",
+            "FASTQ/SAM Files":   "File",
             "Sample/Group Name": "Group",
             "Replicate Number":  "Replicate",
             "Control":           "Control",
