@@ -28,14 +28,16 @@ class MyTestCase(unittest.TestCase):
         be divided by the number of classes before being summed."""
 
         # Each feature contributes a single count to its listed classes
-        raw_counts_df = plotter.tokenize_feature_classes(
-            pd.DataFrame.from_dict(
-                {('feat1', pd.NA): ['', 'wago', 1, 1, 1],
-                 ('feat2', pd.NA): ['', 'csr,wago', 2, 2, 2],
-                 ('feat3', pd.NA): ['', 'wago,csr,other', 3, 3, 3]},
-                orient='index',
-                columns=['Feature Name', 'Feature Class', 'lib1', 'lib2', 'lib3'])
-        )
+        raw_counts_df = pd.DataFrame.from_dict(
+            {('feat1', 'wago'):  ['', 1.0, 1.0, 1.0],
+             ('feat2', 'csr'):   ['', 1.0, 1.0, 1.0],
+             ('feat2', 'wago'):  ['', 1.0, 1.0, 1.0],
+             ('feat3', 'wago'):  ['', 1.0, 1.0, 1.0],
+             ('feat3', 'csr'):   ['', 1.0, 1.0, 1.0],
+             ('feat3', 'other'): ['', 1.0, 1.0, 1.0]},
+            orient='index',
+            columns=['Feature Name', 'lib1', 'lib2', 'lib3'])
+        raw_counts_df.index = pd.MultiIndex.from_tuples(raw_counts_df.index)
 
         actual = plotter.get_class_counts(raw_counts_df)
         expected = pd.DataFrame.from_dict(

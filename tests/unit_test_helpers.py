@@ -49,11 +49,11 @@ def csv_factory(type: str, rows: List[dict], header=()):
     return csv_string.getvalue()
 
 
-paths_template_file = os.path.abspath('../tiny/templates/paths.yml')
+paths_template_file = os.path.abspath('./testdata/config_files/paths.yml')
 
 
 def make_paths_file(in_pipeline=False, prefs=None):
-    """IMPORTANT: relative file paths are evaluated relative to /tiny/templates/"""
+    """IMPORTANT: relative file paths are evaluated relative to /tests/testdata/config_files"""
 
     paths_file = paths_template_file
     config = PathsFile(paths_file, in_pipeline)

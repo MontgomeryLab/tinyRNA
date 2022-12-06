@@ -27,7 +27,7 @@ class test_entry(unittest.TestCase):
 
         # For pre-install tests
         self.cwl_path = '../tiny/cwl'
-        self.templates_path = '../tiny/templates'
+        self.templates_path = './testdata/config_files'
 
         # For both pre and post install
         self.config_file = f'{self.templates_path}/run_config_template.yml'
@@ -198,7 +198,7 @@ class test_entry(unittest.TestCase):
                 print('\n\n')
                 print("Captured stderr:\n" + f'"{test.get_stderr()}"')
             finally:
-                run_dirs = glob("./testdata/entry_test_*_run_directory")
+                run_dirs = glob(f"{self.templates_path}/test_run_config_*_run_directory")
                 for dir in run_dirs:
                     shutil.rmtree(dir)
 
