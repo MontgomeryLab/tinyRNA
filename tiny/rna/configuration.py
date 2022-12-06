@@ -9,13 +9,11 @@ import re
 
 from pkg_resources import resource_filename
 from collections import Counter, OrderedDict
-from datetime import datetime
 from typing import Union, Any, Optional, List
 from glob import glob
 
 from tiny.rna.counter.validation import GFFValidator
-
-timestamp_format = re.compile(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}")
+from tiny.rna.util import get_timestamp
 
 
 class ConfigBase:
@@ -240,7 +238,7 @@ class Configuration(ConfigBase):
     def setup_pipeline(self):
         """Overall settings for the whole pipeline"""
 
-        self.dt = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        self.dt = get_timestamp()
         self['run_date'], self['run_time'] = self.dt.split('_')
 
         default_run_name = '_'.join(x for x in [self['user'], "tinyrna"] if x)
