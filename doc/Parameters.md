@@ -64,21 +64,21 @@ Optional arguments:
 ## tiny-count
 
 ### Get Templates
- | Run Config Key | Commandline Argument |
+| Run Config Key | Commandline Argument |
 |----------------|----------------------|
-|                | `--get-template`     |
+|                | `--get-templates`    |
 
 Copies the template configuration files required by tiny-count into the current directory. This argument can't be combined with `--paths-file`. All other arguments are ignored when provided, and once the templates have been copied tiny-count exits.
 
 ### Normalize by Hits
- | Run Config Key             | Commandline Argument      |
+| Run Config Key             | Commandline Argument      |
 |----------------------------|---------------------------|
 | counter-normalize-by-hits: | `--normalize-by-hits T/F` |
 
 By default, tiny-count will divide the number of counts associated with each sequence, twice, before they are assigned to a feature. Each unique sequence's count is determined by tiny-collapse (or a compatible collapsing utility) and is preserved through the alignment process. The original count is divided first by the number of loci that the sequence aligns to, and second by the number of features passing selection at each locus. Switching this option "off" disables the latter normalization step.
 
 ### Decollapse
- | Run Config Key      | Commandline Argument   |
+| Run Config Key      | Commandline Argument   |
 |---------------------|------------------------|
 | counter_decollapse: | `--decollapse`         |
 
@@ -89,24 +89,17 @@ The SAM files produced by the tinyRNA pipeline are collapsed by default; alignme
 |--------------------|----------------------|
 | counter_stepvector | `--stepvector`       |
 
-A custom Cython implementation of HTSeq's StepVector is used for finding features that overlap each alignment interval. While the core C++ component of the StepVector is the same, we have found that our Cython implementation can result in runtimes up to 50% faster than HTSeq's implementation. This parameter allows you to use HTSeq's StepVector if you wish (for example, if the Cython StepVector is incompatible with your system)
-
-### Allow Features with Multiple ID Values
- | Run Config Key         | Commandline Argument |
-|------------------------|----------------------|
-| counter_allow_multi_id | `--multi-id`         |
-
-By default, an error will be produced if a GFF file contains a feature with multiple comma separated values listed under its ID attribute. Switching this option "on" instructs tiny-count to accept these features without error, but only the first listed value is used as the ID.
+A custom Cython implementation of HTSeq's StepVector is used for finding features that overlap each alignment interval. While the core C++ component of the StepVector is the same, we have found that our Cython implementation can result in runtimes up to 50% faster than HTSeq's implementation. This parameter allows you to use HTSeq's StepVector if you wish.
 
 ### Is Pipeline
- | Run Config Key | Commandline Argument |
+| Run Config Key | Commandline Argument |
 |----------------|----------------------|
 |                | `--is-pipeline`      |
 
 This commandline argument tells tiny-count that it is running as a workflow step rather than a standalone/manual run. Under these conditions tiny-count will look for all input files in the current working directory regardless of the paths defined in the Samples Sheet and Features Sheet.
 
 ### Report Diags
- | Run Config Key | Commandline Argument |
+| Run Config Key | Commandline Argument |
 |----------------|----------------------|
 | counter_diags: | `--report-diags`     |
 
@@ -206,28 +199,28 @@ Optional arguments:
 ## tiny-plot
 
 ### Plot Requests
- | Run Config Key | Commandline Argument         |
+| Run Config Key | Commandline Argument         |
 |----------------|------------------------------|
 | plot_requests: | `--plots PLOT PLOT PLOT ...` |
 
 tiny-plot will only produce the list of plots requested.
 
 ### P value
- | Run Config Key | Commandline Argument |
+| Run Config Key | Commandline Argument |
 |----------------|----------------------|
 | plot_pval:     | `--p-value VALUE`    |
 
 Feature expression levels are considered significant if their P value is less than this value, with a default of 0.05. Non-differentially expressed features are plotted as gray points, and in `sample_avg_scatter_by_dge_class`, these points are not colored by feature class.
 
 ### Style Sheet
- | Run Config Key | Paths File Key    | Commandline Argument     |
+| Run Config Key | Paths File Key    | Commandline Argument     |
 |----------------|-------------------|--------------------------|
 |                | plot_style_sheet: | `--style-sheet MPLSTYLE` |
 
 The plot style sheet can be used to override the default Matplotlib styles used by tiny-plot. Unlike the other parameters, this option is found in the Paths File. See the [Plot Stylesheet documentation](Configuration.md#plot-stylesheet-details) for more information.
 
 ### Vector Scatter
- | Run Config Key      | Commandline Argument |
+| Run Config Key      | Commandline Argument |
 |---------------------|----------------------|
 | plot_vector_points: | `--vector-scatter`   |
 
@@ -235,7 +228,7 @@ The scatter plots produced by tiny-plot have rasterized points by default. This 
 >**Note**: only scatter points are rasterized with this option switched "off"; all other elements are vectorized in every plot type.
 
 ### Bounds for len_dist Charts
- | Run Config Key     | Commandline Argument   |
+| Run Config Key     | Commandline Argument   |
 |--------------------|------------------------|
 | plot_len_dist_min: | `--len-dist-min VALUE` | 
 | plot_len_dist_max: | `--len-dist-max VALUE` |
@@ -255,8 +248,8 @@ The labels that should be used for special groups in `class_charts` and `sample_
 tiny-plot [-rc RAW_COUNTS] [-nc NORM_COUNTS] [-uc RULE_COUNTS]
           [-ss STAT] [-dge COMPARISON [COMPARISON ...]]
           [-len 5P_LEN [5P_LEN ...]] [-h] [-o PREFIX] [-pv VALUE]
-          [-s MPLSTYLE] [-v] [-ldi VALUE] [-lda VALUE] -p PLOT
-          [PLOT ...]
+          [-s MPLSTYLE] [-v] [-ldi VALUE] [-lda VALUE] [-una LABEL]
+          [-unk LABEL] -p PLOT [PLOT ...]
 
 This script produces basic static plots for publication as part of the tinyRNA
 workflow. Input file requirements vary by plot type and you are free to supply

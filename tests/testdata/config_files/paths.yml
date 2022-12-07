@@ -59,7 +59,7 @@ adapter_fasta:
 ######--------------------------------- tiny-plot -----------------------------------######
 #
 # Optional: override the styles used by tiny-plot by providing your own .mplstyle sheet
-# Run "tiny get-template" in your terminal to get a copy of the current style sheet
+# Run "tiny get-templates" in your terminal to get a copy of the current style sheet
 #
 ######-------------------------------------------------------------------------------######
 
