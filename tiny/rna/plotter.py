@@ -18,7 +18,7 @@ from typing import Dict, Union, Tuple, DefaultDict
 from pkg_resources import resource_filename
 
 from tiny.rna.plotterlib import plotterlib
-from tiny.rna.util import report_execution_time, make_filename, SmartFormatter, timestamp_format
+from tiny.rna.util import report_execution_time, make_filename, SmartFormatter, timestamp_format, add_transparent_help
 
 aqplt: plotterlib
 RASTER: bool
@@ -50,7 +50,6 @@ def get_args():
                                help='The ...nt_len_dist.csv files')
 
     # Outputs options
-    optional_args.add_argument('-h', '--help', action="help", help="show this help message and exit")
     optional_args.add_argument('-o', '--out-prefix', metavar='PREFIX',
                                help='Prefix to use for output filenames.')
     optional_args.add_argument('-pv', '--p-value', metavar='VALUE', default=0.05, type=float,
@@ -85,6 +84,7 @@ def get_args():
                                     "with classes highlighted for differentially expressed small RNAs "
                                     "based on P value cutoff.")
 
+    add_transparent_help(parser)
     return parser.parse_args()
 
 
