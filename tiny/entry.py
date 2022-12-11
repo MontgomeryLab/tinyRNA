@@ -1,23 +1,7 @@
 #!/usr/bin/env python
-"""The main entry point for tinyRNA for small RNA data analysis.
-
-This tool provides an end-to-end workflow for analyzing small RNA sequencing
-data. This entry point also provides options for only
-returning template files and workflows that can be used separately.
-
-Subcommands: get-templates, setup-cwl, recount, replot, run.
-
-When installed, run, recount and setup-cwl should be invoked with:
-    tiny <subcommand> --config <config-file>
-
-The Run Config file should be supplied for the run subcommand (required)
-and for the setup-cwl subcommand (optional; alternatively you may use the
-word "None" or "none" to obtain only the workflow files). The config file
-will be processed to generate pipeline settings from your input files.
-
-The recount and replot commands must be invoked from within the Run Directory
-of the run you wish to resume. The config file you supply must be the processed
-Run Configuration file within the Run Directory.
+"""tinyRNA provides an all-in-one workflow for precision analysis of sRNA-seq data.
+At the core of tinyRNA is a highly flexible counting utility, tiny-count, that allows
+for hierarchical assignment of reads to features based on their attributes.
 """
 
 import cwltool.factory
@@ -25,6 +9,7 @@ import cwltool.secrets
 import coloredlogs
 import subprocess
 import functools
+import argparse
 import logging
 import shutil
 import sys
@@ -34,38 +19,117 @@ from cwltool.context import LoadingContext, RuntimeContext
 from cwltool.executors import SingleJobExecutor, MultithreadedJobExecutor
 from cwltool.utils import DEFAULT_TMP_PREFIX
 from pkg_resources import resource_filename
-from argparse import ArgumentParser
 
 from tiny.rna.configuration import Configuration, ConfigBase
 from tiny.rna.resume import ResumeCounterConfig, ResumePlotterConfig
-from tiny.rna.util import report_execution_time
+from tiny.rna.util import report_execution_time, SmartFormatter, add_transparent_help
+
+# Global variables
+cwl_path = resource_filename('tiny', 'cwl')
+templates_path = resource_filename('tiny', 'templates')
+template_files = [os.path.basename(f) for f in os.listdir(templates_path)]
+optional_files = [f for f in template_files if f.endswith('.mplstyle')]
 
 
 def get_args():
     """Parses command line input"""
 
-    parser = ArgumentParser(description=__doc__)
+    primary_parser = argparse.ArgumentParser(
+        description=__doc__,         # Borrow docstring found at the beginning of the file
+        add_help=False,              # We later add --help argument "transparently" so it isn't listed in help string
+        conflict_handler='resolve',  # Otherwise argparse gets upset about subparsers also having "transparent" help
+    )
 
-    # Parser for subcommands: (run, recount, replot, setup-cwl, get-templates, etc.)
-    subparsers = parser.add_subparsers(required=True, dest='command')
-    subcommands_with_configfile = {
-        "run": "Processes the provided config file and executes the workflow it specifies.",
-        "replot": "Resume pipeline at the tiny-plot step using the PROCESSED run config provided",
-        "recount": "Resume pipeline at the tiny-count step using the PROCESSED run config provided",
-        "setup-cwl": 'Processes the provided config file and copies workflow files to the current directory'
-    }
+    add_transparent_help(primary_parser)
 
-    # Subcommands that require a configuration file argument
-    for command, desc in subcommands_with_configfile.items():
-        subparsers.add_parser(command).add_argument(
-            '--config', metavar='configFile', required=True, help=desc
+    subcommands = primary_parser.add_subparsers(
+        title="Available subcommands",
+        description="Run tiny SUBCOMMAND -h for subcommand details",
+        required=True,
+        dest='command',
+    )
+
+    def add_subcommand(command, brief, detail, config: str = None, **kwargs):
+        parser = subcommands.add_parser(
+            command,
+            help=brief,
+            description=detail,
+            conflict_handler='resolve',
+            add_help=False,
+            **kwargs
         )
+        add_transparent_help(parser)
+        if config is not None:
+            args_section = parser.add_argument_group("Required arguments")
+            args_section.add_argument(
+                '--config',
+                help=f"The file path to your {config.replace('_', ' ')}",
+                metavar=config.upper(),
+                required=True
+            )
 
-    # Subcommand get-templates has no additional arguments
-    subparsers.add_parser("get-templates",
-                          help="Copies run config, sample, and reference templates to current directory")
+    def priority_sort(x):
+        priority = ('.yml', '.csv', '.mplstyle')
+        ext = os.path.splitext(x)[1]
+        return priority.index(ext) if ext in priority else sys.maxsize
 
-    return parser.parse_args()
+    ext_sorted_templates = sorted(template_files, key=priority_sort)
+    add_subcommand(
+        "get-templates",
+        brief="Copy configuration files to the current directory",
+        detail=f"This command copies configuration file templates to the current directory. "
+               "These files include: \n\t" + '\n\t'.join(ext_sorted_templates) + "\n\n"
+               "The following files are not required for pipeline execution:\n  "
+               + ', '.join(optional_files),
+        formatter_class=SmartFormatter
+    )
+
+    add_subcommand(
+        "run",
+        brief="Run an end-to-end analysis",
+        detail="This command coordinates a comprehensive end-to-end analysis of your input files "
+               "according to the preferences defined in your configuration files.\n\n"
+               "The primary configuration file, or Run Config, contains user preferences "
+               "for each step of the workflow, and a reference to a second configuration "
+               "file: the Paths File. Within the Paths File you must specify the location "
+               "of your file inputs, including two final configuration files: the Samples "
+               "Sheet and Features Sheet.",
+        config='run_config',
+        formatter_class=SmartFormatter
+    )
+
+    resume_helpstring_template = (
+        "This command resumes the workflow at the {step_name} step using outputs "
+        "from a prior end-to-end analysis. It must be executed within the run "
+        "directory whose prior outputs you wish to reuse. Additionally, you must "
+        "provide the processed Run Config which is located in that directory.")
+
+    add_subcommand(
+        "recount",
+        brief="Resume an analysis at the tiny-count step",
+        detail=resume_helpstring_template.format(step_name='tiny-count'),
+        config='processed_run_config'
+    )
+
+    add_subcommand(
+        "replot",
+        brief="Resume an analysis at the tiny-plot step",
+        detail=resume_helpstring_template.format(step_name='tiny-plot'),
+        config='processed_run_config'
+    )
+
+    add_subcommand(
+        "setup-cwl",
+        brief="Produce a processed Run Config and workflow files",
+        detail="This command should only be used if you intend to use an alternative "
+               "workflow runner (advanced). It will produce a processed copy of your "
+               "Run Config, and it will copy the workflow CWL files to the current "
+               'directory. You can also pass the word "none" for your Run Config to '
+               "skip processing and only copy the workflow files.",
+        config='run_config'
+    )
+
+    return primary_parser.parse_args()
 
 
 @report_execution_time("Pipeline runtime")
@@ -271,9 +335,6 @@ def get_templates(templates_path: str) -> None:
 
     print("Copying template input files to current directory...")
 
-    template_files = ['run_config_template.yml', 'samples.csv', 'features.csv',
-                      'paths.yml', 'tinyrna-light.mplstyle']
-
     # Copy template files to the current working directory
     for template in template_files:
         shutil.copyfile(f"{templates_path}/{template}", f"{os.getcwd()}/{template}")
@@ -284,15 +345,14 @@ def setup_cwl(tinyrna_cwl_path: str, config_file: str) -> None:
 
     Args:
         tinyrna_cwl_path: The path to the project's CWL workflow file directory
-        config_file: The configuration file to be processed (or None/none to skip processing)
+        config_file: The configuration file to be processed (or none to skip processing)
 
     Returns: None
 
     """
 
-    # If the word "None" or "none" is supplied, simply copy workflow files. No config file processing.
-    if config_file not in ('None', 'none'):
-        # Set up the config file
+    if config_file.upper() == "NONE":
+        # Simply copy workflow files. No config file processing.
         print("Processing configuration file...")
         outfile_name = "processed_" + os.path.basename(config_file)
         Configuration(config_file).write_processed_config(filename=outfile_name)
@@ -307,7 +367,7 @@ def main():
     """The main routine that determines what type of run to do.
 
     Options:
-        run: Run the end-to-end analysis based on a config file.
+        run: Run an end-to-end analysis based on a config file.
         recount: Resume pipeline execution at the tiny-count step
         replot: Resume pipeline execution at the tiny-plot step
         get-templates: Get the input sheets & template config files.
@@ -316,10 +376,6 @@ def main():
 
     # Parse command line arguments
     args = get_args()
-
-    # Get the package data
-    cwl_path = resource_filename('tiny', 'cwl')
-    templates_path = resource_filename('tiny', 'templates')
 
     # Execute appropriate command based on command line input
     command_map = {
