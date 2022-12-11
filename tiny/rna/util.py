@@ -35,7 +35,18 @@ def report_execution_time(step_name: str):
 
 
 class SmartFormatter(argparse.HelpFormatter):
-    # Properly formats argparse helpstring fields that contain newlines
+    """Properly formats argparse help string fields that contain newlines.
+
+    Newlines are only preserved in Argparse description fields if they are
+    followed by whitespace (e.g. \n\n, \n\t, etc.). This is because docstrings
+    can be lengthy and require single newlines to maintain an appropriate width,
+    but in the terminal we want this text to instead fill the terminal width.
+    Leading whitespace (indentation) is also preserved.
+
+    Newlines are only preserved in argument help fields that begin with the
+    token "R|". Otherwise, all newlines are replaced just as they are in
+    vanilla argparse."""
+
     def _split_lines(self, text, width):
         if text.startswith('R|'):
             lines = []
@@ -44,6 +55,29 @@ class SmartFormatter(argparse.HelpFormatter):
                 lines.extend(fill.splitlines())
             return lines
         return argparse.HelpFormatter._split_lines(self, text, width)
+
+    def _fill_text(self, text, width, indent):
+        input_sections = text.split('\n\n')
+        output_lines = []
+
+        for section in input_sections:
+            section_lines = []
+            for subsection in re.split(r'\n(?=\s)', section):
+                leading_ws = re.match(r'\s+', subsection)
+                sub_indent = indent if not leading_ws else indent + leading_ws.group()
+                subsection = textwrap.TextWrapper.wordsep_simple_re.sub(' ', subsection)
+                section_lines.append(
+                    textwrap.fill(
+                        subsection, width,
+                        initial_indent=sub_indent,
+                        subsequent_indent=sub_indent,
+                        replace_whitespace=False,
+                        break_on_hyphens=False,
+                ))
+
+            output_lines.append('\n'.join(section_lines))
+
+        return '\n\n'.join(output_lines)
 
 
 def from_here(config_file, input_file):
@@ -107,4 +141,9 @@ gzip_open = functools.partial(gzip.GzipFile, compresslevel=6, fileobj=None, mtim
 timestamp_format = re.compile(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}")
 def get_timestamp():
     return datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+
+
+# Allows -h/--help without listing it within the optional arguments section
+def add_transparent_help(parser):
+    parser.add_argument('-h', '--help', action="help", help=argparse.SUPPRESS)
 
