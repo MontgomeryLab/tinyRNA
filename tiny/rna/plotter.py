@@ -76,7 +76,7 @@ def get_args():
                                help="R|List of plots to create. Options: \n"
                                "• len_dist: A stacked barchart showing size & 5' nucleotide distribution.\n"
                                "• rule_charts: A barchart showing percentages of counts by matched rule.\n"
-                               "• class_charts: A barchart showing percentages of counts by Class attribute.\n"
+                               "• class_charts: A barchart showing percentages of counts per classification.\n"
                                "• replicate_scatter: A scatter plot comparing replicates for all count files given.\n"
                                "• sample_avg_scatter_by_dge: A scatter plot comparing all sample groups, with "
                                     "differentially expressed small RNAs highlighted based on P value cutoff.\n"

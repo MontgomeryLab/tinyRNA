@@ -247,25 +247,27 @@ The labels that should be used for special groups in `class_charts` and `sample_
 ```
 tiny-plot [-rc RAW_COUNTS] [-nc NORM_COUNTS] [-uc RULE_COUNTS]
           [-ss STAT] [-dge COMPARISON [COMPARISON ...]]
-          [-len 5P_LEN [5P_LEN ...]] [-h] [-o PREFIX] [-pv VALUE]
+          [-len 5P_LEN [5P_LEN ...]] [-o PREFIX] [-pv VALUE]
           [-s MPLSTYLE] [-v] [-ldi VALUE] [-lda VALUE] [-una LABEL]
           [-unk LABEL] -p PLOT [PLOT ...]
 
 This script produces basic static plots for publication as part of the tinyRNA
-workflow. Input file requirements vary by plot type and you are free to supply
-only the files necessary for your plot selections. If you are sourcing all of
-your input files from the same run directory, you may find it easier to
-instead run `tiny replot` within that run directory.
+workflow.
+
+Input file requirements vary by plot type and you are free to supply only the
+files necessary for your plot selections. If you are sourcing all of your
+input files from the same run directory, you may find it easier to instead run
+`tiny replot` within that run directory.
 
 Required arguments:
   -p PLOT [PLOT ...], --plots PLOT [PLOT ...]
                         List of plots to create. Options:
                         • len_dist: A stacked barchart showing size & 5'
                           nucleotide distribution.
-                        • rule_charts: A barchart showing percentages
-                          of counts by matched rule.
-                        • class_charts: A barchart showing percentages
-                          of counts per class.
+                        • rule_charts: A barchart showing percentages of
+                          counts by matched rule.
+                        • class_charts: A barchart showing percentages of
+                          counts per Classification.
                         • replicate_scatter: A scatter plot comparing
                           replicates for all count files given.
                         • sample_avg_scatter_by_dge: A scatter plot comparing
@@ -293,7 +295,6 @@ Input files produced by tiny-deseq.r:
                         The ...cond1...cond2...deseq.csv files
 
 Optional arguments:
-  -h, --help            show this help message and exit
   -o PREFIX, --out-prefix PREFIX
                         Prefix to use for output filenames.
   -pv VALUE, --p-value VALUE
