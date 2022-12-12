@@ -291,6 +291,13 @@ plot_unknown_class: "_UNKNOWN_"
 ##-- Use this label in class plots for unassigned counts --##
 plot_unassigned_class: "_UNASSIGNED_"
 
+##-- Optionally filter the classes in class scatter plots --##
+plot_class_scatter_filter:
+  # Choose: include or exclude
+  # Add classes between [ and ], separated by comma
+  style: exclude
+  classes: [masked, piRNA-5'T]
+
 
 ######----------------------------- OUTPUT DIRECTORIES ------------------------------######
 #
@@ -368,3 +375,16 @@ run_deseq: True
 # The following configuration settings are automatically derived from the Features Sheet
 #
 ######-------------------------------------------------------------------------------######
+
+
+
+######--------------------------- DERIVED FROM RUN CONFIG ---------------------------######
+#
+# The following configuration settings are automatically derived from this file
+#
+######-------------------------------------------------------------------------------######
+
+##-- Utilized by tiny-plot --##
+# Filters for class scatter plots
+plot_class_scatter_filter_include: []
+plot_class_scatter_filter_exclude: []
