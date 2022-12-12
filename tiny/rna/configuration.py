@@ -138,6 +138,28 @@ class ConfigBase:
         else:
             return destination
 
+    def setup_step_inputs(self):
+        """For now, only tiny-plot requires additional setup for step inputs
+        This function is called at both startup and resume"""
+
+        # tiny-plot setup
+        cs_filter = 'plot_class_scatter_filter'
+        style_req = ['include', 'exclude']
+        classes = self[cs_filter]['classes']
+        if not classes:
+            return
+
+        # Validate filter style
+        style = self[cs_filter]['style'].lower()
+        assert style in style_req, \
+            f'{cs_filter} -> style: must be {" or ".join(style_req)}.'
+
+        # Assign the workflow key and reset the other filter(s)
+        self[f"{cs_filter}_{style}"] = classes
+        style_req.remove(style)
+        for style in style_req:
+            self[f"{cs_filter}_{style}"] = []
+
     def create_run_directory(self) -> str:
         """Create the destination directory for pipeline outputs"""
         run_dir = self["run_directory"]
@@ -194,6 +216,7 @@ class Configuration(ConfigBase):
         self.setup_ebwt_idx()
         self.process_samples_sheet()
         self.process_features_sheet()
+        self.setup_step_inputs()
         if validate_inputs: self.validate_inputs()
 
     def load_paths_config(self):

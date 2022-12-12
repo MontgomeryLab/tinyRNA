@@ -39,6 +39,7 @@ class ResumeConfig(ConfigBase, ABC):
 
         self.paths = self.load_paths_config()
         self.assimilate_paths_file()
+        self.setup_step_inputs()
 
         self._create_truncated_workflow()
         self._rebuild_entry_inputs()
