@@ -94,7 +94,7 @@ class MyTestCase(unittest.TestCase):
     def test_seq_counter_gzip(self):
         # MIN TEST
         # Need to patch builtins.open in gzip module scope
-        with patch('tiny.rna.collapser.gzip.builtins.open', new=mock_open(read_data=self.min_fastq_gz)):
+        with patch('tiny.rna.util.gzip.builtins.open', new=mock_open(read_data=self.min_fastq_gz)):
             # Read the mock gzipped single record fastq file
             gz_min_result = collapser.seq_counter("mockPrefixDNE", collapser.gz_f)
             self.assertEqual(self.min_counts_dict, gz_min_result)
@@ -109,7 +109,7 @@ class MyTestCase(unittest.TestCase):
     """
     @patch('tiny.rna.collapser.open', new_callable=mock_open())
     def test_seq2fasta_gzip(self, mock_open_f):
-        with patch('tiny.rna.collapser.gzip.builtins.open', new_callable=mock_open) as gz_open:
+        with patch('tiny.rna.util.gzip.builtins.open', new_callable=mock_open) as gz_open:
             # MIN TEST
             collapser.seq2fasta(self.min_counts_dict, "min_gz", gz=True)
             output = reassemble_gz_w(gz_open.mock_calls)
@@ -362,7 +362,7 @@ class MyTestCase(unittest.TestCase):
     Testing argparse requirements.
     """
     @patch('tiny.rna.collapser.os', autospec=True)
-    @patch('tiny.rna.collapser.gzip.os', autospec=True)
+    @patch('tiny.rna.util.gzip.os', autospec=True)
     @patch('sys.stdout', new_callable=StringIO)
     @patch('sys.stderr',  new_callable=StringIO)
     def test_collapser_args(self, mock_stderr, mock_stdout, os_gz, os_aq):

@@ -6,6 +6,8 @@ import time
 import os
 import re
 
+from datetime import datetime
+
 
 class Singleton(type):
     _instances = {}
@@ -99,3 +101,10 @@ def sorted_natural(lines, reverse=False):
 
 # File IO interface for reading and writing Gzip files
 gzip_open = functools.partial(gzip.GzipFile, compresslevel=6, fileobj=None, mtime=0)
+
+
+# For timestamp matching and creation
+timestamp_format = re.compile(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}")
+def get_timestamp():
+    return datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+

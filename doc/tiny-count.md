@@ -4,19 +4,16 @@
 For an explanation of tiny-count's parameters in the Run Config and by commandline, see [the parameters documentation](Parameters.md#tiny-count).
 
 ## Resuming an End-to-End Analysis
-tiny-count offers a variety of options for refining your analysis. You might find that repeat analyses are required while tuning these options to your goals. However, the earlier pipeline steps are resource and time intensive, so it is inconvenient to rerun an end-to-end analysis to test new selection rules. Using the command `tiny recount`, tinyRNA will run the workflow starting at the tiny-count step using inputs from a prior end-to-end run. See the [pipeline resume documentation](Pipeline.md#resuming-a-prior-analysis) for details and prerequesites.
+tiny-count offers a variety of options for refining your analysis. You might find that repeat analyses are required while tuning these options to your goals. Using the command `tiny recount`, tinyRNA will run the workflow starting at the tiny-count step using inputs from a prior end-to-end run to save time. See the [pipeline resume documentation](Pipeline.md#resuming-a-prior-analysis) for details and prerequisites.
 
 ## Running as a Standalone Tool
-If you would like to run tiny-count as a standalone tool, not as part of an end-to-end or resumed analysis, you can do so with the command `tiny-count`. The command requires that you specify the paths to your Samples Sheet and Features Sheet, and a filename prefix for outputs. [All other arguments are optional](Parameters.md#full-tiny-count-help-string). You will need to make a copy of your Samples Sheet and modify it so that the `Input FASTQ Files` column instead contains paths to the corresponding SAM files from a prior end-to-end run. SAM files from third party sources are also supported, and can be produced from reads collapsed by tiny-collapse or fastx, or from non-collapsed reads.
-
->**Important:** reusing the same output filename prefix between standalone runs will result in prior outputs being overwritten.
+If you would like to run tiny-count as a standalone tool, not as part of an end-to-end or resumed analysis, you can do so with the command `tiny-count`. The command has [one required argument](Parameters.md#full-tiny-count-help-string): your Paths File. Your Samples Sheet will need to list SAM files rather than FASTQ files in the `FASTQ/SAM Files` column. SAM files from third party sources are also supported, and if they have been produced from reads collapsed by tiny-collapse or fastx, tiny-count will honor the reported read counts.
 
 #### Using Non-collapsed Sequence Alignments
-While third-party SAM files from non-collapsed reads are supported, there are some caveats. These files will result in substantially higher resource usage and runtimes; we strongly recommend collapsing prior to alignment. Additionally, the sequence-related stats produced by tiny-count will no longer represent _unique_ sequences. These stats will instead refer to all sequences with unique QNAMEs (that is, multi-alignment bundles still cary a sequence count of 1.)
+While third-party SAM files from non-collapsed reads are supported, there are some caveats. These files will result in substantially higher resource usage and runtimes; we strongly recommend collapsing prior to alignment. Additionally, the sequence-related stats produced by tiny-count will no longer represent _unique_ sequences. These stats will instead refer to all sequences with unique QNAMEs (that is, multi-alignment bundles still cary a sequence count of 1).
 
 
 # Feature Selection
-![Feature Selection Diagram](../images/tiny-count_selection.png)
 
 We provide a Features Sheet (`features.csv`) in which you can define selection rules to more accurately capture counts for the small RNAs of interest. The parameters for these rules include attributes commonly used in the classification of small RNAs, such as length, strandedness, and 5' nucleotide.
 
@@ -26,6 +23,8 @@ Selection occurs in three stages, with the output of each stage as input to the 
 1. Features are matched to rules based on their attributes defined in GFF files
 2. At each alignment locus, overlapping features are selected based on the overlap requirements of their matched rules. Selected features are sorted by hierarchy value so that smaller values take precedence in the next stage.
 3. Finally, features are selected for read assignment based on the small RNA attributes of the alignment locus. Once reads are assigned to a feature, they are excluded from matches with larger hierarchy values.
+
+![Feature Selection Diagram](../images/tiny-count_selection.png)
  
 ## Stage 1: Feature Attribute Parameters
 | _features.csv columns:_ | Select for... | with value... | Classify as... | Source Filter | Type Filter |

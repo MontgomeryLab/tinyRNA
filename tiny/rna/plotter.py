@@ -17,9 +17,8 @@ from collections import defaultdict
 from typing import Dict, Union, Tuple, DefaultDict
 from pkg_resources import resource_filename
 
-from tiny.rna.configuration import timestamp_format
 from tiny.rna.plotterlib import plotterlib
-from tiny.rna.util import report_execution_time, make_filename, SmartFormatter
+from tiny.rna.util import report_execution_time, make_filename, SmartFormatter, timestamp_format
 
 aqplt: plotterlib
 RASTER: bool

@@ -12,7 +12,7 @@ from unit_test_helpers import csv_factory, paths_template_file, make_paths_file
 class BowtieIndexesTest(unittest.TestCase):
     @classmethod
     def setUpClass(self):
-        self.root_cfg_dir = os.path.abspath("../tiny/templates")
+        self.root_cfg_dir = os.path.abspath("./testdata/config_files")
         self.run_config = self.root_cfg_dir + "/run_config_template.yml"
         self.paths = self.root_cfg_dir + "/paths.yml"
 
@@ -231,8 +231,8 @@ class PathsFileTest(unittest.TestCase):
         config.groups = ('mock_parameter',)
 
         mapping_1 = {'path': "./some/../file", "other_key": "irrelevant"}
-        mapping_2 = {'path': "../templates/another_file"}
-        path_string = "../../START_HERE/reference_data/ram1.gff3"
+        mapping_2 = {'path': "../config_files/another_file"}
+        path_string = "../../../START_HERE/reference_data/ram1.gff3"
 
         config['mock_parameter'] = [mapping_1, mapping_2, path_string, None, '']
 

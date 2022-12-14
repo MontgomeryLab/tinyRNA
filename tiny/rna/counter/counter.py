@@ -1,22 +1,20 @@
-"""This submodule assigns feature counts for SAM alignments using a Feature Sheet ruleset.
-
-If you find that you are sourcing all of your input files from a prior run, we recommend
-that you instead run `tiny recount` within that run's directory.
-"""
+"""tiny-count is a precision counting tool for hierarchical classification and quantification of small RNA-seq reads"""
 
 import multiprocessing as mp
 import traceback
 import argparse
+import shutil
 import sys
 import os
 
 from collections import defaultdict
 from typing import Tuple, List, Dict
+from pkg_resources import resource_filename
 
 from tiny.rna.counter.validation import GFFValidator
 from tiny.rna.counter.features import Features, FeatureCounter
 from tiny.rna.counter.statistics import MergedStatsManager
-from tiny.rna.util import report_execution_time, from_here, ReadOnlyDict
+from tiny.rna.util import report_execution_time, from_here, ReadOnlyDict, get_timestamp
 from tiny.rna.configuration import CSVReader, PathsFile
 
 # Global variables for multiprocessing
@@ -26,30 +24,42 @@ counter: FeatureCounter
 def get_args():
     """Get input arguments from the user/command line."""
 
-    arg_parser = argparse.ArgumentParser(description=__doc__, add_help=False)
-    required_args = arg_parser.add_argument_group("Required arguments")
-    optional_args = arg_parser.add_argument_group("Optional arguments")
+    arg_parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description=__doc__,
+        add_help=False,
+    )
+
+    required_args = arg_parser.add_argument_group(
+        title="Required arguments",
+        description="You must either provide a Paths File or request templates for detailing your configuration.")
+    optional_args = arg_parser.add_argument_group(
+        title="Optional arguments",
+        description="These options can be used in conjunction with the Paths File (-pf) argument mentioned above.")
 
     # Required arguments
-    required_args.add_argument('-pf', '--paths-file', metavar='PATHS', required=True,
-                               help='your Paths File')
-    required_args.add_argument('-o', '--out-prefix', metavar='OUTPUTPREFIX', required=True,
-                               help='output prefix to use for file names')
+    mutex_top_grp = required_args.add_mutually_exclusive_group(required=True)
+    mutex_top_grp.add_argument('-pf', '--paths-file', metavar='FILE', help='your Paths File')
+    mutex_top_grp.add_argument('--get-templates', action='store_true',
+                               help='Copies the template configuration files required by '
+                                    'tiny-count into the current directory.')
 
     # Optional arguments
-    optional_args.add_argument('-h', '--help', action="help", help="show this help message and exit")
+    optional_args.add_argument('-h', '--help', action="help", help=argparse.SUPPRESS)
+    optional_args.add_argument('-o', '--out-prefix', metavar='PREFIX', default='tiny-count_{timestamp}',
+                               help='The output prefix to use for file names. All occurrences of the '
+                                    'substring {timestamp} will be replaced with the current date and time.')
     optional_args.add_argument('-nh', '--normalize-by-hits', metavar='T/F', default='T',
-                               help='If T/true, normalize counts by (selected) '
-                                    'overlapping feature counts. Default: true.')
+                               help='If T/true, normalize counts by (selected) overlapping feature counts.')
     optional_args.add_argument('-dc', '--decollapse', action='store_true',
-                               help='Create a decollapsed copy of all SAM files listed in your '
-                                    'Samples Sheet. This option is ignored for non-collapsed inputs.')
+                               help='Create a decollapsed copy of all SAM files listed in your Samples Sheet. '
+                                    'This option is ignored for non-collapsed inputs.')
     optional_args.add_argument('-sv', '--stepvector', choices=['Cython', 'HTSeq'], default='Cython',
                                help='Select which StepVector implementation is used to find '
                                     'features overlapping an interval.')
-    optional_args.add_argument('-a', '--all-features', action='store_true',
-                               help='Represent all features in output counts table, '
-                                    'even if they did not match a Select for / with value.')
+    optional_args.add_argument('-a', '--all-features', action='store_true', help=argparse.SUPPRESS)
+                               #help='Represent all features in output counts table, '
+                               #     'even if they did not match in Stage 1 selection.')
     optional_args.add_argument('-p', '--is-pipeline', action='store_true',
                                help='Indicates that tiny-count was invoked as part of a pipeline run '
                                     'and that input files should be sourced as such.')
@@ -58,9 +68,26 @@ def get_args():
                                     'selection elements.')
 
     args = arg_parser.parse_args()
-    setattr(args, 'normalize_by_hits', args.normalize_by_hits.lower() in ['t', 'true'])
 
-    return ReadOnlyDict(vars(args))
+    if args.get_templates:
+        get_templates()
+        sys.exit(0)
+    else:
+        args_dict = vars(args)
+        args_dict['out_prefix'] = args.out_prefix.replace('{timestamp}', get_timestamp())
+        args_dict['normalize_by_hits'] = args.normalize_by_hits.lower() in ['t', 'true']
+        return ReadOnlyDict(args_dict)
+
+
+def get_templates():
+    """Copies config file templates required by tiny-count into the current directory"""
+
+    templates_path = resource_filename('tiny', 'templates')
+    template_files = ['paths.yml', 'samples.csv', 'features.csv']
+
+    # Copy template files to the current working directory
+    for template in template_files:
+        shutil.copyfile(f"{templates_path}/{template}", f"{os.getcwd()}/{template}")
 
 
 def load_samples(samples_csv: str, is_pipeline: bool) -> List[Dict[str, str]]:

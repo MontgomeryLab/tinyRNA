@@ -19,14 +19,14 @@
 #
 ######-------------------------------------------------------------------------------######
 
-user: NewUser
+user: ~
 run_date: ~
 run_time: ~
-paths_config: ./paths.yml
+paths_config: paths.yml
 
 ##-- The label for final outputs --##
 ##-- If none provided, the default of user_tinyrna will be used --##
-run_name: tinyrna
+run_name: test_run_config
 
 ##-- Number of threads to use when a step supports multi-threading --##
 ##-- For best performance, this should be equal to your computer's processor core count --##
@@ -317,7 +317,7 @@ dir_name_plotter: plots
 #
 ###########################################################################################
 
-version: 1.2.1
+version: 1.2
 
 ######--------------------------- DERIVED FROM PATHS FILE ---------------------------######
 #
