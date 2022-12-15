@@ -14,7 +14,7 @@ from pkg_resources import resource_filename
 from tiny.rna.counter.validation import GFFValidator
 from tiny.rna.counter.features import Features, FeatureCounter
 from tiny.rna.counter.statistics import MergedStatsManager
-from tiny.rna.util import report_execution_time, from_here, ReadOnlyDict, get_timestamp
+from tiny.rna.util import report_execution_time, from_here, ReadOnlyDict, get_timestamp, add_transparent_help
 from tiny.rna.configuration import CSVReader, PathsFile
 
 # Global variables for multiprocessing
@@ -45,7 +45,6 @@ def get_args():
                                     'tiny-count into the current directory.')
 
     # Optional arguments
-    optional_args.add_argument('-h', '--help', action="help", help=argparse.SUPPRESS)
     optional_args.add_argument('-o', '--out-prefix', metavar='PREFIX', default='tiny-count_{timestamp}',
                                help='The output prefix to use for file names. All occurrences of the '
                                     'substring {timestamp} will be replaced with the current date and time.')
@@ -67,6 +66,7 @@ def get_args():
                                help='Produce diagnostic information about uncounted/eliminated '
                                     'selection elements.')
 
+    add_transparent_help(arg_parser)
     args = arg_parser.parse_args()
 
     if args.get_templates:

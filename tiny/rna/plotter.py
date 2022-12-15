@@ -18,7 +18,7 @@ from typing import Dict, Union, Tuple, DefaultDict
 from pkg_resources import resource_filename
 
 from tiny.rna.plotterlib import plotterlib
-from tiny.rna.util import report_execution_time, make_filename, SmartFormatter, timestamp_format
+from tiny.rna.util import report_execution_time, make_filename, SmartFormatter, timestamp_format, add_transparent_help
 
 aqplt: plotterlib
 RASTER: bool
@@ -50,7 +50,6 @@ def get_args():
                                help='The ...nt_len_dist.csv files')
 
     # Outputs options
-    optional_args.add_argument('-h', '--help', action="help", help="show this help message and exit")
     optional_args.add_argument('-o', '--out-prefix', metavar='PREFIX',
                                help='Prefix to use for output filenames.')
     optional_args.add_argument('-pv', '--p-value', metavar='VALUE', default=0.05, type=float,
@@ -77,7 +76,7 @@ def get_args():
                                help="R|List of plots to create. Options: \n"
                                "• len_dist: A stacked barchart showing size & 5' nucleotide distribution.\n"
                                "• rule_charts: A barchart showing percentages of counts by matched rule.\n"
-                               "• class_charts: A barchart showing percentages of counts by Class attribute.\n"
+                               "• class_charts: A barchart showing percentages of counts per classification.\n"
                                "• replicate_scatter: A scatter plot comparing replicates for all count files given.\n"
                                "• sample_avg_scatter_by_dge: A scatter plot comparing all sample groups, with "
                                     "differentially expressed small RNAs highlighted based on P value cutoff.\n"
@@ -85,6 +84,7 @@ def get_args():
                                     "with classes highlighted for differentially expressed small RNAs "
                                     "based on P value cutoff.")
 
+    add_transparent_help(parser)
     return parser.parse_args()
 
 

@@ -13,7 +13,7 @@ import os
 from collections import Counter
 from typing import Tuple, Iterable
 
-from tiny.rna.util import gzip_open as gz_f
+from tiny.rna.util import gzip_open as gz_f, add_transparent_help
 
 try:
     from _collections import _count_elements  # Load Counter's C helper function if it is available
@@ -47,8 +47,6 @@ def get_args() -> 'argparse.NameSpace':
             raise argparse.ArgumentTypeError("Numerical arguments must be >= 0")
 
     # Optional arguments
-    optional_args.add_argument('-h', '--help', action="help", help="show this help message and exit")
-
     optional_args.add_argument(
         '-t', '--threshold', default=0, required=False, type=positive_number,
         help='Sequences <= THRESHOLD will be omitted from {prefix}_collapsed.fa '
@@ -70,6 +68,7 @@ def get_args() -> 'argparse.NameSpace':
         help="Trim LENGTH bases from the 3' end of each sequence"
     )
 
+    add_transparent_help(parser)
     args = parser.parse_args()
 
     # This is due to 1) args is an object not a dict, and 2) variable names starting with numbers not allowed
