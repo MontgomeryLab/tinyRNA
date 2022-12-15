@@ -3,7 +3,7 @@ The following commands deal with pipeline operations for carrying out end-to-end
 
 ```shell
 # Retrieving config files
-tiny get-template
+tiny get-templates
 tiny setup-cwl
 
 # End-to-end analysis

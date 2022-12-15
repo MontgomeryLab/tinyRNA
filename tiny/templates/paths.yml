@@ -12,13 +12,13 @@
 ######-------------------------------------------------------------------------------######
 
 ##-- Path to Sample & Features Sheets (relative paths are relative to this config file) --##
-samples_csv: './samples.csv'
-features_csv: './features.csv'
+samples_csv: features.csv
+features_csv: samples.csv
 
 ##-- Each entry: 1. the file, 2. (optional) list of attribute keys for feature aliases --##
 gff_files:
-- path: "../../START_HERE/reference_data/ram1.gff3"
-  alias: [ID]
+- path:
+  alias:
 #- path:
 #  alias: [ ]
 
@@ -48,7 +48,7 @@ ebwt: ''
 ##-- If you do not have a bowtie index, provide your reference genome file(s) here --##
 ##-- One file per line, with "- " at the beginning (think: bulleted list) --##
 reference_genome_files:
-- '../../START_HERE/reference_data/ram1.fa'
+- # First genome file goes here!
 
 ######----------------------------------- fastp -------------------------------------######
 # Optional: provide a FASTA file containing the specific adapters you wish to trim
@@ -59,7 +59,7 @@ adapter_fasta:
 ######--------------------------------- tiny-plot -----------------------------------######
 #
 # Optional: override the styles used by tiny-plot by providing your own .mplstyle sheet
-# Run "tiny get-template" in your terminal to get a copy of the current style sheet
+# Run "tiny get-templates" in your terminal to get a copy of the current style sheet
 #
 ######-------------------------------------------------------------------------------######
 

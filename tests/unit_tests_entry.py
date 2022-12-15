@@ -27,7 +27,7 @@ class test_entry(unittest.TestCase):
 
         # For pre-install tests
         self.cwl_path = '../tiny/cwl'
-        self.templates_path = '../tiny/templates'
+        self.templates_path = './testdata/config_files'
 
         # For both pre and post install
         self.config_file = f'{self.templates_path}/run_config_template.yml'
@@ -49,13 +49,13 @@ class test_entry(unittest.TestCase):
         }
 
     """
-    Testing that get-template copies the correct files to the current directory.
+    Testing that get-templates copies the correct files to the current directory.
     """
 
-    def test_get_template(self):
+    def test_get_templates(self):
         test_functions = [
-            helpers.LambdaCapture(lambda: entry.get_template(self.templates_path)),  # The pre-install invocation
-            helpers.ShellCapture("tiny get-template")                                # The post-install command
+            helpers.LambdaCapture(lambda: entry.get_templates(self.templates_path)),  # The pre-install invocation
+            helpers.ShellCapture("tiny get-templates")                                # The post-install command
         ]
         template_files = ['run_config_template.yml', 'samples.csv', 'features.csv',
                           'paths.yml', 'tinyrna-light.mplstyle']
@@ -198,7 +198,7 @@ class test_entry(unittest.TestCase):
                 print('\n\n')
                 print("Captured stderr:\n" + f'"{test.get_stderr()}"')
             finally:
-                run_dirs = glob("./testdata/entry_test_*_run_directory")
+                run_dirs = glob(f"{self.templates_path}/test_run_config_*_run_directory")
                 for dir in run_dirs:
                     shutil.rmtree(dir)
 

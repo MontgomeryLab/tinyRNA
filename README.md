@@ -85,7 +85,7 @@ The pipeline requires that you identify:
 
 For more information, please see the [configuration file documentation](doc/Configuration.md). The `START_HERE` directory demonstrates a working configuration using these files. You can also get a copy of them by running the command:
 ```shell
-tiny get-template
+tiny get-templates
 ```
 
 

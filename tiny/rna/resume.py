@@ -6,10 +6,10 @@ import ruamel.yaml
 from ruamel.yaml.comments import CommentedOrderedMap
 from pkg_resources import resource_filename
 from abc import ABC, abstractmethod
-from datetime import datetime
 from glob import glob
 
-from tiny.rna.configuration import ConfigBase, timestamp_format, PathsFile
+from tiny.rna.configuration import ConfigBase, PathsFile
+from tiny.rna.util import timestamp_format, get_timestamp
 
 
 class ResumeConfig(ConfigBase, ABC):
@@ -33,7 +33,7 @@ class ResumeConfig(ConfigBase, ABC):
             self.workflow: CommentedOrderedMap
             self.workflow = self.yaml.load(f)
 
-        self.dt = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        self.dt = get_timestamp()
         self.entry_inputs = entry_inputs
         self.steps = steps + [f"organize_{s}" for s in steps]
 
