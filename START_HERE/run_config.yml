@@ -293,7 +293,7 @@ plot_unassigned_class: "_UNASSIGNED_"
 
 ##-- Optionally filter the classes in class scatter plots --##
 plot_class_scatter_filter:
-  style: exclude  # Choose: include or exclude
+  style: include  # Choose: include or exclude
   classes: []     # Add classes between [ and ], separated by comma
 
 
