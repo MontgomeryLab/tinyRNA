@@ -293,10 +293,8 @@ plot_unassigned_class: "_UNASSIGNED_"
 
 ##-- Optionally filter the classes in class scatter plots --##
 plot_class_scatter_filter:
-  # Choose: include or exclude
-  # Add classes between [ and ], separated by comma
-  style: exclude
-  classes: [masked, piRNA-5'T]
+  style: exclude  # Choose: include or exclude
+  classes: []     # Add classes between [ and ], separated by comma
 
 
 ######----------------------------- OUTPUT DIRECTORIES ------------------------------######
