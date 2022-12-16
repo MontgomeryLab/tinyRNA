@@ -496,21 +496,6 @@ def set_counts_table_multiindex(counts: pd.DataFrame, fillna: str) -> pd.DataFra
     return counts.set_index([level0, level1])
 
 
-def get_flat_classes(counts_df: pd.DataFrame) -> pd.Index:
-    """Features with multiple associated classes are returned in flattened form
-    with one class per entry, yielding multiple entries for these features. During
-    earlier versions this required some processing, but now we can simply return
-    the multiindex of the counts_df.
-
-    Args:
-        counts_df: A DataFrame with a multiindex of (feature ID, feature class)
-    Returns:
-        The counts_df multiindex
-    """
-
-    return counts_df.index
-
-
 def get_class_counts(raw_counts_df: pd.DataFrame) -> pd.DataFrame:
     """Calculates class counts from level 1 of the raw counts multiindex
 
@@ -607,7 +592,7 @@ def setup(args: argparse.Namespace) -> dict:
              "de_table_df", "avg_view_lims"],
         'sample_avg_scatter_by_dge_class':
             ["norm_counts_df", "sample_rep_dict", "norm_counts_avg_df",
-             "feat_classes_df", "de_table_df", "avg_view_lims"]
+             "de_table_df", "avg_view_lims"]
     }
 
     # These are frozen function pointers; both the function and its
@@ -622,7 +607,6 @@ def setup(args: argparse.Namespace) -> dict:
         'de_table_df': lambda: load_dge_tables(args.dge_tables, args.unknown_class),
         'sample_rep_dict': lambda: get_sample_rep_dict(fetched["norm_counts_df"]),
         'norm_counts_avg_df': lambda: get_sample_averages(fetched["norm_counts_df"], fetched["sample_rep_dict"]),
-        'feat_classes_df': lambda: get_flat_classes(fetched["norm_counts_df"]),
         'class_counts_df': lambda: get_class_counts(fetched["raw_counts_df"]),
         'avg_view_lims': lambda: aqplt.get_scatter_view_lims(fetched["norm_counts_avg_df"]),
         'norm_view_lims': lambda: aqplt.get_scatter_view_lims(fetched["norm_counts_df"].select_dtypes(['number']))
@@ -675,8 +659,7 @@ def main():
             kwd = {"pval": args.p_value}
         elif plot == 'sample_avg_scatter_by_dge_class':
             func = scatter_by_dge_class
-            arg = (inputs["norm_counts_avg_df"], inputs["de_table_df"], inputs["feat_classes_df"],
-                   args.out_prefix, inputs["avg_view_lims"])
+            arg = (inputs["norm_counts_avg_df"], inputs["de_table_df"], args.out_prefix, inputs["avg_view_lims"])
             kwd = {"pval": args.p_value, "include": args.classes_include, "exclude": args.classes_exclude}
         else:
             print('Plot type %s not recognized, please check the -p/--plot arguments' % plot)
