@@ -368,9 +368,11 @@ def filter_dge_classes(count_df: pd.DataFrame, dges: pd.DataFrame, include: Iter
         raise ValueError("Include/exclude filters are mutually exclusive.")
 
     if include is not None:
-        mask = count_df.index.isin(include, level="Classifier")
+        include_lc = [cls.lower() for cls in include]
+        mask = count_df.index.get_level_values('Classifier').str.lower().isin(include_lc)
     elif exclude is not None:
-        mask = ~count_df.index.isin(exclude, level="Classifier")
+        exclude_lc = [cls.lower() for cls in exclude]
+        mask = ~count_df.index.get_level_values('Classifier').str.lower().isin(exclude_lc)
     else:
         mask = None  # to appease linter
 
