@@ -14,7 +14,7 @@ import sys
 import re
 
 from collections import defaultdict
-from typing import Dict, Union, Tuple, DefaultDict
+from typing import Dict, Union, Tuple, DefaultDict, Iterable
 from pkg_resources import resource_filename
 
 from tiny.rna.plotterlib import plotterlib
@@ -348,18 +348,20 @@ def load_dge_tables(comparisons: list, class_fillna: str) -> pd.DataFrame:
     return de_table
 
 
-def get_class_group_filter(include=None, exclude=None):
-    if include and exclude:
-        raise ValueError("Include/exclude filters are mutually exclusive.")
-    elif include is not None:
-        return lambda x: x[0] in include
-    elif exclude is not None:
-        return lambda x: x[0] not in exclude
-    else:
-        return lambda _: True
+def filter_dge_classes(count_df: pd.DataFrame, dges: pd.DataFrame, include: Iterable = None, exclude: Iterable = None):
+    """Filters features by classification in counts and DGE tables.
+    Arguments `include` and `exclude` are mutually exclusive; providing both
+    arguments will result in an error.
 
+    Args:
+        count_df: A dataframe with an index comprised of (feature ID, classifier)
+        dges: A dataframe with an index comprised of (feature ID, classifier)
+        include: An iterable of classifiers to allow
+        exclude: An iterable of classifiers to exclude
 
-def filter_dge_classes(count_df, dges, include=None, exclude=None):
+    Returns: A filtered counts_avg_df and a filtered dge table
+    """
+
     if not (include or exclude):
         return count_df, dges
     elif include and exclude:
@@ -369,23 +371,28 @@ def filter_dge_classes(count_df, dges, include=None, exclude=None):
         mask = count_df.index.isin(include, level="Classifier")
     elif exclude is not None:
         mask = ~count_df.index.isin(exclude, level="Classifier")
+    else:
+        mask = None  # to appease linter
 
     return count_df[mask], dges[mask]
 
 
 def scatter_by_dge_class(count_df, dges, classes, output_prefix, view_lims, include=None, exclude=None, pval=0.05):
     """Creates PDFs of all pairwise comparison scatter plots with differentially
-    expressed genes colored by class
+    expressed features colored by class. Counts for features with P value >= `pval`
+    will be assigned the color grey.
 
     Args:
-        count_df: A dataframe of counts per feature with multiindex (feature ID, classification)
-        dges: A dataframe of differential gene table output to highlight
-        classes: A multiindex of (feature ID, classification)
+        counts_avg_df: A dataframe of normalized counts per multiindex (feature ID, classification) that
+            have been averaged across replicates within each condition.
+        dges: A differential gene expression dataframe with multiindex (feature ID, classification),
+            and columns containing adjusted P values for each pairwise comparison. Each column should be
+            labeled as "conditionA_vs_conditionB" where conditionB is the untreated condition.
         view_lims: A tuple of (min, max) data bounds for the plot view
         include: A list of classes to plot, if present (default: all classes)
         exclude: A list of classes to omit from plots (default: no classes)
         output_prefix: A string to use as a prefix for saving files
-        pval: The pvalue threshold for determining the outgroup
+        pval: The P value threshold for determining the outgroup
     """
 
     count_df, dges = filter_dge_classes(count_df, dges, include, exclude)
@@ -396,8 +403,6 @@ def scatter_by_dge_class(count_df, dges, classes, output_prefix, view_lims, incl
     for pair in dges:
         p1, p2 = pair.split("_vs_")
         dge_classes = dges[dges[pair] < pval].groupby(level=1).groups
-        # dge_include = dict(filter(class_filter, dge_classes.items()))
-        # dge_exclude = dict(dge_classes.items() - dge_include.items())
 
         labels, grp_args = zip(*dge_classes.items()) if dge_classes else ((), ())
         sscat = aqplt.scatter_grouped(count_df.loc[:, p1], count_df.loc[:, p2], *grp_args,
@@ -414,11 +419,15 @@ def scatter_by_dge_class(count_df, dges, classes, output_prefix, view_lims, incl
 
 def scatter_by_dge(count_df, dges, output_prefix, view_lims, pval=0.05):
     """Creates PDFs of all pairwise comparison scatter plots with differentially
-    expressed genes highlighted
+    expressed features highlighted. Counts for features with P value >= `pval`
+    will be assigned the color grey.
 
     Args:
-        count_df: A dataframe of normalized counts per feature with multiindex (feature ID, classifier)
-        dges: A dataframe of differential gene table output to highlight
+        counts_avg_df: A dataframe of normalized counts per multiindex (feature ID, classification) that
+            have been averaged across replicates within each condition.
+        dges: A differential gene expression dataframe with multiindex (feature ID, classification),
+            and columns containing adjusted P values for each pairwise comparison. Each column should be
+            labeled as "conditionA_vs_conditionB" where conditionB is the untreated condition.
         view_lims: A tuple of (min, max) data bounds for the plot view
         output_prefix: A string to use as a prefix for saving files
         pval: The pvalue threshold for determining the outgroup
