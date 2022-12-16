@@ -20,8 +20,8 @@ from pkg_resources import resource_filename
 from tiny.rna.plotterlib import plotterlib
 from tiny.rna.util import report_execution_time, make_filename, SmartFormatter, timestamp_format, add_transparent_help
 
-aqplt: plotterlib
-RASTER: bool
+aqplt: plotterlib = None
+RASTER: bool = True
 
 
 def get_args():
@@ -396,6 +396,8 @@ def scatter_by_dge_class(counts_avg_df, dges, output_prefix, view_lims, include=
     """
 
     counts_avg_df, dges = filter_dge_classes(counts_avg_df, dges, include, exclude)
+    if counts_avg_df.empty or dges.empty: return
+
     uniq_classes = pd.unique(counts_avg_df.index.get_level_values(1))
     class_colors = aqplt.assign_class_colors(uniq_classes)
     aqplt.set_dge_class_legend_style()
@@ -433,11 +435,14 @@ def scatter_by_dge(counts_avg_df, dges, output_prefix, view_lims, pval=0.05):
         pval: The pvalue threshold for determining the outgroup
     """
 
+    if counts_avg_df.empty or dges.empty:
+        return
+
     for pair in dges:
-        grp_args = list(dges.index[dges[pair] < pval])
+        grp_args = dges.index[dges[pair] < pval]
         ut, tr = pair.split("_vs_")  # untreated, treated
 
-        labels = ['p < %g' % pval] if grp_args else []
+        labels = ['p < %g' % pval] if not grp_args.empty else []
         colors = aqplt.assign_class_colors(labels)
         sscat = aqplt.scatter_grouped(counts_avg_df.loc[:, ut], counts_avg_df.loc[:, tr], grp_args,
                                       colors=colors, alpha=0.5, pval=pval, view_lims=view_lims, labels=labels,
