@@ -377,7 +377,7 @@ def filter_dge_classes(count_df: pd.DataFrame, dges: pd.DataFrame, include: Iter
     return count_df[mask], dges[mask]
 
 
-def scatter_by_dge_class(count_df, dges, classes, output_prefix, view_lims, include=None, exclude=None, pval=0.05):
+def scatter_by_dge_class(counts_avg_df, dges, output_prefix, view_lims, include=None, exclude=None, pval=0.05):
     """Creates PDFs of all pairwise comparison scatter plots with differentially
     expressed features colored by class. Counts for features with P value >= `pval`
     will be assigned the color grey.
@@ -395,29 +395,29 @@ def scatter_by_dge_class(count_df, dges, classes, output_prefix, view_lims, incl
         pval: The P value threshold for determining the outgroup
     """
 
-    count_df, dges = filter_dge_classes(count_df, dges, include, exclude)
-    uniq_classes = pd.unique(classes.get_level_values(1))
+    counts_avg_df, dges = filter_dge_classes(counts_avg_df, dges, include, exclude)
+    uniq_classes = pd.unique(counts_avg_df.index.get_level_values(1))
     class_colors = aqplt.assign_class_colors(uniq_classes)
     aqplt.set_dge_class_legend_style()
 
     for pair in dges:
-        p1, p2 = pair.split("_vs_")
+        ut, tr = pair.split("_vs_")  # untreated, treated
         dge_classes = dges[dges[pair] < pval].groupby(level=1).groups
 
         labels, grp_args = zip(*dge_classes.items()) if dge_classes else ((), ())
-        sscat = aqplt.scatter_grouped(count_df.loc[:, p1], count_df.loc[:, p2], *grp_args,
+        sscat = aqplt.scatter_grouped(counts_avg_df.loc[:, ut], counts_avg_df.loc[:, tr], *grp_args,
                                       colors=class_colors, pval=pval, view_lims=view_lims, labels=labels,
                                       rasterized=RASTER)
 
-        sscat.set_title('%s vs %s' % (p1, p2))
-        sscat.set_xlabel("Log$_{2}$ normalized reads in " + p1)
-        sscat.set_ylabel("Log$_{2}$ normalized reads in " + p2)
+        sscat.set_title('%s vs %s' % (tr, ut))
+        sscat.set_xlabel("Log$_{2}$ normalized reads in " + ut)
+        sscat.set_ylabel("Log$_{2}$ normalized reads in " + tr)
         sscat.get_legend().set_bbox_to_anchor((1, 1))
         pdf_name = make_filename([output_prefix, pair, 'scatter_by_dge_class'], ext='.pdf')
         save_plot(sscat, "scatter_by_dge_class", pdf_name)
 
 
-def scatter_by_dge(count_df, dges, output_prefix, view_lims, pval=0.05):
+def scatter_by_dge(counts_avg_df, dges, output_prefix, view_lims, pval=0.05):
     """Creates PDFs of all pairwise comparison scatter plots with differentially
     expressed features highlighted. Counts for features with P value >= `pval`
     will be assigned the color grey.
@@ -435,17 +435,17 @@ def scatter_by_dge(count_df, dges, output_prefix, view_lims, pval=0.05):
 
     for pair in dges:
         grp_args = list(dges.index[dges[pair] < pval])
-        p1, p2 = pair.split("_vs_")
+        ut, tr = pair.split("_vs_")  # untreated, treated
 
         labels = ['p < %g' % pval] if grp_args else []
         colors = aqplt.assign_class_colors(labels)
-        sscat = aqplt.scatter_grouped(count_df.loc[:, p1], count_df.loc[:, p2], grp_args,
+        sscat = aqplt.scatter_grouped(counts_avg_df.loc[:, ut], counts_avg_df.loc[:, tr], grp_args,
                                       colors=colors, alpha=0.5, pval=pval, view_lims=view_lims, labels=labels,
                                       rasterized=RASTER)
 
-        sscat.set_title('%s vs %s' % (p1, p2))
-        sscat.set_xlabel("Log$_{2}$ normalized reads in " + p1)
-        sscat.set_ylabel("Log$_{2}$ normalized reads in " + p2)
+        sscat.set_title('%s vs %s' % (tr, ut))
+        sscat.set_xlabel("Log$_{2}$ normalized reads in " + ut)
+        sscat.set_ylabel("Log$_{2}$ normalized reads in " + tr)
         pdf_name = make_filename([output_prefix, pair, 'scatter_by_dge'], ext='.pdf')
         save_plot(sscat, 'scatter_by_dge', pdf_name)
 
