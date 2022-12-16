@@ -1,8 +1,6 @@
-import sys
 import unittest
-from unittest.mock import patch, call
+from unittest.mock import patch
 
-import numpy as np
 import pandas as pd
 from pandas.testing import assert_frame_equal
 from pkg_resources import resource_filename
@@ -16,10 +14,31 @@ class MyTestCase(unittest.TestCase):
     def setUpClass(cls):
         cls.stylesheet = resource_filename('tiny', 'templates/tinyrna-light.mplstyle')
 
+    #====== HELPER METHODS ===================================================
+
     def get_label_width_pairs_from_annotations_mock(self, annotations):
         bar_widths = [i[1]['xycoords'].get_width() for i in annotations.call_args_list]
         bar_labels = [i[0][0] for i in annotations.call_args_list]
         return list(zip(bar_labels, bar_widths))
+
+    def aqplt_mock(self):
+        return patch(
+            'tiny.rna.plotter.aqplt',
+            lib.plotterlib(resource_filename('tiny', 'templates/tinyrna-light.mplstyle'))
+        )
+
+    def get_empty_scatter_dge_dataframes(self):
+        counts = pd.DataFrame(
+            columns=['Feature ID', 'Classifier', 'ConditionA', 'ConditionB']
+        ).set_index(['Feature ID', 'Classifier'])
+
+        dge = pd.DataFrame(
+            columns=['Feature ID', 'Classifier', 'ConditionA_vs_ConditionB']
+        ).set_index(['Feature ID', 'Classifier'])
+
+        return counts, dge
+
+    #====== TESTS =============================================================
 
     """Are class counts properly calculated?"""
 
@@ -127,6 +146,37 @@ class MyTestCase(unittest.TestCase):
         }, **df_kwargs)
 
         assert_frame_equal(actual_below_thresh, expected_below_thresh, check_dtype=False, check_like=True)
+
+    """Does scatter_by_dge do the right thing when DataFrame inputs are empty?"""
+
+    def test_scatter_by_dge_empty_dataframes(self):
+        counts, dge = self.get_empty_scatter_dge_dataframes()
+
+        with patch('tiny.rna.plotter.save_plot') as save_plot, self.aqplt_mock():
+            plotter.scatter_by_dge(counts, dge, 'dummy_prefix', (0, 0))
+
+        save_plot.assert_not_called()
+
+    """Does scatter_by_dge_class do the right thing when DataFrame inputs are empty?"""
+
+    def test_scatter_by_dge_class_empty_dataframes(self):
+        counts, dge = self.get_empty_scatter_dge_dataframes()
+
+        with patch('tiny.rna.plotter.save_plot') as save_plot, self.aqplt_mock():
+            plotter.scatter_by_dge_class(counts, dge, 'dummy_prefix', (0, 0))
+
+        save_plot.assert_not_called()
+
+    """Does scatter_by_dge_class properly handle empty inclusive filter lists?"""
+
+    def test_scatter_dge_class_empty_inclusive_filter(self):
+        counts, dge = self.get_empty_scatter_dge_dataframes()
+
+        with patch('tiny.rna.plotter.plotterlib.scatter_grouped') as scatter, self.aqplt_mock():
+            plotter.scatter_by_dge_class(counts, dge, 'dummy_prefix', (0, 0), include=[])
+            scatter.assert_not_called()
+            plotter.scatter_by_dge_class(counts, dge, 'dummy_prefix', (0, 0), exclude=[])
+            scatter.assert_not_called()
 
 
 if __name__ == '__main__':
