@@ -88,6 +88,22 @@ inputs:
       prefix: -una
     doc: 'Use this label in class-related plots for unassigned counts'
 
+  classes_include:
+    type: string[]?
+    inputBinding:
+      prefix: -ic
+    doc: \
+      'Only include these classes, if present, in class scatter '
+      'plots (applies regardless of P value)'
+
+  classes_exclude:
+    type: string[]?
+    inputBinding:
+      prefix: -ec
+    doc: \
+      'Omit these classes, if present, from class scatter plots '
+      '(applies regardless of P value)'
+
   out_prefix:
     type: string?
     inputBinding:

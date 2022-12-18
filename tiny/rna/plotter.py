@@ -14,14 +14,14 @@ import sys
 import re
 
 from collections import defaultdict
-from typing import Dict, Union, Tuple, DefaultDict
+from typing import Dict, Union, Tuple, DefaultDict, Iterable
 from pkg_resources import resource_filename
 
 from tiny.rna.plotterlib import plotterlib
 from tiny.rna.util import report_execution_time, make_filename, SmartFormatter, timestamp_format, add_transparent_help
 
-aqplt: plotterlib
-RASTER: bool
+aqplt: plotterlib = None
+RASTER: bool = True
 
 
 def get_args():
@@ -70,6 +70,15 @@ def get_args():
     optional_args.add_argument('-unk', '--unknown-class', metavar='LABEL', default='_UNKNOWN_',
                                help='Use this label in class-related plots for counts which were '
                                     'assigned by rules lacking a "Classify as..." value')
+
+    # Class filtering options
+    mutex_class_filter = optional_args.add_mutually_exclusive_group()
+    mutex_class_filter.add_argument('-ic', '--classes-include', metavar='CLASS', nargs='+', type=str,
+                                    help='Only include these classes, if present, in class scatter '
+                                         'plots (applies regardless of P value)')
+    mutex_class_filter.add_argument('-ec', '--classes-exclude', metavar='CLASS', nargs='+', type=str,
+                                    help='Omit these classes, if present, from class scatter plots '
+                                         '(applies regardless of P value)')
 
     # Required arguments
     required_args.add_argument('-p', '--plots', metavar='PLOT', required=True, nargs='+',
@@ -339,56 +348,113 @@ def load_dge_tables(comparisons: list, class_fillna: str) -> pd.DataFrame:
     return de_table
 
 
-def scatter_dges(count_df, dges, output_prefix, view_lims, classes=None, pval=0.05):
-    """Creates PDFs of all pairwise comparison scatter plots from a count table.
-    Can highlight classes and/or differentially expressed genes as different colors.
+def filter_dge_classes(count_df: pd.DataFrame, dges: pd.DataFrame, include: Iterable = None, exclude: Iterable = None):
+    """Filters features by classification in counts and DGE tables.
+    Arguments `include` and `exclude` are mutually exclusive; providing both
+    arguments will result in an error.
 
     Args:
-        count_df: A dataframe of counts per feature with multiindex (feature ID, classifier)
-        dges: A dataframe of differential gene table output to highlight
+        count_df: A dataframe with an index comprised of (feature ID, classifier)
+        dges: A dataframe with an index comprised of (feature ID, classifier)
+        include: An iterable of classifiers to allow
+        exclude: An iterable of classifiers to exclude
+
+    Returns: A filtered counts_avg_df and a filtered dge table
+    """
+
+    if not (include or exclude):
+        return count_df, dges
+    elif include and exclude:
+        raise ValueError("Include/exclude filters are mutually exclusive.")
+
+    if include is not None:
+        include_lc = [cls.lower() for cls in include]
+        mask = count_df.index.get_level_values('Classifier').str.lower().isin(include_lc)
+    elif exclude is not None:
+        exclude_lc = [cls.lower() for cls in exclude]
+        mask = ~count_df.index.get_level_values('Classifier').str.lower().isin(exclude_lc)
+    else:
+        mask = None  # to appease linter
+
+    return count_df[mask], dges[mask]
+
+
+def scatter_by_dge_class(counts_avg_df, dges, output_prefix, view_lims, include=None, exclude=None, pval=0.05):
+    """Creates PDFs of all pairwise comparison scatter plots with differentially
+    expressed features colored by class. Counts for features with P value >= `pval`
+    will be assigned the color grey.
+
+    Args:
+        counts_avg_df: A dataframe of normalized counts per multiindex (feature ID, classification) that
+            have been averaged across replicates within each condition.
+        dges: A differential gene expression dataframe with multiindex (feature ID, classification),
+            and columns containing adjusted P values for each pairwise comparison. Each column should be
+            labeled as "conditionA_vs_conditionB" where conditionB is the untreated condition.
+        view_lims: A tuple of (min, max) data bounds for the plot view
+        include: A list of classes to plot, if present (default: all classes)
+        exclude: A list of classes to omit from plots (default: no classes)
+        output_prefix: A string to use as a prefix for saving files
+        pval: The P value threshold for determining the outgroup
+    """
+
+    counts_avg_df, dges = filter_dge_classes(counts_avg_df, dges, include, exclude)
+    if counts_avg_df.empty or dges.empty: return
+
+    uniq_classes = pd.unique(counts_avg_df.index.get_level_values(1))
+    class_colors = aqplt.assign_class_colors(uniq_classes)
+    aqplt.set_dge_class_legend_style()
+
+    for pair in dges:
+        ut, tr = pair.split("_vs_")  # untreated, treated
+        dge_classes = dges[dges[pair] < pval].groupby(level=1).groups
+
+        labels, grp_args = zip(*dge_classes.items()) if dge_classes else ((), ())
+        sscat = aqplt.scatter_grouped(counts_avg_df.loc[:, ut], counts_avg_df.loc[:, tr], *grp_args,
+                                      colors=class_colors, pval=pval, view_lims=view_lims, labels=labels,
+                                      rasterized=RASTER)
+
+        sscat.set_title('%s vs %s' % (tr, ut))
+        sscat.set_xlabel("Log$_{2}$ normalized reads in " + ut)
+        sscat.set_ylabel("Log$_{2}$ normalized reads in " + tr)
+        sscat.get_legend().set_bbox_to_anchor((1, 1))
+        pdf_name = make_filename([output_prefix, pair, 'scatter_by_dge_class'], ext='.pdf')
+        save_plot(sscat, "scatter_by_dge_class", pdf_name)
+
+
+def scatter_by_dge(counts_avg_df, dges, output_prefix, view_lims, pval=0.05):
+    """Creates PDFs of all pairwise comparison scatter plots with differentially
+    expressed features highlighted. Counts for features with P value >= `pval`
+    will be assigned the color grey.
+
+    Args:
+        counts_avg_df: A dataframe of normalized counts per multiindex (feature ID, classification) that
+            have been averaged across replicates within each condition.
+        dges: A differential gene expression dataframe with multiindex (feature ID, classification),
+            and columns containing adjusted P values for each pairwise comparison. Each column should be
+            labeled as "conditionA_vs_conditionB" where conditionB is the untreated condition.
         view_lims: A tuple of (min, max) data bounds for the plot view
         output_prefix: A string to use as a prefix for saving files
-        classes: An optional feature-class multiindex. If provided, points are grouped by class
         pval: The pvalue threshold for determining the outgroup
     """
 
-    if classes is not None:
-        uniq_classes = pd.unique(classes.get_level_values(1))
-        class_colors = aqplt.assign_class_colors(uniq_classes)
-        aqplt.set_dge_class_legend_style()
+    if counts_avg_df.empty or dges.empty:
+        return
 
-        for pair in dges:
-            p1, p2 = pair.split("_vs_")
-            dge_dict = dges[dges[pair] < pval].groupby(level=1).groups
+    for pair in dges:
+        grp_args = dges.index[dges[pair] < pval]
+        ut, tr = pair.split("_vs_")  # untreated, treated
 
-            labels, grp_args = zip(*dge_dict.items()) if dge_dict else ((), ())
-            sscat = aqplt.scatter_grouped(count_df.loc[:, p1], count_df.loc[:, p2], *grp_args,
-                                          colors=class_colors, pval=pval, view_lims=view_lims, labels=labels,
-                                          rasterized=RASTER)
+        labels = ['p < %g' % pval] if not grp_args.empty else []
+        colors = aqplt.assign_class_colors(labels)
+        sscat = aqplt.scatter_grouped(counts_avg_df.loc[:, ut], counts_avg_df.loc[:, tr], grp_args,
+                                      colors=colors, alpha=0.5, pval=pval, view_lims=view_lims, labels=labels,
+                                      rasterized=RASTER)
 
-            sscat.set_title('%s vs %s' % (p1, p2))
-            sscat.set_xlabel("Log$_{2}$ normalized reads in " + p1)
-            sscat.set_ylabel("Log$_{2}$ normalized reads in " + p2)
-            sscat.get_legend().set_bbox_to_anchor((1, 1))
-            pdf_name = make_filename([output_prefix, pair, 'scatter_by_dge_class'], ext='.pdf')
-            save_plot(sscat, "scatter_by_dge_class", pdf_name)
-
-    else:
-        for pair in dges:
-            grp_args = list(dges.index[dges[pair] < pval])
-            p1, p2 = pair.split("_vs_")
-
-            labels = ['p < %g' % pval] if grp_args else []
-            colors = aqplt.assign_class_colors(labels)
-            sscat = aqplt.scatter_grouped(count_df.loc[:, p1], count_df.loc[:, p2], grp_args,
-                                          colors=colors, alpha=0.5, pval=pval, view_lims=view_lims, labels=labels,
-                                          rasterized=RASTER)
-
-            sscat.set_title('%s vs %s' % (p1, p2))
-            sscat.set_xlabel("Log$_{2}$ normalized reads in " + p1)
-            sscat.set_ylabel("Log$_{2}$ normalized reads in " + p2)
-            pdf_name = make_filename([output_prefix, pair, 'scatter_by_dge'], ext='.pdf')
-            save_plot(sscat, 'scatter_by_dge', pdf_name)
+        sscat.set_title('%s vs %s' % (tr, ut))
+        sscat.set_xlabel("Log$_{2}$ normalized reads in " + ut)
+        sscat.set_ylabel("Log$_{2}$ normalized reads in " + tr)
+        pdf_name = make_filename([output_prefix, pair, 'scatter_by_dge'], ext='.pdf')
+        save_plot(sscat, 'scatter_by_dge', pdf_name)
 
 
 def load_raw_counts(raw_counts_file: str, class_fillna: str) -> pd.DataFrame:
@@ -435,21 +501,6 @@ def set_counts_table_multiindex(counts: pd.DataFrame, fillna: str) -> pd.DataFra
 
     counts[level1] = counts[level1].fillna(fillna)
     return counts.set_index([level0, level1])
-
-
-def get_flat_classes(counts_df: pd.DataFrame) -> pd.Index:
-    """Features with multiple associated classes are returned in flattened form
-    with one class per entry, yielding multiple entries for these features. During
-    earlier versions this required some processing, but now we can simply return
-    the multiindex of the counts_df.
-
-    Args:
-        counts_df: A DataFrame with a multiindex of (feature ID, feature class)
-    Returns:
-        The counts_df multiindex
-    """
-
-    return counts_df.index
 
 
 def get_class_counts(raw_counts_df: pd.DataFrame) -> pd.DataFrame:
@@ -548,7 +599,7 @@ def setup(args: argparse.Namespace) -> dict:
              "de_table_df", "avg_view_lims"],
         'sample_avg_scatter_by_dge_class':
             ["norm_counts_df", "sample_rep_dict", "norm_counts_avg_df",
-             "feat_classes_df", "de_table_df", "avg_view_lims"]
+             "de_table_df", "avg_view_lims"]
     }
 
     # These are frozen function pointers; both the function and its
@@ -563,7 +614,6 @@ def setup(args: argparse.Namespace) -> dict:
         'de_table_df': lambda: load_dge_tables(args.dge_tables, args.unknown_class),
         'sample_rep_dict': lambda: get_sample_rep_dict(fetched["norm_counts_df"]),
         'norm_counts_avg_df': lambda: get_sample_averages(fetched["norm_counts_df"], fetched["sample_rep_dict"]),
-        'feat_classes_df': lambda: get_flat_classes(fetched["norm_counts_df"]),
         'class_counts_df': lambda: get_class_counts(fetched["raw_counts_df"]),
         'avg_view_lims': lambda: aqplt.get_scatter_view_lims(fetched["norm_counts_avg_df"]),
         'norm_view_lims': lambda: aqplt.get_scatter_view_lims(fetched["norm_counts_df"].select_dtypes(['number']))
@@ -611,13 +661,13 @@ def main():
             arg = (inputs["norm_counts_df"], inputs["sample_rep_dict"], args.out_prefix, inputs["norm_view_lims"])
             kwd = {}
         elif plot == 'sample_avg_scatter_by_dge':
-            func = scatter_dges
+            func = scatter_by_dge
             arg = (inputs["norm_counts_avg_df"], inputs["de_table_df"], args.out_prefix, inputs["avg_view_lims"])
             kwd = {"pval": args.p_value}
         elif plot == 'sample_avg_scatter_by_dge_class':
-            func = scatter_dges
+            func = scatter_by_dge_class
             arg = (inputs["norm_counts_avg_df"], inputs["de_table_df"], args.out_prefix, inputs["avg_view_lims"])
-            kwd = {"classes": inputs["feat_classes_df"], "pval": args.p_value}
+            kwd = {"pval": args.p_value, "include": args.classes_include, "exclude": args.classes_exclude}
         else:
             print('Plot type %s not recognized, please check the -p/--plot arguments' % plot)
             continue

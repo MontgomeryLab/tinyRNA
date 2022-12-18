@@ -243,13 +243,22 @@ The min and/or max bounds for plotted lengths can be set with this option. See [
 
 The labels that should be used for special groups in `class_charts` and `sample_avg_scatter_by_dge_class` plots. The "unknown" class group represents counts which were assigned by a Features Sheet rule which lacked a "Classify as..." label. The "unassigned" class group represents counts which weren't assigned to a feature.
 
+### Filtering Classes in DGE Class Scatter Plots
+| Run Config Key             | Commandline Argument |
+|----------------------------|----------------------|
+| plot_class_scatter_filter: | `--classes-include`  |
+|                            | `--classes-exclude`  |
+
+If an inclusive filter is used, then only the classes in the list, if present, are shown. If an exclusive filter is used, then the listed classes are omitted from the plot. This behavior extends to features whose P value is above threshold. In the Run Config, the filter type can be set with the `style:` sub-key, and the desired list of classes for the filter can be provided between the brackets of the `classes:` sub-key
+
 ### Full tiny-plot Help String
 ```
 tiny-plot [-rc RAW_COUNTS] [-nc NORM_COUNTS] [-uc RULE_COUNTS]
           [-ss STAT] [-dge COMPARISON [COMPARISON ...]]
           [-len 5P_LEN [5P_LEN ...]] [-o PREFIX] [-pv VALUE]
           [-s MPLSTYLE] [-v] [-ldi VALUE] [-lda VALUE] [-una LABEL]
-          [-unk LABEL] -p PLOT [PLOT ...]
+          [-unk LABEL] [-ic CLASS [CLASS ...] | -ec CLASS [CLASS ...]]
+          -p PLOT [PLOT ...]
 
 This script produces basic static plots for publication as part of the tinyRNA
 workflow.
@@ -267,7 +276,7 @@ Required arguments:
                         • rule_charts: A barchart showing percentages of
                           counts by matched rule.
                         • class_charts: A barchart showing percentages of
-                          counts per Classification.
+                          counts per classification.
                         • replicate_scatter: A scatter plot comparing
                           replicates for all count files given.
                         • sample_avg_scatter_by_dge: A scatter plot comparing
@@ -315,4 +324,10 @@ Optional arguments:
                         Use this label in class-related plots for counts which
                         were assigned by rules lacking a "Classify as..."
                         value
+  -ic CLASS [CLASS ...], --classes-include CLASS [CLASS ...]
+                        Only include these classes, if present, in class
+                        scatter plots (applies regardless of P value)
+  -ec CLASS [CLASS ...], --classes-exclude CLASS [CLASS ...]
+                        Omit these classes, if present, from class scatter
+                        plots (applies regardless of P value)
 ```

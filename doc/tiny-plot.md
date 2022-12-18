@@ -109,7 +109,7 @@ The P value cutoff can be changed using the [Run Config or commandline arguments
 
 
 ## sample_avg_scatter_by_dge_class
-The previous plot type can be extended to group and color differentially expressed features by class. Classes are sorted by abundance before plotting to maximize representation.
+The previous plot type can be extended to group and color differentially expressed features by class. Classes are sorted by abundance before plotting to maximize representation. You can also filter the classes displayed using [plot_class_scatter_filter](Parameters.md#filtering-classes-in-dge-class-scatter-plots)
 
 <p float="left" align="center">
     <img src="../images/plots/scatter_dge_class.jpg" width="100%" alt="sample_avg_scatter_by_dge_class"/>

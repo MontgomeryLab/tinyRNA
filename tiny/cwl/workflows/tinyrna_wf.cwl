@@ -103,6 +103,8 @@ inputs:
   plot_pval: float?
   plot_unknown_class: string?
   plot_unassigned_class: string?
+  plot_class_scatter_filter_include: string[]?
+  plot_class_scatter_filter_exclude: string[]?
 
   # output directory names
   dir_name_bt_build: string
@@ -258,6 +260,8 @@ steps:
           $(self.length ? self[0] : null)
       unknown_class_label: plot_unknown_class
       unassigned_class_label: plot_unassigned_class
+      classes_include: plot_class_scatter_filter_include
+      classes_exclude: plot_class_scatter_filter_exclude
       dge_pval: plot_pval
       style_sheet: plot_style_sheet
       out_prefix: run_name
