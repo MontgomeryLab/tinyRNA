@@ -36,7 +36,7 @@ from abc import ABC, abstractmethod
 
 class plotterlib:
 
-    def __init__(self, user_style_sheet):
+    def __init__(self, user_style_sheet, **prefs):
 
         self.debug = self.is_debug_mode()
         if self.debug:
@@ -46,6 +46,7 @@ class plotterlib:
         # Set global plot style once
         plt.style.use(user_style_sheet)
 
+        self.prefs = prefs
         self.subplot_cache = {}
         self.dge_scatter_tick_cache = {}
 
@@ -457,6 +458,8 @@ class plotterlib:
     def cache_ticks(self, axis: mpl.axis.Axis, name: str):
         """Cache major and minor tick objects, which contain expensive data"""
 
+        if not self.prefs['cache_scatter_ticks']: return
+
         for type in ["major", "minor"]:
             self.dge_scatter_tick_cache[f"{name}_{type}_loc"] = getattr(axis, type).locator
             self.dge_scatter_tick_cache[f"{name}_{type}_tix"] = getattr(axis, f"{type}Ticks")
@@ -620,6 +623,9 @@ class plotterlib:
 class CacheBase(ABC):
     @abstractmethod
     def get(self): pass
+
+    def __del__(self):
+        plt.close(self.fig)
 
 
 class ClassChartCache(CacheBase):
