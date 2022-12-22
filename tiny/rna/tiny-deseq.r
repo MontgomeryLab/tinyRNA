@@ -182,7 +182,7 @@ if (has_control){
   r_safe_control_name <- make.names(control_grp)
   all_comparisons <- as.matrix(expand.grid(
     r_safe_control_name,
-    unique(names(sampleConditions[sampleConditions != r_safe_control_name]))
+    unique(names(sampleConditions[sampleConditions != control_grp]))
   ))
 } else {
   # Comparison is all combinations of conditions
