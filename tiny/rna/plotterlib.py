@@ -458,11 +458,10 @@ class plotterlib:
     def cache_ticks(self, axis: mpl.axis.Axis, name: str):
         """Cache major and minor tick objects, which contain expensive data"""
 
-        if not self.prefs['cache_scatter_ticks']: return
-
-        for type in ["major", "minor"]:
-            self.dge_scatter_tick_cache[f"{name}_{type}_loc"] = getattr(axis, type).locator
-            self.dge_scatter_tick_cache[f"{name}_{type}_tix"] = getattr(axis, f"{type}Ticks")
+        if self.prefs.get('cache_scatter_ticks', True):
+            for type in ["major", "minor"]:
+                self.dge_scatter_tick_cache[f"{name}_{type}_loc"] = getattr(axis, type).locator
+                self.dge_scatter_tick_cache[f"{name}_{type}_tix"] = getattr(axis, f"{type}Ticks")
 
     def restore_ticks(self, ax: plt.Axes, axis: str):
         """Restore tick objects from previous render"""
