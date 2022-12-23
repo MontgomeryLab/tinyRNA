@@ -8,12 +8,12 @@ import os
 import re
 
 from pkg_resources import resource_filename
-from collections import Counter, OrderedDict
+from collections import Counter, OrderedDict, defaultdict
 from typing import Union, Any, Optional, List
 from glob import glob
 
 from tiny.rna.counter.validation import GFFValidator
-from tiny.rna.util import get_timestamp
+from tiny.rna.util import get_timestamp, get_r_safename
 
 
 class ConfigBase:
@@ -586,6 +586,8 @@ class SamplesSheet:
 
     @staticmethod
     def validate_deseq_compatibility(sample_groups: Counter) -> bool:
+        SamplesSheet.validate_r_safe_sample_groups(sample_groups)
+
         total_samples = sum(sample_groups.values())
         total_coefficients = len(sample_groups)
         degrees_of_freedom = total_samples - total_coefficients
@@ -597,6 +599,21 @@ class SamplesSheet:
             return False
         else:
             return True
+
+    @staticmethod
+    def validate_r_safe_sample_groups(sample_groups: Counter):
+        """Determine the "syntactically valid" translation of each group name to ensure
+        that two groups won't share the same name once translated in tiny-deseq.r"""
+
+        safe_names = defaultdict(list)
+        for group in sample_groups:
+            safe_names[get_r_safename(group)].append(group)
+
+        collisions = [' ≈ '.join(cluster) for cluster in safe_names.values() if len(cluster) > 1]
+
+        assert len(collisions) == 0, \
+            "The following group names are too similar and will cause a namespace collision in R:\n" \
+            + '\n'.join(collisions)
 
     @staticmethod
     def get_sample_basename(filename):

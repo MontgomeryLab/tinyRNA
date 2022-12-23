@@ -95,17 +95,33 @@ def make_filename(args, ext='.csv'):
     return '_'.join([str(chnk) for chnk in args if chnk is not None]) + ext
 
 
+r_reserved_keywords = [
+    "if", "else", "repeat", "while", "function",
+    "for", "in", "next", "break", "TRUE", "FALSE",
+    "NULL", "Inf", "NaN", "NA", "NA_integer_",
+    "NA_real_", "NA_complex_", "NA_character_"]
+
+
 def get_r_safename(name: str) -> str:
     """Converts a string to a syntactically valid R name
 
-    This can be used to match names along axes of DataFrames produced by R,
-    assuming that the R script takes no measures to preserve names itself.
+    This can be used as the Python equivalent of R's make.names() function.
     https://stat.ethz.ch/R-manual/R-devel/library/base/html/make.names.html
     """
 
+    # If the name starts with a non-letter character or a dot
+    # followed by a number, the character "X" is prepended
     leading_char = lambda x: re.sub(r"^(?=[^a-zA-Z.]+|\.\d)", "X", x)
-    special_char = lambda x: re.sub(r"[^a-zA-Z0-9_.]", ".", x)
-    return special_char(leading_char(name))
+
+    # If the name contains characters that aren't (locale based) letters,
+    # numbers, dot, or underscore, the characters are replaced with a dot
+    special_char = lambda x: re.sub(r"[^\w.]", ".", x)
+
+    # If the name contains R keywords, a dot is appended to the keyword
+    reserved = "|".join(r_reserved_keywords)
+    reserved_wrd = lambda x: re.sub(fr"^({reserved})$", r'\1.', x)
+
+    return reserved_wrd(special_char(leading_char(name)))
 
 
 class ReadOnlyDict(dict):
