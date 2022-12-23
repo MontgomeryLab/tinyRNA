@@ -1,14 +1,16 @@
+import sys
 import unittest
-from unittest.mock import patch
-
+import numpy as np
 import pandas as pd
+
+from unittest.mock import patch
 from pandas.testing import assert_frame_equal
 from pkg_resources import resource_filename
 
 import tiny.rna.plotter as plotter
 import tiny.rna.plotterlib as lib
 
-class MyTestCase(unittest.TestCase):
+class PlotterTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
@@ -24,7 +26,10 @@ class MyTestCase(unittest.TestCase):
     def aqplt_mock(self):
         return patch(
             'tiny.rna.plotter.aqplt',
-            lib.plotterlib(resource_filename('tiny', 'templates/tinyrna-light.mplstyle'))
+            lib.plotterlib(
+                resource_filename('tiny', 'templates/tinyrna-light.mplstyle'),
+                **{'cache_scatter_ticks': False}
+            )
         )
 
     def get_empty_scatter_dge_dataframes(self):
@@ -177,6 +182,32 @@ class MyTestCase(unittest.TestCase):
             scatter.assert_not_called()
             plotter.scatter_by_dge_class(counts, dge, 'dummy_prefix', (0, 0), exclude=[])
             scatter.assert_not_called()
+
+    """Do scatter plots show the appropriate major ticks through a range of view limits?"""
+
+    @unittest.skip("Long-running test, execute manually if needed")
+    def test_scatter_major_ticks(self):
+        counts, dge = self.get_empty_scatter_dge_dataframes()
+        min_non_zero = 1 / sys.maxsize  # avoid zero on log scale
+        fps = 3
+
+        counts.loc[('featA', 'featClassA'), 'ConditionA'] = min_non_zero
+        counts.loc[('featA', 'featClassA'), 'ConditionB'] = min_non_zero
+        dge.loc[('featA', 'featClassA'), 'ConditionA_vs_ConditionB'] = 0
+
+        for x in range(0, 121):
+            with self.aqplt_mock():
+                x /= fps  # Range only produces integer values, but we want fractional powers of 2 in the demo
+
+                # Rolling view limit window
+                lo_bound = 2**(-6 + (x/2))  # Walk lower bound slowly forward from 2 decimal log2 minimum
+                hi_bound = 2**x + x         # Walk upper bound forward much faster
+                vlim = np.array((lo_bound, hi_bound))
+
+                # title = f"Range: 2^{int(np.log2(view_lims[0]))} .. 2^{np.log2(view_lims[1]):.1f}"
+                # ^ must be set within scatter_* functions in plotter.py, not worth refactoring to support
+                plotter.scatter_by_dge(counts, dge, f'lim_{x:.2f}', vlim)
+
 
 
 if __name__ == '__main__':

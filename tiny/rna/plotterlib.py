@@ -36,7 +36,7 @@ from abc import ABC, abstractmethod
 
 class plotterlib:
 
-    def __init__(self, user_style_sheet):
+    def __init__(self, user_style_sheet, **prefs):
 
         self.debug = self.is_debug_mode()
         if self.debug:
@@ -46,6 +46,7 @@ class plotterlib:
         # Set global plot style once
         plt.style.use(user_style_sheet)
 
+        self.prefs = prefs
         self.subplot_cache = {}
         self.dge_scatter_tick_cache = {}
 
@@ -383,8 +384,8 @@ class plotterlib:
         """Produces a list of locations for major ticks for the given view limit"""
 
         ax_min, ax_max = min(view_lims), max(view_lims)
-        floor, ceil, log2 = math.floor, math.ceil, np.log2
-        locs = [2 ** x for x in range(floor(log2(ax_min)), ceil(log2(ax_max)))]
+        ceil, log2 = math.ceil, np.log2
+        locs = [2 ** x for x in range(ceil(log2(ax_min)), ceil(log2(ax_max)))]
         return locs, ax_min, ax_max
 
     def set_scatter_ticks(self, ax: plt.Axes, minor_ticks=False):
@@ -402,7 +403,8 @@ class plotterlib:
 
         for axis in [ax.xaxis, ax.yaxis]:
             # Only display every nth major tick label
-            ticks_displayed, last_idx = self.every_nth_label(axis, 3)
+            n = int(np.log2(len(major_locs)) - 1)
+            ticks_displayed, last_idx = self.every_nth_label(axis, n)
 
             if minor_ticks:
                 axis.set_minor_locator(tix.LogLocator(
@@ -410,7 +412,7 @@ class plotterlib:
                     numticks=self.get_min_LogLocator_numticks(axis),
                     subs=np.log2(np.linspace(2 ** 2, 2 ** 4, 10))[:-1]))
 
-            min_tick = 2 ** (np.log2(ax_min)+1)
+            min_tick = ax_min
             max_tick = major_locs[last_idx]
             self.set_tick_bounds(axis, min_tick=min_tick, max_tick=max_tick, minor=minor_ticks)
             self.cache_ticks(axis, axis.__name__)
@@ -428,16 +430,6 @@ class plotterlib:
             else:
                 ticks_displayed.append(tick)
                 last_idx = i
-
-        # Hide tick labels in the lower left corner, regardless
-        major_ticks[0].label1.set_visible(False)
-
-        # If the last tick label on the x-axis will extend past the plot space,
-        # then hide it and its corresponding tick on the y-axis
-        if axis.__name__ == "xaxis" and axis.get_tick_space() == len(ticks_displayed):
-            major_ticks[last_idx].label1.set_visible(False)
-            yaxis = axis.axes.yaxis
-            yaxis.get_major_ticks()[last_idx].label1.set_visible(False)
 
         return ticks_displayed, last_idx
 
@@ -466,9 +458,10 @@ class plotterlib:
     def cache_ticks(self, axis: mpl.axis.Axis, name: str):
         """Cache major and minor tick objects, which contain expensive data"""
 
-        for type in ["major", "minor"]:
-            self.dge_scatter_tick_cache[f"{name}_{type}_loc"] = getattr(axis, type).locator
-            self.dge_scatter_tick_cache[f"{name}_{type}_tix"] = getattr(axis, f"{type}Ticks")
+        if self.prefs.get('cache_scatter_ticks', True):
+            for type in ["major", "minor"]:
+                self.dge_scatter_tick_cache[f"{name}_{type}_loc"] = getattr(axis, type).locator
+                self.dge_scatter_tick_cache[f"{name}_{type}_tix"] = getattr(axis, f"{type}Ticks")
 
     def restore_ticks(self, ax: plt.Axes, axis: str):
         """Restore tick objects from previous render"""
@@ -629,6 +622,9 @@ class plotterlib:
 class CacheBase(ABC):
     @abstractmethod
     def get(self): pass
+
+    def __del__(self):
+        plt.close(self.fig)
 
 
 class ClassChartCache(CacheBase):
