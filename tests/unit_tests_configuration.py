@@ -7,6 +7,7 @@ from unittest.mock import patch, mock_open, call
 
 from tiny.rna.configuration import Configuration, SamplesSheet, PathsFile
 from unit_test_helpers import csv_factory, paths_template_file, make_paths_file
+from tiny.rna.util import r_reserved_keywords
 
 
 class BowtieIndexesTest(unittest.TestCase):
@@ -209,6 +210,22 @@ class SamplesSheetTest(unittest.TestCase):
                 patch('tiny.rna.configuration.os.path.isfile', return_value=True):
             SamplesSheet('mock_filename')
 
+    """Does validate_r_safe_sample_groups detect group names that will cause namespace collisions in R?"""
+
+    def test_validate_r_safe_sample_groups(self):
+        non_alphanum_chars = [bad.join(('a', 'b')) for bad in "~!@#$%^&*()+-=`<>?/,:;\"'[]{}\| \t\n\r\f\v"]
+        leading_dot_number = [".0", "X.0"]
+
+        for bad in [non_alphanum_chars, leading_dot_number]:
+            msg = " ≈ ".join(bad)
+            with self.assertRaisesRegex(AssertionError, msg):
+                SamplesSheet.validate_r_safe_sample_groups(dict.fromkeys(bad))
+
+        for kwd in r_reserved_keywords:
+            bad = (kwd, kwd + '.')
+            msg = " ≈ ".join(bad)
+            with self.assertRaisesRegex(AssertionError, msg):
+                SamplesSheet.validate_r_safe_sample_groups(dict.fromkeys(bad))
 
 class PathsFileTest(unittest.TestCase):
 
