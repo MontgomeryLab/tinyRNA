@@ -204,7 +204,7 @@ class PlotterTests(unittest.TestCase):
                 hi_bound = 2**x + x         # Walk upper bound forward much faster
                 vlim = np.array((lo_bound, hi_bound))
 
-                # title = f"Range: 2^{int(np.log2(view_lims[0]))} .. 2^{np.log2(view_lims[1]):.1f}"
+                # title = f"Range: 2^{int(np.log2(view_lims[0])):.1f} .. 2^{np.log2(view_lims[1]):.1f}"
                 # ^ must be set within scatter_* functions in plotter.py, not worth refactoring to support
                 plotter.scatter_by_dge(counts, dge, f'lim_{x:.2f}', vlim)
 
