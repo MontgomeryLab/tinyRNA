@@ -1,10 +1,10 @@
-# Getting Started
+# Getting Started With the tinyRNA Workflow
 
 This folder (`START_HERE`) contains a working minimal configuration and a generated/simulated sample dataset. We've assembled this configuration to make it easy to start using tinyRNA, and to provide a basis for your own project configuration.
 
 ## Installation
 
-See the [README](../README.md#installation) for installation instructions and tips.
+See the [README](../README.md#tinyrna-installation) for installation instructions and tips.
 
 ## This folder
 
