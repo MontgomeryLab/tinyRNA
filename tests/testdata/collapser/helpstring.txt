@@ -1,4 +1,4 @@
-usage: tiny-collapse -i FASTQFILE -o OUTPREFIX [-h] [-t THRESHOLD] [-c]
+usage: tiny-collapse -i FASTQFILE -o OUTPREFIX [-t THRESHOLD] [-c]
                      [--5p-trim LENGTH] [--3p-trim LENGTH]
 
 Collapse sequences from a fastq file to a fasta file. Headers in the output
@@ -16,7 +16,6 @@ Required arguments:
                         {prefix}_collapsed_lowcounts.fa
 
 Optional arguments:
-  -h, --help            show this help message and exit
   -t THRESHOLD, --threshold THRESHOLD
                         Sequences <= THRESHOLD will be omitted from
                         {prefix}_collapsed.fa and will instead be placed in
