@@ -20,7 +20,7 @@ from cwltool.executors import SingleJobExecutor, MultithreadedJobExecutor
 from cwltool.utils import DEFAULT_TMP_PREFIX
 from pkg_resources import resource_filename
 
-from tiny.rna.configuration import Configuration, ConfigBase
+from tiny.rna.configuration import Configuration, ConfigBase, get_templates
 from tiny.rna.resume import ResumeCounterConfig, ResumePlotterConfig
 from tiny.rna.util import report_execution_time, SmartFormatter, add_transparent_help
 
@@ -321,25 +321,6 @@ def run_cwltool_native(config_object: 'ConfigBase', workflow: str, run_directory
     return 0
 
 
-def get_templates(templates_path: str) -> None:
-    """Copies all configuration file templates to the current working directory
-
-    Args:
-        templates_path: The path to the project's templates directory. This directory
-            contains templates for the run configuration, sample inputs, feature selection
-            rules, the project's matplotlib stylesheet, and paths for all the above.
-
-    Returns: None
-
-    """
-
-    print("Copying template input files to current directory...")
-
-    # Copy template files to the current working directory
-    for template in template_files:
-        shutil.copyfile(f"{templates_path}/{template}", f"{os.getcwd()}/{template}")
-
-
 def setup_cwl(tinyrna_cwl_path: str, config_file: str) -> None:
     """Retrieves the project's workflow files, and if provided, processes the run config file
 
@@ -383,7 +364,7 @@ def main():
         "replot": lambda: resume(cwl_path, args.config, "tiny-plot"),
         "recount": lambda: resume(cwl_path, args.config, "tiny-count"),
         "setup-cwl": lambda: setup_cwl(cwl_path, args.config),
-        "get-templates": lambda: get_templates(templates_path)
+        "get-templates": lambda: get_templates("tiny")
     }
 
     command_map[args.command]()

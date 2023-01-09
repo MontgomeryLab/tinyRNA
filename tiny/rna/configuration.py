@@ -403,6 +403,42 @@ class Configuration(ConfigBase):
         config_object.write_processed_config(f"processed_{file_basename}")
 
 
+def get_templates(context: str):
+    """Copies a context-based subset of configuration file templates to the CWD
+
+        Args:
+            context: The command for which template files should be provided
+                (currently: "tiny" or "tiny-count" or "tiny-plot")
+
+        Returns: None
+    """
+
+    tiny_count = ['paths.yml', 'samples.csv', 'features.csv']
+    tiny_plot =  ['tinyrna-light.mplstyle']
+    tiny =       ['run_config_template.yml', *tiny_count, *tiny_plot]
+
+    files_to_copy = {
+        'tiny': tiny,
+        'tiny-count': tiny_count,
+        'tiny-plot': tiny_plot
+    }.get(context, None)
+
+    if files_to_copy is None:
+        raise ValueError(f"Invalid template file context: {context}")
+    else:
+        conflicts = [f for f in files_to_copy if os.path.exists(f)]
+        if conflicts:
+            sys.exit(
+                "The following files already exist in the current directory:\n\t"
+                + '\n\t'.join(conflicts) + "\nPlease remove or rename them and try again."
+            )
+
+    # Copy template files to the current working directory
+    templates_path = resource_filename('tiny', 'templates')
+    for template in files_to_copy:
+        shutil.copyfile(f"{templates_path}/{template}", f"{os.getcwd()}/{template}")
+
+
 class PathsFile(ConfigBase):
     """A configuration class for managing and validating Paths Files.
     Relative paths are automatically resolved on lookup and list types are enforced.
@@ -620,6 +656,7 @@ class SamplesSheet:
         root, _ = os.path.splitext(filename)
         return os.path.basename(root)
 
+
 class CSVReader(csv.DictReader):
     """A simple wrapper class for csv.DictReader
 
@@ -732,6 +769,7 @@ class CSVReader(csv.DictReader):
                 ]))
 
         if compat_errors: raise ValueError('\n\n'.join(compat_errors))
+
 
 if __name__ == '__main__':
     Configuration.main()

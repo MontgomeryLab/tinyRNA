@@ -15,7 +15,7 @@ from tiny.rna.counter.validation import GFFValidator
 from tiny.rna.counter.features import Features, FeatureCounter
 from tiny.rna.counter.statistics import MergedStatsManager
 from tiny.rna.util import report_execution_time, from_here, ReadOnlyDict, get_timestamp, add_transparent_help
-from tiny.rna.configuration import CSVReader, PathsFile
+from tiny.rna.configuration import CSVReader, PathsFile, get_templates
 
 # Global variables for multiprocessing
 counter: FeatureCounter
@@ -70,24 +70,13 @@ def get_args():
     args = arg_parser.parse_args()
 
     if args.get_templates:
-        get_templates()
+        get_templates("tiny-count")
         sys.exit(0)
     else:
         args_dict = vars(args)
         args_dict['out_prefix'] = args.out_prefix.replace('{timestamp}', get_timestamp())
         args_dict['normalize_by_hits'] = args.normalize_by_hits.lower() in ['t', 'true']
         return ReadOnlyDict(args_dict)
-
-
-def get_templates():
-    """Copies config file templates required by tiny-count into the current directory"""
-
-    templates_path = resource_filename('tiny', 'templates')
-    template_files = ['paths.yml', 'samples.csv', 'features.csv']
-
-    # Copy template files to the current working directory
-    for template in template_files:
-        shutil.copyfile(f"{templates_path}/{template}", f"{os.getcwd()}/{template}")
 
 
 def load_samples(samples_csv: str, is_pipeline: bool) -> List[Dict[str, str]]:
