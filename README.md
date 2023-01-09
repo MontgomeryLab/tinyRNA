@@ -50,12 +50,15 @@ This option provides the latest features but stable releases are more rigorously
  ./setup.sh
 ```
 
-## tiny-count installation
+## tiny-count Standalone Installation
 Alternatively, you can install tinyRNA's precision counting tool by itself. Unlike the full tinyRNA suite, this option can be installed in existing conda environments and requires fewer dependencies.
 
 ```shell
 conda install -c bioconda -c conda-forge tiny-count
 ```
+
+If you'd like to jump right in and start using tiny-count, see our<br> 
+👉 [tutorial](START_HERE/tiny-count_TUTORIAL.md) 👈
 
 ## Usage
 
@@ -70,7 +73,7 @@ The `tinyrna` conda environment must be activated before using the tinyRNA workf
  conda deactivate
 ```
 If you'd like to jump right in and start using tinyRNA, see our<br> 
-👉 [tutorial](START_HERE/TUTORIAL.md) 👈
+👉 [tutorial](START_HERE/tinyRNA_TUTORIAL.md) 👈
 
 You can execute the workflow in its entirety for a full end-to-end analysis pipeline, or you can execute individual steps on their own. In most cases you will use the command `tiny` for pipeline operations.
 
@@ -290,8 +293,8 @@ See the [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. To see what is active
 
 ## Authors
 
-* **Kristen Brown** - 2018-2019 - Colorado State University - [biokcb](https://github.com/biokcb)
 * **Alex Tate** - 01/2021-present - Colorado State University - [AlexTate](https://github.com/AlexTate)
+* **Kristen Brown** - 2018-2019 - Colorado State University - [biokcb](https://github.com/biokcb)
 
 See also the list of [contributors](https://github.com/MontgomeryLab/tinyrna/contributors) who participated in this project.
 

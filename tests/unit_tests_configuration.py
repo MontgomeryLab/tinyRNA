@@ -5,7 +5,7 @@ import random
 import unittest
 from unittest.mock import patch, mock_open, call
 
-from tiny.rna.configuration import Configuration, SamplesSheet, PathsFile
+from tiny.rna.configuration import Configuration, SamplesSheet, PathsFile, get_templates
 from unit_test_helpers import csv_factory, paths_template_file, make_paths_file
 from tiny.rna.util import r_reserved_keywords
 
@@ -227,6 +227,7 @@ class SamplesSheetTest(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, msg):
                 SamplesSheet.validate_r_safe_sample_groups(dict.fromkeys(bad))
 
+
 class PathsFileTest(unittest.TestCase):
 
     @classmethod
@@ -348,6 +349,53 @@ class PathsFileTest(unittest.TestCase):
         self.assertEqual(config['mock_path'], "path.gz")
         self.assertEqual(config['empty_path'], "")
         self.assertEqual(config['none_path'], None)
+
+
+class ConfigurationTest(unittest.TestCase):
+
+    """Does get_templates copy the expected number of files for each context?"""
+
+    def test_get_templates_contexts(self):
+        context_file_count = {
+            'tiny': 5,
+            'tiny-count': 3,
+            'tiny-plot': 1
+        }
+
+        with patch('tiny.rna.configuration.shutil.copyfile') as cf:
+            for context, count in context_file_count.items():
+                cf.reset_mock()
+                get_templates(context)
+                # Check against unique calls to copyfile incase there are duplicate calls for some reason
+                self.assertEqual(len(set(call.args[0] for call in cf.call_args_list)), count)
+
+    """Does get_templates properly handle cases where template files already exist in the CWD?"""
+
+    def test_get_templates_conflicts(self):
+        tiny_count = ['paths.yml', 'samples.csv', 'features.csv']
+        tiny_plot = ['tinyrna-light.mplstyle']
+        tiny = ['run_config_template.yml', *tiny_count, *tiny_plot]
+
+        contexts = {
+            'tiny': tiny,
+            'tiny-count': tiny_count,
+            'tiny-plot': tiny_plot
+        }
+
+        for context, files in contexts.items():
+            with patch('tiny.rna.configuration.os.path.exists') as pe:
+                pe.return_value = True
+
+                try:
+                    get_templates(context)
+                except SystemExit as e:
+                    err_msg = e.args[0]
+                    err_files = err_msg.splitlines()[1:-1]
+                    exp_set = set(files)
+                    act_set = set(map(str.strip, err_files))
+
+                    self.assertSetEqual(exp_set, act_set)
+
 
 
 if __name__ == '__main__':
