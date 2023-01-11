@@ -77,9 +77,9 @@ class plotterlib:
             sizeb = size_prop.plot(kind='bar', stacked=True, reuse_plot=True, **kwargs)
             sizeb.tick_params(axis='x', labelsize=font_size, rotation=0)
             sizeb.set_ylim(0, np.max(np.sum(size_prop, axis=1)) + 0.025)
-            sizeb.set_title(f'Distribution of {subtype} Reads')
-            sizeb.set_ylabel('Proportion of Reads')
-            sizeb.set_xlabel('Length of Sequence')
+            sizeb.set_title(f'Distribution of {subtype} reads')
+            sizeb.set_ylabel('Proportion of reads')
+            sizeb.set_xlabel('Length of sequence')
 
         return sizeb
 
@@ -134,7 +134,7 @@ class plotterlib:
         # Create the plot and set plot attributes
         cbar = (prop_ds * 100).plot(kind='barh', ax=ax, color=bar_colors, sort_columns=False, **kwargs)
         cbar.xaxis.set_major_formatter(tix.PercentFormatter())
-        cbar.set_xlabel('Percentage of Reads')
+        cbar.set_xlabel('Percentage of reads')
         cbar.set_xlim(0, min([(max_prop * 100) + 10, 100]))
 
         # Remove irrelevant plot attributes

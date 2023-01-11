@@ -167,7 +167,7 @@ def get_len_dist_dict(files_list: list) -> DefaultDict[str, Dict[str, pd.DataFra
             # File does not appear to have been produced by the pipeline
             condition_and_rep = basename
 
-        subtype = "Assigned" if "assigned" in condition_and_rep else "Mapped"
+        subtype = "assigned" if "assigned" in condition_and_rep else "mapped"
         matrices[subtype][condition_and_rep] = pd.read_csv(file, index_col=0)
 
     return matrices
@@ -190,7 +190,7 @@ def class_charts(raw_class_counts: pd.DataFrame, mapped_reads: pd.Series, out_pr
 
     for library in raw_class_counts:
         chart = aqplt.barh_proportion(class_props[library], max_prop, scale, **kwargs)
-        chart.set_title("Percentage of Small RNAs by Class")
+        chart.set_title("Percentage of small RNAs by class")
         chart.set_ylabel("Class")
 
         # Save the plot
@@ -218,7 +218,7 @@ def rule_charts(rule_counts: pd.DataFrame, out_prefix: str, scale=2, **kwargs):
 
     for library, prop_df in rule_props.items():
         chart = aqplt.barh_proportion(prop_df, max_prop, scale, **kwargs)
-        chart.set_title("Percentage of Small RNAs by Matched Rule")
+        chart.set_title("Percentage of small RNAs by matched rule")
         chart.set_ylabel("Rule")
 
         # Save the plot
