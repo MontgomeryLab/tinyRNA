@@ -321,28 +321,54 @@ class plotterlib:
         scatter.set_position(orig_axes_pos.transformed(transFigure.inverted()))
 
     @staticmethod
-    def get_scatter_view_lims(counts_df: pd.DataFrame) -> Tuple[float, float]:
-        """Calculates scatter view limits for the counts dataframe"""
+    def get_scatter_view_lims(counts_df: pd.DataFrame, vmin: int = None, vmax: int = None) -> Tuple[float, float]:
+        """Calculates scatter view limits for the counts dataframe
 
-        x0 = counts_df.min(axis='columns').where(lambda x: x != 0).dropna().min()
+        Args:
+            counts_df: A pandas dataframe of counts per feature
+            vmin: Optional log2 minimum view limit
+            vmax: Optional log2 maximum view limit
+        """
+
+        # For transforming values to/from log2 scale
+        transform = LogTransform(base=2)
+        inverse_trans = transform.inverted()
+
+        # User-specified min & max, no calculation necessary
+        if (vmin, vmax) != (None, None):
+            return inverse_trans.transform([vmin, vmax])
+
+        # Obtain the minimum and maximum counts from the counts dataframe
+        x0 = counts_df.replace(0, pd.NA).min(axis="columns").dropna().min()
         x1 = counts_df.max().max()
         minpos = 1e-300
 
         if not np.isfinite([x0, x1]).all() or not isinstance(x0, np.float) or x1 <= 0:
-            print("The provided dataset contains invalid values.")
+            print("The provided dataset contains invalid values.", file=sys.stderr)
             return (minpos, minpos)
 
+        # Avoid log2(0) errors
         x0, x1 = (minpos if x0 <= 0 else x0,
                   minpos if x1 <= 0 else x1)
 
-        transform = LogTransform(base=2)
-        inverse_trans = transform.inverted()
+        # Get axes margin preferences from stylesheet
+        rc_mar = {mpl.rcParams.get(f"axes.{m}", 0)
+                  for m in ('xmargin', 'ymargin')}
 
+        margin = max(rc_mar)
+        if len(rc_mar) != 1:
+            print("Stylesheet values for axes.xmargin and axes.ymargin differ. "
+                  "The larger value will be chosen for the scatter plot margin.",
+                  file=sys.stderr)
+
+        # Calculate plot margins
         x0t, x1t = transform.transform([x0, x1])
-        delta = (x1t - x0t) * mpl.rcParams.get('axes.xmargin', 0)
+        delta = (x1t - x0t) * margin
         if not np.isfinite(delta): delta = 0
 
-        return inverse_trans.transform([x0t - delta, x1t + delta])
+        if vmin is None: vmin = x0t - delta
+        if vmax is None: vmax = x1t + delta
+        return inverse_trans.transform([vmin, vmax])
 
     @staticmethod
     def set_square_scatter_view_lims(ax: plt.Axes, min_max=None):

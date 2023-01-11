@@ -62,9 +62,13 @@ def get_args():
                                'Note: only the points on scatter plots will be raster if '
                                'this option is not provided.')
     optional_args.add_argument('-ldi', '--len-dist-min', metavar='VALUE', type=int,
-                               help='len_dist plots will start at this value')
+                               help='len_dist plots will start at this lower bound')
     optional_args.add_argument('-lda', '--len-dist-max', metavar='VALUE', type=int,
-                               help='len_dist plots will end at this value')
+                               help='len_dist plots will end at this upper bound')
+    optional_args.add_argument('-dgi', '--dge-min', metavar='VALUE', type=int,
+                               help='DGE scatter plots will start at this lower bound')
+    optional_args.add_argument('-dga', '--dge-max', metavar='VALUE', type=int,
+                               help='DGE scatter plots will end at this upper bound')
     optional_args.add_argument('-una', '--unassigned-class', metavar='LABEL', default='_UNASSIGNED_',
                                help='Use this label in class-related plots for unassigned counts'),
     optional_args.add_argument('-unk', '--unknown-class', metavar='LABEL', default='_UNKNOWN_',
@@ -615,7 +619,7 @@ def setup(args: argparse.Namespace) -> dict:
         'sample_rep_dict': lambda: get_sample_rep_dict(fetched["norm_counts_df"]),
         'norm_counts_avg_df': lambda: get_sample_averages(fetched["norm_counts_df"], fetched["sample_rep_dict"]),
         'class_counts_df': lambda: get_class_counts(fetched["raw_counts_df"]),
-        'avg_view_lims': lambda: aqplt.get_scatter_view_lims(fetched["norm_counts_avg_df"]),
+        'avg_view_lims': lambda: aqplt.get_scatter_view_lims(fetched["norm_counts_avg_df"], args.dge_min, args.dge_max),
         'norm_view_lims': lambda: aqplt.get_scatter_view_lims(fetched["norm_counts_df"].select_dtypes(['number']))
     }
 
