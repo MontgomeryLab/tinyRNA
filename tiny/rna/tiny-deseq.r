@@ -211,8 +211,8 @@ for (i in seq_len(nrow(all_comparisons))){
   result_df <- df_with_metadata(data.frame(deseq_res[order(deseq_res$padj),]))
 
   # Resolve original condition names for use in output filename
-  cond1 <- sampleConditions[[comparison[1]]]
-  cond2 <- sampleConditions[[comparison[2]]]
+  cond1 <- sampleConditions[[comparison[2]]]
+  cond2 <- sampleConditions[[comparison[1]]]
   write_dge_table(result_df, cond1, cond2)
 
   if (!has_control){

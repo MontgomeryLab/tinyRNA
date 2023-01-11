@@ -409,7 +409,7 @@ def scatter_by_dge_class(counts_avg_df, dges, output_prefix, view_lims, include=
     aqplt.set_dge_class_legend_style()
 
     for pair in dges:
-        ut, tr = pair.split("_vs_")  # untreated, treated
+        tr, ut = pair.split("_vs_")  # treated, untreated
         dge_classes = dges[dges[pair] < pval].groupby(level=1).groups
 
         labels, grp_args = zip(*dge_classes.items()) if dge_classes else ((), ())
@@ -446,7 +446,7 @@ def scatter_by_dge(counts_avg_df, dges, output_prefix, view_lims, pval=0.05):
 
     for pair in dges:
         grp_args = dges.index[dges[pair] < pval]
-        ut, tr = pair.split("_vs_")  # untreated, treated
+        tr, ut = pair.split("_vs_")  # treated, untreated
 
         labels = ['p < %g' % pval] if not grp_args.empty else []
         colors = aqplt.assign_class_colors(labels)
