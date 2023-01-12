@@ -99,6 +99,8 @@ inputs:
   plot_vector_points: boolean?
   plot_len_dist_min: int?
   plot_len_dist_max: int?
+  plot_dge_scatter_min: double?
+  plot_dge_scatter_max: double?
   plot_style_sheet: File?
   plot_pval: float?
   plot_unknown_class: string?
@@ -258,6 +260,8 @@ steps:
         pickValue: all_non_null
         valueFrom: |
           $(self.length ? self[0] : null)
+      dge_min: plot_dge_scatter_min
+      dge_max: plot_dge_scatter_max
       unknown_class_label: plot_unknown_class
       unassigned_class_label: plot_unassigned_class
       classes_include: plot_class_scatter_filter_include

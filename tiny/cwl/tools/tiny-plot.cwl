@@ -74,6 +74,18 @@ inputs:
       prefix: -lda
     doc: "The last length to plot in the range for len_dist plots"
 
+  dge_min:
+    type: double?
+    inputBinding:
+      prefix: -dgi
+    doc: "The log2 lower view limit in DGE scatter plots"
+
+  dge_max:
+    type: double?
+    inputBinding:
+      prefix: -dga
+    doc: "The log2 upper view limit in DGE scatter plots"
+
   unknown_class_label:
     type: string?
     inputBinding:
