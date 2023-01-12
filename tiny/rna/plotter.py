@@ -62,13 +62,13 @@ def get_args():
                                'Note: only the points on scatter plots will be raster if '
                                'this option is not provided.')
     optional_args.add_argument('-ldi', '--len-dist-min', metavar='VALUE', type=int,
-                               help='len_dist plots will start at this lower bound')
+                               help='len_dist plots will start at this value')
     optional_args.add_argument('-lda', '--len-dist-max', metavar='VALUE', type=int,
-                               help='len_dist plots will end at this upper bound')
-    optional_args.add_argument('-dgi', '--dge-min', metavar='VALUE', type=int,
-                               help='DGE scatter plots will start at this lower bound')
-    optional_args.add_argument('-dga', '--dge-max', metavar='VALUE', type=int,
-                               help='DGE scatter plots will end at this upper bound')
+                               help='len_dist plots will end at this value')
+    optional_args.add_argument('-dgi', '--dge-min', metavar='VALUE', type=float,
+                               help='scatter_by_dge plots will start at this log2 value')
+    optional_args.add_argument('-dga', '--dge-max', metavar='VALUE', type=float,
+                               help='scatter_by_dge plots will end at this log2 value')
     optional_args.add_argument('-una', '--unassigned-class', metavar='LABEL', default='_UNASSIGNED_',
                                help='Use this label in class-related plots for unassigned counts'),
     optional_args.add_argument('-unk', '--unknown-class', metavar='LABEL', default='_UNKNOWN_',
