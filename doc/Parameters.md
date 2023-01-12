@@ -235,6 +235,14 @@ The scatter plots produced by tiny-plot have rasterized points by default. This 
 
 The min and/or max bounds for plotted lengths can be set with this option. See [tiny-plot's documentation](tiny-plot.md#length-bounds) for more information about how these values are determined if they aren't set.
 
+### Bounds for scatter_by_dge Plots
+| Run Config Key        | Commandline Argument |
+|-----------------------|----------------------|
+| plot_dge_scatter_min: | `--dge-min VALUE`    | 
+| plot_dge_scatter_max: | `--dge-max VALUE`    |
+
+The min and/or max bounds for DGE scatter plots can be set with this option. The value you provide should be a log2 count value and can be whole or fractional, e.g. `--dge-min 1.9` would produce a plot whose first tick mark is labeled 2 and would include points for feature counts as low as 3.74. Unspecified bounds are automatically calculated to fit the data, and will include the margin specified by the `axes.[x/y]margin` key in the [Plot Stylesheet](Configuration.md#plot-stylesheet-details).
+
 ### Labels for Class-related Plots
 | Run Config Key         | Commandline Argument |
 |------------------------|----------------------|
@@ -256,9 +264,9 @@ If an inclusive filter is used, then only the classes in the list, if present, a
 tiny-plot [-rc RAW_COUNTS] [-nc NORM_COUNTS] [-uc RULE_COUNTS]
           [-ss STAT] [-dge COMPARISON [COMPARISON ...]]
           [-len 5P_LEN [5P_LEN ...]] [-o PREFIX] [-pv VALUE]
-          [-s MPLSTYLE] [-v] [-ldi VALUE] [-lda VALUE] [-una LABEL]
-          [-unk LABEL] [-ic CLASS [CLASS ...] | -ec CLASS [CLASS ...]]
-          -p PLOT [PLOT ...]
+          [-s MPLSTYLE] [-v] [-ldi VALUE] [-lda VALUE] [-dgi VALUE]
+          [-dga VALUE] [-una LABEL] [-unk LABEL] [-ic CLASS [CLASS ...]
+          | -ec CLASS [CLASS ...]] -p PLOT [PLOT ...]
 
 This script produces basic static plots for publication as part of the tinyRNA
 workflow.
@@ -317,6 +325,10 @@ Optional arguments:
                         len_dist plots will start at this value
   -lda VALUE, --len-dist-max VALUE
                         len_dist plots will end at this value
+  -dgi VALUE, --dge-min VALUE
+                        scatter_by_dge plots will start at this log2 value
+  -dga VALUE, --dge-max VALUE
+                        scatter_by_dge plots will end at this log2 value
   -una LABEL, --unassigned-class LABEL
                         Use this label in class-related plots for unassigned
                         counts
