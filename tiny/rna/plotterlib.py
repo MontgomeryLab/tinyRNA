@@ -418,7 +418,7 @@ class plotterlib:
         """Intelligently creates major and minor ticks for a square scatter plot while avoiding crowding"""
 
         # Get tick locations corresponding to the current view limits
-        major_locs, ax_min, ax_max = self.get_fixed_majorticklocs(ax.viewLim.bounds)
+        major_locs, ax_min, ax_max = self.get_fixed_majorticklocs(ax.viewLim.extents)
 
         ax.xaxis.set_major_locator(tix.FixedLocator(major_locs))
         ax.yaxis.set_major_locator(tix.FixedLocator(major_locs))
@@ -429,7 +429,7 @@ class plotterlib:
 
         for axis in [ax.xaxis, ax.yaxis]:
             # Only display every nth major tick label
-            n = int(np.log2(len(major_locs)) - 1)
+            n = int(np.log2(len(major_locs)) - 1) or 1
             ticks_displayed, last_idx = self.every_nth_label(axis, n)
 
             if minor_ticks:
