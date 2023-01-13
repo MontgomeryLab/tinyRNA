@@ -77,9 +77,9 @@ class plotterlib:
             sizeb = size_prop.plot(kind='bar', stacked=True, reuse_plot=True, **kwargs)
             sizeb.tick_params(axis='x', labelsize=font_size, rotation=0)
             sizeb.set_ylim(0, np.max(np.sum(size_prop, axis=1)) + 0.025)
-            sizeb.set_title(f'Distribution of {subtype} Reads')
-            sizeb.set_ylabel('Proportion of Reads')
-            sizeb.set_xlabel('Length of Sequence')
+            sizeb.set_title(f'Distribution of {subtype} reads')
+            sizeb.set_ylabel('Proportion of reads')
+            sizeb.set_xlabel('Length of sequence')
 
         return sizeb
 
@@ -134,7 +134,7 @@ class plotterlib:
         # Create the plot and set plot attributes
         cbar = (prop_ds * 100).plot(kind='barh', ax=ax, color=bar_colors, sort_columns=False, **kwargs)
         cbar.xaxis.set_major_formatter(tix.PercentFormatter())
-        cbar.set_xlabel('Percentage of Reads')
+        cbar.set_xlabel('Percentage of reads')
         cbar.set_xlim(0, min([(max_prop * 100) + 10, 100]))
 
         # Remove irrelevant plot attributes
@@ -321,28 +321,54 @@ class plotterlib:
         scatter.set_position(orig_axes_pos.transformed(transFigure.inverted()))
 
     @staticmethod
-    def get_scatter_view_lims(counts_df: pd.DataFrame) -> Tuple[float, float]:
-        """Calculates scatter view limits for the counts dataframe"""
+    def get_scatter_view_lims(counts_df: pd.DataFrame, vmin: int = None, vmax: int = None) -> Tuple[float, float]:
+        """Calculates scatter view limits for the counts dataframe
 
-        x0 = counts_df.min(axis='columns').where(lambda x: x != 0).dropna().min()
+        Args:
+            counts_df: A pandas dataframe of counts per feature
+            vmin: Optional log2 minimum view limit
+            vmax: Optional log2 maximum view limit
+        """
+
+        # For transforming values to/from log2 scale
+        transform = LogTransform(base=2)
+        inverse_trans = transform.inverted()
+
+        # User-specified min & max, no calculation necessary
+        if (vmin, vmax) != (None, None):
+            return inverse_trans.transform([vmin, vmax])
+
+        # Obtain the minimum and maximum counts from the counts dataframe
+        x0 = counts_df.replace(0, pd.NA).min(axis="columns").dropna().min()
         x1 = counts_df.max().max()
         minpos = 1e-300
 
         if not np.isfinite([x0, x1]).all() or not isinstance(x0, np.float) or x1 <= 0:
-            print("The provided dataset contains invalid values.")
+            print("The provided dataset contains invalid values.", file=sys.stderr)
             return (minpos, minpos)
 
+        # Avoid log2(0) errors
         x0, x1 = (minpos if x0 <= 0 else x0,
                   minpos if x1 <= 0 else x1)
 
-        transform = LogTransform(base=2)
-        inverse_trans = transform.inverted()
+        # Get axes margin preferences from stylesheet
+        rc_mar = {mpl.rcParams.get(f"axes.{m}", 0)
+                  for m in ('xmargin', 'ymargin')}
 
+        margin = max(rc_mar)
+        if len(rc_mar) != 1:
+            print("Stylesheet values for axes.xmargin and axes.ymargin differ. "
+                  "The larger value will be chosen for the scatter plot margin.",
+                  file=sys.stderr)
+
+        # Calculate plot margins
         x0t, x1t = transform.transform([x0, x1])
-        delta = (x1t - x0t) * mpl.rcParams.get('axes.xmargin', 0)
+        delta = (x1t - x0t) * margin
         if not np.isfinite(delta): delta = 0
 
-        return inverse_trans.transform([x0t - delta, x1t + delta])
+        if vmin is None: vmin = x0t - delta
+        if vmax is None: vmax = x1t + delta
+        return inverse_trans.transform([vmin, vmax])
 
     @staticmethod
     def set_square_scatter_view_lims(ax: plt.Axes, min_max=None):
@@ -392,7 +418,7 @@ class plotterlib:
         """Intelligently creates major and minor ticks for a square scatter plot while avoiding crowding"""
 
         # Get tick locations corresponding to the current view limits
-        major_locs, ax_min, ax_max = self.get_fixed_majorticklocs(ax.viewLim.bounds)
+        major_locs, ax_min, ax_max = self.get_fixed_majorticklocs(ax.viewLim.extents)
 
         ax.xaxis.set_major_locator(tix.FixedLocator(major_locs))
         ax.yaxis.set_major_locator(tix.FixedLocator(major_locs))
@@ -403,7 +429,7 @@ class plotterlib:
 
         for axis in [ax.xaxis, ax.yaxis]:
             # Only display every nth major tick label
-            n = int(np.log2(len(major_locs)) - 1)
+            n = int(np.log2(len(major_locs)) - 1) or 1
             ticks_displayed, last_idx = self.every_nth_label(axis, n)
 
             if minor_ticks:

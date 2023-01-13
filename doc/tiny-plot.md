@@ -102,9 +102,14 @@ Differential gene expression between sample groups can be visualized with this p
     <img src="../images/plots/scatter_dge.jpg" width="80%" alt="sample_avg_scatter_by_dge"/>
 </p>
 
-#### Customization
-The P value cutoff can be changed using the [Run Config or commandline arguments](Parameters.md#p-value). The control condition is plotted on the x-axis, but it must be specified in your Samples Sheet prior to running an end-to-end or `tiny recount` analysis. If using `tiny replot`, is not possible to change a no-control experiment to a control experiment and have these changes reflected in these plots. This is because tiny-deseq.r must be aware of the control condition in order to perform the proper directional comparisons.
+#### P value Threshold
+The P value cutoff [can be changed](Parameters.md#p-value) (default: 0.05).
 
+#### Control Conditions
+The control condition is plotted on the x-axis, but it must be specified in your Samples Sheet prior to running an end-to-end or `tiny recount` analysis. If using `tiny replot`, is not possible to change a no-control experiment to a control experiment and have these changes reflected in these plots. This is because tiny-deseq.r must be aware of the control condition in order to perform the proper directional comparisons.
+
+#### View Limits
+Both the lower and upper bound of the plot's axes [can be set manually](Parameters.md#view-limits). Unspecified bounds are automatically calculated to fit the data.
 
 
 

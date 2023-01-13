@@ -65,6 +65,10 @@ def get_args():
                                help='len_dist plots will start at this value')
     optional_args.add_argument('-lda', '--len-dist-max', metavar='VALUE', type=int,
                                help='len_dist plots will end at this value')
+    optional_args.add_argument('-dgi', '--dge-min', metavar='VALUE', type=float,
+                               help='scatter_by_dge plots will start at this log2 value')
+    optional_args.add_argument('-dga', '--dge-max', metavar='VALUE', type=float,
+                               help='scatter_by_dge plots will end at this log2 value')
     optional_args.add_argument('-una', '--unassigned-class', metavar='LABEL', default='_UNASSIGNED_',
                                help='Use this label in class-related plots for unassigned counts'),
     optional_args.add_argument('-unk', '--unknown-class', metavar='LABEL', default='_UNKNOWN_',
@@ -163,7 +167,7 @@ def get_len_dist_dict(files_list: list) -> DefaultDict[str, Dict[str, pd.DataFra
             # File does not appear to have been produced by the pipeline
             condition_and_rep = basename
 
-        subtype = "Assigned" if "assigned" in condition_and_rep else "Mapped"
+        subtype = "assigned" if "assigned" in condition_and_rep else "mapped"
         matrices[subtype][condition_and_rep] = pd.read_csv(file, index_col=0)
 
     return matrices
@@ -186,7 +190,7 @@ def class_charts(raw_class_counts: pd.DataFrame, mapped_reads: pd.Series, out_pr
 
     for library in raw_class_counts:
         chart = aqplt.barh_proportion(class_props[library], max_prop, scale, **kwargs)
-        chart.set_title("Percentage of Small RNAs by Class")
+        chart.set_title("Percentage of small RNAs by class")
         chart.set_ylabel("Class")
 
         # Save the plot
@@ -214,7 +218,7 @@ def rule_charts(rule_counts: pd.DataFrame, out_prefix: str, scale=2, **kwargs):
 
     for library, prop_df in rule_props.items():
         chart = aqplt.barh_proportion(prop_df, max_prop, scale, **kwargs)
-        chart.set_title("Percentage of Small RNAs by Matched Rule")
+        chart.set_title("Percentage of small RNAs by matched rule")
         chart.set_ylabel("Rule")
 
         # Save the plot
@@ -405,7 +409,7 @@ def scatter_by_dge_class(counts_avg_df, dges, output_prefix, view_lims, include=
     aqplt.set_dge_class_legend_style()
 
     for pair in dges:
-        ut, tr = pair.split("_vs_")  # untreated, treated
+        tr, ut = pair.split("_vs_")  # treated, untreated
         dge_classes = dges[dges[pair] < pval].groupby(level=1).groups
 
         labels, grp_args = zip(*dge_classes.items()) if dge_classes else ((), ())
@@ -442,7 +446,7 @@ def scatter_by_dge(counts_avg_df, dges, output_prefix, view_lims, pval=0.05):
 
     for pair in dges:
         grp_args = dges.index[dges[pair] < pval]
-        ut, tr = pair.split("_vs_")  # untreated, treated
+        tr, ut = pair.split("_vs_")  # treated, untreated
 
         labels = ['p < %g' % pval] if not grp_args.empty else []
         colors = aqplt.assign_class_colors(labels)
@@ -615,7 +619,7 @@ def setup(args: argparse.Namespace) -> dict:
         'sample_rep_dict': lambda: get_sample_rep_dict(fetched["norm_counts_df"]),
         'norm_counts_avg_df': lambda: get_sample_averages(fetched["norm_counts_df"], fetched["sample_rep_dict"]),
         'class_counts_df': lambda: get_class_counts(fetched["raw_counts_df"]),
-        'avg_view_lims': lambda: aqplt.get_scatter_view_lims(fetched["norm_counts_avg_df"]),
+        'avg_view_lims': lambda: aqplt.get_scatter_view_lims(fetched["norm_counts_avg_df"], args.dge_min, args.dge_max),
         'norm_view_lims': lambda: aqplt.get_scatter_view_lims(fetched["norm_counts_df"].select_dtypes(['number']))
     }
 
