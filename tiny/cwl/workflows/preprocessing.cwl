@@ -71,7 +71,7 @@ steps:
       adapter_fasta: adapter_fasta
       trim_front1: trim_front1
       trim_tail1: trim_tail1
-    out: [fastq1, report_json, report_html, console_output]
+    out: [fastq1, report_json, report_html]
 
   collapse:
     run: ../tools/tiny-collapse.cwl
@@ -83,7 +83,7 @@ steps:
       compress: compress
       5p_trim: 5p_trim
       3p_trim: 3p_trim
-    out: [collapsed_fa, low_counts_fa, console_output]
+    out: [collapsed_fa, low_counts_fa]
 
 outputs:
 
@@ -99,17 +99,9 @@ outputs:
     type: File # unscatter
     outputSource: fastp/report_json
 
-  fastp_console:
-    type: File # unscatter
-    outputSource: fastp/console_output
-
   uniq_seqs:
     type: File # unscatter
     outputSource: collapse/collapsed_fa
-
-  collapser_console:
-    type: File # unscatter
-    outputSource: collapse/console_output
 
   # Optional outputs
   uniq_seqs_low:

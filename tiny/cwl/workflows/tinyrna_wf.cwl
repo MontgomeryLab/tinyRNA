@@ -153,7 +153,7 @@ steps:
       compress: compress
       5p_trim: 5p_trim
       3p_trim: 3p_trim
-    out: [fastq_clean, html_report_file, json_report_file, fastp_console, uniq_seqs, uniq_seqs_low, collapser_console]
+    out: [fastq_clean, html_report_file, json_report_file, uniq_seqs, uniq_seqs_low]
 
   bt_build_optional:
     run: ../tools/bowtie-build.cwl
@@ -167,7 +167,7 @@ steps:
       noref: noref
       ftabchars: ftabchars
       threads: threads
-    out: [ index_files, console_output ]
+    out: [ index_files ]
 
   bowtie:
     run: ../tools/bowtie.cwl
@@ -202,7 +202,7 @@ steps:
       threads: threads
       shared_memory: shared_memory
       seed: seed
-    out: [ sam_out, unal_seqs, console_output ]
+    out: [ sam_out, unal_seqs ]
 
   counter:
     run: ../tools/tiny-count.cwl
@@ -224,8 +224,8 @@ steps:
       fastp_logs: preprocessing/json_report_file
       collapsed_fa: preprocessing/uniq_seqs
     out: [ feature_counts, rule_counts, norm_counts, mapped_nt_len_dist, assigned_nt_len_dist,
-           alignment_stats, summary_stats, console_output, decollapsed_sams,
-           intermed_out_files, alignment_diags, selection_diags ]
+           alignment_stats, summary_stats, decollapsed_sams, intermed_out_files,
+           alignment_diags, selection_diags ]
 
   dge:
     run: ../tools/tiny-deseq.cwl
@@ -237,7 +237,7 @@ steps:
       control: control_condition
       pca: dge_pca_plot
       drop_zero: dge_drop_zero
-    out: [ norm_counts, comparisons, pca_plot, console_output ]
+    out: [ norm_counts, comparisons, pca_plot ]
 
   plotter:
     run: ../tools/tiny-plot.cwl
@@ -272,7 +272,6 @@ steps:
       plot_requests: plot_requests
       vector_scatter: plot_vector_points
     out:
-      - console_output
       - len_dist
       - rule_chart
       - class_chart
@@ -286,7 +285,7 @@ steps:
     in:
       run_bowtie_build: run_bowtie_build
       dir_files:
-        source: [ bt_build_optional/index_files, bt_build_optional/console_output ]
+        source: [ bt_build_optional/index_files ]
         pickValue: all_non_null
       dir_name: dir_name_bt_build
     out: [ subdir ]
@@ -295,8 +294,7 @@ steps:
     run: ../tools/make-subdir.cwl
     in:
       dir_files:
-        source: [ preprocessing/fastq_clean, preprocessing/html_report_file, preprocessing/json_report_file,
-                  preprocessing/fastp_console ]
+        source: [ preprocessing/fastq_clean, preprocessing/html_report_file, preprocessing/json_report_file ]
       dir_name: dir_name_fastp
     out: [ subdir ]
 
@@ -304,7 +302,7 @@ steps:
     run: ../tools/make-subdir.cwl
     in:
       dir_files:
-        source: [ preprocessing/uniq_seqs, preprocessing/uniq_seqs_low, preprocessing/collapser_console ]
+        source: [ preprocessing/uniq_seqs, preprocessing/uniq_seqs_low ]
       dir_name: dir_name_collapser
     out: [ subdir ]
 
@@ -312,7 +310,7 @@ steps:
     run: ../tools/make-subdir.cwl
     in:
       dir_files:
-        source: [ bowtie/sam_out, bowtie/unal_seqs, bowtie/console_output ]
+        source: [ bowtie/sam_out, bowtie/unal_seqs ]
       dir_name: dir_name_bowtie
     out: [ subdir ]
 
@@ -320,9 +318,10 @@ steps:
     run: ../tools/make-subdir.cwl
     in:
       dir_files:
-        source: [ counter/feature_counts, counter/rule_counts, counter/norm_counts, counter/mapped_nt_len_dist,
-                  counter/assigned_nt_len_dist, counter/alignment_stats, counter/summary_stats, counter/console_output,
-                  counter/decollapsed_sams, counter/intermed_out_files, counter/alignment_diags, counter/selection_diags,
+        source: [ counter/feature_counts, counter/rule_counts, counter/norm_counts,
+                  counter/mapped_nt_len_dist, counter/assigned_nt_len_dist,
+                  counter/alignment_stats, counter/summary_stats, counter/decollapsed_sams,
+                  counter/alignment_diags, counter/selection_diags, counter/intermed_out_files,
                   features_csv ]
       dir_name: dir_name_counter
     out: [ subdir ]
@@ -333,7 +332,7 @@ steps:
     in:
       run_deseq: run_deseq
       dir_files:
-        source: [ dge/norm_counts, dge/comparisons, dge/console_output ]
+        source: [ dge/norm_counts, dge/comparisons ]
         pickValue: all_non_null
       dir_name: dir_name_dge
     out: [ subdir ]
@@ -344,7 +343,7 @@ steps:
       dir_files:
         source: [plotter/len_dist, plotter/rule_chart, plotter/class_chart, plotter/replicate_scatter,
                  plotter/sample_avg_scatter_by_dge, plotter/sample_avg_scatter_by_dge_class,
-                 dge/pca_plot, plotter/console_output]
+                 dge/pca_plot ]
         pickValue: all_non_null
       dir_name: dir_name_plotter
     out: [ subdir ]
