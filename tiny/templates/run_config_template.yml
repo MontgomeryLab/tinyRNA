@@ -316,6 +316,7 @@ dir_name_bowtie: bowtie
 dir_name_counter: counter
 dir_name_dge: DGE
 dir_name_plotter: plots
+dir_name_logs: logs
 
 
 #########################  AUTOMATICALLY GENERATED CONFIGURATIONS #########################
