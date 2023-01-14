@@ -147,6 +147,7 @@ steps:
       adapter_fasta: adapter_fasta
       trim_front1: trim_front1
       trim_tail1: trim_tail1
+      threads: threads
 
       # Collapser
       threshold: threshold
