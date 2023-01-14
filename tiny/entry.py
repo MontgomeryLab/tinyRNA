@@ -278,6 +278,7 @@ def run_cwltool_native(config_object: 'ConfigBase', workflow: str, run_directory
 
     # Set overall config for cwltool
     runtime_context = RuntimeContext({
+        'log_dir': f"{run_directory}/{config_object['dir_name_logs']}",
         'secret_store': cwltool.secrets.SecretStore(),
         'outdir': run_directory,
         'on_error': "continue",
