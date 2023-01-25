@@ -73,7 +73,7 @@ steps:
       trim_tail1: trim_tail1
     out: [fastq1, report_json, report_html]
 
-  collapse:
+  tiny-collapse:
     run: ../tools/tiny-collapse.cwl
     in:
       input_file: fastp/fastq1
@@ -101,9 +101,9 @@ outputs:
 
   uniq_seqs:
     type: File # unscatter
-    outputSource: collapse/collapsed_fa
+    outputSource: tiny-collapse/collapsed_fa
 
   # Optional outputs
   uniq_seqs_low:
     type: File? # unscatter
-    outputSource: collapse/low_counts_fa
+    outputSource: tiny-collapse/low_counts_fa

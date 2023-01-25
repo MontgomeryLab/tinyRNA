@@ -630,7 +630,7 @@ class SamplesSheet:
 
         if degrees_of_freedom < 1:
             print("Your experiment design has less than one degree of freedom, which is incompatible "
-                  "with DESeq2. The DGE step will be skipped and most plots will not be produced.",
+                  "with DESeq2. The tiny-deseq step will be skipped and DGE plots will not be produced.",
                   file=sys.stderr)
             return False
         else:
