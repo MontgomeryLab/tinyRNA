@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from glob import glob
 
 from tiny.rna.configuration import ConfigBase, PathsFile
+from tiny.rna.compatibility import RunConfigCompatibility
 from tiny.rna.util import timestamp_format, get_timestamp
 
 
@@ -24,7 +25,7 @@ class ResumeConfig(ConfigBase, ABC):
 
     def __init__(self, processed_config, workflow, steps, entry_inputs):
         # Parse the pre-processed YAML configuration file
-        super().__init__(processed_config)
+        super().__init__(processed_config, RunConfigCompatibility)
         self.check_dir_requirements()
 
         # Load the workflow YAML for modification
@@ -180,24 +181,30 @@ class ResumePlotterConfig(ResumeConfig):
             'len_dist_tables': {'var': "resume_len_dist", 'type': "File[]"}
         }
 
-        dge_outputs = {
+        self.optional_dge_outputs = {
             'norm_counts': {'var': "resume_norm", 'type': "File"},
             'dge_tables': {'var': "resume_dge", 'type': "File[]"}
         }
 
-        if self._dge_subdir_exists(processed_config):
-            inputs.update(dge_outputs)
+        inputs.update(self.optional_dge_outputs)
+        self.dge_ran = None
 
         # Build resume config from the previously-processed Run Config
         super().__init__(processed_config, workflow, steps, inputs)
 
-    def _dge_subdir_exists(self, processed_config):
-        with open(processed_config, 'r') as f:
-            config = ruamel.yaml.YAML().load(f)
-            exists = os.path.isdir(config['dir_name_dge'])
+    def _check_for_dge_outputs(self, dge_dir):
+        self.dge_ran = exists = os.path.isdir(dge_dir)
 
-        self.dge_ran = exists
-        return exists
+        if not exists:
+            wf_steps = self.workflow["steps"]
+            wf_inputs = self.workflow["inputs"]
+
+            # Remove DGE inputs at the workflow level and entry step
+            for dge_output, resume_def in self.optional_dge_outputs.items():
+                # Remove WorkflowInputParameters (workflow level)
+                del wf_inputs[resume_def['var']]
+                # Remove WorkflowStepInputs (entry step)
+                del wf_steps[self.steps[0]]['in'][dge_output]
 
     def _rebuild_entry_inputs(self):
         """Set the new path inputs for the tiny-plot step
