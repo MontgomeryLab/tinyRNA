@@ -38,7 +38,7 @@ class SAM_reader:
         self._decollapsed_filename = None
         self._decollapsed_reads = []
         self._header_lines = []
-        self._header_dict = {}
+        self._header_dict = defaultdict(list)
 
     def bundle_multi_alignments(self, file: str) -> Iterator[Bundle]:
         """Bundles multi-alignments (determined by a shared QNAME) and reports the associated read's count"""
@@ -142,10 +142,11 @@ class SAM_reader:
         fields = header_line[3:].strip().split('\t')
 
         if rec_type == "@CO":
-            self._header_dict[rec_type] = fields[0]
+            self._header_dict[rec_type].append(fields[0])
         else:
-            self._header_dict[rec_type] = \
+            self._header_dict[rec_type].append(
                 {field[:2]: field[3:].strip() for field in fields}
+            )
 
     def _determine_collapser_type(self, first_aln_line: str) -> None:
         """Attempts to determine the collapsing utility that was used before producing the
@@ -157,7 +158,7 @@ class SAM_reader:
         elif re.match(_re_fastx, first_aln_line) is not None:
             self.collapser_type = "fastx"
 
-            sort_order = self._header_dict.get('@HD', {}).get('SO', None)
+            sort_order = self._header_dict.get('@HD', [{}])[0].get('SO', None)
             if sort_order is None or sort_order != "queryname":
                 raise ValueError("SAM files from fastx collapsed outputs must be sorted by queryname\n"
                                  "(and the @HD [...] SO header must be set accordingly).")
