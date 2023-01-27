@@ -743,3 +743,77 @@ class ReferenceTables(AnnotationParsing):
         If both filters are defined then they must both evaluate to true for a match"""
 
         return row.source in rule['Filter_s'] and row.type in rule['Filter_t']
+
+
+class NonGenomicAnnotations(AnnotationParsing):
+
+    def __init__(self, sam_files, feature_selector, **prefs):
+        super().__init__(feature_selector, **prefs)
+        self.sam_files = sam_files
+        self.alias = {}
+        self.tags = {}
+
+    @report_execution_time("Non-genomic annotations parsing")
+    def get(self):
+        ref_seqs = self.get_reference_seq_definitions()
+        unbuilt_match_tuples = self.get_matches()
+
+        for seq_id, seq_len in ref_seqs.items():
+            self.add_reference_seq(seq_id, seq_len, unbuilt_match_tuples)
+
+        # Aliases are irrelevant for non-GFF references
+        aliases = {seq_id: () for seq_id in self.tags}
+        return self.feats, aliases, self.tags
+
+    def get_reference_seq_definitions(self) -> Dict[str,int]:
+        reader = SAM_reader()
+        for sam in self.sam_files:
+            with open(sam['File'], 'rb') as f:
+                reader._read_to_first_aln(f)
+
+        ref_seqs = defaultdict(set)
+        for sq in reader._header_dict['@SQ']:
+            seq_id = sq['SN']
+            seq_len = int(sq['LN'])
+            ref_seqs[seq_id].add(seq_len)
+
+        return self.get_seq_len_consensus(ref_seqs)
+
+    @staticmethod
+    def get_seq_len_consensus(ref_seqs):
+        consensus = {}
+        for seq_id, lengths in ref_seqs.items():
+            if len(lengths) > 1:
+                msg = f"Reference sequence identifier {seq_id} " \
+                      "was given multiple lengths in your SAM files. " \
+                      "This might indicate that your files were produced " \
+                      "by alignments that used different indexes."
+                raise ValueError(msg)
+            consensus[seq_id] = lengths.pop()
+
+        return consensus
+
+    def get_matches(self):
+        """Stage 1 selection is skipped in non-genomic counting.
+        Simply build match_tuples for all rules. These will be used
+        uniformly in each reference sequence's feature_record_tuple"""
+
+        return [(idx, rule['Hierarchy'], rule['Overlap'])
+                for idx, rule in sorted(
+                    enumerate(self.selector.rules_table),
+                    key=lambda x: x[1]['Hierarchy']
+                )]
+
+    def add_reference_seq(self, seq_id, seq_len, unbuilt_match_tuples):
+
+        # Features are classified in Reference Tables (Stage 1 selection)
+        # For compatibility, use the seq_id with an empty classifier (index 1)
+        tagged_id = (seq_id,)
+        self.tags[seq_id] = {tagged_id}
+
+        for strand in ('+', '-'):
+            iv = HTSeq.GenomicInterval(seq_id, 0, seq_len, strand)
+            match_tuples = self.selector.build_interval_selectors(iv, unbuilt_match_tuples.copy())
+            tinyrna_strand = self.map_strand(strand)
+
+            self.feats[iv] += (tagged_id, tinyrna_strand, tuple(match_tuples))
