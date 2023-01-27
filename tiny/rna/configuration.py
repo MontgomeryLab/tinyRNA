@@ -449,7 +449,7 @@ class PathsFile(ConfigBase):
     """
 
     # Parameter types
-    required = ('samples_csv', 'features_csv', 'gff_files')
+    required = ('samples_csv', 'features_csv')
     single =   ('samples_csv', 'features_csv', 'plot_style_sheet', 'adapter_fasta')
     groups =   ('reference_genome_files', 'gff_files')
     prefix =   ('ebwt', 'run_directory', 'tmp_directory')
@@ -508,9 +508,10 @@ class PathsFile(ConfigBase):
             "The following parameters are required in {selfname}: {params}" \
             .format(selfname=self.basename, params=', '.join(self.required))
 
-        assert any(gff.get('path') for gff in self['gff_files']), \
-            "At least one GFF file path must be specified under gff_files in {selfname}" \
-            .format(selfname=self.basename)
+        if not any(gff.get('path') for gff in self['gff_files']):
+            print("No GFF files were specified in {selfname} so "
+                  "reads will be counted in non-genomic mode."
+                  .format(selfname=self.basename))
 
         # Some entries in Paths File are omitted from tiny-count's working directory during
         #  pipeline runs. There is no advantage to checking file existence here vs. in load_*
@@ -526,6 +527,7 @@ class PathsFile(ConfigBase):
         for key in self.groups:
             for entry in self[key]:
                 if isinstance(entry, dict): entry = entry['path']
+                if not entry: continue
                 assert os.path.isfile(entry), \
                     "The following file provided under {key} in {selfname} could not be found:\n\t{file}" \
                     .format(key=key, selfname=self.basename, file=entry)
