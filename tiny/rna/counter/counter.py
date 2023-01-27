@@ -178,23 +178,21 @@ def load_gff_files(paths: PathsFile, libraries: List[dict], rules: List[dict]) -
 
     # Build dictionary of unique files and allowed aliases
     for gff in paths['gff_files']:
-        gff_files[gff['path']].extend(
-            alias for alias in gff.get('alias', ())
-            if alias.lower() not in ignore_alias
-        )
+        if gff['path'] is not None:
+            gff_files[gff['path']].extend(
+                alias for alias in gff.get('alias', ())
+                if alias.lower() not in ignore_alias
+            )
 
     # Remove duplicate aliases (per file), keep original order
     for file, alias in gff_files.items():
         gff_files[file] = sorted(set(alias), key=alias.index)
 
-    # Prepare supporting file inputs for GFF validation
-    sam_files = [lib['File'] for lib in libraries]
+    if gff_files:
+        # Prepare supporting file inputs for GFF validation
+        sam_files = [lib['File'] for lib in libraries]
+        GFFValidator(gff_files, rules, alignments=sam_files).validate()
 
-    # Todo: update GFFValidator so that genomes and ebwt can be safely passed here
-    # ref_genomes = [map_path(fasta) for fasta in paths['reference_genome_files']]
-    # ebwt_prefix = map_path(paths['ebwt'])
-
-    GFFValidator(gff_files, rules, alignments=sam_files).validate()
     return gff_files
 
 
@@ -235,7 +233,7 @@ def main():
 
         # global for multiprocessing
         global counter
-        counter = FeatureCounter(gff_files, selection, **args)
+        counter = FeatureCounter(gff_files, libraries, selection, **args)
 
         # Assign and count features using multiprocessing and merge results
         merged_counts = map_and_reduce(libraries, paths, args)
