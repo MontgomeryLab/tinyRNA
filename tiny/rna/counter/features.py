@@ -4,7 +4,7 @@ import sys
 from collections import defaultdict
 from typing import List, Tuple, Set, Dict, Mapping
 
-from tiny.rna.counter.hts_parsing import ReferenceTables, SAM_reader
+from tiny.rna.counter.hts_parsing import ReferenceTables, NonGenomicAnnotations, SAM_reader
 from .statistics import LibraryStats
 from .matching import *
 
@@ -27,30 +27,20 @@ class Features(metaclass=Singleton):
 
 class FeatureCounter:
 
-    def __init__(self, gff_file_set, selection_rules, **prefs):
+    def __init__(self, gff_file_set, sam_file_set, selection_rules, **prefs):
         self.stats = LibraryStats(**prefs)
         self.sam_reader = SAM_reader(**prefs)
         self.selector = FeatureSelector(selection_rules, self.stats, **prefs)
 
-        reference_tables = ReferenceTables(gff_file_set, self.selector, **prefs)
-        Features(*reference_tables.get())
+        if gff_file_set:
+            self.mode = "genomic"
+            annotations = ReferenceTables(gff_file_set, self.selector, **prefs)
+        else:
+            self.mode = "non-genomic"
+            annotations = NonGenomicAnnotations(sam_file_set, self.selector, **prefs)
+
+        Features(*annotations.get())
         self.prefs = prefs
-
-    def assign_features(self, al: dict) -> Tuple[dict, int]:
-        """Determines features associated with the interval then performs rule-based feature selection"""
-
-        try:
-            feat_matches = set().union(
-                            *Features.chrom_vectors[al['Chrom']]['.']  # GenomicArrayOfSets -> ChromVector
-                                     .array[al['Start']:al['End']]     # ChromVector -> StepVector
-                                     .get_steps(values_only=True))     # StepVector -> {features}
-        except KeyError as ke:
-            self.stats.chrom_misses[ke.args[0]] += 1
-            return {}, 0
-
-        # If features are associated with the alignment interval, perform selection
-        assignment = self.selector.choose(feat_matches, al) if feat_matches else {}
-        return assignment, len(feat_matches)
 
     def count_reads(self, library: dict):
         """Collects statistics on features assigned to each alignment associated with each read"""
@@ -70,6 +60,22 @@ class FeatureCounter:
             self.stats.finalize_bundle(bstat)
 
         return self.stats
+
+    def assign_features(self, al: dict) -> Tuple[dict, int]:
+        """Determines features associated with the interval then performs rule-based feature selection"""
+
+        try:
+            feat_matches = set().union(
+                            *Features.chrom_vectors[al['Chrom']]['.']  # GenomicArrayOfSets -> ChromVector
+                                     .array[al['Start']:al['End']]     # ChromVector -> StepVector
+                                     .get_steps(values_only=True))     # StepVector -> {features}
+        except KeyError as ke:
+            self.stats.chrom_misses[ke.args[0]] += 1
+            return {}, 0
+
+        # If features are associated with the alignment interval, perform selection
+        assignment = self.selector.choose(feat_matches, al) if feat_matches else {}
+        return assignment, len(feat_matches)
 
 
 class FeatureSelector:
