@@ -6,6 +6,7 @@ import re
 
 from collections import Counter, defaultdict
 from typing import Tuple, List, Dict, Iterator, Optional, DefaultDict, Set, Union, IO, Callable
+from abc import ABC, abstractmethod
 from urllib.parse import unquote
 from inspect import stack
 
@@ -409,6 +410,58 @@ class CaseInsensitiveAttrs(Dict[str, tuple]):
         raise NotImplementedError(f"CaseInsensitiveAttrs does not support {stack()[1].function}")
 
 
+class AnnotationParsing(ABC):
+    def __init__(self, feature_selector, **prefs):
+        self.stepvector = prefs.get('stepvector', 'HTSeq')
+        self.selector = feature_selector
+        self.feats = self._init_genomic_array()
+
+    @abstractmethod
+    def get(self): pass
+
+    def _init_genomic_array(self):
+        if self.stepvector == 'Cython':
+            try:
+                from tiny.rna.counter.stepvector import StepVector
+                setattr(HTSeq.StepVector, 'StepVector', StepVector)
+                return HTSeq.GenomicArray("auto", stranded=False)
+            except ModuleNotFoundError:
+                self.stepvector = 'HTSeq'
+                print("Failed to import Cython StepVector\n"
+                      "Falling back to HTSeq's StepVector",
+                      file=sys.stderr)
+
+        if self.stepvector == 'HTSeq':
+            return HTSeq.GenomicArrayOfSets("auto", stranded=False)
+
+    def chrom_vector_setdefault(self, chrom):
+        """Behaves like dict.setdefault() for chrom_vectors. Even though chrom_vectors are
+        dictionaries themselves, calling setdefault on them will break the GenomicArrayOfSets"""
+
+        if chrom not in self.feats.chrom_vectors:
+            self.feats.add_chrom(chrom)
+
+    def get_feats_table_size(self) -> int:
+        """Returns the sum of features across all chromosomes and strands"""
+
+        total_feats = 0
+        empty_size = {"Cython": 1, "HTSeq": 3}[self.stepvector]
+        for chrom in self.feats.chrom_vectors:
+            for strand in self.feats.chrom_vectors[chrom]:
+                total_feats += self.feats.chrom_vectors[chrom][strand].array.num_steps() - empty_size
+
+        return total_feats
+
+    @staticmethod
+    def map_strand(htseq_value: str):
+        """Maps HTSeq's strand representation (+/-/.) to
+        tinyRNA's strand representation (True/False/None)"""
+
+        return {
+            '+': True,
+            '-': False,
+        }.get(htseq_value, None)
+
 def parse_gff(file, row_fn: Callable, alias_keys=None):
     if alias_keys is not None:
         row_fn = functools.partial(row_fn, alias_keys=alias_keys)
@@ -433,8 +486,7 @@ AliasTable = DefaultDict[str, Tuple[str]]
 TagTable = DefaultDict[str, Set[Tuple[str, str]]]
 GenomicArray = HTSeq.GenomicArrayOfSets
 
-
-class ReferenceTables:
+class ReferenceTables(AnnotationParsing):
     """A GFF parser which builds feature, alias, and class reference tables
 
     Discontinuous features are supported, and comma-separated attribute values (GFF3 column 9)
@@ -462,17 +514,16 @@ class ReferenceTables:
     type_filter = []
 
     def __init__(self, gff_files: Dict[str, list], feature_selector, **prefs):
+        super().__init__(feature_selector, **prefs)
         self.all_features = prefs.get('all_features', False)
-        self.stepvector = prefs.get('stepvector', 'HTSeq')
-        self.selector = feature_selector
         self.gff_files = gff_files
-        # ----------------------------------------------------------- Primary Key:
-        self.feats = self._init_genomic_array()                         # Root Match ID
-        self.parents, self.filtered = {}, set()                         # Original Feature ID
-        self.intervals = defaultdict(list)                              # Root Feature ID
-        self.matches = defaultdict(set)                                 # Root Match ID
-        self.alias = defaultdict(set)                                   # Root Feature ID
-        self.tags = defaultdict(set)                                    # Root Feature ID -> Root Match ID
+        # ----------------------------------------------- Primary Key:
+        # self.feats                                        # Root Match ID
+        self.parents, self.filtered = {}, set()             # Original Feature ID
+        self.intervals = defaultdict(list)                  # Root Feature ID
+        self.matches = defaultdict(set)                     # Root Match ID
+        self.alias = defaultdict(set)                       # Root Feature ID
+        self.tags = defaultdict(set)                        # Root Feature ID -> Root Match ID
 
         # Patch the GFF attribute parser to support comma separated attribute value lists
         setattr(HTSeq.features.GFF_Reader, 'parse_GFF_attribute_string', staticmethod(parse_GFF_attribute_string))
@@ -664,39 +715,12 @@ class ReferenceTables:
 
         return merged_ivs
 
-    def get_feats_table_size(self) -> int:
-        """Returns the sum of features across all chromosomes and strands"""
-
-        total_feats = 0
-        empty_size = {"Cython": 1, "HTSeq": 3}[self.stepvector]
-        for chrom in self.feats.chrom_vectors:
-            for strand in self.feats.chrom_vectors[chrom]:
-                total_feats += self.feats.chrom_vectors[chrom][strand].array.num_steps() - empty_size
-
-        return total_feats
-
-    def map_strand(self, gff_value: str):
-        """Maps HTSeq's strand representation (+/-/.) to
-        tinyRNA's strand representation (True/False/None)"""
-
-        return {
-            '+': True,
-            '-': False,
-        }.get(gff_value, None)
-
     def was_matched(self, untagged_id):
         """Checks if the feature ID previously matched on identity, regardless of whether
         the matching rule was tagged or untagged."""
 
         # any() will short circuit on first match when provided a generator function
         return any(tagged_id in self.matches for tagged_id in self.tags.get(untagged_id, ()))
-
-    def chrom_vector_setdefault(self, chrom):
-        """Behaves like dict.setdefault() for chrom_vectors. Even though chrom_vectors are
-        dictionaries themselves, calling setdefault on them will break the GenomicArrayOfSets"""
-
-        if chrom not in self.feats.chrom_vectors:
-            self.feats.add_chrom(chrom)
 
     @staticmethod
     def get_feature_id(row):
@@ -712,21 +736,6 @@ class ReferenceTables:
             return ','.join(id_collection)
 
         return id_collection[0]
-
-    def _init_genomic_array(self):
-        if self.stepvector == 'Cython':
-            try:
-                from tiny.rna.counter.stepvector import StepVector
-                setattr(HTSeq.StepVector, 'StepVector', StepVector)
-                return HTSeq.GenomicArray("auto", stranded=False)
-            except ModuleNotFoundError:
-                self.stepvector = 'HTSeq'
-                print("Failed to import Cython StepVector\n"
-                      "Falling back to HTSeq's StepVector",
-                      file=sys.stderr)
-
-        if self.stepvector == 'HTSeq':
-            return HTSeq.GenomicArrayOfSets("auto", stranded=False)
 
     @staticmethod
     def column_filter_match(row, rule):
