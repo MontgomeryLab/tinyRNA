@@ -241,7 +241,7 @@ class GFFValidator:
         for file in sam_files:
             file_chroms = set()
             with open(file, 'rb') as f:
-                for line, i in zip(f, range(subset_size)):
+                for i, line in zip(range(subset_size), f):
                     if line[0] == ord('@'): continue
                     file_chroms.add(line.split(b'\t')[2].strip().decode())
                     if i % 10000 == 0 and len(file_chroms & self.chrom_set): break
