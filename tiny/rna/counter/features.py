@@ -211,20 +211,23 @@ class FeatureSelector:
 
         built_selectors = {}
         selector_factory = {
-            'full': lambda: IntervalFullMatch(iv),
-            'exact': lambda: IntervalExactMatch(iv),
-            'partial': lambda: IntervalPartialMatch(iv),
-            'anchored': lambda: IntervalAnchorMatch(iv),
-            "5' anchored": lambda: Interval5pMatch(iv) if iv.strand in ('+', '-') else IntervalAnchorMatch(iv),
-            "3' anchored": lambda: Interval3pMatch(iv) if iv.strand in ('+', '-') else IntervalAnchorMatch(iv),
+            'full': lambda: IntervalFullMatch(*args),
+            'exact': lambda: IntervalExactMatch(*args),
+            'partial': lambda: IntervalPartialMatch(*args),
+            'anchored': lambda: IntervalAnchorMatch(*args),
+            "5' anchored": lambda: Interval5pMatch(*args) if iv.strand in ('+', '-') else IntervalAnchorMatch(*args),
+            "3' anchored": lambda: Interval3pMatch(*args) if iv.strand in ('+', '-') else IntervalAnchorMatch(*args),
         }
 
-        for i in range(len(match_tuples)):
+        for i, match in enumerate(match_tuples):
             try:
-                match = match_tuples[i]
+                # Split into keyword and params
+                defn = re.split(r'\s+', match[2], 2)
+                selector, args = defn[0], (iv, *defn[1:])
+                
                 # Cache instances to prevent duplicates for the same match type on the same iv
-                selector = built_selectors.setdefault(match[2], selector_factory[match[2]]())
-                match_tuples[i] = (match[0], match[1], selector)
+                selector_obj = built_selectors.setdefault(selector, selector_factory[selector]())
+                match_tuples[i] = (match[0], match[1], selector_obj)
             except KeyError:
                 raise ValueError(f'Invalid overlap selector: "{match_tuples[i][2]}"')
 

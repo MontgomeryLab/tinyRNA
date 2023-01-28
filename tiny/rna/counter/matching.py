@@ -118,7 +118,7 @@ class NumericalMatch(frozenset):
 
 
 class IntervalSelector:
-    __slots__ = ("start", "end")
+    __slots__ = ("start", "end", "shift")
 
     """IntervalSelector classes use __slots__ rather than class attributes to
     reduce memory footprint. As a result, each instance requires only 128 bytes
@@ -127,10 +127,14 @@ class IntervalSelector:
     one IntervalSelector is created for each unique match definition, for each
     interval associated with each retained feature."""
 
-    def __init__(self, iv: HTSeq.GenomicInterval):
-        """Descendents only need to know the start and end coordinates of the target feature"""
-        self.start = iv.start
-        self.end = iv.end
+    def __init__(self, iv: HTSeq.GenomicInterval, shift:str = None):
+        """Descendants only need to know the start and end coordinates of the target feature"""
+        if shift:
+            self.validate_shift_params(shift)
+            self.start, self.end, self.shift = self.parse_shift_parameters(shift, iv)
+        else:
+            self.start, self.end = iv.start, iv.end
+            self.shift = None
 
     def __hash__(self):
         """Descendents must be hashable in order to be stored in a GenomicArrayOfSets"""
@@ -140,6 +144,26 @@ class IntervalSelector:
         return self.__class__.__name__ == other.__class__.__name__ and \
                self.start == other.start and \
                self.end == other.end
+
+    @staticmethod
+    def parse_shift_parameters(defn, iv):
+        split = defn.strip().split(',', 2)
+        shift = shift_5, shift_3 = int(split[0]), int(split[1])
+
+        if iv.strand == '+':
+            start, end = iv.start + shift_5, iv.end + shift_3
+        elif iv.strand == '-':
+            start, end = iv.start + shift_3, iv.end + shift_5
+        else:  # iv.strand == '.':
+            start, end = iv.start, iv.end
+            shift = None
+
+        return start, end, shift
+
+    @staticmethod
+    def validate_shift_params(defn):
+        assert re.match(r'^-?\d+\s*,\s*-?\d+$', defn.strip()) is not None, \
+            f'Invalid overlap shift parameters: "{defn}"'
 
 
 class IntervalPartialMatch(IntervalSelector):
@@ -151,8 +175,8 @@ class IntervalPartialMatch(IntervalSelector):
 
     __contains__ = Wildcard.__contains__
 
-    def __init__(self, iv: HTSeq.GenomicInterval):
-        super().__init__(iv)
+    def __init__(self, iv: HTSeq.GenomicInterval, shift=None):
+        super().__init__(iv, shift)
 
     def __repr__(self):
         return f"<Any overlap [{self.start}, {self.end})>"
@@ -160,8 +184,8 @@ class IntervalPartialMatch(IntervalSelector):
 
 class IntervalFullMatch(IntervalSelector):
 
-    def __init__(self, iv: HTSeq.GenomicInterval):
-        super().__init__(iv)
+    def __init__(self, iv: HTSeq.GenomicInterval, shift=None):
+        super().__init__(iv, shift)
 
     def __contains__(self, alignment):
         return self.start <= alignment['Start'] and alignment['End'] <= self.end
@@ -172,8 +196,8 @@ class IntervalFullMatch(IntervalSelector):
 
 class IntervalExactMatch(IntervalSelector):
 
-    def __init__(self, iv: HTSeq.GenomicInterval):
-        super().__init__(iv)
+    def __init__(self, iv: HTSeq.GenomicInterval, shift=None):
+        super().__init__(iv, shift)
 
     def __contains__(self, alignment):
         return self.start == alignment['Start'] and alignment['End'] == self.end
@@ -185,8 +209,8 @@ class IntervalExactMatch(IntervalSelector):
 class IntervalAnchorMatch(IntervalSelector):
     """Evaluates whether an alignment's start matches the feature's start, and vice versa for end."""
 
-    def __init__(self, iv: HTSeq.GenomicInterval):
-        super().__init__(iv)
+    def __init__(self, iv: HTSeq.GenomicInterval, shift=None):
+        super().__init__(iv, shift)
         assert iv.strand not in ('+', '-')
 
     def __contains__(self, alignment: dict):
@@ -213,8 +237,8 @@ class IntervalAnchorMatch(IntervalSelector):
 class Interval5pMatch(IntervalSelector):
     """Evaluates whether an alignment's 5' end is anchored to the corresponding terminus of the feature"""
 
-    def __init__(self, iv: HTSeq.GenomicInterval):
-        super().__init__(iv)
+    def __init__(self, iv: HTSeq.GenomicInterval, shift=None):
+        super().__init__(iv, shift)
 
     def __contains__(self, alignment: dict):
         """The following diagram demonstrates 5' anchored matching semantics.
@@ -250,8 +274,8 @@ class Interval5pMatch(IntervalSelector):
 class Interval3pMatch(IntervalSelector):
     """Evaluates whether an alignment's 5' end is anchored to the corresponding terminus of the feature"""
 
-    def __init__(self, iv: HTSeq.GenomicInterval):
-        super().__init__(iv)
+    def __init__(self, iv: HTSeq.GenomicInterval, shift=None):
+        super().__init__(iv, shift)
 
     def __contains__(self, alignment):
         """The following diagram demonstrates 3' anchored matching semantics.
