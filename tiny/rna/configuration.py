@@ -12,33 +12,39 @@ from collections import Counter, OrderedDict, defaultdict
 from typing import Union, Any, Optional, List
 from glob import glob
 
+from tiny.rna.compatibility import RunConfigCompatibility
 from tiny.rna.counter.validation import GFFValidator
 from tiny.rna.util import get_timestamp, get_r_safename
 
 
 class ConfigBase:
-    """Base class for basic tinyrna configuration operations
+    """Base class for YAML-based tinyRNA configurations
+
+    Args:
+        config_file: the path of the YAML config file
+        BackwardCompatibility: a class for providing compatibility with old config files
 
     Attributes:
         yaml: the YAML interface for reading config and writing processed config
         config: the configuration object produced by loading the config file
-        inf: the filename of the configuration .yml file to process
-        dir: parent directory of the input file. Used for calculating paths relative to config file.
-        templates: path to the package templates directory
-        dt: a date-time string for default output naming
+        inf: the input configuration file name
+        basename: the basename of config_file
+        dir: parent directory of the input file
+        dt: a date-time string to use in output prefixes
     """
 
-    def __init__(self, config_file: str):
+    def __init__(self, config_file: str, BackwardCompatibility = None):
         if '~' in config_file: config_file = os.path.expanduser(config_file)
         self.dir = os.path.dirname(os.path.abspath(config_file))
         self.inf = config_file
         self.basename = os.path.basename(config_file)
-        self.templates = ''
         self.dt = ''
 
         self.yaml = ruamel.yaml.YAML()
         with open(config_file, 'r') as f:
             self.config = self.yaml.load(f)
+            if BackwardCompatibility is not None:
+                self.config = BackwardCompatibility(self.config).upgrade()
 
     def __getitem__(self, key: str) -> Any:
         return self.get(key)
@@ -205,7 +211,7 @@ class Configuration(ConfigBase):
 
     def __init__(self, config_file: str, validate_inputs=False):
         # Parse YAML configuration file
-        super().__init__(config_file)
+        super().__init__(config_file, RunConfigCompatibility)
 
         self.paths = self.load_paths_config()
         self.assimilate_paths_file()
@@ -630,7 +636,7 @@ class SamplesSheet:
 
         if degrees_of_freedom < 1:
             print("Your experiment design has less than one degree of freedom, which is incompatible "
-                  "with DESeq2. The DGE step will be skipped and most plots will not be produced.",
+                  "with DESeq2. The tiny-deseq step will be skipped and DGE plots will not be produced.",
                   file=sys.stderr)
             return False
         else:
