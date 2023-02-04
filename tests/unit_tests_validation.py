@@ -6,10 +6,10 @@ import io
 from glob import glob
 from unittest.mock import patch, mock_open
 
-from rna.counter.validation import GFFValidator, ReportFormatter
+from rna.counter.validation import GFFValidator, ReportFormatter, SamSqValidator
 
 
-class ValidationTests(unittest.TestCase):
+class GFFValidatorTest(unittest.TestCase):
 
     """======== Helper functions =========================== """
 
@@ -295,6 +295,118 @@ class ValidationTests(unittest.TestCase):
         self.assertLessEqual(end-start, 2)
 
 
+class SamSqValidatorTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(self):
+        self.syntax_header = "Every SAM file must have complete @SQ headers with SN and LN\n" \
+                             "fields when counting in non-genomic mode.\n"
+
+        self.identifier_header = "Sequence identifiers must be unique and have consistent length definitions.\n"
+    
+    def make_sam_sq_header(self, chroms):
+        return '\n'.join(
+            [f"@SQ\tSN:{chrom[0]}\tLN:{chrom[1]}"
+             for chrom in chroms]
+        )
+
+    def make_parsed_sq_header(self, chroms):
+        return [{'SN': chrom[0], 'LN': chrom[1]} if chrom[0] and chrom[1] else
+                {'SN': chrom[0]} if not chrom[1] else
+                {'LN': chrom[1]}
+                for chrom in chroms]
+
+    """Does SamSqValidator correctly identify missing @SQ headers?"""
+
+    def test_missing_sq_headers(self):
+        mock_files = ['sam1', 'sam2']
+        mock_sam_headers = {
+            mock_files[0]: self.make_parsed_sq_header([('chr1', 100), ('chr2', 200)]),
+            mock_files[1]: []
+        }
+
+        expected = '\n'.join([
+            self.syntax_header,
+            "\t" + f"{SamSqValidator.targets['missing sq']}: ",
+            "\t\t" + mock_files[1]
+        ])
+
+        validator = SamSqValidator(mock_files)
+        validator.sq_headers = mock_sam_headers
+        validator.validate_sq_headers()
+
+        self.assertListEqual(validator.report.errors, [expected])
+        self.assertListEqual(validator.report.warnings, [])
+
+    """Does SamSqValidator correctly identify incomplete @SQ headers?"""
+
+    def test_incomplete_sq_headers(self):
+        mock_files = ['sam1', 'sam2', 'sam3']
+        mock_sam_headers = {
+            mock_files[0]: self.make_parsed_sq_header([('chr1', 100),  ('chr2', 200)]),
+            mock_files[1]: self.make_parsed_sq_header([('chr3', None), ('chr4', 400)]),
+            mock_files[2]: self.make_parsed_sq_header([('chr5', 500),  (None,   600)])
+        }
+
+        expected = '\n'.join([
+            self.syntax_header,
+            "\t" + f"{SamSqValidator.targets['incomplete sq']}: ",
+            "\t\t" + mock_files[1],
+            "\t\t" + mock_files[2],
+        ])
+
+        validator = SamSqValidator(mock_files)
+        validator.sq_headers = mock_sam_headers
+        validator.validate_sq_headers()
+
+        self.assertListEqual(validator.report.errors, [expected])
+        self.assertListEqual(validator.report.warnings, [])
+
+    """Does SamSqValidator correctly identify duplicate identifiers?"""
+
+    def test_duplicate_identifiers(self):
+        mock_files = ['sam1', 'sam2', 'sam3']
+        mock_sam_headers = {
+            mock_files[0]: self.make_parsed_sq_header([('chr1', 100), ('chr2', 200)]),
+            mock_files[1]: self.make_parsed_sq_header([('chr1', 100), ('chr2', 200)]),
+            mock_files[2]: self.make_parsed_sq_header([('chr1', 100), ('chr1', 100)])
+        }
+
+        expected = '\n'.join([
+            self.identifier_header,
+            "\t" + f"{SamSqValidator.targets['intra sq']}: ",
+            "\t\t" + mock_files[2],
+        ])
+
+        validator = SamSqValidator(mock_files)
+        validator.sq_headers = mock_sam_headers
+        validator.validate_sq_headers()
+
+        self.assertListEqual(validator.report.errors, [expected])
+        self.assertListEqual(validator.report.warnings, [])
+
+    """Does SamSqValidator correctly identify identifiers with inconsistent length definitions?"""
+
+    def test_inconsistent_identifier_length(self):
+        mock_files = ['sam1', 'sam2', 'sam3']
+        mock_sam_headers = {
+            mock_files[0]: self.make_parsed_sq_header([('chr1', 100), ('chr2', 200)]),
+            mock_files[1]: self.make_parsed_sq_header([('chr1', 100), ('chr2', 300)]),
+            mock_files[2]: self.make_parsed_sq_header([('chr1', 200), ('chr2', 100)])
+        }
+
+        expected = '\n'.join([
+            self.identifier_header,
+            "\t" + f"{SamSqValidator.targets['inter sq']}: ",
+            "\t\t" + 'chr1',
+            "\t\t" + 'chr2',
+        ])
+
+        validator = SamSqValidator(mock_files)
+        validator.sq_headers = mock_sam_headers
+        validator.validate_sq_headers()
+
+        self.assertListEqual(validator.report.errors, [expected])
+        self.assertListEqual(validator.report.warnings, [])
 
 if __name__ == '__main__':
     unittest.main()
