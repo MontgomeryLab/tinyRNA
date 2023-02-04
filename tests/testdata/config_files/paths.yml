@@ -7,7 +7,7 @@
 #   1. Fill out the Samples Sheet with files to process + naming scheme. [samples.csv]
 #   2. Fill out the Features Sheet with selection rules [features.csv]
 #   3. Set samples_csv and features_csv (below) to point to these files
-#   4. Add annotation files and per-file alias preferences to gff_files
+#   4. Add annotation files and per-file alias preferences to gff_files (optional)
 #
 ######-------------------------------------------------------------------------------######
 
