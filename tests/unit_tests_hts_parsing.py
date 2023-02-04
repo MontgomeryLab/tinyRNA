@@ -145,7 +145,7 @@ class MyTestCase(unittest.TestCase):
         iv = HTSeq.GenomicInterval("I", 3746, 3909, "-")
         kwargs = {'all_features': True}
 
-        feats, alias, tags = ReferenceTables(feature_source, feature_selector, **kwargs).get()
+        feats, alias, tags = ReferenceTables(feature_source, **kwargs).get(feature_selector)
         steps = list(feats[iv].array[iv.start:iv.end].get_steps(values_only=True))
 
         self.assertEqual((type(feats), type(alias), type(tags)), (HTSeq.GenomicArrayOfSets, dict, defaultdict))
@@ -169,7 +169,7 @@ class MyTestCase(unittest.TestCase):
         iv = HTSeq.GenomicInterval("I", 3746, 3909, "-")
         kwargs = {'all_features': True}
 
-        feats, alias, tags = ReferenceTables(feature_source, feature_selector, **kwargs).get()
+        feats, alias, tags = ReferenceTables(feature_source, **kwargs).get(feature_selector)
         steps = list(feats[iv].array[iv.start:iv.end].get_steps(values_only=True))
 
         self.assertEqual((type(feats), type(alias), type(tags)), (HTSeq.GenomicArrayOfSets, dict, defaultdict))
@@ -192,7 +192,7 @@ class MyTestCase(unittest.TestCase):
         # ReferenceTables.get() skips the steps for recording the feature's alias.
         # Instead, a different exception is raised due to reference tables being empty
         with self.assertRaisesRegex(ValueError, expected_err):
-            ReferenceTables(feature_source, feature_selector, **kwargs).get()
+            ReferenceTables(feature_source, **kwargs).get(feature_selector)
 
     """Does ReferenceTables.get() raise ValueError when a feature lacks an ID attribute?"""
 
@@ -209,7 +209,7 @@ class MyTestCase(unittest.TestCase):
 
         with patch('tiny.rna.counter.hts_parsing.HTSeq.utils.open', new=mock_reader):
             with self.assertRaisesRegex(ValueError, expected_err):
-                _ = ReferenceTables(feature_source, feature_selector, **kwargs).get()
+                _ = ReferenceTables(feature_source, **kwargs).get(feature_selector)
 
     """Does ReferenceTables.get() properly concatenate aliases if there is more than one alias for a feature?"""
     """Does ReferenceTables.get() properly concatenate aliases when Name Attribute refers to a list-type alias?"""
@@ -221,7 +221,7 @@ class MyTestCase(unittest.TestCase):
 
         # Notice: screening for "ID" name attribute happens earlier in counter.load_config()
         expected_alias = {"Gene:WBGene00023193": ("additional_class", "Gene:WBGene00023193", "unknown")}
-        _, alias, _ = ReferenceTables(feature_source, MockFeatureSelector([]), **kwargs).get()
+        _, alias, _ = ReferenceTables(feature_source, **kwargs).get(MockFeatureSelector([]))
 
         self.assertDictEqual(alias, expected_alias)
 
@@ -236,7 +236,7 @@ class MyTestCase(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, expected_err):
             # No aliases saved due to all_features=False and the lack of identity matches
-            _, alias, _ = ReferenceTables(feature_source, MockFeatureSelector([]), **kwargs).get()
+            _, alias, _ = ReferenceTables(feature_source, **kwargs).get(MockFeatureSelector([]))
 
     """Does ReferenceTables.get() properly concatenate identity match tuples when multiple GFF files define
     matches for a feature?"""
@@ -262,7 +262,7 @@ class MyTestCase(unittest.TestCase):
             set()
         ]
 
-        feats, _, _ = ReferenceTables(feature_source, feature_selector, **kwargs).get()
+        feats, _, _ = ReferenceTables(feature_source, **kwargs).get(feature_selector)
 
         actual_matches = list(feats.chrom_vectors['I']['.'].array.get_steps(values_only=True))
         self.assertListEqual(actual_matches, expected_matches)
@@ -274,7 +274,7 @@ class MyTestCase(unittest.TestCase):
         feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
         mock_selector = self.selector_with_template(helpers.rules_template)
 
-        _, alias, _ = ReferenceTables(feature_source, mock_selector, **kwargs).get()
+        _, alias, _ = ReferenceTables(feature_source, **kwargs).get(mock_selector)
 
         # Ancestor depth of 1, distinct aliases
         self.assertEqual(alias['Parent2'], ('Child2Name', 'Parent2Name'))
@@ -294,7 +294,7 @@ class MyTestCase(unittest.TestCase):
                        "This may be due to a lack of features matching 'Select for...with value...'"
 
         with self.assertRaisesRegex(ValueError, expected_err):
-            ReferenceTables(feature_source, mock_selector, **kwargs).get()
+            ReferenceTables(feature_source, **kwargs).get(mock_selector)
 
     """Does ReferenceTables.get() properly build a GenomicArrayOfSets for discontinuous features
         where no features match but all_features is True? If the feature didn't match we only want to
@@ -311,7 +311,7 @@ class MyTestCase(unittest.TestCase):
         # EVEN if all_features = True.
         expected = [set()]
 
-        feats, _, _ = ReferenceTables(feature_source, feature_selector, **kwargs).get()
+        feats, _, _ = ReferenceTables(feature_source, **kwargs).get(feature_selector)
         actual = list(feats.chrom_vectors["I"]["."].array.get_steps(values_only=True))
         self.assertListEqual(actual, expected)
 
@@ -331,8 +331,8 @@ class MyTestCase(unittest.TestCase):
         sib_2 = HTSeq.GenomicInterval('I', 110, 120, '-')
         sib_3 = HTSeq.GenomicInterval('I', 139, 150, '-')
 
-        RT_instance = ReferenceTables(feature_source, feature_selector, **kwargs)
-        _ = RT_instance.get()
+        RT_instance = ReferenceTables(feature_source, **kwargs)
+        _ = RT_instance.get(feature_selector)
 
         # Ancestor depth of 1
         self.assertEqual(RT_instance.intervals['GrandParent'], [grandparent_iv, parent_w_p_iv, child_w_gp_iv])
@@ -381,7 +381,7 @@ class MyTestCase(unittest.TestCase):
                     {(Sibling,     False, (rule3_sib['139:150'], rule2_sib['139:150']))},
                     set()]
 
-        feats, _, _ = ReferenceTables(feature_source, feature_selector, **rt_kwargs).get()
+        feats, _, _ = ReferenceTables(feature_source, **rt_kwargs).get(feature_selector)
         actual_steps = list(feats.chrom_vectors["I"]["."].array.get_steps(values_only=True))
         self.assertListEqual(actual_steps, expected)
 
@@ -401,8 +401,8 @@ class MyTestCase(unittest.TestCase):
         exp_filtered =  {"GrandParent", "ParentWithGrandparent", "Parent2", "Child1", "Sibling"}
         exp_parents =   {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'}
 
-        rt = ReferenceTables(feature_source, feature_selector, **kwargs)
-        feats, alias, _ = rt.get()
+        rt = ReferenceTables(feature_source, **kwargs)
+        feats, alias, _ = rt.get(feature_selector)
 
         self.assertEqual(alias, exp_alias)
         self.assertEqual(rt.parents, exp_parents)
@@ -426,8 +426,8 @@ class MyTestCase(unittest.TestCase):
         exp_filtered =  {"GrandParent", "ParentWithGrandparent", "Parent2", "Child2", "Sibling"}
         exp_parents =   {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'}
 
-        rt = ReferenceTables(feature_source, feature_selector, **kwargs)
-        feats, alias, _ = rt.get()
+        rt = ReferenceTables(feature_source, **kwargs)
+        feats, alias, _ = rt.get(feature_selector)
 
         self.assertEqual(alias, exp_alias)
         self.assertEqual(rt.intervals, exp_intervals)
@@ -443,8 +443,8 @@ class MyTestCase(unittest.TestCase):
         feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
         feature_selector = self.selector_with_template([{'Filter_s': "SourceName", 'Filter_t': "gene"}])
 
-        rt = ReferenceTables(feature_source, feature_selector, **kwargs)
-        feats, alias, _ = rt.get()
+        rt = ReferenceTables(feature_source, **kwargs)
+        feats, alias, _ = rt.get(feature_selector)
 
         self.assertEqual(rt.filtered, {'Child1', 'Child2'})
         self.assertEqual(rt.parents, {'ParentWithGrandparent': 'GrandParent', 'Child1': 'ParentWithGrandparent', 'Child2': 'Parent2'})
@@ -473,7 +473,7 @@ class MyTestCase(unittest.TestCase):
             set()
         ]
 
-        feats, aliases, tags = ReferenceTables(feature_source, feature_selector, **kwargs).get()
+        feats, aliases, tags = ReferenceTables(feature_source, **kwargs).get(feature_selector)
 
         actual_feats = list(feats.chrom_vectors['I']['.'].array.get_steps(values_only=True))
         self.assertListEqual(actual_feats, expected_feats)
@@ -509,7 +509,7 @@ class MyTestCase(unittest.TestCase):
             set()
         ]
 
-        feats, aliases, tags = ReferenceTables(feature_source, feature_selector).get()
+        feats, aliases, tags = ReferenceTables(feature_source).get(feature_selector)
 
         stepvec = list(feats.chrom_vectors['I']['.'].array.get_steps(values_only=True))
         self.assertListEqual(stepvec, expected_feats)
@@ -762,11 +762,11 @@ class GenomeParsingTests(unittest.TestCase):
         files = {gff.format(ftype): [] for gff in self.genomes.values() for ftype in ('gff3', 'gtf')}
 
         fs = FeatureSelector(rules, LibraryStats())
-        rt = ReferenceTables(files, fs)
+        rt = ReferenceTables(files)
 
         # The test is passed if this command
         # completes without throwing errors.
-        rt.get()
+        rt.get(fs)
 
 if __name__ == '__main__':
     unittest.main()
