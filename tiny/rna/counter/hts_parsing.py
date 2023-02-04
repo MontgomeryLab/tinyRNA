@@ -796,7 +796,7 @@ class NonGenomicAnnotations(AnnotationParsing):
 
         # Features are classified in Reference Tables (Stage 1 selection)
         # For compatibility, use the seq_id with an empty classifier (index 1)
-        tagged_id = (seq_id,)
+        tagged_id = (seq_id, '')
         self.tags[seq_id] = {tagged_id}
 
         for strand in ('+', '-'):
