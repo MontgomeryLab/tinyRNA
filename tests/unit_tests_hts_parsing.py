@@ -758,7 +758,8 @@ class GenomeParsingTests(unittest.TestCase):
         print("Running GFF Megazord test. This will take a long time...")
 
         # Single rule with all wildcard selectors, but only Identity is actually relevant within ReferenceTables
-        rules = [{'Identity': ('', ''), 'Tag': '', 'Hierarchy': 0, 'Overlap': 'partial', 'Strand': '', 'nt5end': '', 'Length': ''}]
+        rules = [{'Identity': ('', ''), 'Class': '', 'Filter_s': '', 'Filter_t': '', 'Hierarchy': 0,
+                  'Overlap': 'partial', 'Strand': '', 'nt5end': '', 'Length': ''}]
         files = {gff.format(ftype): [] for gff in self.genomes.values() for ftype in ('gff3', 'gtf')}
 
         fs = FeatureSelector(rules, LibraryStats())
