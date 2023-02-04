@@ -420,13 +420,18 @@ class CaseInsensitiveAttrs(Dict[str, tuple]):
 
 
 class AnnotationParsing(ABC):
-    def __init__(self, feature_selector, **prefs):
+    def __init__(self, **prefs):
         self.stepvector = prefs.get('stepvector', 'HTSeq')
-        self.selector = feature_selector
         self.feats = self._init_genomic_array()
 
+        # The selector is assigned whenever get() is called.
+        # While it isn't the current use case, this would allow
+        # for groups of GFF files to be processed with different
+        # Stage 1 selection rules and pooled into the same tables
+        self.selector = None
+
     @abstractmethod
-    def get(self): pass
+    def get(self, feature_selector): pass
 
     def _init_genomic_array(self):
         if self.stepvector == 'Cython':
@@ -470,6 +475,7 @@ class AnnotationParsing(ABC):
             '+': True,
             '-': False,
         }.get(htseq_value, None)
+
 
 def parse_gff(file, row_fn: Callable, alias_keys=None):
     if alias_keys is not None:
@@ -522,8 +528,8 @@ class ReferenceTables(AnnotationParsing):
     source_filter = []
     type_filter = []
 
-    def __init__(self, gff_files: Dict[str, list], feature_selector, **prefs):
-        super().__init__(feature_selector, **prefs)
+    def __init__(self, gff_files: Dict[str, list], **prefs):
+        super().__init__(**prefs)
         self.all_features = prefs.get('all_features', False)
         self.gff_files = gff_files
         # ----------------------------------------------- Primary Key:
@@ -538,9 +544,10 @@ class ReferenceTables(AnnotationParsing):
         setattr(HTSeq.features.GFF_Reader, 'parse_GFF_attribute_string', staticmethod(parse_GFF_attribute_string))
 
     @report_execution_time("GFF parsing")
-    def get(self) -> Tuple[GenomicArray, AliasTable, TagTable]:
+    def get(self, feature_selector) -> Tuple[GenomicArray, AliasTable, TagTable]:
         """Initiates GFF parsing and returns complete feature, alias, and tag tables"""
 
+        self.selector = feature_selector
         for file, alias_keys in self.gff_files.items():
             parse_gff(file, self.parse_row, alias_keys=alias_keys)
 
@@ -756,51 +763,23 @@ class ReferenceTables(AnnotationParsing):
 
 class NonGenomicAnnotations(AnnotationParsing):
 
-    def __init__(self, sam_files, feature_selector, **prefs):
-        super().__init__(feature_selector, **prefs)
-        self.sam_files = sam_files
+    def __init__(self, reference_seqs, **prefs):
+        super().__init__(**prefs)
+        self.seqs = reference_seqs
         self.alias = {}
         self.tags = {}
 
     @report_execution_time("Non-genomic annotations parsing")
-    def get(self):
-        ref_seqs = self.get_reference_seq_definitions()
-        unbuilt_match_tuples = self.get_matches()
+    def get(self, selector):
+        self.selector = selector
+        match_tuples = self.get_matches()
 
-        for seq_id, seq_len in ref_seqs.items():
-            self.add_reference_seq(seq_id, seq_len, unbuilt_match_tuples)
+        for seq_id, seq_len in self.seqs.items():
+            self.add_reference_seq(seq_id, seq_len, match_tuples)
 
         # Aliases are irrelevant for non-GFF references
         aliases = {seq_id: () for seq_id in self.tags}
         return self.feats, aliases, self.tags
-
-    def get_reference_seq_definitions(self) -> Dict[str,int]:
-        reader = SAM_reader()
-        for sam in self.sam_files:
-            with open(sam['File'], 'rb') as f:
-                reader._read_to_first_aln(f)
-
-        ref_seqs = defaultdict(set)
-        for sq in reader._header_dict['@SQ']:
-            seq_id = sq['SN']
-            seq_len = int(sq['LN'])
-            ref_seqs[seq_id].add(seq_len)
-
-        return self.get_seq_len_consensus(ref_seqs)
-
-    @staticmethod
-    def get_seq_len_consensus(ref_seqs):
-        consensus = {}
-        for seq_id, lengths in ref_seqs.items():
-            if len(lengths) > 1:
-                msg = f"Reference sequence identifier {seq_id} " \
-                      "was given multiple lengths in your SAM files. " \
-                      "This might indicate that your files were produced " \
-                      "by alignments that used different indexes."
-                raise ValueError(msg)
-            consensus[seq_id] = lengths.pop()
-
-        return consensus
 
     def get_matches(self):
         """Stage 1 selection is skipped in non-genomic counting.

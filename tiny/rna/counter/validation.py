@@ -87,7 +87,7 @@ class GFFValidator:
     }
 
     def __init__(self, gff_files, rules, ebwt=None, genomes=None, alignments=None):
-        self.ReferenceTables = ReferenceTables(gff_files, None)
+        self.ReferenceTables = ReferenceTables(gff_files)
         self.column_filters = self.build_column_filters(rules)
         self.report = ReportFormatter(self.targets)
         self.chrom_set = set()
