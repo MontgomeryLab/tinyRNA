@@ -4,7 +4,7 @@ import sys
 from collections import defaultdict
 from typing import List, Tuple, Set, Dict, Mapping
 
-from tiny.rna.counter.hts_parsing import SAM_reader, ReferenceTables, NonGenomicAnnotations
+from tiny.rna.counter.hts_parsing import SAM_reader, ReferenceFeatures, ReferenceSeqs
 from .statistics import LibraryStats
 from .matching import *
 
@@ -32,12 +32,12 @@ class FeatureCounter:
         self.sam_reader = SAM_reader(**prefs)
         self.selector = FeatureSelector(selection_rules, self.stats, **prefs)
 
-        if isinstance(references, ReferenceTables):
+        if isinstance(references, ReferenceFeatures):
             self.mode = "genomic"
-        elif isinstance(references, NonGenomicAnnotations):
+        elif isinstance(references, ReferenceSeqs):
             self.mode = "non-genomic"
         else:
-            raise TypeError("Expected ReferenceTables or NonGenomicAnnotations, got %s" % type(references))
+            raise TypeError("Expected ReferenceFeatures or ReferenceSeqs, got %s" % type(references))
 
         Features(*references.get(self.selector))
         self.prefs = prefs
@@ -84,7 +84,7 @@ class FeatureSelector:
     Two sources of data serve as targets for selection: feature attributes (sourced from
     input GFF files), and sequence attributes (sourced from input SAM files).
     All candidate features are assumed to have matched at least one Identity selector,
-    as determined by hts_parsing.ReferenceTables.get_matches_and_classes()
+    as determined by hts_parsing.ReferenceFeatures.get_matches_and_classes()
 
     The first round of selection was performed during GFF parsing.
 
@@ -205,7 +205,7 @@ class FeatureSelector:
 
         Unlike build_selectors() and build_inverted_identities(), this function
         is not called at construction time. Instead, it is called when finalizing
-        match-tuples in ReferenceTables. This is because interval selectors are
+        match-tuples in reference parsers. This is because interval selectors are
         created for each feature (requiring start/stop/strand to be known) for
         each of the feature's identity matches (each match-tuple).
 

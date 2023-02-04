@@ -6,7 +6,7 @@ import os
 from collections import Counter, defaultdict
 from typing import List, Dict
 
-from tiny.rna.counter.hts_parsing import parse_gff, ReferenceTables, SAM_reader
+from tiny.rna.counter.hts_parsing import parse_gff, ReferenceFeatures, SAM_reader
 from tiny.rna.counter.features import FeatureSelector
 from tiny.rna.util import sorted_natural, gzip_open, report_execution_time
 
@@ -92,7 +92,7 @@ class GFFValidator:
     }
 
     def __init__(self, gff_files, rules, ebwt=None, genomes=None, alignments=None):
-        self.ReferenceTables = ReferenceTables(gff_files)
+        self.ReferenceFeatures = ReferenceFeatures(gff_files)
         self.column_filters = self.build_column_filters(rules)
         self.report = ReportFormatter(self.targets)
         self.chrom_set = set()
@@ -120,13 +120,13 @@ class GFFValidator:
     def validate_gff_row(self, row, issues, file):
         # Skip definitions of whole chromosomes and obey source/type filters
         if row.type.lower() == "chromosome": return
-        if not self.ReferenceTables.column_filter_match(row, self.column_filters): return
+        if not self.ReferenceFeatures.column_filter_match(row, self.column_filters): return
 
         if row.iv.strand not in ('+', '-'):
             issues['strand'][file] += 1
 
         try:
-            self.ReferenceTables.get_feature_id(row)
+            self.ReferenceFeatures.get_feature_id(row)
         except:
             issues['ID attribute'][file] += 1
 

@@ -10,7 +10,7 @@ class StepVectorTests(unittest.TestCase):
 
     def test_genomicarray_with_cython_stepvec(self):
         # Patch the StepVector reference in the HTSeq module and use a GenomicArray
-        # instead of a GenomicArrayOfSets, just as we do in ReferenceTables
+        # instead of a GenomicArrayOfSets, just as we do in reference parsers
         setattr(HTSeq.StepVector, 'StepVector', StepVector)
         gas = HTSeq.GenomicArray('auto', stranded=False)
 

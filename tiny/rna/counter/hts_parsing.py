@@ -236,7 +236,7 @@ def infer_strandedness(sam_file: str, intervals: dict) -> str:
 
     Args:
         sam_file: the path of the SAM file to evaluate
-        intervals: the intervals instance attribute of ReferenceTables, populated by .get()
+        intervals: the intervals instance attribute of ReferenceFeatures, populated by .get()
     """
 
     unstranded = HTSeq.GenomicArrayOfSets("auto", stranded=False)
@@ -419,7 +419,9 @@ class CaseInsensitiveAttrs(Dict[str, tuple]):
         raise NotImplementedError(f"CaseInsensitiveAttrs does not support {stack()[1].function}")
 
 
-class AnnotationParsing(ABC):
+class ReferenceBase(ABC):
+    """The base class for reference parsers"""
+
     def __init__(self, **prefs):
         self.stepvector = prefs.get('stepvector', 'HTSeq')
         self.feats = self._init_genomic_array()
@@ -501,7 +503,8 @@ AliasTable = DefaultDict[str, Tuple[str]]
 TagTable = DefaultDict[str, Set[Tuple[str, str]]]
 GenomicArray = HTSeq.GenomicArrayOfSets
 
-class ReferenceTables(AnnotationParsing):
+
+class ReferenceFeatures(ReferenceBase):
     """A GFF parser which builds feature, alias, and class reference tables
 
     Discontinuous features are supported, and comma-separated attribute values (GFF3 column 9)
@@ -514,7 +517,7 @@ class ReferenceTables(AnnotationParsing):
     Children of the root ancestor are otherwise not stored in the reference tables.
 
     Match-tuples are created for each Features Sheet rule which matches a feature's attributes.
-    They are structured as (rank, rule, overlap). "Rank" is the heirarchy value of the matching
+    They are structured as (rank, rule, overlap). "Rank" is the hierarchy value of the matching
     rule, "rule" is the index of that rule in FeatureSelector's rules table, and "overlap" is the
     IntervalSelector per the rule's overlap requirements.
 
@@ -582,7 +585,7 @@ class ReferenceTables(AnnotationParsing):
         """Returns the highest feature ID in the ancestral tree which passed stage 1 selection.
         The original feature ID is returned if there are no valid ancestors."""
 
-        # Descend tree until the descendent is found in the matches table
+        # Descend tree until the descendant is found in the matches table
         # This is because ancestor feature(s) may have been filtered
         for ancestor in lineage[::-1]:
             if self.was_matched(ancestor):
@@ -761,7 +764,7 @@ class ReferenceTables(AnnotationParsing):
         return row.source in rule['Filter_s'] and row.type in rule['Filter_t']
 
 
-class NonGenomicAnnotations(AnnotationParsing):
+class ReferenceSeqs(ReferenceBase):
 
     def __init__(self, reference_seqs, **prefs):
         super().__init__(**prefs)

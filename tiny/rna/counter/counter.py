@@ -11,7 +11,7 @@ from typing import List, Dict
 from tiny.rna.counter.validation import GFFValidator, SamSqValidator
 from tiny.rna.counter.features import Features, FeatureCounter
 from tiny.rna.counter.statistics import MergedStatsManager
-from tiny.rna.counter.hts_parsing import ReferenceTables, NonGenomicAnnotations, AnnotationParsing
+from tiny.rna.counter.hts_parsing import ReferenceFeatures, ReferenceSeqs, ReferenceBase
 from tiny.rna.util import report_execution_time, from_here, ReadOnlyDict, get_timestamp, add_transparent_help
 from tiny.rna.configuration import CSVReader, PathsFile, get_templates
 
@@ -132,7 +132,7 @@ def load_samples(samples_csv: str, is_pipeline: bool) -> List[Dict[str, str]]:
 
 
 def load_config(features_csv: str, is_pipeline: bool) -> List[dict]:
-    """Parses the Features Sheet to provide inputs to FeatureSelector and ReferenceTables
+    """Parses the Features Sheet to provide inputs to FeatureSelector and reference parsers
 
     Args:
         features_csv: a csv file which defines feature sources and selection rules
@@ -150,7 +150,7 @@ def load_config(features_csv: str, is_pipeline: bool) -> List[dict]:
         rule['nt5end'] = rule['nt5end'].upper().translate({ord('U'): 'T'})  # Convert RNA base to cDNA base
         rule['Identity'] = (rule.pop('Key'), rule.pop('Value'))             # Create identity tuple
         rule['Hierarchy'] = int(rule['Hierarchy'])                          # Convert hierarchy to number
-        rule['Overlap'] = rule['Overlap'].lower()                           # Built later in ReferenceTables
+        rule['Overlap'] = rule['Overlap'].lower()                           # Built later in reference parsers
 
         # Duplicate rule entries are not allowed
         if rule not in rules: rules.append(rule)
@@ -158,17 +158,17 @@ def load_config(features_csv: str, is_pipeline: bool) -> List[dict]:
     return rules
 
 
-def load_references(paths: PathsFile, libraries: List[dict], rules: List[dict], prefs) -> AnnotationParsing:
+def load_references(paths: PathsFile, libraries: List[dict], rules: List[dict], prefs) -> ReferenceBase:
     """Determines the reference source (GFF or SAM @SQ headers) and constructs the appropriate object
 
     Args:
         paths: a PathsFile object that optionally contains a `gff_files` configuration
         libraries: libraries parsed from Samples Sheet, each as a dict with a 'File' key
         rules: selection rules parsed from Features Sheet
-        prefs: command line arguments to pass to the AnnotationParsing subclass
+        prefs: command line arguments to pass to the ReferenceBase subclass
 
     Returns:
-        references: an AnnotationParsing object, subclassed based on
+        references: a ReferenceBase object, subclassed based on
             the presence of GFF files in the Paths File
     """
 
@@ -177,14 +177,14 @@ def load_references(paths: PathsFile, libraries: List[dict], rules: List[dict], 
 
     if gff_files:
         GFFValidator(gff_files, rules, alignments=sam_files).validate()
-        references = ReferenceTables(gff_files, **prefs)
+        references = ReferenceFeatures(gff_files, **prefs)
     else:
         sq_validator = SamSqValidator(sam_files)
 
         # Reuse sq_validator's parsing results to save time
         sq_validator.validate()
         sequences = sq_validator.reference_seqs
-        references = NonGenomicAnnotations(sequences, **prefs)
+        references = ReferenceSeqs(sequences, **prefs)
 
     return references
 
