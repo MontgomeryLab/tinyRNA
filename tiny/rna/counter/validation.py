@@ -61,14 +61,19 @@ class ReportFormatter:
 
         lines = []
         for key, val in mapping.items():
-            if not val: continue
             key_header = f"{indent}{self.key_mapper.get(key, key)}: "
             if isinstance(val, dict):
                 lines.append(key_header)
-                lines.extend(self.recursive_indent(val, indent + '\t'))
+                if len(val):
+                    lines.extend(self.recursive_indent(val, indent + '\t'))
+                else:
+                    lines.append(indent + "\t" + "{ NONE }")
             elif isinstance(val, (list, set)):
                 lines.append(key_header)
-                lines.extend([indent + '\t' + line for line in map(str, val)])
+                if len(val):
+                    lines.extend([indent + '\t' + line for line in map(str, val)])
+                else:
+                    lines.append(indent + "\t" + "[ NONE ]")
             else:
                 lines.append(key_header + str(val))
         return lines
