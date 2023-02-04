@@ -581,31 +581,37 @@ class ReferenceFeatures(ReferenceBase):
         # Add alias to root ancestor if it is unique
         self.add_alias(root_id, alias_keys, row.attr)
 
-    def get_root_feature(self, lineage: list) -> str:
-        """Returns the highest feature ID in the ancestral tree which passed stage 1 selection.
-        The original feature ID is returned if there are no valid ancestors."""
+    @staticmethod
+    def get_feature_id(row):
+        id_collection = row.attr.get('ID') \
+                        or row.attr.get('gene_id') \
+                        or row.attr.get('Parent')
 
-        # Descend tree until the descendant is found in the matches table
-        # This is because ancestor feature(s) may have been filtered
-        for ancestor in lineage[::-1]:
-            if self.was_matched(ancestor):
-                return ancestor
-        else:
-            return lineage[0]  # Default: the original feature_id
+        if id_collection is None:
+            raise ValueError(f"Feature {row.name} does not have an ID attribute.")
+        if len(id_collection) == 0:
+            raise ValueError("A feature's ID attribute cannot be empty. This value is required.")
+        if len(id_collection) > 1:
+            return ','.join(id_collection)
 
-    def get_feature_ancestors(self, feature_id: str, row_attrs: CaseInsensitiveAttrs):
-        if "Parent" not in row_attrs:
-            return [feature_id]
+        return id_collection[0]
 
-        parent_id = self.get_row_parent(feature_id, row_attrs)
-        lineage = [feature_id, parent_id]
+    def get_matches(self, row: HTSeq.GenomicFeature) -> DefaultDict:
+        """Performs Stage 1 selection and returns match tuples under their associated classifier"""
 
-        # Climb ancestral tree until the root parent is found
-        while parent_id in self.parents:
-            parent_id = self.parents[parent_id]
-            lineage.append(parent_id)
+        identity_matches = defaultdict(set)
+        for ident, rule_indexes in self.selector.inv_ident.items():
+            if row.attr.contains_ident(ident):
+                for index in rule_indexes:
+                    rule = self.selector.rules_table[index]
+                    if self.column_filter_match(row, rule):
+                        # Unclassified matches are pooled under '' empty string
+                        identity_matches[rule['Class']].add(
+                            (index, rule['Hierarchy'], rule['Overlap'])
+                        )
 
-        return lineage
+        # -> identity_matches: {classifier: {(rule, rank, overlap), ...}, ...}
+        return identity_matches
 
     def add_feature(self, feature_id: str, row, matches: defaultdict) -> str:
         """Adds the feature to the intervals table under its root ID, and to the matches table
@@ -630,29 +636,38 @@ class ReferenceFeatures(ReferenceBase):
 
         return root_id
 
-    def add_alias(self, root_id: str, alias_keys: List[str], row_attrs: CaseInsensitiveAttrs) -> None:
-        """Add feature's aliases to the root ancestor's alias set"""
+    def get_feature_ancestors(self, feature_id: str, row_attrs: CaseInsensitiveAttrs):
+        if "Parent" not in row_attrs:
+            return [feature_id]
 
-        for alias_key in alias_keys:
-            for row_val in row_attrs.get(alias_key, ()):
-                self.alias[root_id].add(row_val)
+        parent_id = self.get_row_parent(feature_id, row_attrs)
+        lineage = [feature_id, parent_id]
 
-    def get_matches(self, row: HTSeq.GenomicFeature) -> DefaultDict:
-        """Performs Stage 1 selection and returns match tuples under their associated classifier"""
+        # Climb ancestral tree until the root parent is found
+        while parent_id in self.parents:
+            parent_id = self.parents[parent_id]
+            lineage.append(parent_id)
 
-        identity_matches = defaultdict(set)
-        for ident, rule_indexes in self.selector.inv_ident.items():
-            if row.attr.contains_ident(ident):
-                for index in rule_indexes:
-                    rule = self.selector.rules_table[index]
-                    if self.column_filter_match(row, rule):
-                        # Unclassified matches are pooled under '' empty string
-                        identity_matches[rule['Class']].add(
-                            (index, rule['Hierarchy'], rule['Overlap'])
-                        )
+        return lineage
 
-        # -> identity_matches: {class: (rule, rank, overlap), ...}
-        return identity_matches
+    def get_root_feature(self, lineage: list) -> str:
+        """Returns the highest feature ID in the ancestral tree which passed stage 1 selection.
+        The original feature ID is returned if there are no valid ancestors."""
+
+        # Descend tree until the descendant is found in the matches table
+        # This is because ancestor feature(s) may have been filtered
+        for ancestor in lineage[::-1]:
+            if self.was_matched(ancestor):
+                return ancestor
+        else:
+            return lineage[0]  # Default: the original feature_id
+
+    def was_matched(self, untagged_id):
+        """Checks if the feature ID previously matched on identity, regardless of whether
+        the matching rule was tagged or untagged."""
+
+        # any() will short circuit on first match when provided a generator function
+        return any(tagged_id in self.matches for tagged_id in self.tags.get(untagged_id, ()))
 
     def get_row_parent(self, feature_id: str, row_attrs: CaseInsensitiveAttrs) -> str:
         """Get the current feature's parent while cooperating with filtered features"""
@@ -686,6 +701,13 @@ class ReferenceFeatures(ReferenceBase):
         if "Parent" in row.attr:
             self.parents[feature_id] = self.get_row_parent(feature_id, row.attr)
         self.chrom_vector_setdefault(row.iv.chrom)
+
+    def add_alias(self, root_id: str, alias_keys: List[str], row_attrs: CaseInsensitiveAttrs) -> None:
+        """Add feature's aliases to the root ancestor's alias set"""
+
+        for alias_key in alias_keys:
+            for row_val in row_attrs.get(alias_key, ()):
+                self.alias[root_id].add(row_val)
 
     def _finalize_aliases(self):
         self.alias = {feat: tuple(sorted(aliases, key=str.lower)) for feat, aliases in self.alias.items()}
@@ -733,28 +755,6 @@ class ReferenceFeatures(ReferenceBase):
         merged_ivs.append(continuous_iv)
 
         return merged_ivs
-
-    def was_matched(self, untagged_id):
-        """Checks if the feature ID previously matched on identity, regardless of whether
-        the matching rule was tagged or untagged."""
-
-        # any() will short circuit on first match when provided a generator function
-        return any(tagged_id in self.matches for tagged_id in self.tags.get(untagged_id, ()))
-
-    @staticmethod
-    def get_feature_id(row):
-        id_collection = row.attr.get('ID') \
-                        or row.attr.get('gene_id') \
-                        or row.attr.get('Parent')
-
-        if id_collection is None:
-            raise ValueError(f"Feature {row.name} does not have an ID attribute.")
-        if len(id_collection) == 0:
-            raise ValueError("A feature's ID attribute cannot be empty. This value is required.")
-        if len(id_collection) > 1:
-            return ','.join(id_collection)
-
-        return id_collection[0]
 
     @staticmethod
     def column_filter_match(row, rule):
