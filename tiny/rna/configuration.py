@@ -136,6 +136,22 @@ class ConfigBase:
         else:
             return destination
 
+    @staticmethod
+    def is_path_dict(val, empty_ok=False):
+        return (isinstance(val, dict) and
+                isinstance(val.get("path"), (str, bytes)) and
+                (len(val['path']) or empty_ok))
+
+    @staticmethod
+    def is_path_str(val, empty_ok=False):
+        return (isinstance(val, (str, bytes)) and
+                (len(val) or empty_ok))
+
+    @classmethod
+    def is_path(cls, val, empty_ok=False):
+        return (cls.is_path_dict(val, empty_ok) or
+                cls.is_path_str(val, empty_ok))
+
     def setup_step_inputs(self):
         """For now, only tiny-plot requires additional setup for step inputs
         This function is called at both startup and resume"""
@@ -340,17 +356,15 @@ class Configuration(ConfigBase):
     def validate_inputs(self):
         """For now, only GFF files are validated here"""
 
-        selection_rules = self.process_features_sheet()
-        gff_files = {gff['path']: [] for gff in self['gff_files']}
-        ebwt = self.paths['ebwt'] if not self['run_bowtie_build'] else None
+        gff_files = self.paths.get_gff_config()
 
-        GFFValidator(
-            gff_files,
-            selection_rules,
-            ebwt=ebwt,
-            genomes=self.paths['reference_genome_files'],
-            alignments=None  # Used in tiny-count standalone runs
-        ).validate()
+        if gff_files:
+            GFFValidator(
+                gff_files,
+                self.process_features_sheet(),
+                self.paths['ebwt'] if not self['run_bowtie_build'] else None,
+                self.paths['reference_genome_files']
+            ).validate()
 
     def execute_post_run_tasks(self, return_code):
         if self['run_bowtie_build']:
@@ -469,9 +483,9 @@ class PathsFile(ConfigBase):
         """When tiny-count runs as a pipeline step, all file inputs are
         sourced from the working directory regardless of original path."""
 
-        if isinstance(value, dict) and value.get("path") is not None:
+        if ConfigBase.is_path_dict(value, empty_ok=True):
             return dict(value, path=os.path.basename(value['path']))
-        elif isinstance(value, (str, bytes)):
+        elif ConfigBase.is_path_str(value, empty_ok=True):
             return os.path.basename(value)
         else:
             return value
@@ -497,7 +511,7 @@ class PathsFile(ConfigBase):
         elif key in self.single:
             return self.cwl_file(val)
         elif key in self.groups:
-            return [self.cwl_file(sub) for sub in val if sub]
+            return [self.cwl_file(sub) for sub in val if self.is_path(sub)]
         elif key in self.prefix:
             raise ValueError(f"The parameter {key} isn't meant to be a CWL file object.")
         else:
@@ -526,7 +540,7 @@ class PathsFile(ConfigBase):
 
         for key in self.groups:
             for entry in self[key]:
-                if isinstance(entry, dict): entry = entry['path']
+                if isinstance(entry, dict): entry = entry.get('path')
                 if not entry: continue
                 assert os.path.isfile(entry), \
                     "The following file provided under {key} in {selfname} could not be found:\n\t{file}" \
@@ -537,6 +551,35 @@ class PathsFile(ConfigBase):
             "The gff_files parameter was not found in your Paths File. This likely means " \
             "that you are using a Paths File from an earlier version of tinyRNA. Please " \
             "check the release notes and update your configuration files."
+
+    def get_gff_config(self) -> Dict[str, list]:
+        """Restructures GFF input info so that it can be more easily handled.
+        To be clear, the Paths File YAML could be structured to match the desired output,
+        but the current format was chosen because it's more readable with more forgiving syntax.
+
+        The YAML format is [{"path": "gff_path_1", "alias": [alias1, alias2, ...]}, { ... }, ...]
+        The output format is {"gff_path_1": [alias1, alias2, ...], ...}
+        """
+
+        gff_files = defaultdict(list)
+        id_filter = lambda alias: alias.lower() != 'id'
+
+        # Build dictionary of files and allowed aliases
+        for gff in self['gff_files']:
+            if not self.is_path_dict(gff): continue
+            path, aliases = gff['path'], gff.get('alias', ())
+            gff_files[path].extend(filter(id_filter, aliases))
+
+        # Remove duplicate aliases per file, keep order
+        for file, alias in gff_files.items():
+            gff_files[file] = sorted(set(alias), key=alias.index)
+
+        if not len(gff_files) and not self.in_pipeline:
+            print("No GFF files were specified in {selfname} so "
+                  "reads will be counted in non-genomic mode."
+                  .format(selfname=self.basename))
+
+        return dict(gff_files)
 
     # Override
     def append_to(self, key: str, val: Any):

@@ -3,17 +3,15 @@
 import multiprocessing as mp
 import traceback
 import argparse
-import shutil
 import sys
 import os
 
-from collections import defaultdict
-from typing import Tuple, List, Dict
-from pkg_resources import resource_filename
+from typing import List, Dict
 
-from tiny.rna.counter.validation import GFFValidator
+from tiny.rna.counter.validation import GFFValidator, SamSqValidator
 from tiny.rna.counter.features import Features, FeatureCounter
 from tiny.rna.counter.statistics import MergedStatsManager
+from tiny.rna.counter.hts_parsing import ReferenceTables, NonGenomicAnnotations, AnnotationParsing
 from tiny.rna.util import report_execution_time, from_here, ReadOnlyDict, get_timestamp, add_transparent_help
 from tiny.rna.configuration import CSVReader, PathsFile, get_templates
 
@@ -160,40 +158,35 @@ def load_config(features_csv: str, is_pipeline: bool) -> List[dict]:
     return rules
 
 
-def load_gff_files(paths: PathsFile, libraries: List[dict], rules: List[dict]) -> Dict[str, list]:
-    """Retrieves the appropriate file path and alias attributes for each GFF,
-    then validates
+def load_references(paths: PathsFile, libraries: List[dict], rules: List[dict], prefs) -> AnnotationParsing:
+    """Determines the reference source (GFF or SAM @SQ headers) and constructs the appropriate object
 
     Args:
-        paths: a loaded PathsFile with a populated gff_files parameter
+        paths: a PathsFile object that optionally contains a `gff_files` configuration
         libraries: libraries parsed from Samples Sheet, each as a dict with a 'File' key
         rules: selection rules parsed from Features Sheet
+        prefs: command line arguments to pass to the AnnotationParsing subclass
 
     Returns:
-        gff: a dict of GFF files with lists of alias attribute keys
+        references: an AnnotationParsing object, subclassed based on
+            the presence of GFF files in the Paths File
     """
 
-    gff_files = defaultdict(list)
-    ignore_alias = ["id"]
-
-    # Build dictionary of unique files and allowed aliases
-    for gff in paths['gff_files']:
-        if gff['path'] is not None:
-            gff_files[gff['path']].extend(
-                alias for alias in gff.get('alias', ())
-                if alias.lower() not in ignore_alias
-            )
-
-    # Remove duplicate aliases (per file), keep original order
-    for file, alias in gff_files.items():
-        gff_files[file] = sorted(set(alias), key=alias.index)
+    gff_files = paths.get_gff_config()
+    sam_files = [lib['File'] for lib in libraries]
 
     if gff_files:
-        # Prepare supporting file inputs for GFF validation
-        sam_files = [lib['File'] for lib in libraries]
         GFFValidator(gff_files, rules, alignments=sam_files).validate()
+        references = ReferenceTables(gff_files, **prefs)
+    else:
+        sq_validator = SamSqValidator(sam_files)
 
-    return gff_files
+        # Reuse sq_validator's parsing results to save time
+        sq_validator.validate()
+        sequences = sq_validator.reference_seqs
+        references = NonGenomicAnnotations(sequences, **prefs)
+
+    return references
 
 
 @report_execution_time("Counting and merging")
@@ -229,11 +222,11 @@ def main():
         paths = PathsFile(args['paths_file'], is_pipeline)
         libraries = load_samples(paths['samples_csv'], is_pipeline)
         selection = load_config(paths['features_csv'], is_pipeline)
-        gff_files = load_gff_files(paths, libraries, selection)
+        reference = load_references(paths, libraries, selection, args)
 
         # global for multiprocessing
         global counter
-        counter = FeatureCounter(gff_files, libraries, selection, **args)
+        counter = FeatureCounter(reference, selection, **args)
 
         # Assign and count features using multiprocessing and merge results
         merged_counts = map_and_reduce(libraries, paths, args)
