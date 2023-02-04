@@ -5,11 +5,10 @@ import errno
 import sys
 import csv
 import os
-import re
 
 from pkg_resources import resource_filename
 from collections import Counter, OrderedDict, defaultdict
-from typing import Union, Any, Optional, List
+from typing import Union, Any, List, Dict
 from glob import glob
 
 from tiny.rna.counter.validation import GFFValidator
@@ -57,7 +56,10 @@ class ConfigBase:
         return val
 
     def set_if_not(self, key: str, val: Union[str, list, dict, bool]) -> Any:
-        """Apply the setting if it has not been previously set"""
+        """Apply the setting if it has not been previously set. This differs from
+        dict.setdefault() in that existing keys are overwritten if the associated
+        value is false in boolean context (e.g. None, False, empty container, etc.)"""
+
         if not self[key]:
             self[key] = val
             return val
@@ -125,13 +127,9 @@ class ConfigBase:
         if isinstance(origin, dict): origin = origin.get('path')
         if origin is None: origin = self.dir
 
-        if (
-                isinstance(destination, dict) and
-                isinstance(destination.get("path"), (str, bytes)) and
-                len(destination['path'])
-        ):
+        if self.is_path_dict(destination):
             return dict(destination, path=self.joinpath(origin, destination["path"]))
-        elif isinstance(destination, (str, bytes)) and bool(destination):
+        elif self.is_path_str(destination):
             return self.joinpath(origin, destination)
         else:
             return destination
@@ -193,11 +191,6 @@ class ConfigBase:
         if filename is None: filename = self.get_outfile_path(self.inf)
 
         with open(filename, 'w') as outconf:
-            if 'paths_config' in self and not os.path.isabs(self['paths_config']):
-                # Processed config will be written to the Run Directory
-                # Ensure paths_config is an absolute path so it remains valid
-                self['paths_config'] = self.from_here(self['paths_config'])
-
             self.yaml.dump(self.config, outconf)
 
         return filename
@@ -224,7 +217,7 @@ class Configuration(ConfigBase):
         super().__init__(config_file)
 
         self.paths = self.load_paths_config()
-        self.assimilate_paths_file()
+        self.absorb_paths_file()
 
         self.setup_pipeline()
         self.setup_file_groups()
@@ -235,18 +228,24 @@ class Configuration(ConfigBase):
         if validate_inputs: self.validate_inputs()
 
     def load_paths_config(self):
-        """Constructs a sub-configuration object containing workflow file preferences
-        self['paths_config'] is the user-facing file path (just the path string)
-        self['paths_file'] is a CWL file object used as a workflow input."""
-        paths_file_path = self.from_here(self['paths_config'])
-        return PathsFile(paths_file_path)
+        """Returns a PathsFile object and updates keys related to the Paths File path"""
 
-    def assimilate_paths_file(self):
+        # paths_config: user-specified
+        #   Resolve the absolute path so that it remains valid when
+        #   the processed Run Config is copied to the Run Directory
+        self['paths_config'] = self.from_here(self['paths_config'])
+
+        # paths_file: automatically generated
+        #   CWL file dictionary is used as a workflow input
+        self['paths_file'] = self.cwl_file(self['paths_config'])
+
+        return PathsFile(self['paths_config'])
+
+    def absorb_paths_file(self):
         for key in [*PathsFile.single, *PathsFile.groups]:
             self[key] = self.paths.as_cwl_file_obj(key)
         for key in PathsFile.prefix:
             self[key] = self.paths[key]
-        self['paths_file'] = self.cwl_file(self.paths.inf)
 
     def process_samples_sheet(self):
         samples_sheet_path = self.paths['samples_csv']
@@ -460,6 +459,12 @@ class PathsFile(ConfigBase):
         - Lookups that return list values do not return the original object; don't
           append to them. Instead, use the append_to() helper function.
         - Chained assignments can produce unexpected results.
+
+    Args:
+        file: The path to the Paths File, as a string
+        in_pipeline: True only when utilized by a step in the workflow,
+            in which case input files are sourced from the working directory
+            regardless of the path indicated in the Paths File
     """
 
     # Parameter types
@@ -521,11 +526,6 @@ class PathsFile(ConfigBase):
         assert all(self[req] for req in self.required), \
             "The following parameters are required in {selfname}: {params}" \
             .format(selfname=self.basename, params=', '.join(self.required))
-
-        if not any(gff.get('path') for gff in self['gff_files']):
-            print("No GFF files were specified in {selfname} so "
-                  "reads will be counted in non-genomic mode."
-                  .format(selfname=self.basename))
 
         # Some entries in Paths File are omitted from tiny-count's working directory during
         #  pipeline runs. There is no advantage to checking file existence here vs. in load_*

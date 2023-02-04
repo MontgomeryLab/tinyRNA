@@ -91,9 +91,11 @@ class ResumeConfig(ConfigBase, ABC):
             wf_steps[self.steps[0]]['in'][param] = new_input['var']
 
     def load_paths_config(self):
-        """Constructs a sub-configuration object containing workflow file preferences"""
-        paths_file_path = self.from_here(self['paths_config'])
-        return PathsFile(paths_file_path)
+        """Returns a PathsFile object and updates keys related to the Paths File path"""
+
+        self['paths_config'] = self.from_here(self['paths_config'])
+        self['paths_file'] = self.cwl_file(self['paths_config'])
+        return PathsFile(self['paths_config'])
 
     def assimilate_paths_file(self):
         """Updates the processed workflow with resume-safe Paths File parameters"""
