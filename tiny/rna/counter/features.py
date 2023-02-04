@@ -4,7 +4,7 @@ import sys
 from collections import defaultdict
 from typing import List, Tuple, Set, Dict, Mapping
 
-from tiny.rna.counter.hts_parsing import ReferenceTables, NonGenomicAnnotations, SAM_reader
+from tiny.rna.counter.hts_parsing import SAM_reader, ReferenceTables, NonGenomicAnnotations
 from .statistics import LibraryStats
 from .matching import *
 
@@ -27,19 +27,19 @@ class Features(metaclass=Singleton):
 
 class FeatureCounter:
 
-    def __init__(self, gff_file_set, sam_file_set, selection_rules, **prefs):
+    def __init__(self, references, selection_rules, **prefs):
         self.stats = LibraryStats(**prefs)
         self.sam_reader = SAM_reader(**prefs)
         self.selector = FeatureSelector(selection_rules, self.stats, **prefs)
 
-        if gff_file_set:
+        if isinstance(references, ReferenceTables):
             self.mode = "genomic"
-            annotations = ReferenceTables(gff_file_set, self.selector, **prefs)
-        else:
+        elif isinstance(references, NonGenomicAnnotations):
             self.mode = "non-genomic"
-            annotations = NonGenomicAnnotations(sam_file_set, self.selector, **prefs)
+        else:
+            raise TypeError("Expected ReferenceTables or NonGenomicAnnotations, got %s" % type(references))
 
-        Features(*annotations.get())
+        Features(*references.get(self.selector))
         self.prefs = prefs
 
     def count_reads(self, library: dict):
