@@ -21,7 +21,8 @@ _re_attr_empty = re.compile(r"^\s*$")
 AlignmentDict = Dict[str, Union[str, int, bytes]]
 Bundle = Tuple[List[AlignmentDict], int]
 _re_tiny = r"\d+_count=\d+"
-_re_fastx = r'seq\d+_x(\d+)'
+_re_fastx = r"seq\d+_x(\d+)"
+_re_header = re.compile(r"^@(HD|SQ|RG|PG)(\t[A-Za-z][A-Za-z0-9]:[ -~]+)+$|^@CO\t.*")
 
 # For Alignment
 complement = {ord('A'): 'T', ord('T'): 'A', ord('G'): 'C', ord('C'): 'G'}
@@ -136,6 +137,7 @@ class SAM_reader:
     def _parse_header_line(self, header_line: str) -> None:
         """Parses and saves information from the provided header line"""
 
+        self.validate_header_line(header_line)
         self._header_lines.append(header_line)
 
         # Header dict
@@ -148,6 +150,13 @@ class SAM_reader:
             self._header_dict[rec_type].append(
                 {field[:2]: field[3:].strip() for field in fields}
             )
+
+    def validate_header_line(self, line):
+        if not re.match(_re_header, line):
+            msg = "Invalid SAM header"
+            msg += f" in {os.path.basename(self.file)}" if self.file else ""
+            msg += ':\n\t' + f'"{line}"'
+            raise ValueError(msg)
 
     def _determine_collapser_type(self, first_aln_line: str) -> None:
         """Attempts to determine the collapsing utility that was used before producing the
