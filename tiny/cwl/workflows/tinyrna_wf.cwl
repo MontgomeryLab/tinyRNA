@@ -48,7 +48,7 @@ inputs:
   trim_front1: int?
   trim_tail1: int?
 
-  # collapser inputs
+  # tiny-collapse inputs
   threshold: int?
   compress: boolean?
   5p_trim: int?
@@ -75,7 +75,7 @@ inputs:
   seed: int?
   shared_memory: boolean?
 
-  # counter inputs
+  # tiny-count inputs
   paths_file: File
   samples_csv: File
   features_csv: File
@@ -88,13 +88,13 @@ inputs:
   counter_all_features: boolean?
   counter_normalize_by_hits: boolean?
 
-  # deseq inputs
+  # tiny-deseq inputs
   run_deseq: boolean
   control_condition: string?
   dge_pca_plot: boolean?
   dge_drop_zero: boolean?
 
-  # plotter options
+  # tiny-plot options
   plot_requests: string[]
   plot_vector_points: boolean?
   plot_len_dist_min: int?
@@ -111,11 +111,11 @@ inputs:
   # output directory names
   dir_name_bt_build: string
   dir_name_fastp: string
-  dir_name_collapser: string
+  dir_name_tiny-collapse: string
   dir_name_bowtie: string
-  dir_name_counter: string
-  dir_name_dge: string
-  dir_name_plotter: string
+  dir_name_tiny-count: string
+  dir_name_tiny-deseq: string
+  dir_name_tiny-plot: string
 
 steps:
 
@@ -147,13 +147,14 @@ steps:
       adapter_fasta: adapter_fasta
       trim_front1: trim_front1
       trim_tail1: trim_tail1
+      threads: threads
 
-      # Collapser
+      # tiny-collapse
       threshold: threshold
       compress: compress
       5p_trim: 5p_trim
       3p_trim: 3p_trim
-    out: [fastq_clean, html_report_file, json_report_file, fastp_console, uniq_seqs, uniq_seqs_low, collapser_console]
+    out: [fastq_clean, html_report_file, json_report_file, uniq_seqs, uniq_seqs_low]
 
   bt_build_optional:
     run: ../tools/bowtie-build.cwl
@@ -167,7 +168,7 @@ steps:
       noref: noref
       ftabchars: ftabchars
       threads: threads
-    out: [ index_files, console_output ]
+    out: [ index_files ]
 
   bowtie:
     run: ../tools/bowtie.cwl
@@ -202,9 +203,9 @@ steps:
       threads: threads
       shared_memory: shared_memory
       seed: seed
-    out: [ sam_out, unal_seqs, console_output ]
+    out: [ sam_out, unal_seqs ]
 
-  counter:
+  tiny-count:
     run: ../tools/tiny-count.cwl
     in:
       paths_file: paths_file
@@ -224,31 +225,31 @@ steps:
       fastp_logs: preprocessing/json_report_file
       collapsed_fa: preprocessing/uniq_seqs
     out: [ feature_counts, rule_counts, norm_counts, mapped_nt_len_dist, assigned_nt_len_dist,
-           alignment_stats, summary_stats, console_output, decollapsed_sams,
-           intermed_out_files, alignment_diags, selection_diags ]
+           alignment_stats, summary_stats, decollapsed_sams, intermed_out_files,
+           alignment_diags, selection_diags ]
 
-  dge:
+  tiny-deseq:
     run: ../tools/tiny-deseq.cwl
     when: $(inputs.run_deseq)
     in:
       run_deseq: run_deseq
-      input_file: counter/feature_counts
+      input_file: tiny-count/feature_counts
       outfile_prefix: run_name
       control: control_condition
       pca: dge_pca_plot
       drop_zero: dge_drop_zero
-    out: [ norm_counts, comparisons, pca_plot, console_output ]
+    out: [ norm_counts, comparisons, pca_plot ]
 
-  plotter:
+  tiny-plot:
     run: ../tools/tiny-plot.cwl
     in:
-      norm_counts: dge/norm_counts
-      dge_tables: dge/comparisons
-      raw_counts: counter/feature_counts
-      rule_counts: counter/rule_counts
-      summ_stats: counter/summary_stats
+      norm_counts: tiny-deseq/norm_counts
+      dge_tables: tiny-deseq/comparisons
+      raw_counts: tiny-count/feature_counts
+      rule_counts: tiny-count/rule_counts
+      summ_stats: tiny-count/summary_stats
       len_dist_tables:
-        source: [ counter/mapped_nt_len_dist, counter/assigned_nt_len_dist ]
+        source: [ tiny-count/mapped_nt_len_dist, tiny-count/assigned_nt_len_dist ]
         linkMerge: merge_flattened
       len_dist_min:
         source: [ plot_len_dist_min, length_required ]
@@ -272,7 +273,6 @@ steps:
       plot_requests: plot_requests
       vector_scatter: plot_vector_points
     out:
-      - console_output
       - len_dist
       - rule_chart
       - class_chart
@@ -286,7 +286,7 @@ steps:
     in:
       run_bowtie_build: run_bowtie_build
       dir_files:
-        source: [ bt_build_optional/index_files, bt_build_optional/console_output ]
+        source: [ bt_build_optional/index_files ]
         pickValue: all_non_null
       dir_name: dir_name_bt_build
     out: [ subdir ]
@@ -295,58 +295,58 @@ steps:
     run: ../tools/make-subdir.cwl
     in:
       dir_files:
-        source: [ preprocessing/fastq_clean, preprocessing/html_report_file, preprocessing/json_report_file,
-                  preprocessing/fastp_console ]
+        source: [ preprocessing/fastq_clean, preprocessing/html_report_file, preprocessing/json_report_file ]
       dir_name: dir_name_fastp
     out: [ subdir ]
 
-  organize_collapser:
+  organize_tiny-collapse:
     run: ../tools/make-subdir.cwl
     in:
       dir_files:
-        source: [ preprocessing/uniq_seqs, preprocessing/uniq_seqs_low, preprocessing/collapser_console ]
-      dir_name: dir_name_collapser
+        source: [ preprocessing/uniq_seqs, preprocessing/uniq_seqs_low ]
+      dir_name: dir_name_tiny-collapse
     out: [ subdir ]
 
   organize_bowtie:
     run: ../tools/make-subdir.cwl
     in:
       dir_files:
-        source: [ bowtie/sam_out, bowtie/unal_seqs, bowtie/console_output ]
+        source: [ bowtie/sam_out, bowtie/unal_seqs ]
       dir_name: dir_name_bowtie
     out: [ subdir ]
 
-  organize_counter:
+  organize_tiny-count:
     run: ../tools/make-subdir.cwl
     in:
       dir_files:
-        source: [ counter/feature_counts, counter/rule_counts, counter/norm_counts, counter/mapped_nt_len_dist,
-                  counter/assigned_nt_len_dist, counter/alignment_stats, counter/summary_stats, counter/console_output,
-                  counter/decollapsed_sams, counter/intermed_out_files, counter/alignment_diags, counter/selection_diags,
+        source: [ tiny-count/feature_counts, tiny-count/rule_counts, tiny-count/norm_counts,
+                  tiny-count/mapped_nt_len_dist, tiny-count/assigned_nt_len_dist,
+                  tiny-count/alignment_stats, tiny-count/summary_stats, tiny-count/decollapsed_sams,
+                  tiny-count/alignment_diags, tiny-count/selection_diags, tiny-count/intermed_out_files,
                   features_csv ]
-      dir_name: dir_name_counter
+      dir_name: dir_name_tiny-count
     out: [ subdir ]
 
-  organize_dge:
+  organize_tiny-deseq:
     run: ../tools/make-subdir.cwl
     when: $(inputs.run_deseq)
     in:
       run_deseq: run_deseq
       dir_files:
-        source: [ dge/norm_counts, dge/comparisons, dge/console_output ]
+        source: [ tiny-deseq/norm_counts, tiny-deseq/comparisons ]
         pickValue: all_non_null
-      dir_name: dir_name_dge
+      dir_name: dir_name_tiny-deseq
     out: [ subdir ]
 
-  organize_plotter:
+  organize_tiny-plot:
     run: ../tools/make-subdir.cwl
     in:
       dir_files:
-        source: [plotter/len_dist, plotter/rule_chart, plotter/class_chart, plotter/replicate_scatter,
-                 plotter/sample_avg_scatter_by_dge, plotter/sample_avg_scatter_by_dge_class,
-                 dge/pca_plot, plotter/console_output]
+        source: [tiny-plot/len_dist, tiny-plot/rule_chart, tiny-plot/class_chart, tiny-plot/replicate_scatter,
+                 tiny-plot/sample_avg_scatter_by_dge, tiny-plot/sample_avg_scatter_by_dge_class,
+                 tiny-deseq/pca_plot ]
         pickValue: all_non_null
-      dir_name: dir_name_plotter
+      dir_name: dir_name_tiny-plot
     out: [ subdir ]
 
 outputs:
@@ -360,22 +360,22 @@ outputs:
     type: Directory
     outputSource: organize_fastp/subdir
 
-  collapser_out_dir:
+  tiny-collapse_out_dir:
     type: Directory
-    outputSource: organize_collapser/subdir
+    outputSource: organize_tiny-collapse/subdir
 
   bowtie_out_dir:
     type: Directory
     outputSource: organize_bowtie/subdir
 
-  counter_out_dir:
+  tiny-count_out_dir:
     type: Directory
-    outputSource: organize_counter/subdir
+    outputSource: organize_tiny-count/subdir
 
-  dge_out_dir:
+  tiny-deseq_out_dir:
     type: Directory?
-    outputSource: organize_dge/subdir
+    outputSource: organize_tiny-deseq/subdir
 
-  plotter_out_dir:
+  tiny-plot_out_dir:
     type: Directory
-    outputSource: organize_plotter/subdir
+    outputSource: organize_tiny-plot/subdir

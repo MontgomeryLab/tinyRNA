@@ -1,0 +1,18 @@
+# For describing changes to the Run Config between versions
+#  - Major keys are version numbers. Changes are evaluated by release order.
+#  - Supported operations: remove, rename, add, and block
+#  - A version that contains `block` will notify the user to resolve manually
+#  - Adding mappings requires noting the key that should precede the new key
+#  - Renames are evaluated before additions; preceding_key should use the new name if version renames it
+
+
+1.2.2:
+  remove: []
+  rename:
+    - dir_name_collapser: dir_name_tiny-collapse
+    - dir_name_counter: dir_name_tiny-count
+    - dir_name_plotter: dir_name_tiny-plot
+    - dir_name_dge: dir_name_tiny-deseq
+  add:
+    - preceding_key: dir_name_tiny-plot
+      dir_name_logs: logs

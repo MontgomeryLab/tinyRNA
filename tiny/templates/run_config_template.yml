@@ -311,11 +311,12 @@ plot_class_scatter_filter:
 
 dir_name_bt_build: bowtie-build
 dir_name_fastp: fastp
-dir_name_collapser: collapser
+dir_name_tiny-collapse: tiny-collapse
 dir_name_bowtie: bowtie
-dir_name_counter: counter
-dir_name_dge: DGE
-dir_name_plotter: plots
+dir_name_tiny-count: tiny-count
+dir_name_tiny-deseq: tiny-deseq
+dir_name_tiny-plot: tiny-plot
+dir_name_logs: logs
 
 
 #########################  AUTOMATICALLY GENERATED CONFIGURATIONS #########################
