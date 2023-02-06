@@ -209,29 +209,40 @@ class FeatureSelector:
                 matches. Each tuple index 2 defines and is replaced by the selector.
         """
 
-        built_selectors = {}
+        cache = {}
         selector_factory = {
-            'full': lambda: IntervalFullMatch(*args),
-            'exact': lambda: IntervalExactMatch(*args),
-            'partial': lambda: IntervalPartialMatch(*args),
-            'anchored': lambda: IntervalAnchorMatch(*args),
-            "5' anchored": lambda: Interval5pMatch(*args) if iv.strand in ('+', '-') else IntervalAnchorMatch(*args),
-            "3' anchored": lambda: Interval3pMatch(*args) if iv.strand in ('+', '-') else IntervalAnchorMatch(*args),
+            'full': lambda x: IntervalFullMatch(x),
+            'exact': lambda x: IntervalExactMatch(x),
+            'partial': lambda x: IntervalPartialMatch(x),
+            'anchored': lambda x: IntervalAnchorMatch(x),
+            "5'anchored": lambda x: Interval5pMatch(x) if iv.strand in ('+', '-') else IntervalAnchorMatch(x),
+            "3'anchored": lambda x: Interval3pMatch(x) if iv.strand in ('+', '-') else IntervalAnchorMatch(x),
         }
 
+        matches_by_interval = defaultdict(list)
         for i, match in enumerate(match_tuples):
             try:
-                # Split into keyword and params
-                defn = re.split(r'\s+', match[2], 2)
-                selector, args = defn[0], (iv, *defn[1:])
+                # Split optional shift parameters from definition
+                defn = re.split(r'\s*,\s*', match[2], 1)
+                selector, shift = defn[0], defn[1:]
+                selector = selector.replace(' ', '')
+
+                # Shift the interval before constructing if shift parameters were provided
+                match_iv = IntervalSelector.get_shifted_interval(shift[0], iv) if shift else iv
+                cache_key = (selector, match_iv)
                 
                 # Cache instances to prevent duplicates for the same match type on the same iv
-                selector_obj = built_selectors.setdefault(selector, selector_factory[selector]())
-                match_tuples[i] = (match[0], match[1], selector_obj)
+                selector_obj = cache.setdefault(cache_key, selector_factory[selector](match_iv))
+
+                built_match_tuple = (match[0], match[1], selector_obj)
+                matches_by_interval[match_iv].append(built_match_tuple)
             except KeyError:
                 raise ValueError(f'Invalid overlap selector: "{match_tuples[i][2]}"')
+            except IllegalShiftError:
+                # Drop offending match tuple
+                pass
 
-        return match_tuples
+        return matches_by_interval
 
     @staticmethod
     def build_inverted_identities(rules_table) -> Dict[Tuple[str, str], List[int]]:

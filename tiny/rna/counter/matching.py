@@ -117,8 +117,19 @@ class NumericalMatch(frozenset):
             f'Invalid length selector: "{defn}"'
 
 
+# Used in IntervalSelector
+class IllegalShiftError(Exception):
+    def __init__(self, iv, shift, subtype):
+        self.subtype = subtype
+        self.shift = shift
+        self.iv = iv
+
+        self.args = (f"The interval {iv} cannot be shifted by {shift} "
+                     f"(results in {self.subtype} interval)",)
+
+
 class IntervalSelector:
-    __slots__ = ("start", "end", "shift")
+    __slots__ = ("start", "end")
 
     """IntervalSelector classes use __slots__ rather than class attributes to
     reduce memory footprint. As a result, each instance requires only 128 bytes
@@ -127,17 +138,13 @@ class IntervalSelector:
     one IntervalSelector is created for each unique match definition, for each
     interval associated with each retained feature."""
 
-    def __init__(self, iv: HTSeq.GenomicInterval, shift:str = None):
+    def __init__(self, iv: HTSeq.GenomicInterval):
         """Descendants only need to know the start and end coordinates of the target feature"""
-        if shift:
-            self.validate_shift_params(shift)
-            self.start, self.end, self.shift = self.parse_shift_parameters(shift, iv)
-        else:
-            self.start, self.end = iv.start, iv.end
-            self.shift = None
+        self.start = iv.start
+        self.end = iv.end
 
     def __hash__(self):
-        """Descendents must be hashable in order to be stored in a GenomicArrayOfSets"""
+        """Descendants must be hashable in order to be stored in a GenomicArrayOfSets"""
         return self.start ^ self.end
 
     def __eq__(self, other):
@@ -145,20 +152,38 @@ class IntervalSelector:
                self.start == other.start and \
                self.end == other.end
 
-    @staticmethod
-    def parse_shift_parameters(defn, iv):
-        split = defn.strip().split(',', 2)
+    @classmethod
+    def get_shifted_interval(cls, shift_defn: str, iv: HTSeq.GenomicInterval):
+        """Shifts the interval's 5' and 3' ends according to the shift definition
+
+        Positive values expand and negative values contract the interval on
+        the specified end. Both values must be specified but zero can be
+        provided if no change is desired.
+
+        Args:
+            shift_defn: A string of two signed numbers, `M` and `N`, comma separated.
+                `M` shifts the interval's 5' end and `N` shifts the interval's 3' end.
+            iv: The interval to shift"""
+
+        cls.validate_shift_params(shift_defn)
+        split = shift_defn.split(',', 1)
         shift = shift_5, shift_3 = int(split[0]), int(split[1])
 
         if iv.strand == '+':
-            start, end = iv.start + shift_5, iv.end + shift_3
+            start, end = iv.start - shift_5, iv.end + shift_3
         elif iv.strand == '-':
-            start, end = iv.start + shift_3, iv.end + shift_5
+            start, end = iv.start - shift_3, iv.end + shift_5
         else:  # iv.strand == '.':
-            start, end = iv.start, iv.end
-            shift = None
+            shift_x = max(shift)
+            start, end = iv.start - shift_x, iv.end + shift_x
+            shift = (shift_x,) * 2
 
-        return start, end, shift
+        if start == end - 1:  # open interval
+            raise IllegalShiftError(iv, shift, "null")
+        if start > end:
+            raise IllegalShiftError(iv, shift, "inverted")
+
+        return HTSeq.GenomicInterval(iv.chrom, start, end, iv.strand)
 
     @staticmethod
     def validate_shift_params(defn):
@@ -175,8 +200,8 @@ class IntervalPartialMatch(IntervalSelector):
 
     __contains__ = Wildcard.__contains__
 
-    def __init__(self, iv: HTSeq.GenomicInterval, shift=None):
-        super().__init__(iv, shift)
+    def __init__(self, iv: HTSeq.GenomicInterval):
+        super().__init__(iv)
 
     def __repr__(self):
         return f"<Any overlap [{self.start}, {self.end})>"
@@ -184,8 +209,8 @@ class IntervalPartialMatch(IntervalSelector):
 
 class IntervalFullMatch(IntervalSelector):
 
-    def __init__(self, iv: HTSeq.GenomicInterval, shift=None):
-        super().__init__(iv, shift)
+    def __init__(self, iv: HTSeq.GenomicInterval):
+        super().__init__(iv)
 
     def __contains__(self, alignment):
         return self.start <= alignment['Start'] and alignment['End'] <= self.end
@@ -196,8 +221,8 @@ class IntervalFullMatch(IntervalSelector):
 
 class IntervalExactMatch(IntervalSelector):
 
-    def __init__(self, iv: HTSeq.GenomicInterval, shift=None):
-        super().__init__(iv, shift)
+    def __init__(self, iv: HTSeq.GenomicInterval):
+        super().__init__(iv)
 
     def __contains__(self, alignment):
         return self.start == alignment['Start'] and alignment['End'] == self.end
@@ -209,8 +234,8 @@ class IntervalExactMatch(IntervalSelector):
 class IntervalAnchorMatch(IntervalSelector):
     """Evaluates whether an alignment's start matches the feature's start, and vice versa for end."""
 
-    def __init__(self, iv: HTSeq.GenomicInterval, shift=None):
-        super().__init__(iv, shift)
+    def __init__(self, iv: HTSeq.GenomicInterval):
+        super().__init__(iv)
         assert iv.strand not in ('+', '-')
 
     def __contains__(self, alignment: dict):
@@ -237,8 +262,8 @@ class IntervalAnchorMatch(IntervalSelector):
 class Interval5pMatch(IntervalSelector):
     """Evaluates whether an alignment's 5' end is anchored to the corresponding terminus of the feature"""
 
-    def __init__(self, iv: HTSeq.GenomicInterval, shift=None):
-        super().__init__(iv, shift)
+    def __init__(self, iv: HTSeq.GenomicInterval):
+        super().__init__(iv)
 
     def __contains__(self, alignment: dict):
         """The following diagram demonstrates 5' anchored matching semantics.
@@ -274,8 +299,8 @@ class Interval5pMatch(IntervalSelector):
 class Interval3pMatch(IntervalSelector):
     """Evaluates whether an alignment's 5' end is anchored to the corresponding terminus of the feature"""
 
-    def __init__(self, iv: HTSeq.GenomicInterval, shift=None):
-        super().__init__(iv, shift)
+    def __init__(self, iv: HTSeq.GenomicInterval):
+        super().__init__(iv)
 
     def __contains__(self, alignment):
         """The following diagram demonstrates 3' anchored matching semantics.
