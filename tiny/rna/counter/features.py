@@ -195,18 +195,23 @@ class FeatureSelector:
 
     @staticmethod
     def build_interval_selectors(iv: 'HTSeq.GenomicInterval', match_tuples: List[unbuilt_match_tuple]):
-        """Builds partial/full/exact/3' anchored/5' anchored interval selectors
+        """Builds partial/full/exact/5'anchored/3'anchored interval selectors
 
         Unlike build_selectors() and build_inverted_identities(), this function
         is not called at construction time. Instead, it is called when finalizing
-        match-tuples in ReferenceTables. This is because interval selectors are
-        created for each feature (requiring start/stop/strand to be known) for
-        each of the feature's identity matches (each match-tuple).
+        match-tuples in ReferenceTables. This is because the intervals of features
+        passing Stage 1 selection, and the specific rules they matched, must be known.
+
+        Index 2 of each match tuple is from the Overlap column of the Features Sheet.
+        It defines the desired selector and, optionally, a shift parameter for shifting
+        the 5' and/or 3' ends of the interval. Its syntax is:
+            selector,M,N
+                M = signed shift value for 5' end
+                N = signed shift value for 3' end
 
         Args:
             iv: The interval of the feature from which each selector is built
-            match_tuples: A list of tuples representing the feature's identity
-                matches. Each tuple index 2 defines and is replaced by the selector.
+            match_tuples: A list of tuples representing the feature's Stage 1 matches
         """
 
         cache = {}
@@ -239,8 +244,7 @@ class FeatureSelector:
             except KeyError:
                 raise ValueError(f'Invalid overlap selector: "{match_tuples[i][2]}"')
             except IllegalShiftError:
-                # Drop offending match tuple
-                pass
+                pass  # Drop offending match tuple
 
         return matches_by_interval
 

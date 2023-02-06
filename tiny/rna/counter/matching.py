@@ -156,23 +156,25 @@ class IntervalSelector:
     def get_shifted_interval(cls, shift_defn: str, iv: HTSeq.GenomicInterval):
         """Shifts the interval's 5' and 3' ends according to the shift definition
 
-        Positive values expand and negative values contract the interval on
-        the specified end. Both values must be specified but zero can be
+        Positive values shift the interval in the 3' direction and negative values
+        shift in the 5' direction. Both values must be specified but zero can be
         provided if no change is desired.
 
         Args:
             shift_defn: A string of two signed numbers, `M` and `N`, comma separated.
-                `M` shifts the interval's 5' end and `N` shifts the interval's 3' end.
-            iv: The interval to shift"""
+                `M` shifts the interval at the 5' end and `N` shifts the interval
+                 at the 3' end.
+            iv: The interval to shift
+        """
 
         cls.validate_shift_params(shift_defn)
         split = shift_defn.split(',', 1)
         shift = shift_5, shift_3 = int(split[0]), int(split[1])
 
         if iv.strand == '+':
-            start, end = iv.start - shift_5, iv.end + shift_3
+            start, end = iv.start + shift_5, iv.end + shift_3
         elif iv.strand == '-':
-            start, end = iv.start - shift_3, iv.end + shift_5
+            start, end = iv.start - shift_3, iv.end - shift_5
         else:  # iv.strand == '.':
             shift_x = max(shift)
             start, end = iv.start - shift_x, iv.end + shift_x
