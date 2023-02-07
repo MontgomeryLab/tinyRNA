@@ -772,7 +772,6 @@ class ReferenceSeqs(ReferenceBase):
         self.alias = {}
         self.tags = {}
 
-    @report_execution_time("Non-genomic annotations parsing")
     def get(self, selector):
         self.selector = selector
         match_tuples = self.get_matches()
@@ -785,7 +784,7 @@ class ReferenceSeqs(ReferenceBase):
         return self.feats, aliases, self.tags
 
     def get_matches(self):
-        """Stage 1 selection is skipped in non-genomic counting.
+        """Stage 1 selection is skipped in sequence-based counting.
         Simply build match_tuples for all rules. These will be used
         uniformly in each reference sequence's feature_record_tuple"""
 

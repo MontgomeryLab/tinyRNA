@@ -2,6 +2,7 @@ import ruamel.yaml
 import argparse
 import shutil
 import errno
+import time
 import sys
 import csv
 import os
@@ -581,11 +582,19 @@ class PathsFile(ConfigBase):
             gff_files[file] = sorted(set(alias), key=alias.index)
 
         if not len(gff_files) and not self.in_pipeline:
-            print("No GFF files were specified in {selfname} so "
-                  "reads will be counted in non-genomic mode."
-                  .format(selfname=self.basename))
+            self.print_sequence_counting_notice()
 
         return dict(gff_files)
+
+    def print_sequence_counting_notice(self):
+        print("No GFF files were specified in {selfname}.\n"
+              "Reads will be quantified by sequence "
+              "rather than by feature."
+              .format(selfname=self.basename))
+
+        for s in reversed(range(6)):
+            print(f"Proceeding in {s}s", end='\r')
+            time.sleep(1)
 
     # Override
     def append_to(self, key: str, val: Any):

@@ -299,7 +299,7 @@ class SamSqValidatorTest(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         self.syntax_header = "Every SAM file must have complete @SQ headers with SN and LN\n" \
-                             "fields when counting in non-genomic mode.\n"
+                             "fields when performing sequence-based counting.\n"
 
         self.identifier_header = "Sequence identifiers must be unique and have consistent length definitions.\n"
     

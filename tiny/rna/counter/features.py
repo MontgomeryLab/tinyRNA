@@ -33,9 +33,9 @@ class FeatureCounter:
         self.selector = FeatureSelector(selection_rules, self.stats, **prefs)
 
         if isinstance(references, ReferenceFeatures):
-            self.mode = "genomic"
+            self.mode = "by feature"
         elif isinstance(references, ReferenceSeqs):
-            self.mode = "non-genomic"
+            self.mode = "by sequence"
         else:
             raise TypeError("Expected ReferenceFeatures or ReferenceSeqs, got %s" % type(references))
 

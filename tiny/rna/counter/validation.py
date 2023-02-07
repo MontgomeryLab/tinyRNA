@@ -295,7 +295,7 @@ class GFFValidator:
 
 
 class SamSqValidator:
-    """Validates @SQ headers for tiny-count's non-genomic counting mode"""
+    """Validates @SQ headers for tiny-count's sequence-based counting mode"""
 
     targets = {
         "inter sq": "Sequence identifiers with inconsistent lengths",
@@ -310,7 +310,6 @@ class SamSqValidator:
         self.reference_seqs = {}
         self.sq_headers = {}
 
-    @report_execution_time("Non-genomic annotations validation")
     def validate(self):
         print("Validating sequence identifiers in SAM files...")
         self.read_sq_headers()
@@ -391,7 +390,7 @@ class SamSqValidator:
             report['incomplete sq'] = sorted_natural(incomplete)
 
         header = "Every SAM file must have complete @SQ headers with SN and LN\n" \
-                 "fields when counting in non-genomic mode.\n"
+                 "fields when performing sequence-based counting.\n"
         self.report.add_error_section(header, report)
 
     def generate_identifier_report(self, duplicate, ambiguous):
