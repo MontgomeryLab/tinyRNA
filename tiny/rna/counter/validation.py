@@ -6,9 +6,9 @@ import os
 from collections import Counter, defaultdict
 from typing import List, Dict
 
-from tiny.rna.counter.hts_parsing import parse_gff, ReferenceTables
+from tiny.rna.counter.hts_parsing import parse_gff, ReferenceFeatures, SAM_reader
 from tiny.rna.counter.features import FeatureSelector
-from tiny.rna.util import sorted_natural, gzip_open
+from tiny.rna.util import sorted_natural, gzip_open, report_execution_time
 
 
 class ReportFormatter:
@@ -61,14 +61,19 @@ class ReportFormatter:
 
         lines = []
         for key, val in mapping.items():
-            if not val: continue
             key_header = f"{indent}{self.key_mapper.get(key, key)}: "
             if isinstance(val, dict):
                 lines.append(key_header)
-                lines.extend(self.recursive_indent(val, indent + '\t'))
+                if len(val):
+                    lines.extend(self.recursive_indent(val, indent + '\t'))
+                else:
+                    lines.append(indent + "\t" + "{ NONE }")
             elif isinstance(val, (list, set)):
                 lines.append(key_header)
-                lines.extend([indent + '\t' + line for line in map(str, val)])
+                if len(val):
+                    lines.extend([indent + '\t' + line for line in map(str, val)])
+                else:
+                    lines.append(indent + "\t" + "[ NONE ]")
             else:
                 lines.append(key_header + str(val))
         return lines
@@ -87,7 +92,7 @@ class GFFValidator:
     }
 
     def __init__(self, gff_files, rules, ebwt=None, genomes=None, alignments=None):
-        self.ReferenceTables = ReferenceTables(gff_files, None)
+        self.ReferenceFeatures = ReferenceFeatures(gff_files)
         self.column_filters = self.build_column_filters(rules)
         self.report = ReportFormatter(self.targets)
         self.chrom_set = set()
@@ -115,13 +120,13 @@ class GFFValidator:
     def validate_gff_row(self, row, issues, file):
         # Skip definitions of whole chromosomes and obey source/type filters
         if row.type.lower() == "chromosome": return
-        if not self.ReferenceTables.column_filter_match(row, self.column_filters): return
+        if not self.ReferenceFeatures.column_filter_match(row, self.column_filters): return
 
         if row.iv.strand not in ('+', '-'):
             issues['strand'][file] += 1
 
         try:
-            self.ReferenceTables.get_feature_id(row)
+            self.ReferenceFeatures.get_feature_id(row)
         except:
             issues['ID attribute'][file] += 1
 
@@ -241,7 +246,7 @@ class GFFValidator:
         for file in sam_files:
             file_chroms = set()
             with open(file, 'rb') as f:
-                for line, i in zip(f, range(subset_size)):
+                for i, line in zip(range(subset_size), f):
                     if line[0] == ord('@'): continue
                     file_chroms.add(line.split(b'\t')[2].strip().decode())
                     if i % 10000 == 0 and len(file_chroms & self.chrom_set): break
@@ -287,3 +292,121 @@ class GFFValidator:
         }
 
         return FeatureSelector.build_selectors([selector_defs])[0]
+
+
+class SamSqValidator:
+    """Validates @SQ headers for tiny-count's sequence-based counting mode"""
+
+    targets = {
+        "inter sq": "Sequence identifiers with inconsistent lengths",
+        "intra sq": "SAM files with repeated sequence identifiers",
+        "incomplete sq": "SAM files with incomplete @SQ headers",
+        "missing sq": "SAM files that lack @SQ headers"
+    }
+
+    def __init__(self, sam_files):
+        self.report = ReportFormatter(self.targets)
+        self.sam_files = sam_files
+        self.reference_seqs = {}
+        self.sq_headers = {}
+
+    def validate(self):
+        print("Validating sequence identifiers in SAM files...")
+        self.read_sq_headers()
+        self.validate_sq_headers()
+        self.report.print_report()
+        if self.report.errors:
+            sys.exit(1)
+
+    def validate_sq_headers(self):
+        """Performs validation tests in the required order
+        It is important to check for and return upon syntax error, otherwise
+        the remaining tests are likely to raise an exception before the report
+        has a chance to be printed"""
+
+        # First verify @SQ header syntax
+        missing = self.get_missing_headers()
+        incomplete = self.get_incomplete_sq_headers()
+        if missing or incomplete:
+            self.generate_header_syntax_report(missing, incomplete)
+            return
+
+        # Next verify identifier definitions
+        duplicate = self.get_duplicate_identifiers()
+        ambiguous = self.get_ambiguous_lengths()
+        if duplicate or ambiguous:
+            self.generate_identifier_report(duplicate, ambiguous)
+
+    def get_ambiguous_lengths(self) -> List[str]:
+        """Returns a list of sequence IDs that have inconsistent length definitions.
+        Sequences with consistent length definitions are added to self.reference_seqs"""
+
+        seq_lengths = defaultdict(set)
+        for sam in self.sam_files:
+            for sq in self.sq_headers[sam]:
+                seq_id = sq['SN']
+                seq_len = int(sq['LN'])
+                seq_lengths[seq_id].add(seq_len)
+
+        bad_seqs = []
+        for seq_id, lengths in seq_lengths.items():
+            if len(lengths) == 1:
+                lengths = lengths.pop()
+                self.reference_seqs[seq_id] = lengths
+            else:
+                bad_seqs.append(seq_id)
+
+        return bad_seqs
+
+    def get_duplicate_identifiers(self) -> Dict[str, List[str]]:
+        """Returns a dictionary of SAM files that contain duplicate sequence identifiers"""
+
+        bad_files = {}
+        for file in self.sam_files:
+            sq = self.sq_headers[file]
+            id_count = Counter(seq['SN'] for seq in sq)
+            duplicates = [seq_id for seq_id, count in id_count.items() if count > 1]
+            if duplicates: bad_files[file] = duplicates
+
+        return bad_files
+
+    def get_incomplete_sq_headers(self) -> List[str]:
+        """Returns a list of SAM files that have incomplete @SQ headers"""
+
+        return [file for file, sqs in self.sq_headers.items()
+                if not all("SN" in sq and "LN" in sq for sq in sqs)]
+
+    def get_missing_headers(self) -> List[str]:
+        """Returns a list of SAM files that lack @SQ headers"""
+
+        return [file for file, sqs in self.sq_headers.items()
+                if len(sqs) == 0]
+
+    def generate_header_syntax_report(self, missing, incomplete):
+        report = {}
+        if missing:
+            report['missing sq'] = sorted_natural(missing)
+        if incomplete:
+            report['incomplete sq'] = sorted_natural(incomplete)
+
+        header = "Every SAM file must have complete @SQ headers with SN and LN\n" \
+                 "fields when performing sequence-based counting.\n"
+        self.report.add_error_section(header, report)
+
+    def generate_identifier_report(self, duplicate, ambiguous):
+        report = {}
+        if duplicate:
+            report['intra sq'] = sorted_natural(duplicate)
+        if ambiguous:
+            report['inter sq'] = sorted_natural(ambiguous)
+
+        header = "Sequence identifiers must be unique and have consistent length definitions.\n"
+        self.report.add_error_section(header, report)
+
+    def read_sq_headers(self):
+        for file in self.sam_files:
+            with open(file, 'rb') as f:
+                reader = SAM_reader()
+                reader._read_to_first_aln(f)
+
+            self.sq_headers[file] = reader._header_dict.get('@SQ', [])

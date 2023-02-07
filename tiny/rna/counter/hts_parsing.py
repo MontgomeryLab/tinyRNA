@@ -6,6 +6,7 @@ import re
 
 from collections import Counter, defaultdict
 from typing import Tuple, List, Dict, Iterator, Optional, DefaultDict, Set, Union, IO, Callable
+from abc import ABC, abstractmethod
 from urllib.parse import unquote
 from inspect import stack
 
@@ -20,7 +21,8 @@ _re_attr_empty = re.compile(r"^\s*$")
 AlignmentDict = Dict[str, Union[str, int, bytes]]
 Bundle = Tuple[List[AlignmentDict], int]
 _re_tiny = r"\d+_count=\d+"
-_re_fastx = r'seq\d+_x(\d+)'
+_re_fastx = r"seq\d+_x(\d+)"
+_re_header = re.compile(r"^@(HD|SQ|RG|PG)(\t[A-Za-z][A-Za-z0-9]:[ -~]+)+$|^@CO\t.*")
 
 # For Alignment
 complement = {ord('A'): 'T', ord('T'): 'A', ord('G'): 'C', ord('C'): 'G'}
@@ -38,7 +40,7 @@ class SAM_reader:
         self._decollapsed_filename = None
         self._decollapsed_reads = []
         self._header_lines = []
-        self._header_dict = {}
+        self._header_dict = defaultdict(list)
 
     def bundle_multi_alignments(self, file: str) -> Iterator[Bundle]:
         """Bundles multi-alignments (determined by a shared QNAME) and reports the associated read's count"""
@@ -135,6 +137,7 @@ class SAM_reader:
     def _parse_header_line(self, header_line: str) -> None:
         """Parses and saves information from the provided header line"""
 
+        self.validate_header_line(header_line)
         self._header_lines.append(header_line)
 
         # Header dict
@@ -142,10 +145,18 @@ class SAM_reader:
         fields = header_line[3:].strip().split('\t')
 
         if rec_type == "@CO":
-            self._header_dict[rec_type] = fields[0]
+            self._header_dict[rec_type].append(fields[0])
         else:
-            self._header_dict[rec_type] = \
+            self._header_dict[rec_type].append(
                 {field[:2]: field[3:].strip() for field in fields}
+            )
+
+    def validate_header_line(self, line):
+        if not re.match(_re_header, line):
+            msg = "Invalid SAM header"
+            msg += f" in {os.path.basename(self.file)}" if self.file else ""
+            msg += ':\n\t' + f'"{line}"'
+            raise ValueError(msg)
 
     def _determine_collapser_type(self, first_aln_line: str) -> None:
         """Attempts to determine the collapsing utility that was used before producing the
@@ -157,7 +168,7 @@ class SAM_reader:
         elif re.match(_re_fastx, first_aln_line) is not None:
             self.collapser_type = "fastx"
 
-            sort_order = self._header_dict.get('@HD', {}).get('SO', None)
+            sort_order = self._header_dict.get('@HD', [{}])[0].get('SO', None)
             if sort_order is None or sort_order != "queryname":
                 raise ValueError("SAM files from fastx collapsed outputs must be sorted by queryname\n"
                                  "(and the @HD [...] SO header must be set accordingly).")
@@ -225,7 +236,7 @@ def infer_strandedness(sam_file: str, intervals: dict) -> str:
 
     Args:
         sam_file: the path of the SAM file to evaluate
-        intervals: the intervals instance attribute of ReferenceTables, populated by .get()
+        intervals: the intervals instance attribute of ReferenceFeatures, populated by .get()
     """
 
     unstranded = HTSeq.GenomicArrayOfSets("auto", stranded=False)
@@ -408,6 +419,66 @@ class CaseInsensitiveAttrs(Dict[str, tuple]):
         raise NotImplementedError(f"CaseInsensitiveAttrs does not support {stack()[1].function}")
 
 
+class ReferenceBase(ABC):
+    """The base class for reference parsers"""
+
+    def __init__(self, **prefs):
+        self.stepvector = prefs.get('stepvector', 'HTSeq')
+        self.feats = self._init_genomic_array()
+
+        # The selector is assigned whenever get() is called.
+        # While it isn't the current use case, this would allow
+        # for groups of GFF files to be processed with different
+        # Stage 1 selection rules and pooled into the same tables
+        self.selector = None
+
+    @abstractmethod
+    def get(self, feature_selector): pass
+
+    def _init_genomic_array(self):
+        if self.stepvector == 'Cython':
+            try:
+                from tiny.rna.counter.stepvector import StepVector
+                setattr(HTSeq.StepVector, 'StepVector', StepVector)
+                return HTSeq.GenomicArray("auto", stranded=False)
+            except ModuleNotFoundError:
+                self.stepvector = 'HTSeq'
+                print("Failed to import Cython StepVector\n"
+                      "Falling back to HTSeq's StepVector",
+                      file=sys.stderr)
+
+        if self.stepvector == 'HTSeq':
+            return HTSeq.GenomicArrayOfSets("auto", stranded=False)
+
+    def chrom_vector_setdefault(self, chrom):
+        """Behaves like dict.setdefault() for chrom_vectors. Even though chrom_vectors are
+        dictionaries themselves, calling setdefault on them will break the GenomicArrayOfSets"""
+
+        if chrom not in self.feats.chrom_vectors:
+            self.feats.add_chrom(chrom)
+
+    def get_feats_table_size(self) -> int:
+        """Returns the sum of features across all chromosomes and strands"""
+
+        total_feats = 0
+        empty_size = {"Cython": 1, "HTSeq": 3}[self.stepvector]
+        for chrom in self.feats.chrom_vectors:
+            for strand in self.feats.chrom_vectors[chrom]:
+                total_feats += self.feats.chrom_vectors[chrom][strand].array.num_steps() - empty_size
+
+        return total_feats
+
+    @staticmethod
+    def map_strand(htseq_value: str):
+        """Maps HTSeq's strand representation (+/-/.) to
+        tinyRNA's strand representation (True/False/None)"""
+
+        return {
+            '+': True,
+            '-': False,
+        }.get(htseq_value, None)
+
+
 def parse_gff(file, row_fn: Callable, alias_keys=None):
     if alias_keys is not None:
         row_fn = functools.partial(row_fn, alias_keys=alias_keys)
@@ -433,7 +504,7 @@ TagTable = DefaultDict[str, Set[Tuple[str, str]]]
 GenomicArray = HTSeq.GenomicArrayOfSets
 
 
-class ReferenceTables:
+class ReferenceFeatures(ReferenceBase):
     """A GFF parser which builds feature, alias, and class reference tables
 
     Discontinuous features are supported, and comma-separated attribute values (GFF3 column 9)
@@ -446,7 +517,7 @@ class ReferenceTables:
     Children of the root ancestor are otherwise not stored in the reference tables.
 
     Match-tuples are created for each Features Sheet rule which matches a feature's attributes.
-    They are structured as (rank, rule, overlap). "Rank" is the heirarchy value of the matching
+    They are structured as (rank, rule, overlap). "Rank" is the hierarchy value of the matching
     rule, "rule" is the index of that rule in FeatureSelector's rules table, and "overlap" is the
     IntervalSelector per the rule's overlap requirements.
 
@@ -460,26 +531,26 @@ class ReferenceTables:
     source_filter = []
     type_filter = []
 
-    def __init__(self, gff_files: Dict[str, list], feature_selector, **prefs):
+    def __init__(self, gff_files: Dict[str, list], **prefs):
+        super().__init__(**prefs)
         self.all_features = prefs.get('all_features', False)
-        self.stepvector = prefs.get('stepvector', 'HTSeq')
-        self.selector = feature_selector
         self.gff_files = gff_files
-        # ----------------------------------------------------------- Primary Key:
-        self.feats = self._init_genomic_array()                         # Root Match ID
-        self.parents, self.filtered = {}, set()                         # Original Feature ID
-        self.intervals = defaultdict(list)                              # Root Feature ID
-        self.matches = defaultdict(set)                                 # Root Match ID
-        self.alias = defaultdict(set)                                   # Root Feature ID
-        self.tags = defaultdict(set)                                    # Root Feature ID -> Root Match ID
+        # ----------------------------------------------- Primary Key:
+        # self.feats                                        # Root Match ID
+        self.parents, self.filtered = {}, set()             # Original Feature ID
+        self.intervals = defaultdict(list)                  # Root Feature ID
+        self.matches = defaultdict(set)                     # Root Match ID
+        self.alias = defaultdict(set)                       # Root Feature ID
+        self.tags = defaultdict(set)                        # Root Feature ID -> Root Match ID
 
         # Patch the GFF attribute parser to support comma separated attribute value lists
         setattr(HTSeq.features.GFF_Reader, 'parse_GFF_attribute_string', staticmethod(parse_GFF_attribute_string))
 
     @report_execution_time("GFF parsing")
-    def get(self) -> Tuple[GenomicArray, AliasTable, TagTable]:
+    def get(self, feature_selector) -> Tuple[GenomicArray, AliasTable, TagTable]:
         """Initiates GFF parsing and returns complete feature, alias, and tag tables"""
 
+        self.selector = feature_selector
         for file, alias_keys in self.gff_files.items():
             parse_gff(file, self.parse_row, alias_keys=alias_keys)
 
@@ -510,31 +581,37 @@ class ReferenceTables:
         # Add alias to root ancestor if it is unique
         self.add_alias(root_id, alias_keys, row.attr)
 
-    def get_root_feature(self, lineage: list) -> str:
-        """Returns the highest feature ID in the ancestral tree which passed stage 1 selection.
-        The original feature ID is returned if there are no valid ancestors."""
+    @staticmethod
+    def get_feature_id(row):
+        id_collection = row.attr.get('ID') \
+                        or row.attr.get('gene_id') \
+                        or row.attr.get('Parent')
 
-        # Descend tree until the descendent is found in the matches table
-        # This is because ancestor feature(s) may have been filtered
-        for ancestor in lineage[::-1]:
-            if self.was_matched(ancestor):
-                return ancestor
-        else:
-            return lineage[0]  # Default: the original feature_id
+        if id_collection is None:
+            raise ValueError(f"Feature {row.name} does not have an ID attribute.")
+        if len(id_collection) == 0:
+            raise ValueError("A feature's ID attribute cannot be empty. This value is required.")
+        if len(id_collection) > 1:
+            return ','.join(id_collection)
 
-    def get_feature_ancestors(self, feature_id: str, row_attrs: CaseInsensitiveAttrs):
-        if "Parent" not in row_attrs:
-            return [feature_id]
+        return id_collection[0]
 
-        parent_id = self.get_row_parent(feature_id, row_attrs)
-        lineage = [feature_id, parent_id]
+    def get_matches(self, row: HTSeq.GenomicFeature) -> DefaultDict:
+        """Performs Stage 1 selection and returns match tuples under their associated classifier"""
 
-        # Climb ancestral tree until the root parent is found
-        while parent_id in self.parents:
-            parent_id = self.parents[parent_id]
-            lineage.append(parent_id)
+        identity_matches = defaultdict(set)
+        for ident, rule_indexes in self.selector.inv_ident.items():
+            if row.attr.contains_ident(ident):
+                for index in rule_indexes:
+                    rule = self.selector.rules_table[index]
+                    if self.column_filter_match(row, rule):
+                        # Unclassified matches are pooled under '' empty string
+                        identity_matches[rule['Class']].add(
+                            (index, rule['Hierarchy'], rule['Overlap'])
+                        )
 
-        return lineage
+        # -> identity_matches: {classifier: {(rule, rank, overlap), ...}, ...}
+        return identity_matches
 
     def add_feature(self, feature_id: str, row, matches: defaultdict) -> str:
         """Adds the feature to the intervals table under its root ID, and to the matches table
@@ -559,29 +636,38 @@ class ReferenceTables:
 
         return root_id
 
-    def add_alias(self, root_id: str, alias_keys: List[str], row_attrs: CaseInsensitiveAttrs) -> None:
-        """Add feature's aliases to the root ancestor's alias set"""
+    def get_feature_ancestors(self, feature_id: str, row_attrs: CaseInsensitiveAttrs):
+        if "Parent" not in row_attrs:
+            return [feature_id]
 
-        for alias_key in alias_keys:
-            for row_val in row_attrs.get(alias_key, ()):
-                self.alias[root_id].add(row_val)
+        parent_id = self.get_row_parent(feature_id, row_attrs)
+        lineage = [feature_id, parent_id]
 
-    def get_matches(self, row: HTSeq.GenomicFeature) -> DefaultDict:
-        """Performs Stage 1 selection and returns match tuples under their associated classifier"""
+        # Climb ancestral tree until the root parent is found
+        while parent_id in self.parents:
+            parent_id = self.parents[parent_id]
+            lineage.append(parent_id)
 
-        identity_matches = defaultdict(set)
-        for ident, rule_indexes in self.selector.inv_ident.items():
-            if row.attr.contains_ident(ident):
-                for index in rule_indexes:
-                    rule = self.selector.rules_table[index]
-                    if self.column_filter_match(row, rule):
-                        # Unclassified matches are pooled under '' empty string
-                        identity_matches[rule['Class']].add(
-                            (index, rule['Hierarchy'], rule['Overlap'])
-                        )
+        return lineage
 
-        # -> identity_matches: {class: (rule, rank, overlap), ...}
-        return identity_matches
+    def get_root_feature(self, lineage: list) -> str:
+        """Returns the highest feature ID in the ancestral tree which passed stage 1 selection.
+        The original feature ID is returned if there are no valid ancestors."""
+
+        # Descend tree until the descendant is found in the matches table
+        # This is because ancestor feature(s) may have been filtered
+        for ancestor in lineage[::-1]:
+            if self.was_matched(ancestor):
+                return ancestor
+        else:
+            return lineage[0]  # Default: the original feature_id
+
+    def was_matched(self, untagged_id):
+        """Checks if the feature ID previously matched on identity, regardless of whether
+        the matching rule was tagged or untagged."""
+
+        # any() will short circuit on first match when provided a generator function
+        return any(tagged_id in self.matches for tagged_id in self.tags.get(untagged_id, ()))
 
     def get_row_parent(self, feature_id: str, row_attrs: CaseInsensitiveAttrs) -> str:
         """Get the current feature's parent while cooperating with filtered features"""
@@ -615,6 +701,13 @@ class ReferenceTables:
         if "Parent" in row.attr:
             self.parents[feature_id] = self.get_row_parent(feature_id, row.attr)
         self.chrom_vector_setdefault(row.iv.chrom)
+
+    def add_alias(self, root_id: str, alias_keys: List[str], row_attrs: CaseInsensitiveAttrs) -> None:
+        """Add feature's aliases to the root ancestor's alias set"""
+
+        for alias_key in alias_keys:
+            for row_val in row_attrs.get(alias_key, ()):
+                self.alias[root_id].add(row_val)
 
     def _finalize_aliases(self):
         self.alias = {feat: tuple(sorted(aliases, key=str.lower)) for feat, aliases in self.alias.items()}
@@ -663,73 +756,54 @@ class ReferenceTables:
 
         return merged_ivs
 
-    def get_feats_table_size(self) -> int:
-        """Returns the sum of features across all chromosomes and strands"""
-
-        total_feats = 0
-        empty_size = {"Cython": 1, "HTSeq": 3}[self.stepvector]
-        for chrom in self.feats.chrom_vectors:
-            for strand in self.feats.chrom_vectors[chrom]:
-                total_feats += self.feats.chrom_vectors[chrom][strand].array.num_steps() - empty_size
-
-        return total_feats
-
-    def map_strand(self, gff_value: str):
-        """Maps HTSeq's strand representation (+/-/.) to
-        tinyRNA's strand representation (True/False/None)"""
-
-        return {
-            '+': True,
-            '-': False,
-        }.get(gff_value, None)
-
-    def was_matched(self, untagged_id):
-        """Checks if the feature ID previously matched on identity, regardless of whether
-        the matching rule was tagged or untagged."""
-
-        # any() will short circuit on first match when provided a generator function
-        return any(tagged_id in self.matches for tagged_id in self.tags.get(untagged_id, ()))
-
-    def chrom_vector_setdefault(self, chrom):
-        """Behaves like dict.setdefault() for chrom_vectors. Even though chrom_vectors are
-        dictionaries themselves, calling setdefault on them will break the GenomicArrayOfSets"""
-
-        if chrom not in self.feats.chrom_vectors:
-            self.feats.add_chrom(chrom)
-
-    @staticmethod
-    def get_feature_id(row):
-        id_collection = row.attr.get('ID') \
-                        or row.attr.get('gene_id') \
-                        or row.attr.get('Parent')
-
-        if id_collection is None:
-            raise ValueError(f"Feature {row.name} does not have an ID attribute.")
-        if len(id_collection) == 0:
-            raise ValueError("A feature's ID attribute cannot be empty. This value is required.")
-        if len(id_collection) > 1:
-            return ','.join(id_collection)
-
-        return id_collection[0]
-
-    def _init_genomic_array(self):
-        if self.stepvector == 'Cython':
-            try:
-                from tiny.rna.counter.stepvector import StepVector
-                setattr(HTSeq.StepVector, 'StepVector', StepVector)
-                return HTSeq.GenomicArray("auto", stranded=False)
-            except ModuleNotFoundError:
-                self.stepvector = 'HTSeq'
-                print("Failed to import Cython StepVector\n"
-                      "Falling back to HTSeq's StepVector",
-                      file=sys.stderr)
-
-        if self.stepvector == 'HTSeq':
-            return HTSeq.GenomicArrayOfSets("auto", stranded=False)
-
     @staticmethod
     def column_filter_match(row, rule):
         """Checks if the GFF row passes the inclusive filter(s)
         If both filters are defined then they must both evaluate to true for a match"""
 
         return row.source in rule['Filter_s'] and row.type in rule['Filter_t']
+
+
+class ReferenceSeqs(ReferenceBase):
+
+    def __init__(self, reference_seqs, **prefs):
+        super().__init__(**prefs)
+        self.seqs = reference_seqs
+        self.alias = {}
+        self.tags = {}
+
+    def get(self, selector):
+        self.selector = selector
+        match_tuples = self.get_matches()
+
+        for seq_id, seq_len in self.seqs.items():
+            self.add_reference_seq(seq_id, seq_len, match_tuples)
+
+        # Aliases are irrelevant for non-GFF references
+        aliases = {seq_id: () for seq_id in self.tags}
+        return self.feats, aliases, self.tags
+
+    def get_matches(self):
+        """Stage 1 selection is skipped in sequence-based counting.
+        Simply build match_tuples for all rules. These will be used
+        uniformly in each reference sequence's feature_record_tuple"""
+
+        return [(idx, rule['Hierarchy'], rule['Overlap'])
+                for idx, rule in sorted(
+                    enumerate(self.selector.rules_table),
+                    key=lambda x: x[1]['Hierarchy']
+                )]
+
+    def add_reference_seq(self, seq_id, seq_len, unbuilt_match_tuples):
+
+        # Features are classified in Reference Tables (Stage 1 selection)
+        # For compatibility, use the seq_id with an empty classifier (index 1)
+        tagged_id = (seq_id, '')
+        self.tags[seq_id] = {tagged_id}
+
+        for strand in ('+', '-'):
+            iv = HTSeq.GenomicInterval(seq_id, 0, seq_len, strand)
+            match_tuples = self.selector.build_interval_selectors(iv, unbuilt_match_tuples.copy())
+            tinyrna_strand = self.map_strand(strand)
+
+            self.feats[iv] += (tagged_id, tinyrna_strand, tuple(match_tuples))

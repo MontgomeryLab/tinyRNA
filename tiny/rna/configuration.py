@@ -2,14 +2,14 @@ import ruamel.yaml
 import argparse
 import shutil
 import errno
+import time
 import sys
 import csv
 import os
-import re
 
 from pkg_resources import resource_filename
 from collections import Counter, OrderedDict, defaultdict
-from typing import Union, Any, Optional, List
+from typing import Union, Any, List, Dict
 from glob import glob
 
 from tiny.rna.compatibility import RunConfigCompatibility
@@ -63,7 +63,10 @@ class ConfigBase:
         return val
 
     def set_if_not(self, key: str, val: Union[str, list, dict, bool]) -> Any:
-        """Apply the setting if it has not been previously set"""
+        """Apply the setting if it has not been previously set. This differs from
+        dict.setdefault() in that existing keys are overwritten if the associated
+        value is false in boolean context (e.g. None, False, empty container, etc.)"""
+
         if not self[key]:
             self[key] = val
             return val
@@ -131,16 +134,28 @@ class ConfigBase:
         if isinstance(origin, dict): origin = origin.get('path')
         if origin is None: origin = self.dir
 
-        if (
-                isinstance(destination, dict) and
-                isinstance(destination.get("path"), (str, bytes)) and
-                len(destination['path'])
-        ):
+        if self.is_path_dict(destination):
             return dict(destination, path=self.joinpath(origin, destination["path"]))
-        elif isinstance(destination, (str, bytes)) and bool(destination):
+        elif self.is_path_str(destination):
             return self.joinpath(origin, destination)
         else:
             return destination
+
+    @staticmethod
+    def is_path_dict(val, empty_ok=False):
+        return (isinstance(val, dict) and
+                isinstance(val.get("path"), (str, bytes)) and
+                (len(val['path']) or empty_ok))
+
+    @staticmethod
+    def is_path_str(val, empty_ok=False):
+        return (isinstance(val, (str, bytes)) and
+                (len(val) or empty_ok))
+
+    @classmethod
+    def is_path(cls, val, empty_ok=False):
+        return (cls.is_path_dict(val, empty_ok) or
+                cls.is_path_str(val, empty_ok))
 
     def setup_step_inputs(self):
         """For now, only tiny-plot requires additional setup for step inputs
@@ -183,11 +198,6 @@ class ConfigBase:
         if filename is None: filename = self.get_outfile_path(self.inf)
 
         with open(filename, 'w') as outconf:
-            if 'paths_config' in self and not os.path.isabs(self['paths_config']):
-                # Processed config will be written to the Run Directory
-                # Ensure paths_config is an absolute path so it remains valid
-                self['paths_config'] = self.from_here(self['paths_config'])
-
             self.yaml.dump(self.config, outconf)
 
         return filename
@@ -214,7 +224,7 @@ class Configuration(ConfigBase):
         super().__init__(config_file, RunConfigCompatibility)
 
         self.paths = self.load_paths_config()
-        self.assimilate_paths_file()
+        self.absorb_paths_file()
 
         self.setup_pipeline()
         self.setup_file_groups()
@@ -225,18 +235,24 @@ class Configuration(ConfigBase):
         if validate_inputs: self.validate_inputs()
 
     def load_paths_config(self):
-        """Constructs a sub-configuration object containing workflow file preferences
-        self['paths_config'] is the user-facing file path (just the path string)
-        self['paths_file'] is a CWL file object used as a workflow input."""
-        paths_file_path = self.from_here(self['paths_config'])
-        return PathsFile(paths_file_path)
+        """Returns a PathsFile object and updates keys related to the Paths File path"""
 
-    def assimilate_paths_file(self):
+        # paths_config: user-specified
+        #   Resolve the absolute path so that it remains valid when
+        #   the processed Run Config is copied to the Run Directory
+        self['paths_config'] = self.from_here(self['paths_config'])
+
+        # paths_file: automatically generated
+        #   CWL file dictionary is used as a workflow input
+        self['paths_file'] = self.cwl_file(self['paths_config'])
+
+        return PathsFile(self['paths_config'])
+
+    def absorb_paths_file(self):
         for key in [*PathsFile.single, *PathsFile.groups]:
             self[key] = self.paths.as_cwl_file_obj(key)
         for key in PathsFile.prefix:
             self[key] = self.paths[key]
-        self['paths_file'] = self.cwl_file(self.paths.inf)
 
     def process_samples_sheet(self):
         samples_sheet_path = self.paths['samples_csv']
@@ -346,17 +362,15 @@ class Configuration(ConfigBase):
     def validate_inputs(self):
         """For now, only GFF files are validated here"""
 
-        selection_rules = self.process_features_sheet()
-        gff_files = {gff['path']: [] for gff in self['gff_files']}
-        ebwt = self.paths['ebwt'] if not self['run_bowtie_build'] else None
+        gff_files = self.paths.get_gff_config()
 
-        GFFValidator(
-            gff_files,
-            selection_rules,
-            ebwt=ebwt,
-            genomes=self.paths['reference_genome_files'],
-            alignments=None  # Used in tiny-count standalone runs
-        ).validate()
+        if gff_files:
+            GFFValidator(
+                gff_files,
+                self.process_features_sheet(),
+                self.paths['ebwt'] if not self['run_bowtie_build'] else None,
+                self.paths['reference_genome_files']
+            ).validate()
 
     def execute_post_run_tasks(self, return_code):
         if self['run_bowtie_build']:
@@ -452,10 +466,16 @@ class PathsFile(ConfigBase):
         - Lookups that return list values do not return the original object; don't
           append to them. Instead, use the append_to() helper function.
         - Chained assignments can produce unexpected results.
+
+    Args:
+        file: The path to the Paths File, as a string
+        in_pipeline: True only when utilized by a step in the workflow,
+            in which case input files are sourced from the working directory
+            regardless of the path indicated in the Paths File
     """
 
     # Parameter types
-    required = ('samples_csv', 'features_csv', 'gff_files')
+    required = ('samples_csv', 'features_csv')
     single =   ('samples_csv', 'features_csv', 'plot_style_sheet', 'adapter_fasta')
     groups =   ('reference_genome_files', 'gff_files')
     prefix =   ('ebwt', 'run_directory', 'tmp_directory')
@@ -475,9 +495,9 @@ class PathsFile(ConfigBase):
         """When tiny-count runs as a pipeline step, all file inputs are
         sourced from the working directory regardless of original path."""
 
-        if isinstance(value, dict) and value.get("path") is not None:
+        if ConfigBase.is_path_dict(value, empty_ok=True):
             return dict(value, path=os.path.basename(value['path']))
-        elif isinstance(value, (str, bytes)):
+        elif ConfigBase.is_path_str(value, empty_ok=True):
             return os.path.basename(value)
         else:
             return value
@@ -503,7 +523,7 @@ class PathsFile(ConfigBase):
         elif key in self.single:
             return self.cwl_file(val)
         elif key in self.groups:
-            return [self.cwl_file(sub) for sub in val if sub]
+            return [self.cwl_file(sub) for sub in val if self.is_path(sub)]
         elif key in self.prefix:
             raise ValueError(f"The parameter {key} isn't meant to be a CWL file object.")
         else:
@@ -513,10 +533,6 @@ class PathsFile(ConfigBase):
         assert all(self[req] for req in self.required), \
             "The following parameters are required in {selfname}: {params}" \
             .format(selfname=self.basename, params=', '.join(self.required))
-
-        assert any(gff.get('path') for gff in self['gff_files']), \
-            "At least one GFF file path must be specified under gff_files in {selfname}" \
-            .format(selfname=self.basename)
 
         # Some entries in Paths File are omitted from tiny-count's working directory during
         #  pipeline runs. There is no advantage to checking file existence here vs. in load_*
@@ -531,7 +547,8 @@ class PathsFile(ConfigBase):
 
         for key in self.groups:
             for entry in self[key]:
-                if isinstance(entry, dict): entry = entry['path']
+                if isinstance(entry, dict): entry = entry.get('path')
+                if not entry: continue
                 assert os.path.isfile(entry), \
                     "The following file provided under {key} in {selfname} could not be found:\n\t{file}" \
                     .format(key=key, selfname=self.basename, file=entry)
@@ -541,6 +558,43 @@ class PathsFile(ConfigBase):
             "The gff_files parameter was not found in your Paths File. This likely means " \
             "that you are using a Paths File from an earlier version of tinyRNA. Please " \
             "check the release notes and update your configuration files."
+
+    def get_gff_config(self) -> Dict[str, list]:
+        """Restructures GFF input info so that it can be more easily handled.
+        To be clear, the Paths File YAML could be structured to match the desired output,
+        but the current format was chosen because it's more readable with more forgiving syntax.
+
+        The YAML format is [{"path": "gff_path_1", "alias": [alias1, alias2, ...]}, { ... }, ...]
+        The output format is {"gff_path_1": [alias1, alias2, ...], ...}
+        """
+
+        gff_files = defaultdict(list)
+        id_filter = lambda alias: alias.lower() != 'id'
+
+        # Build dictionary of files and allowed aliases
+        for gff in self['gff_files']:
+            if not self.is_path_dict(gff): continue
+            path, aliases = gff['path'], gff.get('alias', ())
+            gff_files[path].extend(filter(id_filter, aliases))
+
+        # Remove duplicate aliases per file, keep order
+        for file, alias in gff_files.items():
+            gff_files[file] = sorted(set(alias), key=alias.index)
+
+        if not len(gff_files) and not self.in_pipeline:
+            self.print_sequence_counting_notice()
+
+        return dict(gff_files)
+
+    def print_sequence_counting_notice(self):
+        print("No GFF files were specified in {selfname}.\n"
+              "Reads will be quantified by sequence "
+              "rather than by feature."
+              .format(selfname=self.basename))
+
+        for s in reversed(range(6)):
+            print(f"Proceeding in {s}s", end='\r')
+            time.sleep(1)
 
     # Override
     def append_to(self, key: str, val: Any):

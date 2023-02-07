@@ -3,17 +3,15 @@
 import multiprocessing as mp
 import traceback
 import argparse
-import shutil
 import sys
 import os
 
-from collections import defaultdict
-from typing import Tuple, List, Dict
-from pkg_resources import resource_filename
+from typing import List, Dict
 
-from tiny.rna.counter.validation import GFFValidator
+from tiny.rna.counter.validation import GFFValidator, SamSqValidator
 from tiny.rna.counter.features import Features, FeatureCounter
 from tiny.rna.counter.statistics import MergedStatsManager
+from tiny.rna.counter.hts_parsing import ReferenceFeatures, ReferenceSeqs, ReferenceBase
 from tiny.rna.util import report_execution_time, from_here, ReadOnlyDict, get_timestamp, add_transparent_help
 from tiny.rna.configuration import CSVReader, PathsFile, get_templates
 
@@ -134,7 +132,7 @@ def load_samples(samples_csv: str, is_pipeline: bool) -> List[Dict[str, str]]:
 
 
 def load_config(features_csv: str, is_pipeline: bool) -> List[dict]:
-    """Parses the Features Sheet to provide inputs to FeatureSelector and ReferenceTables
+    """Parses the Features Sheet to provide inputs to FeatureSelector and reference parsers
 
     Args:
         features_csv: a csv file which defines feature sources and selection rules
@@ -152,7 +150,7 @@ def load_config(features_csv: str, is_pipeline: bool) -> List[dict]:
         rule['nt5end'] = rule['nt5end'].upper().translate({ord('U'): 'T'})  # Convert RNA base to cDNA base
         rule['Identity'] = (rule.pop('Key'), rule.pop('Value'))             # Create identity tuple
         rule['Hierarchy'] = int(rule['Hierarchy'])                          # Convert hierarchy to number
-        rule['Overlap'] = rule['Overlap'].lower()                           # Built later in ReferenceTables
+        rule['Overlap'] = rule['Overlap'].lower()                           # Built later in reference parsers
 
         # Duplicate rule entries are not allowed
         if rule not in rules: rules.append(rule)
@@ -160,42 +158,35 @@ def load_config(features_csv: str, is_pipeline: bool) -> List[dict]:
     return rules
 
 
-def load_gff_files(paths: PathsFile, libraries: List[dict], rules: List[dict]) -> Dict[str, list]:
-    """Retrieves the appropriate file path and alias attributes for each GFF,
-    then validates
+def load_references(paths: PathsFile, libraries: List[dict], rules: List[dict], prefs) -> ReferenceBase:
+    """Determines the reference source (GFF or SAM @SQ headers) and constructs the appropriate object
 
     Args:
-        paths: a loaded PathsFile with a populated gff_files parameter
+        paths: a PathsFile object that optionally contains a `gff_files` configuration
         libraries: libraries parsed from Samples Sheet, each as a dict with a 'File' key
         rules: selection rules parsed from Features Sheet
+        prefs: command line arguments to pass to the ReferenceBase subclass
 
     Returns:
-        gff: a dict of GFF files with lists of alias attribute keys
+        references: a ReferenceBase object, subclassed based on
+            the presence of GFF files in the Paths File
     """
 
-    gff_files = defaultdict(list)
-    ignore_alias = ["id"]
-
-    # Build dictionary of unique files and allowed aliases
-    for gff in paths['gff_files']:
-        gff_files[gff['path']].extend(
-            alias for alias in gff.get('alias', ())
-            if alias.lower() not in ignore_alias
-        )
-
-    # Remove duplicate aliases (per file), keep original order
-    for file, alias in gff_files.items():
-        gff_files[file] = sorted(set(alias), key=alias.index)
-
-    # Prepare supporting file inputs for GFF validation
+    gff_files = paths.get_gff_config()
     sam_files = [lib['File'] for lib in libraries]
 
-    # Todo: update GFFValidator so that genomes and ebwt can be safely passed here
-    # ref_genomes = [map_path(fasta) for fasta in paths['reference_genome_files']]
-    # ebwt_prefix = map_path(paths['ebwt'])
+    if gff_files:
+        GFFValidator(gff_files, rules, alignments=sam_files).validate()
+        references = ReferenceFeatures(gff_files, **prefs)
+    else:
+        sq_validator = SamSqValidator(sam_files)
 
-    GFFValidator(gff_files, rules, alignments=sam_files).validate()
-    return gff_files
+        # Reuse sq_validator's parsing results to save time
+        sq_validator.validate()
+        sequences = sq_validator.reference_seqs
+        references = ReferenceSeqs(sequences, **prefs)
+
+    return references
 
 
 @report_execution_time("Counting and merging")
@@ -231,11 +222,11 @@ def main():
         paths = PathsFile(args['paths_file'], is_pipeline)
         libraries = load_samples(paths['samples_csv'], is_pipeline)
         selection = load_config(paths['features_csv'], is_pipeline)
-        gff_files = load_gff_files(paths, libraries, selection)
+        reference = load_references(paths, libraries, selection, args)
 
         # global for multiprocessing
         global counter
-        counter = FeatureCounter(gff_files, selection, **args)
+        counter = FeatureCounter(reference, selection, **args)
 
         # Assign and count features using multiprocessing and merge results
         merged_counts = map_and_reduce(libraries, paths, args)
