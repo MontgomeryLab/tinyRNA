@@ -231,40 +231,6 @@ class CounterTests(unittest.TestCase):
 
         self.assertEqual(ruleset[0]['nt5end'], 'T')
 
-    """Does load_gff_files properly screen for "ID" alias attributes?"""
-
-    def test_load_gff_files_id_alias_attr(self):
-        config = helpers.make_paths_file()
-        config['gff_files'] = [{'path': "/irrelevant", 'alias': ['ID']}]
-
-        # Patch GFFValidator so that it isn't called (not relevant)
-        with patch('tiny.rna.counter.counter.GFFValidator'):
-            gff_files = counter.load_gff_files(config, [], {})
-
-        expected = {"/irrelevant": []}
-        self.assertDictEqual(gff_files, expected)
-
-    """Does load_gff_files merge aliases if the same GFF file is listed more than once? 
-    Are duplicates also removed and original order preserved?"""
-
-    def test_load_gff_files_merge_alias_attr(self):
-        config = helpers.make_paths_file()
-        config['gff_files'] = [
-            {'path': "/same/path", 'alias': ['attr1', 'attr2']},
-            {'path': "/same/path", 'alias': ['attr1', 'attrN']},
-            {'path': "/different/path", 'alias': ['attr3']}
-        ]
-
-        # Patch GFFValidator so that it isn't called (not relevant)
-        with patch('tiny.rna.counter.counter.GFFValidator'):
-            gff_files = counter.load_gff_files(config, [], {})
-
-        expected = {
-            "/same/path": ['attr1', 'attr2', 'attrN'],
-            "/different/path": ['attr3']
-        }
-
-        self.assertDictEqual(gff_files, expected)
 
 if __name__ == '__main__':
     unittest.main()

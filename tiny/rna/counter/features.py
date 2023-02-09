@@ -4,7 +4,7 @@ import sys
 from collections import defaultdict
 from typing import List, Tuple, Set, Dict, Mapping
 
-from tiny.rna.counter.hts_parsing import ReferenceTables, SAM_reader
+from tiny.rna.counter.hts_parsing import SAM_reader, ReferenceFeatures, ReferenceSeqs
 from .statistics import LibraryStats
 from .matching import *
 
@@ -27,30 +27,20 @@ class Features(metaclass=Singleton):
 
 class FeatureCounter:
 
-    def __init__(self, gff_file_set, selection_rules, **prefs):
+    def __init__(self, references, selection_rules, **prefs):
         self.stats = LibraryStats(**prefs)
         self.sam_reader = SAM_reader(**prefs)
         self.selector = FeatureSelector(selection_rules, self.stats, **prefs)
 
-        reference_tables = ReferenceTables(gff_file_set, self.selector, **prefs)
-        Features(*reference_tables.get())
+        if isinstance(references, ReferenceFeatures):
+            self.mode = "by feature"
+        elif isinstance(references, ReferenceSeqs):
+            self.mode = "by sequence"
+        else:
+            raise TypeError("Expected ReferenceFeatures or ReferenceSeqs, got %s" % type(references))
+
+        Features(*references.get(self.selector))
         self.prefs = prefs
-
-    def assign_features(self, al: dict) -> Tuple[dict, int]:
-        """Determines features associated with the interval then performs rule-based feature selection"""
-
-        try:
-            feat_matches = set().union(
-                            *Features.chrom_vectors[al['Chrom']]['.']  # GenomicArrayOfSets -> ChromVector
-                                     .array[al['Start']:al['End']]     # ChromVector -> StepVector
-                                     .get_steps(values_only=True))     # StepVector -> {features}
-        except KeyError as ke:
-            self.stats.chrom_misses[ke.args[0]] += 1
-            return {}, 0
-
-        # If features are associated with the alignment interval, perform selection
-        assignment = self.selector.choose(feat_matches, al) if feat_matches else {}
-        return assignment, len(feat_matches)
 
     def count_reads(self, library: dict):
         """Collects statistics on features assigned to each alignment associated with each read"""
@@ -71,6 +61,22 @@ class FeatureCounter:
 
         return self.stats
 
+    def assign_features(self, al: dict) -> Tuple[dict, int]:
+        """Determines features associated with the interval then performs rule-based feature selection"""
+
+        try:
+            feat_matches = set().union(
+                            *Features.chrom_vectors[al['Chrom']]['.']  # GenomicArrayOfSets -> ChromVector
+                                     .array[al['Start']:al['End']]     # ChromVector -> StepVector
+                                     .get_steps(values_only=True))     # StepVector -> {features}
+        except KeyError as ke:
+            self.stats.chrom_misses[ke.args[0]] += 1
+            return {}, 0
+
+        # If features are associated with the alignment interval, perform selection
+        assignment = self.selector.choose(feat_matches, al) if feat_matches else {}
+        return assignment, len(feat_matches)
+
 
 class FeatureSelector:
     """Performs hierarchical selection given a set of candidate features for a locus
@@ -78,7 +84,7 @@ class FeatureSelector:
     Two sources of data serve as targets for selection: feature attributes (sourced from
     input GFF files), and sequence attributes (sourced from input SAM files).
     All candidate features are assumed to have matched at least one Identity selector,
-    as determined by hts_parsing.ReferenceTables.get_matches_and_classes()
+    as determined by hts_parsing.ReferenceFeatures.get_matches_and_classes()
 
     The first round of selection was performed during GFF parsing.
 
@@ -199,7 +205,7 @@ class FeatureSelector:
 
         Unlike build_selectors() and build_inverted_identities(), this function
         is not called at construction time. Instead, it is called when finalizing
-        match-tuples in ReferenceTables. This is because the intervals of features
+        match-tuples in reference parsers. This is because the intervals of features
         passing Stage 1 selection, and the specific rules they matched, must be known.
 
         Index 2 of each match tuple is from the Overlap column of the Features Sheet.
@@ -235,7 +241,7 @@ class FeatureSelector:
                 # Shift the interval before constructing if shift parameters were provided
                 match_iv = IntervalSelector.get_shifted_interval(shift[0], iv) if shift else iv
                 cache_key = (selector, match_iv)
-                
+
                 # Cache instances to prevent duplicates for the same match type on the same iv
                 selector_obj = cache.setdefault(cache_key, selector_factory[selector](match_iv))
 

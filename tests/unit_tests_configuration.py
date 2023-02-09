@@ -286,18 +286,29 @@ class PathsFileTest(unittest.TestCase):
 
             config[key] = oldval
 
-    """Does PathsFile check that at least one GFF file has been provided?"""
+    """Does PathsFile notify the user of the change in counting style 
+    when no GFF files have been provided?"""
 
-    def test_validate_gff_files(self):
+    def test_no_gff_files(self):
         config = make_paths_file()
+        stdout = io.StringIO()
 
-        with self.assertRaisesRegex(AssertionError, r".*(At least one GFF).*"):
-            config['gff_files'] = [{'path': "", 'alias': []}]
-            config.validate_paths()
+        gff_configs = [
+            [{'path': "", 'alias': []}],
+            [{'irrelevant': "value"}],
+            None,
+            []
+        ]
 
-        with self.assertRaisesRegex(AssertionError, r".*(At least one GFF).*"):
-            config['gff_files'] = [{'irrelevant': "value"}]
-            config.validate_paths()
+        with contextlib.redirect_stdout(stdout):
+            for gff_config in gff_configs:
+                config['gff_files'] = gff_config
+                config.validate_paths()
+                config_return = config.get_gff_config()
+
+                self.assertRegex(stdout.getvalue(), r".*(No GFF files).*")
+                self.assertEqual(config_return, {})
+                stdout.truncate(0)
 
     """Does PathsFile check for missing files for single entry parameters?"""
 
@@ -349,6 +360,37 @@ class PathsFileTest(unittest.TestCase):
         self.assertEqual(config['mock_path'], "path.gz")
         self.assertEqual(config['empty_path'], "")
         self.assertEqual(config['none_path'], None)
+
+    """Does get_gff_config properly screen for "ID" alias attributes?"""
+
+    def test_get_gff_config_id_alias_attr(self):
+        config = make_paths_file()
+        config['gff_files'] = [{'path': "/irrelevant", 'alias': ['ID']}]
+
+        gff_files = config.get_gff_config()
+        expected = {"/irrelevant": []}
+
+        self.assertDictEqual(gff_files, expected)
+
+    """Does get_gff_config merge aliases if the same GFF file is listed more than once? 
+    Are duplicates also removed and original order preserved?"""
+
+    def test_get_gff_config_merge_alias_attr(self):
+        config = make_paths_file()
+        config['gff_files'] = [
+            {'path': "/same/path", 'alias': ['attr1', 'attr2']},
+            {'path': "/same/path", 'alias': ['attr1', 'attrN']},
+            {'path': "/different/path", 'alias': ['attr3']}
+        ]
+
+        gff_files = config.get_gff_config()
+
+        expected = {
+            "/same/path": ['attr1', 'attr2', 'attrN'],
+            "/different/path": ['attr3']
+        }
+
+        self.assertDictEqual(gff_files, expected)
 
 
 class ConfigurationTest(unittest.TestCase):
