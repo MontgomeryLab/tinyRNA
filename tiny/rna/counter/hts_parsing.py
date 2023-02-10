@@ -820,7 +820,7 @@ class ReferenceSeqs(ReferenceBase):
                     key=lambda x: x[1]['Hierarchy']
                 )]
 
-    def add_reference_seq(self, seq_id, seq_len, unbuilt_match_tuples):
+    def add_reference_seq(self, seq_id, seq_len, matches):
 
         # Features are classified in Reference Tables (Stage 1 selection)
         # For compatibility, use the seq_id with an empty classifier (index 1)
@@ -829,7 +829,10 @@ class ReferenceSeqs(ReferenceBase):
 
         for strand in ('+', '-'):
             iv = HTSeq.GenomicInterval(seq_id, 0, seq_len, strand)
-            match_tuples = self.selector.build_interval_selectors(iv, unbuilt_match_tuples.copy())
-            tinyrna_strand = self.map_strand(strand)
+            matches_by_shifted_iv = self.selector.build_interval_selectors(iv, matches)
+            strand = self.map_strand(strand)
 
-            self.feats[iv] += (tagged_id, tinyrna_strand, tuple(match_tuples))
+            for shifted_iv, built_matches in matches_by_shifted_iv.items():
+                # Sort match tuples by rank for more efficient feature selection
+                sorted_matches = sorted(built_matches, key=lambda x: x[1])
+                self.feats[shifted_iv] += (tagged_id, strand, tuple(sorted_matches))
