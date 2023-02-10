@@ -301,14 +301,18 @@ class PathsFileTest(unittest.TestCase):
         ]
 
         with contextlib.redirect_stdout(stdout):
-            for gff_config in gff_configs:
-                config['gff_files'] = gff_config
-                config.validate_paths()
-                config_return = config.get_gff_config()
+            # Skip countdown timer for each config
+            with patch('tiny.rna.configuration.time.sleep') as countdown:
+                for gff_config in gff_configs:
+                    config['gff_files'] = gff_config
+                    config.validate_paths()
+                    config_return = config.get_gff_config()
 
-                self.assertRegex(stdout.getvalue(), r".*(No GFF files).*")
-                self.assertEqual(config_return, {})
-                stdout.truncate(0)
+                    self.assertRegex(stdout.getvalue(), r".*(No GFF files).*")
+                    self.assertEqual(config_return, {})
+                    stdout.truncate(0)
+
+        countdown.assert_has_calls([call(1)] * 6 * len(gff_configs))
 
     """Does PathsFile check for missing files for single entry parameters?"""
 

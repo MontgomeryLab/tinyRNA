@@ -117,6 +117,17 @@ class NumericalMatch(frozenset):
             f'Invalid length selector: "{defn}"'
 
 
+# Used in IntervalSelector
+class IllegalShiftError(Exception):
+    def __init__(self, iv, shift, subtype):
+        self.subtype = subtype
+        self.shift = shift
+        self.iv = iv
+
+        self.args = (f"The interval {iv} cannot be shifted by {shift} "
+                     f"(results in {self.subtype} interval)",)
+
+
 class IntervalSelector:
     __slots__ = ("start", "end")
 
@@ -128,18 +139,60 @@ class IntervalSelector:
     interval associated with each retained feature."""
 
     def __init__(self, iv: HTSeq.GenomicInterval):
-        """Descendents only need to know the start and end coordinates of the target feature"""
+        """Descendants only need to know the start and end coordinates of the target feature"""
         self.start = iv.start
         self.end = iv.end
 
     def __hash__(self):
-        """Descendents must be hashable in order to be stored in a GenomicArrayOfSets"""
+        """Descendants must be hashable in order to be stored in a GenomicArrayOfSets"""
         return self.start ^ self.end
 
     def __eq__(self, other):
         return self.__class__.__name__ == other.__class__.__name__ and \
                self.start == other.start and \
                self.end == other.end
+
+    @classmethod
+    def get_shifted_interval(cls, shift_defn: str, iv: HTSeq.GenomicInterval):
+        """Shifts the interval's 5' and 3' ends according to the shift definition
+
+        Positive values shift the interval in the 3' direction and negative values
+        shift in the 5' direction. Both values must be specified but zero can be
+        provided if no change is desired.
+
+        Args:
+            shift_defn: A string of two signed numbers, `M` and `N`, comma separated.
+                `M` shifts the interval at the 5' end and `N` shifts the interval
+                at the 3' end.
+            iv: The interval to shift
+        """
+
+        cls.validate_shift_params(shift_defn)
+        split = shift_defn.split(',', 1)
+        shift = shift_5, shift_3 = int(split[0]), int(split[1])
+
+        if iv.strand == '+':
+            start, end = iv.start + shift_5, iv.end + shift_3
+        elif iv.strand == '-':
+            start, end = iv.start - shift_3, iv.end - shift_5
+        else:  # iv.strand == '.':
+            shift_x = max(shift)
+            start, end = iv.start - shift_x, iv.end + shift_x
+            shift = (shift_x,) * 2
+
+        if start == end:
+            raise IllegalShiftError(iv, shift, "null")
+        if start > end:
+            raise IllegalShiftError(iv, shift, "inverted")
+        if start < 0:
+            raise IllegalShiftError(iv, shift, "negative start")
+
+        return HTSeq.GenomicInterval(iv.chrom, start, end, iv.strand)
+
+    @staticmethod
+    def validate_shift_params(defn):
+        assert re.match(r'^-?\d+\s*,\s*-?\d+$', defn.strip()) is not None, \
+            f'Invalid overlap shift parameters: "{defn}"'
 
 
 class IntervalPartialMatch(IntervalSelector):

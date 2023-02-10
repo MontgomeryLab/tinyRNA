@@ -201,40 +201,58 @@ class FeatureSelector:
 
     @staticmethod
     def build_interval_selectors(iv: 'HTSeq.GenomicInterval', match_tuples: List[unbuilt_match_tuple]):
-        """Builds partial/full/exact/3' anchored/5' anchored interval selectors
+        """Builds partial/full/exact/5'anchored/3'anchored interval selectors
 
         Unlike build_selectors() and build_inverted_identities(), this function
         is not called at construction time. Instead, it is called when finalizing
-        match-tuples in reference parsers. This is because interval selectors are
-        created for each feature (requiring start/stop/strand to be known) for
-        each of the feature's identity matches (each match-tuple).
+        match-tuples in reference parsers. This is because the intervals of features
+        passing Stage 1 selection, and the specific rules they matched, must be known.
+
+        Index 2 of each match tuple is from the Overlap column of the Features Sheet.
+        It defines the desired selector and, optionally, a shift parameter for shifting
+        the 5' and/or 3' ends of the interval. Its syntax is:
+            selector,M,N
+                M = signed shift value for 5' end
+                N = signed shift value for 3' end
 
         Args:
             iv: The interval of the feature from which each selector is built
-            match_tuples: A list of tuples representing the feature's identity
-                matches. Each tuple index 2 defines and is replaced by the selector.
+            match_tuples: A list of tuples representing the feature's Stage 1 matches
         """
 
-        built_selectors = {}
+        cache = {}
         selector_factory = {
-            'full': lambda: IntervalFullMatch(iv),
-            'exact': lambda: IntervalExactMatch(iv),
-            'partial': lambda: IntervalPartialMatch(iv),
-            'anchored': lambda: IntervalAnchorMatch(iv),
-            "5' anchored": lambda: Interval5pMatch(iv) if iv.strand in ('+', '-') else IntervalAnchorMatch(iv),
-            "3' anchored": lambda: Interval3pMatch(iv) if iv.strand in ('+', '-') else IntervalAnchorMatch(iv),
+            'full': lambda x: IntervalFullMatch(x),
+            'exact': lambda x: IntervalExactMatch(x),
+            'partial': lambda x: IntervalPartialMatch(x),
+            'anchored': lambda x: IntervalAnchorMatch(x),
+            "5'anchored": lambda x: Interval5pMatch(x) if iv.strand in ('+', '-') else IntervalAnchorMatch(x),
+            "3'anchored": lambda x: Interval3pMatch(x) if iv.strand in ('+', '-') else IntervalAnchorMatch(x),
         }
 
-        for i in range(len(match_tuples)):
+        matches_by_interval = defaultdict(list)
+        for i, match in enumerate(match_tuples):
             try:
-                match = match_tuples[i]
+                # Split optional shift parameters from definition
+                defn = re.split(r'\s*,\s*', match[2], 1)
+                selector, shift = defn[0], defn[1:]
+                selector = selector.replace(' ', '')
+
+                # Shift the interval before constructing if shift parameters were provided
+                match_iv = IntervalSelector.get_shifted_interval(shift[0], iv) if shift else iv
+                cache_key = (selector, match_iv)
+
                 # Cache instances to prevent duplicates for the same match type on the same iv
-                selector = built_selectors.setdefault(match[2], selector_factory[match[2]]())
-                match_tuples[i] = (match[0], match[1], selector)
+                selector_obj = cache.setdefault(cache_key, selector_factory[selector](match_iv))
+
+                built_match_tuple = (match[0], match[1], selector_obj)
+                matches_by_interval[match_iv].append(built_match_tuple)
             except KeyError:
                 raise ValueError(f'Invalid overlap selector: "{match_tuples[i][2]}"')
+            except IllegalShiftError:
+                pass  # Drop offending match tuple
 
-        return match_tuples
+        return matches_by_interval
 
     @staticmethod
     def build_inverted_identities(rules_table) -> Dict[Tuple[str, str], List[int]]:

@@ -713,7 +713,17 @@ class ReferenceFeatures(ReferenceBase):
         self.alias = {feat: tuple(sorted(aliases, key=str.lower)) for feat, aliases in self.alias.items()}
 
     def _finalize_features(self):
-        """Assigns matches to their corresponding intervals by populating GenomicArray with match tuples"""
+        """Assigns matches to their corresponding intervals by populating GenomicArray with match tuples
+
+        Each feature that is handled here has matched a rule, and its matches might be classified
+        into subsets depending on the rules it matched. However, the feature's interval
+        is the same regardless of the match classification. This interval might be
+        discontinuous, so we start by merging any of its sub-intervals that are
+        adjacent to reduce loop count in Stage 2 and 3 selection. Each group of
+        classified matches is then added to the GenomicArray under this shared
+        interval (but the interval is not necessarily shared by matches that
+        have a shift parameter in their overlap selector...)
+        """
 
         for root_id, unmerged_sub_ivs in self.intervals.items():
             merged_sub_ivs = self._merge_adjacent_subintervals(unmerged_sub_ivs)
@@ -728,13 +738,29 @@ class ReferenceFeatures(ReferenceBase):
                     self.chrom_vector_setdefault(merged_sub_ivs[0].chrom)
                     continue
 
-                # Sort match tuples by rank for more efficient feature selection
-                sorted_matches = sorted(self.matches[tagged_id], key=lambda x: x[1])
+                tagged_matches = self.matches[tagged_id]
+                self._add_subinterval_matches(tagged_id, merged_sub_ivs, tagged_matches)
 
-                for sub_iv in merged_sub_ivs:
-                    finalized_match_tuples = self.selector.build_interval_selectors(sub_iv, sorted_matches.copy())
-                    strand = self.map_strand(sub_iv.strand)
-                    self.feats[sub_iv] += (tagged_id, strand, tuple(finalized_match_tuples))
+    def _add_subinterval_matches(self, tagged_id: tuple, sub_ivs: list, matches: set):
+        """Adds the classified group of matches to the GenomicArray under each of the
+        feature's sub-intervals
+
+        These sub-intervals might be further subset if the matches define a shift
+        parameter. The shift operation has to be applied to each of the feature's
+        sub-intervals before the given match can be added to the GenomicArray. The
+        shifted interval must match the interval that the overlap selector expects.
+        """
+
+        for sub_iv in sub_ivs:
+            # Build interval selectors for this
+            matches_by_shifted_iv = self.selector.build_interval_selectors(sub_iv, matches)
+            strand = self.map_strand(sub_iv.strand)
+
+            for shifted_iv, built_matches in matches_by_shifted_iv.items():
+                # Sort match tuples by rank for more efficient feature selection
+                sorted_matches = sorted(built_matches, key=lambda x: x[1])
+                self.feats[shifted_iv] += (tagged_id, strand, tuple(sorted_matches))
+
 
     @staticmethod
     def _merge_adjacent_subintervals(unmerged_sub_ivs: List[HTSeq.GenomicInterval]) -> list:
@@ -794,7 +820,7 @@ class ReferenceSeqs(ReferenceBase):
                     key=lambda x: x[1]['Hierarchy']
                 )]
 
-    def add_reference_seq(self, seq_id, seq_len, unbuilt_match_tuples):
+    def add_reference_seq(self, seq_id, seq_len, matches):
 
         # Features are classified in Reference Tables (Stage 1 selection)
         # For compatibility, use the seq_id with an empty classifier (index 1)
@@ -803,7 +829,10 @@ class ReferenceSeqs(ReferenceBase):
 
         for strand in ('+', '-'):
             iv = HTSeq.GenomicInterval(seq_id, 0, seq_len, strand)
-            match_tuples = self.selector.build_interval_selectors(iv, unbuilt_match_tuples.copy())
-            tinyrna_strand = self.map_strand(strand)
+            matches_by_shifted_iv = self.selector.build_interval_selectors(iv, matches)
+            strand = self.map_strand(strand)
 
-            self.feats[iv] += (tagged_id, tinyrna_strand, tuple(match_tuples))
+            for shifted_iv, built_matches in matches_by_shifted_iv.items():
+                # Sort match tuples by rank for more efficient feature selection
+                sorted_matches = sorted(built_matches, key=lambda x: x[1])
+                self.feats[shifted_iv] += (tagged_id, strand, tuple(sorted_matches))

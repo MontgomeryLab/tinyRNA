@@ -23,12 +23,12 @@ class FeaturesTests(unittest.TestCase):
 
     def make_feature_for_interval_test(self, iv_rule, feat_id, chrom, strand: str, start, stop):
         feat_iv = HTSeq.GenomicInterval(chrom, start, stop, strand)
-        rules = [
-            dict(deepcopy(rules_template[0]), Overlap=iv_rule, Identity=('N/A', 'N/A'), nt5end='all', Length='all')]
+        rules = [dict(deepcopy(rules_template[0]), Overlap=iv_rule, Identity=('*', '*'), nt5end='*', Length='*')]
         fs = FeatureSelector(rules, LibraryStats(normalize_by_hits=True))
 
         # Feature with specified coordinates, matching rule 0 with hierarchy 0 and the appropriate selector for iv_rule
-        match_tuple = tuple(fs.build_interval_selectors(feat_iv, [(0, 0, iv_rule)]))
+        selectors = fs.build_interval_selectors(feat_iv, [(0, 0, iv_rule)])
+        match_tuple = (selectors[feat_iv][0],)
         feat = {(feat_id, strand_to_bool(strand), match_tuple)}
 
         return feat, fs
@@ -93,6 +93,15 @@ class FeaturesTests(unittest.TestCase):
         self.assertEqual(matches_with_cooridnates[1][0], HTSeq.GenomicInterval("I", 10, 15, '-'))
         self.assertEqual(matches_with_cooridnates[2][0], HTSeq.GenomicInterval("I", 15, 20, '-'))
         self.assertEqual(matches_with_cooridnates[2][0], HTSeq.GenomicInterval("I", 15, 20, '-'))
+
+    """Do GenomicArraysOfSets support negative start/end positions? No, they don't."""
+
+    def test_HTSeq_GenomicArrayOfSets_negative_indexing(self):
+        gas = HTSeq.GenomicArrayOfSets("auto", stranded=True)
+        ivn = HTSeq.GenomicInterval("I", -10, 10, '+')
+
+        with self.assertRaises(IndexError):
+            gas[ivn] += "Negative"
 
     """Does assign_features correctly handle alignments with zero feature matches?"""
 
@@ -382,6 +391,49 @@ class FeaturesTests(unittest.TestCase):
         }
 
         self.assertDictEqual(actual, expected)
+
+    """Does FeatureSelector build both shifted and unshifted selectors and group them by resulting interval?"""
+
+    def test_build_interval_selectors_grouping(self):
+        fs = FeatureSelector(deepcopy(rules_template), LibraryStats())
+        iv = HTSeq.GenomicInterval('I', 10, 20, '+')
+
+        match_tuples = [('n/a', 'n/a', 'partial'),
+                        ('n/a', 'n/a', 'full'),
+                        ('n/a', 'n/a', 'exact'),
+                        ('n/a', 'n/a', "5' anchored"),
+                        ('n/a', 'n/a', "3' anchored"),
+                        # iv_shifted_1                        Shift values:
+                        ('n/a', 'n/a', 'partial, -5, 5'),       # 5': -5    3': 5
+                        ('n/a', 'n/a', 'full, -5, 5'),          # 5': -5    3': 5
+                        # iv_shifted_2
+                        ('n/a', 'n/a', 'exact, -10, 10'),       # 5': -10   3': 10
+                        # iv_shifted_3
+                        ('n/a', 'n/a', "5' anchored, -1, -1"),  # 5': -1    3': -1
+                        ('n/a', 'n/a', "3' anchored, -1, -1")]  # 5': -1    3': -1
+
+        iv_shifted_1 = HTSeq.GenomicInterval('I', 5, 25, '+')
+        iv_shifted_2 = HTSeq.GenomicInterval('I', 0, 30, '+')
+        iv_shifted_3 = HTSeq.GenomicInterval('I', 9, 19, '+')
+
+        result = fs.build_interval_selectors(iv, match_tuples)
+
+        # Correct number of groups
+        self.assertEqual(len(result), 4)
+
+        # Correct number of selectors per group
+        self.assertEqual(len(result[iv]), 5)
+        self.assertEqual(len(result[iv_shifted_1]), 2)
+        self.assertEqual(len(result[iv_shifted_2]), 1)
+        self.assertEqual(len(result[iv_shifted_3]), 2)
+
+        # Agreement between group interval and selector's interval
+        for iv_s, tuples in result.items():
+            group_iv = (iv_s.start, iv_s.end)
+            for match in tuples:
+                selector_iv = (match[2].start, match[2].end)
+                self.assertEqual(group_iv, selector_iv)
+
 
 
 if __name__ == '__main__':

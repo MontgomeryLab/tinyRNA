@@ -24,15 +24,18 @@ class MyTestCase(unittest.TestCase):
                         ('n/a', 'n/a', 'full'),
                         ('n/a', 'n/a', 'exact'),
                         ('n/a', 'n/a', "5' anchored"),
-                        ('n/a', 'n/a', "3' anchored")]
+                        ('n/a', 'n/a', "3' anchored"),
+                        ('n/a', 'n/a', "5'anchored"),   # spaces should be optional
+                        ('n/a', 'n/a', "3'anchored")]
 
         result = fs.build_interval_selectors(iv, match_tuples)
 
-        self.assertIsInstance(result[0][2], IntervalPartialMatch)
-        self.assertIsInstance(result[1][2], IntervalFullMatch)
-        self.assertIsInstance(result[2][2], IntervalExactMatch)
-        self.assertIsInstance(result[3][2], Interval5pMatch)
-        self.assertIsInstance(result[4][2], Interval3pMatch)
+        self.assertEqual(len(result), 1)
+        self.assertIsInstance(result[iv][0][2], IntervalPartialMatch)
+        self.assertIsInstance(result[iv][1][2], IntervalFullMatch)
+        self.assertIsInstance(result[iv][2][2], IntervalExactMatch)
+        self.assertIsInstance(result[iv][3][2], Interval5pMatch)
+        self.assertIsInstance(result[iv][4][2], Interval3pMatch)
 
     """Are interval selectors hashable and properly compare for equality?
     This is important for storing feature records in GenomicArraysOfSets"""
@@ -107,6 +110,34 @@ class MyTestCase(unittest.TestCase):
             errmsg = f'Invalid length selector: "{defn}"'
             with self.assertRaisesRegex(AssertionError, errmsg):
                 NumericalMatch(defn)
+
+    """Does IntervalSelector properly validate the shift parameter?"""
+
+    def test_IntervalSelector_shift_validation(self):
+        good_defs = ["1,1", "2, 2", " -3 ,-3", "0,0 ", " -0 , -0 "]
+        bad_defs = ["1,", ",2", "3", "4 4", " ", ",", ", "]
+
+        for defn in good_defs:
+            IntervalSelector.validate_shift_params(defn)
+
+        for defn in bad_defs:
+            errmsg = f'Invalid overlap shift parameters: "{defn}"'
+            with self.assertRaisesRegex(AssertionError, errmsg):
+                IntervalSelector.validate_shift_params(defn)
+
+    """Does IntervalSelector properly raise IllegalShiftErrors?"""
+
+    def test_IntervalSelector_illegal_shift(self):
+        iv = HTSeq.GenomicInterval('n/a', 0, 5, '+')
+
+        with self.assertRaisesRegex(IllegalShiftError, "null interval"):
+            IntervalSelector.get_shifted_interval("0,-5", iv)
+
+        with self.assertRaisesRegex(IllegalShiftError, "inverted interval"):
+            IntervalSelector.get_shifted_interval("10, 0", iv)
+
+        with self.assertRaisesRegex(IllegalShiftError, "negative start interval"):
+            IntervalSelector.get_shifted_interval("-1, 0", iv)
 
 
 if __name__ == '__main__':
