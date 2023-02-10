@@ -163,7 +163,7 @@ class IntervalSelector:
         Args:
             shift_defn: A string of two signed numbers, `M` and `N`, comma separated.
                 `M` shifts the interval at the 5' end and `N` shifts the interval
-                 at the 3' end.
+                at the 3' end.
             iv: The interval to shift
         """
 
@@ -180,10 +180,12 @@ class IntervalSelector:
             start, end = iv.start - shift_x, iv.end + shift_x
             shift = (shift_x,) * 2
 
-        if start == end - 1:  # open interval
+        if start == end:
             raise IllegalShiftError(iv, shift, "null")
         if start > end:
             raise IllegalShiftError(iv, shift, "inverted")
+        if start < 0:
+            raise IllegalShiftError(iv, shift, "negative start")
 
         return HTSeq.GenomicInterval(iv.chrom, start, end, iv.strand)
 
