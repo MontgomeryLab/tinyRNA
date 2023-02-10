@@ -756,9 +756,9 @@ class ReferenceFeatures(ReferenceBase):
             matches_by_shifted_iv = self.selector.build_interval_selectors(sub_iv, matches)
             strand = self.map_strand(sub_iv.strand)
 
-            for shifted_iv, matches in matches_by_shifted_iv.items():
+            for shifted_iv, built_matches in matches_by_shifted_iv.items():
                 # Sort match tuples by rank for more efficient feature selection
-                sorted_matches = sorted(matches, key=lambda x: x[1])
+                sorted_matches = sorted(built_matches, key=lambda x: x[1])
                 self.feats[shifted_iv] += (tagged_id, strand, tuple(sorted_matches))
 
 
