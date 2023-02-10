@@ -23,12 +23,12 @@ class FeaturesTests(unittest.TestCase):
 
     def make_feature_for_interval_test(self, iv_rule, feat_id, chrom, strand: str, start, stop):
         feat_iv = HTSeq.GenomicInterval(chrom, start, stop, strand)
-        rules = [
-            dict(deepcopy(rules_template[0]), Overlap=iv_rule, Identity=('N/A', 'N/A'), nt5end='all', Length='all')]
+        rules = [dict(deepcopy(rules_template[0]), Overlap=iv_rule, Identity=('*', '*'), nt5end='*', Length='*')]
         fs = FeatureSelector(rules, LibraryStats(normalize_by_hits=True))
 
         # Feature with specified coordinates, matching rule 0 with hierarchy 0 and the appropriate selector for iv_rule
-        match_tuple = tuple(fs.build_interval_selectors(feat_iv, [(0, 0, iv_rule)]))
+        selectors = fs.build_interval_selectors(feat_iv, [(0, 0, iv_rule)])
+        match_tuple = (selectors[feat_iv][0],)
         feat = {(feat_id, strand_to_bool(strand), match_tuple)}
 
         return feat, fs
