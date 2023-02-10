@@ -111,6 +111,34 @@ class MyTestCase(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, errmsg):
                 NumericalMatch(defn)
 
+    """Does IntervalSelector properly validate the shift parameter?"""
+
+    def test_IntervalSelector_shift_validation(self):
+        good_defs = ["1,1", "2, 2", " -3 ,-3", "0,0 ", " -0 , -0 "]
+        bad_defs = ["1,", ",2", "3", "4 4", " ", ",", ", "]
+
+        for defn in good_defs:
+            IntervalSelector.validate_shift_params(defn)
+
+        for defn in bad_defs:
+            errmsg = f'Invalid overlap shift parameters: "{defn}"'
+            with self.assertRaisesRegex(AssertionError, errmsg):
+                IntervalSelector.validate_shift_params(defn)
+
+    """Does IntervalSelector properly raise IllegalShiftErrors?"""
+
+    def test_IntervalSelector_illegal_shift(self):
+        iv = HTSeq.GenomicInterval('n/a', 0, 5, '+')
+
+        with self.assertRaisesRegex(IllegalShiftError, "null interval"):
+            IntervalSelector.get_shifted_interval("0,-5", iv)
+
+        with self.assertRaisesRegex(IllegalShiftError, "inverted interval"):
+            IntervalSelector.get_shifted_interval("10, 0", iv)
+
+        with self.assertRaisesRegex(IllegalShiftError, "negative start interval"):
+            IntervalSelector.get_shifted_interval("-1, 0", iv)
+
 
 if __name__ == '__main__':
     unittest.main()
