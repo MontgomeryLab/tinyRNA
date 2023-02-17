@@ -236,7 +236,8 @@ class IntervalExactMatch(IntervalSelector):
 
 
 class IntervalAnchorMatch(IntervalSelector):
-    """Evaluates whether an alignment's start matches the feature's start, and vice versa for end."""
+    """Evaluates whether either end of the alignment's interval is anchored to
+    the feature with the non-anchored end nested within the feature's interval"""
 
     def __init__(self, iv: HTSeq.GenomicInterval):
         super().__init__(iv)
@@ -246,25 +247,25 @@ class IntervalAnchorMatch(IntervalSelector):
         """The following diagram demonstrates unstranded anchored matching semantics.
 
                     Match  |   <------->|
-                    Match  |<-----------|-->
+                    Match  |<------->   |
                     Match  |<---------->|
                  No match  |  <---------|->
                <-----------|<==feat_A==>|----------->
 
         Args:
-            alignment: An alignment dictionary containing strand, start, and end
-
-        Returns: True if the alignment's 5' end is anchored to the strand-appropriate
-            terminus of this feature's interval.
+            alignment: An alignment dictionary containing `Start` and `End` keys
         """
 
-        return alignment['Start'] == self.start or alignment['End'] == self.end
+        return (alignment['Start'] == self.start and alignment['End'] <= self.end) \
+            or (alignment['End'] == self.end and alignment['Start'] >= self.start)
 
     def __repr__(self):
         return f"<Unstranded anchor from {self.start} to {self.end}>"
 
+
 class Interval5pMatch(IntervalSelector):
-    """Evaluates whether an alignment's 5' end is anchored to the corresponding terminus of the feature"""
+    """Evaluates whether an alignment's 5' end is anchored to the corresponding terminus
+    of the feature, and the alignment's 3' end is nested within the feature's interval."""
 
     def __init__(self, iv: HTSeq.GenomicInterval):
         super().__init__(iv)
@@ -274,7 +275,7 @@ class Interval5pMatch(IntervalSelector):
         Each "(no) match" label applies to BOTH feat_A AND feat_B.
 
                  No match  |   -------->|
-                    Match  |------------|-->
+                 No Match  |------------|-->
                     Match  |----------->|
                     Match  |-------->   |
         (+) 5' ------------|==feat_A===>|-----------> 3'
@@ -282,26 +283,25 @@ class Interval5pMatch(IntervalSelector):
         (-) 3' <-----------|<===feat_B==|------------ 5'
                            |   <--------|  Match
                            |<-----------|  Match
-                        <--|------------|  Match
+                        <--|------------|  No Match
                            |<--------   |  No match
         Args:
-            alignment: An alignment dictionary containing strand, start, and end
-
-        Returns: True if the alignment's 5' end is anchored to the strand-appropriate
-            terminus of this feature's interval.
+            alignment: An alignment dictionary containing `Strand`, `Start` and `End` keys
         """
 
         if alignment['Strand'] is True:
-            return alignment['Start'] == self.start
+            return alignment['Start'] == self.start and alignment['End'] <= self.end
         else:
-            return alignment['End'] == self.end
+            return alignment['End'] == self.end and alignment['Start'] >= self.start
 
     def __repr__(self):
-        return f"<5' anchored to {self.start} on (+) / {self.end} on (-)>"
+        return f"<5' anchored to {self.start} nested in {self.end} on (+) / " \
+               f"anchored to {self.end} nested in {self.start} on (-)>"
 
 
 class Interval3pMatch(IntervalSelector):
-    """Evaluates whether an alignment's 5' end is anchored to the corresponding terminus of the feature"""
+    """Evaluates whether an alignment's 3' end is anchored to the corresponding terminus
+    of the feature, and the alignment's 5' end is nested within the feature's interval."""
 
     def __init__(self, iv: HTSeq.GenomicInterval):
         super().__init__(iv)
@@ -311,7 +311,7 @@ class Interval3pMatch(IntervalSelector):
         Each "(no) match" label applies to BOTH feat_A AND feat_B.
 
                No match    |-------->   |
-                  Match  --|----------->|
+               No Match  --|----------->|
                   Match    |----------->|
                   Match    |   -------->|
         (+) 5' ------------|==feat_A===>|-----------> 3'
@@ -319,19 +319,17 @@ class Interval3pMatch(IntervalSelector):
         (-) 3' <-----------|<===feat_B==|------------ 5'
                            |<--------   |    Match
                            |<-----------|    Match
-                           |<-----------|--  Match
+                           |<-----------|--  No Match
                            |   <--------|    No match
         Args:
-            alignment: An alignment dictionary containing strand, start, and end
-
-        Returns: True if the alignment's 3' end is anchored to the strand-appropriate
-            terminus of this feature's interval.
+            alignment: An alignment dictionary containing `Strand`, `Start` and `End` keys
         """
 
         if alignment['Strand'] is True:
-            return alignment['End'] == self.end
+            return alignment['End'] == self.end and alignment['Start'] >= self.start
         else:
-            return alignment['Start'] == self.start
+            return alignment['Start'] == self.start and alignment['End'] <= self.end
 
     def __repr__(self):
-        return f"<3' anchored to {self.end} on (+) / {self.start} on (-)>"
+        return f"<3' anchored to {self.end} nested in {self.start} on (+) / " \
+               f"anchored to {self.start} nested in {self.end} on (-)>"

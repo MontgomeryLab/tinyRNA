@@ -284,7 +284,7 @@ class FeaturesTests(unittest.TestCase):
 
         """
                 No match    | 6 -------->| 10     aln_none
-                   Match  5 |------------|--> 11  aln_long
+                No match  5 |------------|--> 11  aln_long
                    Match  5 |----------->| 10     aln_exact
                    Match  5 |--------> 9 |        aln_short
         (+) 5' -------------|==feat_A===>|-----------> 3'
@@ -292,7 +292,7 @@ class FeaturesTests(unittest.TestCase):
         (-) 3' <------------|<===feat_B==|------------ 5'
                             | 6 <--------| 10  Match
                           5 |<-----------| 10  Match
-                       4 <--|------------| 10  Match
+                       4 <--|------------| 10  No match
                           5 |<-------- 9 |     No match
         """
 
@@ -307,7 +307,7 @@ class FeaturesTests(unittest.TestCase):
         }
 
         self.assertEqual(fs.choose(feat_A, aln['aln_none']), {})
-        self.assertEqual(fs.choose(feat_A, aln['aln_long']), {"5' Anchored Overlap (+)": {0}})
+        self.assertEqual(fs.choose(feat_A, aln['aln_long']), {})
         self.assertEqual(fs.choose(feat_A, aln['aln_exact']), {"5' Anchored Overlap (+)": {0}})
         self.assertEqual(fs.choose(feat_A, aln['aln_short']), {"5' Anchored Overlap (+)": {0}})
 
@@ -319,7 +319,7 @@ class FeaturesTests(unittest.TestCase):
         aln['aln_none'].update({'Start': 5, 'End': 9, 'Strand': False})
 
         self.assertEqual(fs.choose(feat_B, aln['aln_none']), {})
-        self.assertEqual(fs.choose(feat_B, aln['aln_long']), {"5' Anchored Overlap (-)": {0}})
+        self.assertEqual(fs.choose(feat_B, aln['aln_long']), {})
         self.assertEqual(fs.choose(feat_B, aln['aln_exact']), {"5' Anchored Overlap (-)": {0}})
         self.assertEqual(fs.choose(feat_B, aln['aln_short']), {"5' Anchored Overlap (-)": {0}})
 
@@ -330,17 +330,17 @@ class FeaturesTests(unittest.TestCase):
         chrom, start, end = "n/a", 5, 10
 
         """
-                No match  5 |--------> 9 |     aln_none
-                  Match 4 --|----------->| 10  aln_long
-                  Match   5 |----------->| 10  aln_exact
-                  Match     | 6 -------->| 10  aln_short
-        (+) 5' -------------|==feat_A===>|-----------> 3'
-                  start = 5                end = 10
-        (-) 3' <------------|<===feat_B==|------------ 5'
-                          5 |<-------- 9 |       Match
-                          5 |<-----------| 10    Match
-                          5 |<-----------|-- 11  Match
-                            | 6 <--------| 10    No match
+                No match   5 |--------> 9 |     aln_none
+                No match 4 --|----------->| 10  aln_long
+                   Match   5 |----------->| 10  aln_exact
+                   Match     | 6 -------->| 10  aln_short
+        (+) 5' --------------|==feat_A===>|-----------> 3'
+                   start = 5                end = 10
+        (-) 3' <-------------|<===feat_B==|------------ 5'
+                           5 |<-------- 9 |       Match
+                           5 |<-----------| 10    Match
+                           5 |<-----------|-- 11  No match
+                             | 6 <--------| 10    No match
         """
 
         # Test feat_A on (+) strand
@@ -354,7 +354,7 @@ class FeaturesTests(unittest.TestCase):
         }
 
         self.assertEqual(fs.choose(feat_A, aln['aln_none']), {})
-        self.assertEqual(fs.choose(feat_A, aln['aln_long']), {"3' Anchored Overlap (+)": {0}})
+        self.assertEqual(fs.choose(feat_A, aln['aln_long']), {})
         self.assertEqual(fs.choose(feat_A, aln['aln_exact']), {"3' Anchored Overlap (+)": {0}})
         self.assertEqual(fs.choose(feat_A, aln['aln_short']), {"3' Anchored Overlap (+)": {0}})
 
@@ -366,7 +366,7 @@ class FeaturesTests(unittest.TestCase):
         aln['aln_none'].update({'Start': 6, 'End': 10, 'Strand': False})
 
         self.assertEqual(fs.choose(feat_B, aln['aln_none']), {})
-        self.assertEqual(fs.choose(feat_B, aln['aln_long']), {"3' Anchored Overlap (-)": {0}})
+        self.assertEqual(fs.choose(feat_B, aln['aln_long']), {})
         self.assertEqual(fs.choose(feat_B, aln['aln_exact']), {"3' Anchored Overlap (-)": {0}})
         self.assertEqual(fs.choose(feat_B, aln['aln_short']), {"3' Anchored Overlap (-)": {0}})
 
