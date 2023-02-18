@@ -187,12 +187,12 @@ class FeaturesTests(unittest.TestCase):
         instance.assign_features.assert_called_once_with("mock_alignment")
         instance.stats.assert_has_calls(expected_calls_to_stats)
 
-    """Does FeatureSelector.choose() correctly select features defining `full` interval matching rules?"""
+    """Does FeatureSelector.choose() correctly select features defining `nested` interval matching rules?"""
 
-    def test_feature_selector_full_interval(self):
-        iv_rule = 'full'
+    def test_feature_selector_nested_interval(self):
+        iv_rule = 'nested'
         chrom, strand, start, stop = "n/a", "+", 5, 10
-        feat, fs = self.make_feature_for_interval_test(iv_rule, "Full Overlap", chrom, strand, start, stop)
+        feat, fs = self.make_feature_for_interval_test(iv_rule, "Nested Overlap", chrom, strand, start, stop)
 
         aln_base = {'Seq': 'ATGC', 'Chrom': chrom, 'Strand': strand_to_bool(strand)}
         aln_spill_lo = make_parsed_sam_record(**dict(aln_base, Start=start - 1, Name="spill"))
@@ -213,9 +213,9 @@ class FeaturesTests(unittest.TestCase):
 
         self.assertEqual(fs.choose(feat, aln_spill_lo), {})
         self.assertEqual(fs.choose(feat, aln_spill_hi), {})
-        self.assertEqual(fs.choose(feat, aln_contained), {"Full Overlap": {0}})
-        self.assertEqual(fs.choose(feat, aln_contained_lo), {"Full Overlap": {0}})
-        self.assertEqual(fs.choose(feat, aln_contained_hi), {"Full Overlap": {0}})
+        self.assertEqual(fs.choose(feat, aln_contained), {"Nested Overlap": {0}})
+        self.assertEqual(fs.choose(feat, aln_contained_lo), {"Nested Overlap": {0}})
+        self.assertEqual(fs.choose(feat, aln_contained_hi), {"Nested Overlap": {0}})
 
     """Does FeatureSelector.choose() correctly select features with `partial` interval matching rules?"""
 
@@ -399,13 +399,13 @@ class FeaturesTests(unittest.TestCase):
         iv = HTSeq.GenomicInterval('I', 10, 20, '+')
 
         match_tuples = [('n/a', 'n/a', 'partial'),
-                        ('n/a', 'n/a', 'full'),
+                        ('n/a', 'n/a', 'nested'),
                         ('n/a', 'n/a', 'exact'),
                         ('n/a', 'n/a', "5' anchored"),
                         ('n/a', 'n/a', "3' anchored"),
                         # iv_shifted_1                        Shift values:
                         ('n/a', 'n/a', 'partial, -5, 5'),       # 5': -5    3': 5
-                        ('n/a', 'n/a', 'full, -5, 5'),          # 5': -5    3': 5
+                        ('n/a', 'n/a', 'nested, -5, 5'),        # 5': -5    3': 5
                         # iv_shifted_2
                         ('n/a', 'n/a', 'exact, -10, 10'),       # 5': -10   3': 10
                         # iv_shifted_3

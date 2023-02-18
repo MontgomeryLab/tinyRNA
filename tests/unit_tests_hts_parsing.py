@@ -137,7 +137,7 @@ class MyTestCase(unittest.TestCase):
         feature_selector = self.selector_with_template([
             # Fails to match due to Identity selector
             {'Identity': ("Class", "CSR"), 'Strand': "sense", 'Hierarchy': 1, 'Class': 'none', 'nt5end': "all",
-             'Overlap': 'full', 'Length': "20"},
+             'Overlap': 'nested', 'Length': "20"},
             # Match
             {'Identity': ("biotype", "snoRNA"), 'Strand': "antisense", 'Hierarchy': 2, 'Class': 'tag', 'nt5end': "all",
              'Overlap': 'partial', 'Length': "30"}
@@ -161,7 +161,7 @@ class MyTestCase(unittest.TestCase):
         feature_selector = self.selector_with_template([
             # Fails to match due to Identity selector
             {'Identity': ("Class", "CSR"), 'Strand': "sense", 'Hierarchy': 1, 'Class': 'none', 'nt5end': "all",
-             'Overlap': 'full', 'Length': "20"},
+             'Overlap': 'nested', 'Length': "20"},
             # Match
             {'Identity': ("biotype", "snoRNA"), 'Strand': "antisense", 'Hierarchy': 2, 'Class': 'tag', 'nt5end': "all",
              'Overlap': 'partial', 'Length': "30"}

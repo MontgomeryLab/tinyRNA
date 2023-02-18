@@ -211,7 +211,7 @@ class IntervalPartialMatch(IntervalSelector):
         return f"<Any overlap [{self.start}, {self.end})>"
 
 
-class IntervalFullMatch(IntervalSelector):
+class IntervalNestedMatch(IntervalSelector):
 
     def __init__(self, iv: HTSeq.GenomicInterval):
         super().__init__(iv)

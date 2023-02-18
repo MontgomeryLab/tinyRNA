@@ -21,7 +21,7 @@ class MyTestCase(unittest.TestCase):
 
         # Match tuples formed during GFF parsing
         match_tuples = [('n/a', 'n/a', 'partial'),
-                        ('n/a', 'n/a', 'full'),
+                        ('n/a', 'n/a', 'nested'),
                         ('n/a', 'n/a', 'exact'),
                         ('n/a', 'n/a', 'anchored'),
                         ('n/a', 'n/a', "5' anchored"),
@@ -33,7 +33,7 @@ class MyTestCase(unittest.TestCase):
 
         self.assertEqual(len(result), 1)
         self.assertIsInstance(result[iv][0][2], IntervalPartialMatch)
-        self.assertIsInstance(result[iv][1][2], IntervalFullMatch)
+        self.assertIsInstance(result[iv][1][2], IntervalNestedMatch)
         self.assertIsInstance(result[iv][2][2], IntervalExactMatch)
         self.assertIsInstance(result[iv][3][2], IntervalAnchorMatch)
         self.assertIsInstance(result[iv][4][2], Interval5pMatch)
@@ -48,7 +48,7 @@ class MyTestCase(unittest.TestCase):
         shared_iv = HTSeq.GenomicInterval('I', 0, 10)
         class_name_test = {
             IntervalPartialMatch(shared_iv),
-            IntervalFullMatch(shared_iv),
+            IntervalNestedMatch(shared_iv),
             IntervalExactMatch(shared_iv),
             Interval5pMatch(shared_iv),
             Interval3pMatch(shared_iv)

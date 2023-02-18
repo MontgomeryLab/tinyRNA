@@ -201,7 +201,7 @@ class FeatureSelector:
 
     @staticmethod
     def build_interval_selectors(iv: 'HTSeq.GenomicInterval', match_tuples: List[unbuilt_match_tuple]):
-        """Builds partial/full/exact/5'anchored/3'anchored interval selectors
+        """Builds partial/nested/exact/5'anchored/3'anchored interval selectors
 
         Unlike build_selectors() and build_inverted_identities(), this function
         is not called at construction time. Instead, it is called when finalizing
@@ -222,8 +222,8 @@ class FeatureSelector:
 
         cache = {}
         selector_factory = {
-            'full': lambda x: IntervalFullMatch(x),
             'exact': lambda x: IntervalExactMatch(x),
+            'nested': lambda x: IntervalNestedMatch(x),
             'partial': lambda x: IntervalPartialMatch(x),
             'anchored': lambda x: IntervalAnchorMatch(x),
             "5'anchored": lambda x: Interval5pMatch(x) if iv.strand in ('+', '-') else IntervalAnchorMatch(x),
