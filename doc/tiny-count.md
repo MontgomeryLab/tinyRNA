@@ -53,24 +53,23 @@ Wildcard values (`all`, `*`, or an empty cell) can be used in the `Select for...
 Features overlapping a read alignment are selected based on their overlap characteristics. These matches are then sorted by hierarchy value before proceeding to Stage 3.
 
 ### Overlap
-This column allows you to specify the extent of overlap required for candidate feature selection:
-- `partial`: alignment overlaps feature by at least one base
-- `full`: alignment does not extend beyond either terminus of the feature
-- `exact`: alignment termini are equal to the feature's
-- `anchored`: alignment's start and/or end is equal to the feature's
-- `5' anchored`: alignment's 5' end is equal to the corresponding terminus of the feature
-- `3' anchored`: alignment's 3' end is equal to the corresponding terminus of the feature
+This column allows you to specify the extent of overlap required for candidate feature selection. In order to be a candidate, a feature must reside on the same chromosome as the alignment and overlap its interval by at least 1 nucleotide. A shared strand is not required. See the [Strand](#strand) section in Stage 3 for selection by strand.
 
-In order to be a candidate, a feature must match a rule in Stage 1, reside on the same chromosome as the alignment, and must overlap the alignment by at least 1 nucleotide.
-
-#### Strandedness and the Overlap Selector
-A feature does not have to be on the same strand as the alignment in order to be a candidate. See the [Strand](#strand) section in Stage 3 for selection by strand. Unstranded features will have `5' anchored` and `3' anchored` overlap selectors downgraded to `anchored` selectors. Alignments overlapping these features are evaluated for shared start and/or end coordinates, but 5'/3' ends are not distinguished.
+#### Unstranded Features
+ If these features match rules with `5' anchored` and `3' anchored` overlap selectors, they will be downgraded to `anchored` selectors. Alignments overlapping these features are evaluated for shared start and/or end coordinates, but 5' and 3' ends are not distinguished.
 
 #### Selector Demonstration
 
-The following diagrams demonstrate the strand semantics of these interval selectors. The first two options show separate illustrations for features on each strand for emphasis. All matches shown in the remaining three options apply to features on either strand.
-![3'_anchored_5'_anchored](../images/3'_anchored_5'_anchored_interval.png)
-![Full_Exact_Partial](../images/full_exact_partial_interval.png)
+The following table provides a description and illustration of the available overlap selectors. All matches apply to features on either strand, i.e. matches shown below the antisense strand also apply, as shown, to the feature on the sense strand, and vice versa.
+
+| Keyword and Description                                                                           | Illustration                                                                                        |
+|:--------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
+| `partial`: alignment overlaps feature by at least one base                                        | <img src="../images/overlap_selectors/partial.png" alt="Partial" style="max-width:400px" />         |
+| `nested`: alignment does not extend beyond either terminus of the feature                         | <img src="../images/overlap_selectors/nested.png" alt="Nested" style="max-width:400px" />           |
+| `exact`: alignment termini are equal to the feature's                                             | <img src="../images/overlap_selectors/exact.png" alt="Exact" style="max-width:400px" />             |
+| `anchored`: alignment is nested with start and/or end equal to the feature's                      | <img src="../images/overlap_selectors/anchored.png" alt="Anchored" style="max-width:400px" />       |
+| `5' anchored`: alignment is nested with 5' end equal to the corresponding terminus of the feature | <img src="../images/overlap_selectors/5'_anchored.png" alt="5' anchored" style="max-width:400px" /> |
+| `3' anchored`: alignment is nested with 3' end equal to the corresponding terminus of the feature | <img src="../images/overlap_selectors/3'_anchored.png" alt="3' anchored" style="max-width:400px" /> |
 
 ### Hierarchy
 Each rule must be assigned a hierarchy value. This value is used to sort Stage 2 matches so that matches with smaller hierarchy values take precedence in Stage 3.
