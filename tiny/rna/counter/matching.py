@@ -241,7 +241,6 @@ class IntervalAnchorMatch(IntervalSelector):
 
     def __init__(self, iv: HTSeq.GenomicInterval):
         super().__init__(iv)
-        assert iv.strand not in ('+', '-')
 
     def __contains__(self, alignment: dict):
         """The following diagram demonstrates unstranded anchored matching semantics.
