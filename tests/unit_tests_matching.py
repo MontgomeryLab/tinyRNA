@@ -28,6 +28,7 @@ class MyTestCase(unittest.TestCase):
                         ('n/a', 'n/a', "3' anchored"),
                         ('n/a', 'n/a', "5'anchored"),   # spaces should be optional
                         ('n/a', 'n/a', "3'anchored")]
+        match_tuples += [('n/a', 'n/a', kwd) for kwd in Wildcard.kwds]
 
         result = fs.build_interval_selectors(iv, match_tuples)
 
@@ -38,6 +39,7 @@ class MyTestCase(unittest.TestCase):
         self.assertIsInstance(result[iv][3][2], IntervalAnchorMatch)
         self.assertIsInstance(result[iv][4][2], Interval5pMatch)
         self.assertIsInstance(result[iv][5][2], Interval3pMatch)
+        self.assertTrue(isinstance(o, Wildcard) for o in result[iv][6:])
 
     """Are interval selectors hashable and properly compare for equality?
     This is important for storing feature records in GenomicArraysOfSets"""
