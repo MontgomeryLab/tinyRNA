@@ -11,7 +11,7 @@ from urllib.parse import unquote
 from inspect import stack
 
 from tiny.rna.counter.matching import Wildcard
-from tiny.rna.util import report_execution_time, make_filename
+from tiny.rna.util import report_execution_time, make_filename, ReportFormatter
 
 # For parse_GFF_attribute_string()
 _re_attr_main = re.compile(r"\s*([^\s=]+)[\s=]+(.*)")
@@ -436,12 +436,15 @@ class ReferenceBase(ABC):
     def get(self, feature_selector): pass
 
     def _init_genomic_array(self):
+        """The Cython StepVector is more efficient but requires extra setup steps.
+        If these fail, we want to fall back to HTSeq's StepVector and carry on."""
+
         if self.stepvector == 'Cython':
             try:
                 from tiny.rna.counter.stepvector import StepVector
                 setattr(HTSeq.StepVector, 'StepVector', StepVector)
                 return HTSeq.GenomicArray("auto", stranded=False)
-            except ModuleNotFoundError:
+            except:
                 self.stepvector = 'HTSeq'
                 print("Failed to import Cython StepVector\n"
                       "Falling back to HTSeq's StepVector",
@@ -467,6 +470,23 @@ class ReferenceBase(ABC):
                 total_feats += self.feats.chrom_vectors[chrom][strand].array.num_steps() - empty_size
 
         return total_feats
+
+    def print_selector_warnings(self):
+        """Warnings accumulate in FeatureSelector and are printed here using ReportFormatter"""
+
+        if self.selector is None: return
+
+        header = "Incompatible feature intervals were produced as a result of overlap shift parameters."
+        bad_shift = "The following matches were omitted from selection because they result in"
+        descriptions = {
+            "null": f"{bad_shift} a zero-width interval",
+            "inverted": f"{bad_shift} an inverted interval (start > end)",
+            "negative start": f"{bad_shift} a negative start coordinate"
+        }
+
+        formatter = ReportFormatter(descriptions)
+        formatter.add_warning_section(header, self.selector.warnings)
+        formatter.print_report()
 
     @staticmethod
     def map_strand(htseq_value: str):
@@ -557,6 +577,7 @@ class ReferenceFeatures(ReferenceBase):
         self._finalize_aliases()
         self._finalize_features()
 
+        if self.selector.warnings: self.print_selector_warnings()
         if self.get_feats_table_size() == 0 and self.all_features is False:
             raise ValueError("No features were retained while parsing your GFF file.\n"
                              "This may be due to a lack of features matching 'Select for...with value...'")
@@ -753,14 +774,13 @@ class ReferenceFeatures(ReferenceBase):
 
         for sub_iv in sub_ivs:
             # Build interval selectors for this
-            matches_by_shifted_iv = self.selector.build_interval_selectors(sub_iv, matches)
+            matches_by_shifted_iv = self.selector.build_interval_selectors(sub_iv, matches, tagged_id)
             strand = self.map_strand(sub_iv.strand)
 
             for shifted_iv, built_matches in matches_by_shifted_iv.items():
                 # Sort match tuples by rank for more efficient feature selection
                 sorted_matches = sorted(built_matches, key=lambda x: x[1])
                 self.feats[shifted_iv] += (tagged_id, strand, tuple(sorted_matches))
-
 
     @staticmethod
     def _merge_adjacent_subintervals(unmerged_sub_ivs: List[HTSeq.GenomicInterval]) -> list:
@@ -805,6 +825,9 @@ class ReferenceSeqs(ReferenceBase):
         for seq_id, seq_len in self.seqs.items():
             self.add_reference_seq(seq_id, seq_len, match_tuples)
 
+        # If the user provided shift parameters, there will likely be warnings
+        if self.selector.warnings: self.print_selector_warnings()
+
         # Aliases are irrelevant for non-GFF references
         aliases = {seq_id: () for seq_id in self.tags}
         return self.feats, aliases, self.tags
@@ -829,7 +852,7 @@ class ReferenceSeqs(ReferenceBase):
 
         for strand in ('+', '-'):
             iv = HTSeq.GenomicInterval(seq_id, 0, seq_len, strand)
-            matches_by_shifted_iv = self.selector.build_interval_selectors(iv, matches)
+            matches_by_shifted_iv = self.selector.build_interval_selectors(iv, matches, tagged_id)
             strand = self.map_strand(strand)
 
             for shifted_iv, built_matches in matches_by_shifted_iv.items():
