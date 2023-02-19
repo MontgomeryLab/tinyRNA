@@ -197,8 +197,7 @@ class FeatureSelector:
 
         return rules_table
 
-    @staticmethod
-    def build_interval_selectors(iv: 'HTSeq.GenomicInterval', match_tuples: List[unbuilt_match_tuple]):
+    def build_interval_selectors(self, iv: 'HTSeq.GenomicInterval', match_tuples: List[unbuilt_match_tuple], feat_id=None):
         """Builds partial/wildcard/nested/exact/5'anchored/3'anchored interval selectors
 
         Unlike build_selectors() and build_inverted_identities(), this function
@@ -216,6 +215,11 @@ class FeatureSelector:
         Args:
             iv: The interval of the feature from which each selector is built
             match_tuples: A list of tuples representing the feature's Stage 1 matches
+            feat_id: The tagged feature ID associated with these matches (for error logging)
+
+        Returns:
+            matches_by_interval: a dictionary of shifted intervals and their associated
+                match tuples, where each match tuple now contains a complete IntervalSelector
         """
 
         cache = {}
@@ -230,7 +234,7 @@ class FeatureSelector:
         selector_factory.update({kwd: lambda *_: Wildcard() for kwd in Wildcard.kwds})
 
         matches_by_interval = defaultdict(list)
-        for i, match in enumerate(match_tuples):
+        for match in match_tuples:
             try:
                 # Split optional shift parameters from definition
                 defn = re.split(r'\s*,\s*', match[2], 1)
@@ -247,9 +251,10 @@ class FeatureSelector:
                 built_match_tuple = (match[0], match[1], selector_obj)
                 matches_by_interval[match_iv].append(built_match_tuple)
             except KeyError:
-                raise ValueError(f'Invalid overlap selector: "{match_tuples[i][2]}"')
-            except IllegalShiftError:
-                pass  # Drop offending match tuple
+                raise ValueError(f'Invalid overlap selector: "{match[2]}"')
+            except IllegalShiftError as e:
+                bad_shift_msg = f'{feat_id} and rule {match[0]} ({match[2]})'
+                self.warnings[e.subtype].add(bad_shift_msg)
 
         return matches_by_interval
 
