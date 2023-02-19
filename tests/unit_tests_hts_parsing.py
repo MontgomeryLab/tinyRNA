@@ -18,13 +18,6 @@ import unit_test_helpers as helpers
 resources = "./testdata/counter"
 
 
-class MockFeatureSelector:
-    def __init__(self, rules_table):
-        self.rules_table = FeatureSelector.build_selectors(rules_table)
-        self.inv_ident = FeatureSelector.build_inverted_identities(self.rules_table)
-        self.build_interval_selectors = FeatureSelector.build_interval_selectors
-
-
 class MyTestCase(unittest.TestCase):
 
     @classmethod
@@ -54,7 +47,7 @@ class MyTestCase(unittest.TestCase):
         rules = [deepcopy(helpers.rules_template[0]) for _ in range(len(updates_list))]
         for changes, template in zip(updates_list, rules):
             template.update(changes)
-        return MockFeatureSelector(rules)
+        return FeatureSelector(rules)
 
     def exhaust_iterator(self, it):
         collections.deque(it, maxlen=0)
@@ -183,7 +176,7 @@ class MyTestCase(unittest.TestCase):
         kwargs = {'all_features': False}
         bad = "bad_name_attribute"
         feature_source = {self.short_gff_file: [bad]}
-        feature_selector = MockFeatureSelector([])
+        feature_selector = FeatureSelector([])
 
         expected_err = "No features were retained while parsing your GFF file.\n" \
                        "This may be due to a lack of features matching 'Select for...with value...'"
@@ -221,7 +214,7 @@ class MyTestCase(unittest.TestCase):
 
         # Notice: screening for "ID" name attribute happens earlier in counter.load_config()
         expected_alias = {"Gene:WBGene00023193": ("additional_class", "Gene:WBGene00023193", "unknown")}
-        _, alias, _ = ReferenceFeatures(feature_source, **kwargs).get(MockFeatureSelector([]))
+        _, alias, _ = ReferenceFeatures(feature_source, **kwargs).get(FeatureSelector([]))
 
         self.assertDictEqual(alias, expected_alias)
 
@@ -236,7 +229,7 @@ class MyTestCase(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, expected_err):
             # No aliases saved due to all_features=False and the lack of identity matches
-            _, alias, _ = ReferenceFeatures(feature_source, **kwargs).get(MockFeatureSelector([]))
+            _, alias, _ = ReferenceFeatures(feature_source, **kwargs).get(FeatureSelector([]))
 
     """Does ReferenceFeatures.get() properly concatenate identity match tuples when multiple GFF files define
     matches for a feature?"""
@@ -762,7 +755,7 @@ class GenomeParsingTests(unittest.TestCase):
                   'Overlap': 'partial', 'Strand': '', 'nt5end': '', 'Length': ''}]
         files = {gff.format(ftype): [] for gff in self.genomes.values() for ftype in ('gff3', 'gtf')}
 
-        fs = FeatureSelector(rules, LibraryStats())
+        fs = FeatureSelector(rules)
         rt = ReferenceFeatures(files)
 
         # The test is passed if this command

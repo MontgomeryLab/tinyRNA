@@ -24,7 +24,7 @@ class FeaturesTests(unittest.TestCase):
     def make_feature_for_interval_test(self, iv_rule, feat_id, chrom, strand: str, start, stop):
         feat_iv = HTSeq.GenomicInterval(chrom, start, stop, strand)
         rules = [dict(deepcopy(rules_template[0]), Overlap=iv_rule, Identity=('*', '*'), nt5end='*', Length='*')]
-        fs = FeatureSelector(rules, LibraryStats(normalize_by_hits=True))
+        fs = FeatureSelector(rules)
 
         # Feature with specified coordinates, matching rule 0 with hierarchy 0 and the appropriate selector for iv_rule
         selectors = fs.build_interval_selectors(feat_iv, [(0, 0, iv_rule)])
@@ -382,7 +382,7 @@ class FeaturesTests(unittest.TestCase):
 
         rules = [*one, *two, *non, *dup]
 
-        actual = FeatureSelector(rules, LibraryStats(normalize_by_hits=True)).inv_ident
+        actual = FeatureSelector(rules).inv_ident
         expected = {
             (Wildcard(), non_wild):   [0],
             (non_wild,   Wildcard()): [1],
@@ -395,7 +395,7 @@ class FeaturesTests(unittest.TestCase):
     """Does FeatureSelector build both shifted and unshifted selectors and group them by resulting interval?"""
 
     def test_build_interval_selectors_grouping(self):
-        fs = FeatureSelector(deepcopy(rules_template), LibraryStats())
+        fs = FeatureSelector(deepcopy(rules_template))
         iv = HTSeq.GenomicInterval('I', 10, 20, '+')
 
         match_tuples = [('n/a', 'n/a', 'partial'),

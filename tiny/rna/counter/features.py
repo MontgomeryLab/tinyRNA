@@ -30,7 +30,7 @@ class FeatureCounter:
     def __init__(self, references, selection_rules, **prefs):
         self.stats = LibraryStats(**prefs)
         self.sam_reader = SAM_reader(**prefs)
-        self.selector = FeatureSelector(selection_rules, self.stats, **prefs)
+        self.selector = FeatureSelector(selection_rules, **prefs)
 
         if isinstance(references, ReferenceFeatures):
             self.mode = "by feature"
@@ -101,12 +101,10 @@ class FeatureSelector:
     rules_table: List[dict]
     inv_ident: Dict[tuple, List[int]]
 
-    def __init__(self, rules: List[dict], libstats: 'LibraryStats', report_diags=False, **kwargs):
+    def __init__(self, rules: List[dict], **kwargs):
         FeatureSelector.rules_table = self.build_selectors(rules)
         FeatureSelector.inv_ident = self.build_inverted_identities(FeatureSelector.rules_table)
-
-        self.report_eliminations = report_diags
-        if report_diags: self.elim_stats = libstats.diags.selection_diags
+        self.warnings = defaultdict(set)
 
     @classmethod
     def choose(cls, candidates: Set[feature_record_tuple], alignment: dict) -> Mapping[str, set]:

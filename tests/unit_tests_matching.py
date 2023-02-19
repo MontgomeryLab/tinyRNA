@@ -16,7 +16,7 @@ class MyTestCase(unittest.TestCase):
     """Does FeatureSelector build the proper interval selectors?"""
 
     def test_feature_selector_interval_build(self):
-        fs = FeatureSelector(deepcopy(rules_template), LibraryStats())
+        fs = FeatureSelector(deepcopy(rules_template))
         iv = HTSeq.GenomicInterval('I', 0, 10, '+')
 
         # Match tuples formed during GFF parsing
