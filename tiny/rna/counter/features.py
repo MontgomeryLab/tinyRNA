@@ -223,6 +223,7 @@ class FeatureSelector:
         cache = {}
         selector_factory = {
             'exact': lambda x: IntervalExactMatch(x),
+            'full': lambda x: IntervalNestedMatch(x),   # temporary backward compatibility
             'nested': lambda x: IntervalNestedMatch(x),
             'partial': lambda x: IntervalPartialMatch(x),
             'anchored': lambda x: IntervalAnchorMatch(x),
