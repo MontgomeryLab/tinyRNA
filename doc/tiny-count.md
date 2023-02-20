@@ -62,14 +62,16 @@ This column allows you to specify the extent of overlap required for candidate f
 
 The following table provides a description and illustration of the available overlap selectors. All matches apply to features on either strand, i.e. matches shown below the antisense strand also apply, as shown, to the feature on the sense strand, and vice versa.
 
-| Keyword and Description                                                                           | Illustration                                                                                        |
-|:--------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
-| `partial`: alignment overlaps feature by at least one base                                        | <img src="../images/overlap_selectors/partial.png" alt="Partial" style="max-width:400px" />         |
-| `nested`: alignment does not extend beyond either terminus of the feature                         | <img src="../images/overlap_selectors/nested.png" alt="Nested" style="max-width:400px" />           |
-| `exact`: alignment termini are equal to the feature's                                             | <img src="../images/overlap_selectors/exact.png" alt="Exact" style="max-width:400px" />             |
-| `anchored`: alignment is nested with start and/or end equal to the feature's                      | <img src="../images/overlap_selectors/anchored.png" alt="Anchored" style="max-width:400px" />       |
-| `5' anchored`: alignment is nested with 5' end equal to the corresponding terminus of the feature | <img src="../images/overlap_selectors/5'_anchored.png" alt="5' anchored" style="max-width:400px" /> |
-| `3' anchored`: alignment is nested with 3' end equal to the corresponding terminus of the feature | <img src="../images/overlap_selectors/3'_anchored.png" alt="3' anchored" style="max-width:400px" /> |
+| Keyword and Description                                                                           |                                     Illustration                                      |
+|:--------------------------------------------------------------------------------------------------|:-------------------------------------------------------------------------------------:|
+| `partial`: alignment overlaps feature by at least one base                                        |     <img src="../images/overlap_selectors/partial.png" alt="Partial" width=400 />     |
+| `nested`: alignment does not extend beyond either terminus of the feature                         |      <img src="../images/overlap_selectors/nested.png" alt="Nested" width=400 />      |
+| `exact`: alignment termini are equal to the feature's                                             |       <img src="../images/overlap_selectors/exact.png" alt="Exact" width=400 />       |
+| `anchored`: alignment is nested with start and/or end equal to the feature's                      |    <img src="../images/overlap_selectors/anchored.png" alt="Anchored" width=400 />    |
+| `5' anchored`: alignment is nested with 5' end equal to the corresponding terminus of the feature | <img src="../images/overlap_selectors/5'_anchored.png" alt="5' anchored" width=400 /> |
+| `3' anchored`: alignment is nested with 3' end equal to the corresponding terminus of the feature | <img src="../images/overlap_selectors/3'_anchored.png" alt="3' anchored" width=400 /> |
+
+:people_holding_hands: Illustration colors have been selected for colorblindness accessibility.
 
 ### Hierarchy
 Each rule must be assigned a hierarchy value. This value is used to sort Stage 2 matches so that matches with smaller hierarchy values take precedence in Stage 3.
