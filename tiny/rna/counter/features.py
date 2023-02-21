@@ -105,6 +105,7 @@ class FeatureSelector:
         FeatureSelector.rules_table = self.build_selectors(rules)
         FeatureSelector.inv_ident = self.build_inverted_identities(FeatureSelector.rules_table)
         self.warnings = defaultdict(set)
+        self.overlap_cache = {}
 
     @classmethod
     def choose(cls, candidates: Set[feature_record_tuple], alignment: dict) -> Mapping[str, set]:
@@ -222,7 +223,7 @@ class FeatureSelector:
                 match tuples, where each match tuple now contains a complete IntervalSelector
         """
 
-        cache = {}
+        cache = self.overlap_cache
         selector_factory = {
             'exact': lambda x: IntervalExactMatch(x),
             'full': lambda x: IntervalNestedMatch(x),   # temporary backward compatibility
@@ -231,30 +232,35 @@ class FeatureSelector:
             'anchored': lambda x: IntervalAnchorMatch(x),
             "5'anchored": lambda x: Interval5pMatch(x) if iv.strand in ('+', '-') else IntervalAnchorMatch(x),
             "3'anchored": lambda x: Interval3pMatch(x) if iv.strand in ('+', '-') else IntervalAnchorMatch(x)}
-        selector_factory.update({kwd: lambda *_: Wildcard() for kwd in Wildcard.kwds})
 
         matches_by_interval = defaultdict(list)
         for match in match_tuples:
-            try:
-                # Split optional shift parameters from definition
-                defn = re.split(r'\s*,\s*', match[2], 1)
-                selector, shift = defn[0], defn[1:]
-                selector = selector.replace(' ', '')
+            # Split optional shift parameters from definition
+            defn = re.split(r'\s*,\s*', match[2], 1)
+            selector, shift = defn[0], defn[1:]
+            selector = selector.replace(' ', '')
 
-                # Shift the interval before constructing if shift parameters were provided
-                match_iv = IntervalSelector.get_shifted_interval(shift[0], iv) if shift else iv
-                cache_key = (selector, match_iv)
+            if selector in Wildcard.kwds:
+                selector_obj = Wildcard()
+                match_iv = iv
+            else:
+                try:
+                    # Shift the interval before constructing if shift parameters were provided
+                    match_iv = IntervalSelector.get_shifted_interval(shift[0], iv) if shift else iv
 
-                # Cache instances to prevent duplicates for the same match type on the same iv
-                selector_obj = cache.setdefault(cache_key, selector_factory[selector](match_iv))
+                    # Cache instances to prevent duplicates for the same match type on the same iv
+                    cache_key = (selector, match_iv.chrom, match_iv.start, match_iv.end)
+                    selector_obj = cache.setdefault(cache_key, selector_factory[selector](match_iv))
+                except KeyError:
+                    raise ValueError(f'Invalid overlap selector: "{match[2]}"')
+                except IllegalShiftError as e:
+                    bad_shift_msg = f'{feat_id} and rule {match[0]} ({match[2]})'
+                    self.warnings[e.subtype].add(bad_shift_msg)
+                    continue
 
-                built_match_tuple = (match[0], match[1], selector_obj)
-                matches_by_interval[match_iv].append(built_match_tuple)
-            except KeyError:
-                raise ValueError(f'Invalid overlap selector: "{match[2]}"')
-            except IllegalShiftError as e:
-                bad_shift_msg = f'{feat_id} and rule {match[0]} ({match[2]})'
-                self.warnings[e.subtype].add(bad_shift_msg)
+            # Replace the match tuple's definition with selector
+            built_match_tuple = (match[0], match[1], selector_obj)
+            matches_by_interval[match_iv].append(built_match_tuple)
 
         return matches_by_interval
 

@@ -762,6 +762,9 @@ class ReferenceFeatures(ReferenceBase):
                 tagged_matches = self.matches[tagged_id]
                 self._add_subinterval_matches(tagged_id, merged_sub_ivs, tagged_matches)
 
+        # GenomicArray is built. Clear cache...
+        self.selector.overlap_cache.clear()
+
     def _add_subinterval_matches(self, tagged_id: tuple, sub_ivs: list, matches: set):
         """Adds the classified group of matches to the GenomicArray under each of the
         feature's sub-intervals
@@ -824,6 +827,9 @@ class ReferenceSeqs(ReferenceBase):
 
         for seq_id, seq_len in self.seqs.items():
             self.add_reference_seq(seq_id, seq_len, match_tuples)
+
+        # GenomicArray is built. Clear cache...
+        self.selector.overlap_cache.clear()
 
         # If the user provided shift parameters, there will likely be warnings
         if self.selector.warnings: self.print_selector_warnings()
