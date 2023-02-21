@@ -202,6 +202,7 @@ class IntervalPartialMatch(IntervalSelector):
     at least one base, no further evaluation is required when this filter
     is used by FeatureSelector.choose()"""
 
+    __slots__ = ()  # Base class holds attributes
     __contains__ = Wildcard.__contains__
 
     def __init__(self, iv: HTSeq.GenomicInterval):
@@ -212,6 +213,7 @@ class IntervalPartialMatch(IntervalSelector):
 
 
 class IntervalNestedMatch(IntervalSelector):
+    __slots__ = ()  # Base class holds attributes
 
     def __init__(self, iv: HTSeq.GenomicInterval):
         super().__init__(iv)
@@ -224,6 +226,7 @@ class IntervalNestedMatch(IntervalSelector):
 
 
 class IntervalExactMatch(IntervalSelector):
+    __slots__ = ()  # Base class holds attributes
 
     def __init__(self, iv: HTSeq.GenomicInterval):
         super().__init__(iv)
@@ -238,6 +241,8 @@ class IntervalExactMatch(IntervalSelector):
 class IntervalAnchorMatch(IntervalSelector):
     """Evaluates whether either end of the alignment's interval is anchored to
     the feature with the non-anchored end nested within the feature's interval"""
+
+    __slots__ = ()  # Base class holds attributes
 
     def __init__(self, iv: HTSeq.GenomicInterval):
         super().__init__(iv)
@@ -265,6 +270,8 @@ class IntervalAnchorMatch(IntervalSelector):
 class Interval5pMatch(IntervalSelector):
     """Evaluates whether an alignment's 5' end is anchored to the corresponding terminus
     of the feature, and the alignment's 3' end is nested within the feature's interval."""
+
+    __slots__ = ()  # Base class holds attributes
 
     def __init__(self, iv: HTSeq.GenomicInterval):
         super().__init__(iv)
@@ -301,6 +308,8 @@ class Interval5pMatch(IntervalSelector):
 class Interval3pMatch(IntervalSelector):
     """Evaluates whether an alignment's 3' end is anchored to the corresponding terminus
     of the feature, and the alignment's 5' end is nested within the feature's interval."""
+
+    __slots__ = ()  # Base class holds attributes
 
     def __init__(self, iv: HTSeq.GenomicInterval):
         super().__init__(iv)
