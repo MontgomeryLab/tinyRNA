@@ -43,6 +43,7 @@ Expected runtime: ~10-60 minutes (expect longer runtimes if a bowtie index must 
 2. Move your GFF and genome sequence files into the reference_data directory.
 3. Edit features.csv and samples.csv file for your datasets and selection parameters.
 4. Edit paths.yml as follows:
-   - line 46: `ebwt: ''` (no value)
-   - line 50: `reference_genome_files: your-fasta-formatted-DNA-sequence-file`
+   - line 20: change the value after `path:` to point to your GFF or GTF file
+   - line 46: delete the value after `ebwt:`
+   - line 51: change the value after `- ` to point to your fasta formatted DNA sequence file
 5. Run the pipeline with the command: `tiny run --config run_config.yml`

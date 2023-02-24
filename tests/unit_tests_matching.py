@@ -16,26 +16,30 @@ class MyTestCase(unittest.TestCase):
     """Does FeatureSelector build the proper interval selectors?"""
 
     def test_feature_selector_interval_build(self):
-        fs = FeatureSelector(deepcopy(rules_template), LibraryStats())
+        fs = FeatureSelector(deepcopy(rules_template))
         iv = HTSeq.GenomicInterval('I', 0, 10, '+')
 
         # Match tuples formed during GFF parsing
         match_tuples = [('n/a', 'n/a', 'partial'),
-                        ('n/a', 'n/a', 'full'),
+                        ('n/a', 'n/a', 'nested'),
                         ('n/a', 'n/a', 'exact'),
+                        ('n/a', 'n/a', 'anchored'),
                         ('n/a', 'n/a', "5' anchored"),
                         ('n/a', 'n/a', "3' anchored"),
                         ('n/a', 'n/a', "5'anchored"),   # spaces should be optional
                         ('n/a', 'n/a', "3'anchored")]
+        match_tuples += [('n/a', 'n/a', kwd) for kwd in Wildcard.kwds]
 
         result = fs.build_interval_selectors(iv, match_tuples)
 
         self.assertEqual(len(result), 1)
         self.assertIsInstance(result[iv][0][2], IntervalPartialMatch)
-        self.assertIsInstance(result[iv][1][2], IntervalFullMatch)
+        self.assertIsInstance(result[iv][1][2], IntervalNestedMatch)
         self.assertIsInstance(result[iv][2][2], IntervalExactMatch)
-        self.assertIsInstance(result[iv][3][2], Interval5pMatch)
-        self.assertIsInstance(result[iv][4][2], Interval3pMatch)
+        self.assertIsInstance(result[iv][3][2], IntervalAnchorMatch)
+        self.assertIsInstance(result[iv][4][2], Interval5pMatch)
+        self.assertIsInstance(result[iv][5][2], Interval3pMatch)
+        self.assertTrue(isinstance(o, Wildcard) for o in result[iv][6:])
 
     """Are interval selectors hashable and properly compare for equality?
     This is important for storing feature records in GenomicArraysOfSets"""
@@ -46,7 +50,7 @@ class MyTestCase(unittest.TestCase):
         shared_iv = HTSeq.GenomicInterval('I', 0, 10)
         class_name_test = {
             IntervalPartialMatch(shared_iv),
-            IntervalFullMatch(shared_iv),
+            IntervalNestedMatch(shared_iv),
             IntervalExactMatch(shared_iv),
             Interval5pMatch(shared_iv),
             Interval3pMatch(shared_iv)

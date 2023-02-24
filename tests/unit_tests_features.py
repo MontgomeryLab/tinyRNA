@@ -24,7 +24,7 @@ class FeaturesTests(unittest.TestCase):
     def make_feature_for_interval_test(self, iv_rule, feat_id, chrom, strand: str, start, stop):
         feat_iv = HTSeq.GenomicInterval(chrom, start, stop, strand)
         rules = [dict(deepcopy(rules_template[0]), Overlap=iv_rule, Identity=('*', '*'), nt5end='*', Length='*')]
-        fs = FeatureSelector(rules, LibraryStats(normalize_by_hits=True))
+        fs = FeatureSelector(rules)
 
         # Feature with specified coordinates, matching rule 0 with hierarchy 0 and the appropriate selector for iv_rule
         selectors = fs.build_interval_selectors(feat_iv, [(0, 0, iv_rule)])
@@ -187,12 +187,12 @@ class FeaturesTests(unittest.TestCase):
         instance.assign_features.assert_called_once_with("mock_alignment")
         instance.stats.assert_has_calls(expected_calls_to_stats)
 
-    """Does FeatureSelector.choose() correctly select features defining `full` interval matching rules?"""
+    """Does FeatureSelector.choose() correctly select features defining `nested` interval matching rules?"""
 
-    def test_feature_selector_full_interval(self):
-        iv_rule = 'full'
+    def test_feature_selector_nested_interval(self):
+        iv_rule = 'nested'
         chrom, strand, start, stop = "n/a", "+", 5, 10
-        feat, fs = self.make_feature_for_interval_test(iv_rule, "Full Overlap", chrom, strand, start, stop)
+        feat, fs = self.make_feature_for_interval_test(iv_rule, "Nested Overlap", chrom, strand, start, stop)
 
         aln_base = {'Seq': 'ATGC', 'Chrom': chrom, 'Strand': strand_to_bool(strand)}
         aln_spill_lo = make_parsed_sam_record(**dict(aln_base, Start=start - 1, Name="spill"))
@@ -213,9 +213,9 @@ class FeaturesTests(unittest.TestCase):
 
         self.assertEqual(fs.choose(feat, aln_spill_lo), {})
         self.assertEqual(fs.choose(feat, aln_spill_hi), {})
-        self.assertEqual(fs.choose(feat, aln_contained), {"Full Overlap": {0}})
-        self.assertEqual(fs.choose(feat, aln_contained_lo), {"Full Overlap": {0}})
-        self.assertEqual(fs.choose(feat, aln_contained_hi), {"Full Overlap": {0}})
+        self.assertEqual(fs.choose(feat, aln_contained), {"Nested Overlap": {0}})
+        self.assertEqual(fs.choose(feat, aln_contained_lo), {"Nested Overlap": {0}})
+        self.assertEqual(fs.choose(feat, aln_contained_hi), {"Nested Overlap": {0}})
 
     """Does FeatureSelector.choose() correctly select features with `partial` interval matching rules?"""
 
@@ -284,7 +284,7 @@ class FeaturesTests(unittest.TestCase):
 
         """
                 No match    | 6 -------->| 10     aln_none
-                   Match  5 |------------|--> 11  aln_long
+                No match  5 |------------|--> 11  aln_long
                    Match  5 |----------->| 10     aln_exact
                    Match  5 |--------> 9 |        aln_short
         (+) 5' -------------|==feat_A===>|-----------> 3'
@@ -292,7 +292,7 @@ class FeaturesTests(unittest.TestCase):
         (-) 3' <------------|<===feat_B==|------------ 5'
                             | 6 <--------| 10  Match
                           5 |<-----------| 10  Match
-                       4 <--|------------| 10  Match
+                       4 <--|------------| 10  No match
                           5 |<-------- 9 |     No match
         """
 
@@ -307,7 +307,7 @@ class FeaturesTests(unittest.TestCase):
         }
 
         self.assertEqual(fs.choose(feat_A, aln['aln_none']), {})
-        self.assertEqual(fs.choose(feat_A, aln['aln_long']), {"5' Anchored Overlap (+)": {0}})
+        self.assertEqual(fs.choose(feat_A, aln['aln_long']), {})
         self.assertEqual(fs.choose(feat_A, aln['aln_exact']), {"5' Anchored Overlap (+)": {0}})
         self.assertEqual(fs.choose(feat_A, aln['aln_short']), {"5' Anchored Overlap (+)": {0}})
 
@@ -319,7 +319,7 @@ class FeaturesTests(unittest.TestCase):
         aln['aln_none'].update({'Start': 5, 'End': 9, 'Strand': False})
 
         self.assertEqual(fs.choose(feat_B, aln['aln_none']), {})
-        self.assertEqual(fs.choose(feat_B, aln['aln_long']), {"5' Anchored Overlap (-)": {0}})
+        self.assertEqual(fs.choose(feat_B, aln['aln_long']), {})
         self.assertEqual(fs.choose(feat_B, aln['aln_exact']), {"5' Anchored Overlap (-)": {0}})
         self.assertEqual(fs.choose(feat_B, aln['aln_short']), {"5' Anchored Overlap (-)": {0}})
 
@@ -330,17 +330,17 @@ class FeaturesTests(unittest.TestCase):
         chrom, start, end = "n/a", 5, 10
 
         """
-                No match  5 |--------> 9 |     aln_none
-                  Match 4 --|----------->| 10  aln_long
-                  Match   5 |----------->| 10  aln_exact
-                  Match     | 6 -------->| 10  aln_short
-        (+) 5' -------------|==feat_A===>|-----------> 3'
-                  start = 5                end = 10
-        (-) 3' <------------|<===feat_B==|------------ 5'
-                          5 |<-------- 9 |       Match
-                          5 |<-----------| 10    Match
-                          5 |<-----------|-- 11  Match
-                            | 6 <--------| 10    No match
+                No match   5 |--------> 9 |     aln_none
+                No match 4 --|----------->| 10  aln_long
+                   Match   5 |----------->| 10  aln_exact
+                   Match     | 6 -------->| 10  aln_short
+        (+) 5' --------------|==feat_A===>|-----------> 3'
+                   start = 5                end = 10
+        (-) 3' <-------------|<===feat_B==|------------ 5'
+                           5 |<-------- 9 |       Match
+                           5 |<-----------| 10    Match
+                           5 |<-----------|-- 11  No match
+                             | 6 <--------| 10    No match
         """
 
         # Test feat_A on (+) strand
@@ -354,7 +354,7 @@ class FeaturesTests(unittest.TestCase):
         }
 
         self.assertEqual(fs.choose(feat_A, aln['aln_none']), {})
-        self.assertEqual(fs.choose(feat_A, aln['aln_long']), {"3' Anchored Overlap (+)": {0}})
+        self.assertEqual(fs.choose(feat_A, aln['aln_long']), {})
         self.assertEqual(fs.choose(feat_A, aln['aln_exact']), {"3' Anchored Overlap (+)": {0}})
         self.assertEqual(fs.choose(feat_A, aln['aln_short']), {"3' Anchored Overlap (+)": {0}})
 
@@ -366,7 +366,7 @@ class FeaturesTests(unittest.TestCase):
         aln['aln_none'].update({'Start': 6, 'End': 10, 'Strand': False})
 
         self.assertEqual(fs.choose(feat_B, aln['aln_none']), {})
-        self.assertEqual(fs.choose(feat_B, aln['aln_long']), {"3' Anchored Overlap (-)": {0}})
+        self.assertEqual(fs.choose(feat_B, aln['aln_long']), {})
         self.assertEqual(fs.choose(feat_B, aln['aln_exact']), {"3' Anchored Overlap (-)": {0}})
         self.assertEqual(fs.choose(feat_B, aln['aln_short']), {"3' Anchored Overlap (-)": {0}})
 
@@ -382,7 +382,7 @@ class FeaturesTests(unittest.TestCase):
 
         rules = [*one, *two, *non, *dup]
 
-        actual = FeatureSelector(rules, LibraryStats(normalize_by_hits=True)).inv_ident
+        actual = FeatureSelector(rules).inv_ident
         expected = {
             (Wildcard(), non_wild):   [0],
             (non_wild,   Wildcard()): [1],
@@ -395,17 +395,17 @@ class FeaturesTests(unittest.TestCase):
     """Does FeatureSelector build both shifted and unshifted selectors and group them by resulting interval?"""
 
     def test_build_interval_selectors_grouping(self):
-        fs = FeatureSelector(deepcopy(rules_template), LibraryStats())
+        fs = FeatureSelector(deepcopy(rules_template))
         iv = HTSeq.GenomicInterval('I', 10, 20, '+')
 
         match_tuples = [('n/a', 'n/a', 'partial'),
-                        ('n/a', 'n/a', 'full'),
+                        ('n/a', 'n/a', 'nested'),
                         ('n/a', 'n/a', 'exact'),
                         ('n/a', 'n/a', "5' anchored"),
                         ('n/a', 'n/a', "3' anchored"),
                         # iv_shifted_1                        Shift values:
                         ('n/a', 'n/a', 'partial, -5, 5'),       # 5': -5    3': 5
-                        ('n/a', 'n/a', 'full, -5, 5'),          # 5': -5    3': 5
+                        ('n/a', 'n/a', 'nested, -5, 5'),        # 5': -5    3': 5
                         # iv_shifted_2
                         ('n/a', 'n/a', 'exact, -10, 10'),       # 5': -10   3': 10
                         # iv_shifted_3

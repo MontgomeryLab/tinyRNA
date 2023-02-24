@@ -519,7 +519,7 @@ class MergedDiags(MergedStat):
 
     def write_output_logfile(self):
         self.write_alignment_diags()
-        self.write_selection_diags()
+        # self.write_selection_diags()  Not currently collected
         self.write_alignment_tables()
 
     def write_alignment_diags(self):
