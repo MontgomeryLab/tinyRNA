@@ -561,6 +561,13 @@ class PathsFile(ConfigBase):
             "that you are using a Paths File from an earlier version of tinyRNA. Please " \
             "check the release notes and update your configuration files."
 
+        missing_keys = [key for key in (*self.single, *self.groups, *self.prefix)
+                        if key not in self.config]
+
+        assert not missing_keys, \
+            "The following expected keys were missing in {selfname}:\n\t{missing}" \
+            .format(selfname=self.basename, missing="\n\t".join(missing_keys))
+
     def get_gff_config(self) -> Dict[str, list]:
         """Restructures GFF input info so that it can be more easily handled.
         To be clear, the Paths File YAML could be structured to match the desired output,
