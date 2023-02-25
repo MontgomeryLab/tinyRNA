@@ -263,7 +263,7 @@ def run_cwltool_native(config_object: 'ConfigBase', workflow: str, run_directory
     verbosity = config_object['verbosity']
 
     def furnish_if_file_record(file_dict):
-        if isinstance(file_dict, dict) and file_dict.get('class', None) == 'File':
+        if isinstance(file_dict, dict) and file_dict.get('class') == 'File':
             file_dict['basename'] = os.path.basename(file_dict['path'])
             file_dict['location'] = file_dict['path']
             file_dict['contents'] = None

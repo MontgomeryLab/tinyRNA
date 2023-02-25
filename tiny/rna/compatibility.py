@@ -81,7 +81,7 @@ class RunConfigCompatibility:
 
     def __init__(self, config_obj: CommentedMap):
         self.config = config_obj.copy()
-        self.vstart = config_obj.get("version", "0.0.0").strip("v")  # trust reported version for now
+        self.vstart = (config_obj.get("version") or "0.0.0").strip("v")  # trust reported version for now
         definitions = resource_filename('tiny', 'templates') + "/compatibility/run_config_compatibility.yml"
 
         self.yaml = YAML()

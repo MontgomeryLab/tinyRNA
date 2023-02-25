@@ -693,7 +693,7 @@ class ReferenceFeatures(ReferenceBase):
     def get_row_parent(self, feature_id: str, row_attrs: CaseInsensitiveAttrs) -> str:
         """Get the current feature's parent while cooperating with filtered features"""
 
-        parent_attr = row_attrs.get("Parent", [None])
+        parent_attr = row_attrs.get("Parent") or [None]
         parent = parent_attr[0]
 
         if len(parent_attr) > 1:

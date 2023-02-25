@@ -164,7 +164,7 @@ class ConfigBase:
         def setup_tiny_plot_inputs():
             cs_filter = 'plot_class_scatter_filter'
             style_req = ['include', 'exclude']
-            classes = self.get(cs_filter, {}).get('classes')  # backward compatibility
+            classes = (self.get(cs_filter) or {}).get('classes')  # backward compatibility
             if not classes: return
 
             # Validate filter style
@@ -288,7 +288,7 @@ class Configuration(ConfigBase):
         self['run_date'], self['run_time'] = self.dt.split('_')
 
         default_run_name = '_'.join(x for x in [self['user'], "tinyrna"] if x)
-        self['run_name'] = self.get('run_name', default=default_run_name) + "_" + self.dt
+        self['run_name'] = (self['run_name'] or default_run_name) + "_" + self.dt
 
         # Create prefixed Run Directory name
         run_dir_parent, run_dir = os.path.split(self['run_directory'].rstrip(os.sep))
@@ -441,7 +441,7 @@ def get_templates(context: str):
         'tiny': tiny,
         'tiny-count': tiny_count,
         'tiny-plot': tiny_plot
-    }.get(context, None)
+    }.get(context)
 
     if files_to_copy is None:
         raise ValueError(f"Invalid template file context: {context}")
@@ -534,8 +534,10 @@ class PathsFile(ConfigBase):
             "The following parameters are required in {selfname}: {params}" \
             .format(selfname=self.basename, params=', '.join(self.required))
 
-        # Some entries in Paths File are omitted from tiny-count's working directory during
-        #  pipeline runs. There is no advantage to checking file existence here vs. in load_*
+        # The availability of these file entries in the working directory will vary by step.
+        # This is determined by the step's CWL CommandLineTool specification.
+        # Instead of checking file existence within each step that uses this class,
+        # check only at pipeline startup and let the workflow runner worry about files from there.
         if self.in_pipeline: return
 
         for key in self.single:
@@ -574,8 +576,13 @@ class PathsFile(ConfigBase):
         # Build dictionary of files and allowed aliases
         for gff in self['gff_files']:
             if not self.is_path_dict(gff): continue
-            path, aliases = gff['path'], gff.get('alias', ())
-            gff_files[path].extend(filter(id_filter, aliases))
+            alias = gff.get('alias')
+            path = gff['path']
+
+            # Allow for some user error in YAML syntax
+            if isinstance(alias, str): alias = [alias]
+            if not isinstance(alias, list): alias = []
+            gff_files[path].extend(filter(id_filter, alias))
 
         # Remove duplicate aliases per file, keep order
         for file, alias in gff_files.items():
@@ -603,7 +610,11 @@ class PathsFile(ConfigBase):
         items appended to the temporary list would otherwise be lost."""
 
         assert key in self.groups, "Tried appending to a non-list type parameter"
-        target = self.config.get(key, [])
+
+        target = self.config.get(key)
+        if not isinstance(target, list):
+            self.config[key] = target = []
+
         target.append(val)
         return target
 
