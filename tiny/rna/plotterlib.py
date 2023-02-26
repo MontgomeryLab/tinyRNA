@@ -133,7 +133,6 @@ class plotterlib:
 
         # Create the plot and set plot attributes
         cbar = (prop_ds * 100).plot(kind='barh', ax=ax, color=bar_colors, sort_columns=False, **kwargs)
-        cbar.xaxis.set_major_formatter(tix.PercentFormatter())
         cbar.set_xlabel('Percentage of reads')
         cbar.set_xlim(0, min([(max_prop * 100) + 10, 100]))
 
