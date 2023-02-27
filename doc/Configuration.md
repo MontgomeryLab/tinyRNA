@@ -92,7 +92,7 @@ When the pipeline starts up, tinyRNA will process the Run Config based on the co
 ## Paths File Details
 
 ### GFF Files
-GFF annotations are required by tinyRNA. For each file, you can optionally provide an `alias` which is a list of attributes to represent each feature in the Feature Name column of output counts tables. Each entry under the `gff_files` parameter must look something like the following mock example:
+GFF annotations are optional but recommended. If not provided, tiny-count will perform [sequence-based counting](tiny-count.md#sequence-based-counting-mode) rather than feature-based counting. For each file, you can optionally provide an `alias` which is a list of attributes to represent each feature in the Feature Name column of output counts tables. Each entry under the `gff_files` parameter must look something like the following mock example:
 ```yaml
   - path: 'a/path/to/your/file.gff'         # 0 spaces before -
     alias: [optional, list, of attributes]  # 2 spaces before alias
@@ -124,14 +124,16 @@ The `run_directory` suffix in the Paths File supports subdirectories; if provide
 | _Example:_ | cond1_rep1.fastq.gz | condition1        | 1                | True    | RPM           |
 
 ### Assigning the Control Group
-Assigning the control group allows the proper DGE comparisons to be made and plotted. The Control column is where you'll make this indication by writing `true` on any corresponding row. Regardless of the number of replicates in each group, only one associated row needs to have this indication. Do not write `false` or anything else for the other groups; this column should only be used to indicate the affirmative.
+Assigning the control group allows the proper DGE comparisons to be made and plotted. The Control column is where you'll make this indication by writing `true` on any corresponding row. Regardless of the number of replicates in each group, only one row needs to have this indication.
+
+tinyRNA doesn't support experiments with more than one control condition. However, if you omit all control condition labels then every possible comparison will be made which should include the desired comparisons.
 
 ### Applying Custom Normalization
 Custom normalization can be applied at the conclusion of feature counting using the Normalization column. Unlike the Control column, values in the Normalization column apply to the specific library that they share a row with.
 
 Supported values are:
 - **Blank or 1**: no normalization is applied to the corresponding library
-- **Any number**: the corresponding library's counts are divided by this number
+- **Any number**: the corresponding library's counts are divided by this number (useful for spike-in normalization)
 - **RPM or rpm**: the corresponding library's counts are divided by (its mapped read count / 1,000,000)
 
 >**NOTE**: These normalizations operate independently of tiny-count's --normalize-by-hits commandline option. The former is concerned with per-library normalization, whereas the latter is concerned with normalization by selected feature count at each locus ([more info](tiny-count.md#count-normalization)). The commandline option does not enable or disable the normalizations detailed above.
