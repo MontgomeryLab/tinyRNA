@@ -32,7 +32,7 @@ Two plots are produced for each replicate:
 - Distribution of _Assigned Reads_, which are counted at each alignment where at least one overlapping feature passed selection and was assigned a portion of the sequence's original counts
 
 #### Length Bounds
-Lengths are plotted over a continuous range, even if an intermediate length was not observed, and the bounds of this range can be assigned automatically or manually. Manual lengths can be assigned using [plot_len_dist_min and plot_len_dist_max](Parameters.md#bounds-for-len_dist-charts).
+Lengths are plotted over a continuous range, even if an intermediate length was not observed, and the bounds of this range can be assigned automatically or manually. Manual lengths can be assigned using [plot_len_dist_min and plot_len_dist_max](Parameters.md#bounds-for-lendist-charts).
 
 When tiny-plot is called as a step in a pipeline run, min and max bounds are determined independently in the following order of priority:
 1. Manual assignment in the Run Config
@@ -109,7 +109,7 @@ The P value cutoff [can be changed](Parameters.md#p-value) (default: 0.05).
 The control condition is plotted on the x-axis, but it must be specified in your Samples Sheet prior to running an end-to-end or `tiny recount` analysis. If using `tiny replot`, is not possible to change a no-control experiment to a control experiment and have these changes reflected in these plots. This is because tiny-deseq.r must be aware of the control condition in order to perform the proper directional comparisons.
 
 #### View Limits
-Both the lower and upper bound of the plot's axes [can be set manually](Parameters.md#view-limits). Unspecified bounds are automatically calculated to fit the data.
+Both the lower and upper bound of the plot's axes [can be set manually](Parameters.md#bounds-for-lendist-charts). Unspecified bounds are automatically calculated to fit the data.
 
 
 
