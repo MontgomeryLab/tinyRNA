@@ -15,7 +15,7 @@ While third-party SAM files from non-collapsed reads are supported, there are so
 
 # Feature Selection
 
-We provide a Features Sheet (`features.csv`) in which you can define selection rules to more accurately capture counts for the small RNAs of interest. The parameters for these rules include attributes commonly used in the classification of small RNAs, such as length, strandedness, and 5' nucleotide.
+We provide a [Features Sheet](Configuration.md#features-sheet-details) (`features.csv`) in which you can define selection rules to more accurately capture counts for the small RNAs of interest. The parameters for these rules include attributes commonly used in the classification of small RNAs, such as length, strandedness, and 5' nucleotide.
 
 >**Important**: candidate features do not receive counts if they do not pass the selection process described below
 
@@ -25,38 +25,32 @@ Selection occurs in three stages, with the output of each stage as input to the 
 3. Finally, features are selected for read assignment based on the small RNA attributes of the alignment locus. Once reads are assigned to a feature, they are excluded from matches with larger hierarchy values.
 
 ![Feature Selection Diagram](../images/tiny-count_selection.png)
+
+## Sequence-Based Counting Mode
+If GFF files aren't specified in your Paths File, Stage 1 selection is skipped and reads are counted by sequence rather than by feature. Reference sequence names and lengths are determined from the `@SQ` headers of input SAM files. These reference sequences then behave exactly as features normally would in Stage 2 and 3 selection.
  
 ## Stage 1: Feature Attribute Parameters
-| _features.csv columns:_ | Select for... | with value... | Classify as... | Source Filter | Type Filter |
-|-------------------------|---------------|---------------|----------------|---------------|-------------|
+| _Features Sheet Selectors:_ | Select for... | with value... | Classify as... | Source Filter | Type Filter |
+|-----------------------------|---------------|---------------|----------------|---------------|-------------|
 
-Each feature's column 9 attributes are searched for the key-value combinations defined in the `Select for...` and `with value...` columns. These matches are then filtered based on their source (GFF column 2) and type (GFF column 3) according to the corresponding rule's `Source Filter`, and `Type Filter`. Features, and the rules they matched, are retained for later evaluation at alignment loci in Stages 2 and 3.
+This stage deals with GFF parsing. Features are selected and classified based on their source, type, and attributes (GFF columns 2, 3, and 9) using the selectors listed above. If you do not have or wish to use GFF annotations for your experiment, [see sequence-based counting](#sequence-based-counting-mode).
+
+Each feature's attributes (column 9) are searched for pairs matching each rule's `Select for...` and `with value...` selectors. Feature matches are then filtered based on the source (column 2) and type (column 3) requirements of their matching rules' `Source Filter` and `Type Filter` selectors.
 
 #### Feature Classification
-You can optionally specify a classifier for each rule. These classifiers are later used to group and label counts in class-related plots. Features that match rules with a classifier are counted separately; the classifier becomes part of the feature's ID to create a distinct "sub-feature", and these sub-features continue to be treated as distinct in downstream DGE analysis. Classified features receive counts exclusively from the rule(s) which hold the same `Classify as...` value. Counts from multiple rules can be pooled by using the same classifier. In the final counts table, this value is displayed in the Classifier column of features matching the rule, and each feature-classifier pair is shown on its own row.
+You can optionally specify a classifier for each rule using the `Classify as...` column. In tiny-count, the classifier is used to subset reads from individual features. If a feature matches multiple rules with different classifiers, then each classification of that feature is counted separately, per the matching rule, and will have its own entry in the output counts table. If the rules instead share the same classifier, then counts contributed from each rule are pooled under the same classification of that feature. Each subclassification of a feature is treated as a distinct "feature" during DGE analysis in tiny-deseq, and in tiny-plot the classifier is used to group and label counts in class-related plots.
 
-#### Source and Type Filters
-These are inclusive filters, meaning a feature's source/type must match one of the values in these columns to pass Stage 1 selection. If these fields are left empty, or any wildcard value is used, then the feature's source/type is not evaluated.
-
-#### Value Lists
-Attribute keys are allowed to have multiple comma separated values, and these values are treated as a list; only one of the listed values needs to match the `with value...` to be considered a valid match to the rule. For example, if a rule contained `Class` and `WAGO` in these columns, then a feature with attributes `... ;Class=CSR,WAGO; ...` would be considered a match for the rule. Value lists can also be used in the `Source/Type Filter` fields.
-
->**Tip**: The rules defined in your Features Sheet are case-insensitive. You do not need to match the capitalization of your target attributes.
-
-#### Wildcard Support
-Wildcard values (`all`, `*`, or an empty cell) can be used in the `Select for...`, `with value...`, `Source Filter`, and `Type Filter` fields. With this functionality you can evaluate features for the presence of an attribute key without regarding its values, or you can check all attribute keys for the presence of a specific value, or you can skip Stage 1 selection altogether to permit the evaluation of the complete feature set in Stage 2. In the later case, feature-rule matching pairs still serve as the basis for selection; each rule still applies only to its matching subset from previous Stages.
+#### Attribute Value Lists
+Feature attributes (GFF column 9) with multiple comma separated values are treated as a list. Only one of the listed values needs to match the `with value...` selector for the feature to be considered a match to the rule. For example, if a rule has `Select for: Class` `with value: WAGO` in these columns, then a feature with attribute `Class=CSR,WAGO` would be considered a match for the rule. Value lists can also be used in the `Source/Type Filter` fields.
 
 ## Stage 2: Overlap and Hierarchy Parameters
-| _features.csv columns:_ | Hierarchy | Overlap |
-|-------------------------|-----------|---------|
+| _Features Sheet Selectors:_ | Hierarchy | Overlap |
+|-----------------------------|-----------|---------|
 
 Features overlapping a read alignment are selected based on their overlap characteristics. These matches are then sorted by hierarchy value before proceeding to Stage 3.
 
 ### Overlap
 This column allows you to specify the extent of overlap required for candidate feature selection. In order to be a candidate, a feature must reside on the same chromosome as the alignment and overlap its interval by at least 1 nucleotide. A shared strand is not required. See the [Strand](#strand) section in Stage 3 for selection by strand.
-
-#### Unstranded Features
- If these features match rules with `5' anchored` and `3' anchored` overlap selectors, they will be downgraded to `anchored` selectors. Alignments overlapping these features are evaluated for shared start and/or end coordinates, but 5' and 3' ends are not distinguished.
 
 #### Selector Demonstration
 
@@ -73,6 +67,25 @@ The following table provides a description and illustration of the available ove
 
 :people_holding_hands: Illustration colors have been selected for colorblindness accessibility.
 
+#### Shift Parameters
+An optional shift parameter can be provided for each overlap selector which changes the position of the 5' and/or 3' terminus of its feature matches. The shifted interval replaces the original for the given match, and its candidature and selection is based on this new interval. A feature matching both shifted and unshifted rules will retain its original interval for non-shifted matches.
+
+
+The shift parameter can be specified as:
+```
+selector, M, N
+  M = shift value for 5' end
+  N = shift value for 3' end
+```
+
+- Positive values shift the specified end in the 3' direction
+- Negative values shift the specified end in the 5' direction
+- If either parameter is provided, the other must also be provided
+- Zero is also an accepted shift value
+
+#### Unstranded Features
+ If these features match rules with `5' anchored` and `3' anchored` overlap selectors, they will be downgraded to `anchored` selectors. Alignments overlapping these features are evaluated for shared start and/or end coordinates, but 5' and 3' ends are not distinguished.
+
 ### Hierarchy
 Each rule must be assigned a hierarchy value. This value is used to sort Stage 2 matches so that matches with smaller hierarchy values take precedence in Stage 3.
 - Each feature can have multiple hierarchy values if it matched more than one rule during Stage 1 selection
@@ -86,8 +99,8 @@ You can use larger hierarchy values to exclude features that are not of interest
 >**Example:** suppose you have a miRNA locus embedded within a coding gene locus (within an intron for example). By assigning a hierarchy of 1 to miRNA and a hierarchy of 2 to coding genes, all small RNA counts from sequences matching to the miRNA would be excluded from total counts for the coding gene. Reversing the hierarchy such that miRNA had a hierarchy of 2 and coding genes had a hierarchy of 1 would instead exclude reads from sequences matching to the coding gene from total counts for the miRNA. If a hierarchy of 1 was assigned to both miRNAs and coding genes, counts for sequences matching both features would be split between them.
 
 ## Stage 3: Alignment Attribute Parameters
-| _features.csv columns:_ | Strand | 5' End Nucleotide | Length |
-|-------------------------|--------|-------------------|--------|
+| _Features Sheet Selectors:_ | Strand | 5' End Nucleotide | Length |
+|-----------------------------|--------|-------------------|--------|
 
 The final stage of selection is concerned with the small RNA attributes of each alignment locus. Candidates are evaluated in order of hierarchy value where smaller values take precedence. Once a match has been found, reads are excluded from remaining candidates with larger hierarchy values.
 
@@ -102,17 +115,19 @@ These features will match all strand selectors regardless of the alignment's str
 
 
 ### 5' End Nucleotide and Length
-| Parameter  | Single | List | Range | Wildcard |
-|------------|:------:|:----:|:-----:|:--------:|
-| 5' end nt  |   ✓    |  ✓   |       |    ✓     |
-| Length     |   ✓    |  ✓   |   ✓   |    ✓     |
+| Selector | Wildcard | Single | List | Range |
+|---------:|:--------:|:------:|:----:|:-----:|
+|    5' nt |    ✓     |   ✓    |  ✓   |       |
+|   Length |    ✓     |   ✓    |  ✓   |   ✓   |
 
 Examples:
+- **Wildcard**: `any`, `all`, `*`, or a blank cell
 - **Single**: `G` or `22`
 - **List**: `C,G,U` or `25, 26` (spaces do not matter)
 - **Range**: `20-25`
-- **Wildcard**: `all`
-- **Mixed**: `19, 21-23, 25-30`
+- **Mixed** <sup>†</sup>: `19, 21-23, 25-30` 
+
+<sup>†</sup> only supported by the `Length` selector
 
 >**Tip:** you may specify U and T bases in your rules. Uracil bases will be converted to thymine when your Features Sheet is loaded. N bases are also allowed.
 
