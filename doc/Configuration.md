@@ -138,17 +138,37 @@ Supported values are:
 DESeq2 requires that your experiment design has at least one degree of freedom. If your experiment doesn't include at least one sample group with more than one replicate, tiny-deseq.r will be skipped and DGE related plots will not be produced.
 
 ## Features Sheet Details
-| _Column:_  | Select for... | with value... | Classify as... |  Source Filter | Type Filter | Hierarchy | Strand | 5' End Nucleotide | Length | Overlap     |
-|------------|---------------|---------------|----------------|----------------|-------------|-----------|--------|-------------------|--------|-------------|
-| _Example:_ | Class         | miRNA         | miRNA          |                |             | 1         | sense  | all               | all    | 5' anchored |
+![Features Sheet Header](../images/features_sheet_header.png)
 
-The Features Sheet allows you to define selection rules that determine how features are chosen when multiple features are found overlap an alignment locus. Selected features are "assigned" a portion of the reads associated with the alignment.
+The Features Sheet allows you to define selection rules that control how reads are assigned to features. We refer to each row as a rule, and columns as a selectors. `Classify as...` isn't a selector because it is used for labelling and subsetting matches rather than determining them. See [tiny-count's documentation](tiny-count.md#feature-selection) for an explanation of the selection process and the role that each selector plays.
 
-Selection first takes place against the feature attributes defined in your GFF files, and is directed by defining the attribute you want to be considered (Select for...) and the acceptable values for that attribute (with value...). 
+### Selector Formats
+Selectors in the Features Sheet can be specified as a single value, a list of comma separated values, a range, or a wildcard. The supported formats vary from selector to selector.  For list and range formats, just one of the specified values has to match for the target to be selected. Wildcard formats can be implicitly defined with a blank cell, or explicitly defined using the example keywords below.
 
-Rules that match features in the first stage of selection will be used in a second stage which evaluates alignment vs. feature interval overlap. These matches are sorted by hierarchy value and passed to the third and final stage of selection which examines characteristics of the alignment itself: strand relative to the feature of interest, 5' end nucleotide, and length. 
+| Selector        | Wildcard | Single | List | Range | 
+|:----------------|:--------:|:------:|:----:|:-----:|
+| `Select for...` |    ✓     |   ✓    |      |       |
+| `with value...` |    ✓     |   ✓    |      |       |
+| `Source Filter` |    ✓     |   ✓    |  ✓   |       |
+| `Type Filter`   |    ✓     |   ✓    |  ✓   |       |
+| `Hierarchy`     |          |   ✓    |      |       |
+| `Overlap`       |    ✓     |   ✓    |      |       |
+| `Strand`        |    ✓     |   ✓    |      |       |
+| `5' nt`         |    ✓     |   ✓    |  ✓   |       |
+| `Length`        |    ✓     |   ✓    |  ✓   |   ✓   |
 
-See [tiny-count's documentation](tiny-count.md#feature-selection) for an explanation of each column.
+Examples:
+- **Wildcard** <sup>†</sup>: `any`, `all`, `*`, or a blank cell
+- **Single**: `G` or `22`
+- **List**: `C,G,U` or `25, 26` (spaces do not matter)
+- **Range**: `20-25`
+- **Mixed** <sup>§</sup>: `19, 21-23, 25-30` 
+
+<sup>†</sup> the `Strand` selector also supports `both`<br>
+<sup>§</sup> only supported by the `Length` selector
+
+### Case Sensitivity
+All selectors are case-insensitive.
 
 ## Plot Stylesheet Details
 Matplotlib uses key-value "rc parameters" to allow for customization of its properties and styles, and one way these parameters can be specified is with a [matplotlibrc file](https://matplotlib.org/3.4.3/tutorials/introductory/customizing.html#a-sample-matplotlibrc-file), which we simply refer to as the Plot Stylesheet. You can obtain a copy of the default stylesheet used by tiny-plot with the command `tiny get-templates`. Please keep in mind that tiny-plot overrides these defaults for a few specific elements of certain plots. Feel free to reach out if there is a plot style you wish to override but find you are unable to.
