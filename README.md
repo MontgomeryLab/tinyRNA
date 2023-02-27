@@ -24,7 +24,7 @@ tinyRNA is a set of tools to simplify the analysis of next-generation sequencing
 
 ### The Current Workflow
 
-![tinyRNA basic pipeline](images/tinyrna-workflow_current.png)
+![tinyRNA basic pipeline](images/tinyrna_workflow_current.png)
 
 ## tinyRNA Installation
 
