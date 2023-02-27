@@ -112,9 +112,11 @@ Once your indexes have been built, your Paths File will be modified such that `e
 
 ### The Run Directory
 The final output directory name has three components: 
-- The `run_name` defined in your Run Config
-- The date and time at pipeline startup
-- The `run_directory` basename defined in your Paths File
+1. The `run_name` defined in your Run Config
+2. The date and time at pipeline startup
+3. The basename of `run_directory` defined in your Paths File
+
+The `run_directory` suffix in the Paths File supports subdirectories; if provided, the final output directory will be named as indicated above, but the subdirectory structure specified in `run_directory` will be retained. 
 
 ## Samples Sheet Details
 |  _Column:_ | FASTQ/SAM Files     | Sample/Group Name | Replicate Number | Control | Normalization |

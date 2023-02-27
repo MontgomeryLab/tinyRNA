@@ -184,7 +184,7 @@ class ConfigBase:
         """Create the destination directory for pipeline outputs"""
         run_dir = self["run_directory"]
         if not os.path.isdir(run_dir):
-            os.mkdir(run_dir)
+            os.makedirs(run_dir)
 
         return run_dir
 

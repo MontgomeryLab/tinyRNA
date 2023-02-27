@@ -1,21 +1,19 @@
 ######----------------------------- tinyRNA Configuration -----------------------------######
 #
-# In this file you can specify your configuration preferences for the workflow and
-# each workflow step.
+# In this file you can specify your configuration preferences for the workflow.
 #
 # If you want to use DEFAULT settings for the workflow, all you need to do is provide the path
 # to your Samples Sheet and Features Sheet in your Paths File, then make sure that the
 # 'paths_config' setting below points to your Paths File.
 #
 # We suggest that you also:
-#   1. Add a username to identify the person performing runs, if desired for record keeping
-#   2. Add a run directory name in your Paths File. If not provided, "run_directory" is used
-#   3. Add a run name to label your run directory and run-specific summary reports.
-#      If not provided, user_tinyrna will be used.
+#   1. Add a `user` below to identify the person performing runs.
+#   2. Add a `run_name` below to prefix your run directory and summary reports.
+#      If not provided, user_tinyrna is used.
 #
-# This file will be further processed at run time to generate the appropriate pipeline
-# settings for each workflow step. A copy of this processed configuration will be stored
-# in your run directory.
+# This file will be processed at run time to generate the appropriate settings
+# for each workflow step. A copy of the processed configuration will be saved
+# in your run directory for auto-documentation.
 #
 ######-------------------------------------------------------------------------------######
 
@@ -26,7 +24,7 @@ paths_config: ./paths.yml
 
 ##-- The label for final outputs --##
 ##-- If none provided, the default of user_tinyrna will be used --##
-run_name: tinyrna
+run_name:
 
 ##-- Number of threads to use when a step supports multi-threading --##
 ##-- For best performance, this should be equal to your computer's processor core count --##
