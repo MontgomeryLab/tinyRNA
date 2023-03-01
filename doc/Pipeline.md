@@ -32,7 +32,8 @@ The commands `tiny recount` and `tiny replot` seek to solve this problem. As dis
 
 You can modify the behavior of a resume run by changing settings in:
 - The **processed** Run Config
-- The **original** Features Sheet that was used for the end-to-end run (as indicated by the `features_csv` key in the **processed** Run Config)
+- The **original** Features Sheet that was used for the end-to-end run (as indicated by `features_csv` in the processed Run Config)
+- The **original** Paths File (as indicated by `paths_config` in the processed Run Config)
 
 ### The Steps
 1. Make and save the desired changes in the files above
@@ -44,6 +45,9 @@ File inputs are sourced from the **original** output subdirectories of prior ste
 
 ### Where to Find Outputs from Resume Runs
 Output subdirectories for resume runs can be found alongside the originals, and will have a timestamp appended to their name to differentiate them.
+
+### Auto-Documentation of Resume Runs
+A new processed Run Config will be saved in the Run Directory at the beginning of each resume run. It will be labelled with the same timestamp used in the resume run's other outputs to differentiate it. It includes the changes to your Paths File and Run Config. A copy of your Features Sheet is saved to the timestamped tiny-count output directory during `tiny recount` runs.
 
 ## Parallelization
 Most steps in the pipeline run in parallel to minimize runtimes. This is particularly advantageous for multiprocessor systems like server environments. However, parallelization isn't always beneficial. If your computer doesn't have enough free memory, or if you have a large sample file set and/or reference genome, parallel execution might push your machine to its limits. When this happens you might see memory errors or your computer may become unresponsive. In these cases it makes more sense to run resource intensive steps one at a time, in serial, rather than in parallel. To do so, set `run_parallel: false` in your Run Config. This will affect fastp, tiny-collapse, and bowtie since these steps typically handle the largest volumes of data.

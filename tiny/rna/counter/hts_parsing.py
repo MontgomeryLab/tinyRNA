@@ -297,7 +297,7 @@ def parse_GFF_attribute_string(attrStr, extra_return_first_value=False, gff_vers
             continue
         if (gff_version == 2) and attr.count('"') not in (0, 2):
             raise ValueError(
-                "The attribute string seems to contain mismatched  quotes.")
+                "The attribute string seems to contain mismatched quotes.")
         mo = _re_attr_main.match(attr)
         if not mo:
             raise ValueError("Failure parsing GFF attribute line")
@@ -693,7 +693,7 @@ class ReferenceFeatures(ReferenceBase):
     def get_row_parent(self, feature_id: str, row_attrs: CaseInsensitiveAttrs) -> str:
         """Get the current feature's parent while cooperating with filtered features"""
 
-        parent_attr = row_attrs.get("Parent", [None])
+        parent_attr = row_attrs.get("Parent") or [None]
         parent = parent_attr[0]
 
         if len(parent_attr) > 1:
@@ -728,7 +728,7 @@ class ReferenceFeatures(ReferenceBase):
 
         for alias_key in alias_keys:
             for row_val in row_attrs.get(alias_key, ()):
-                self.alias[root_id].add(row_val)
+                if row_val: self.alias[root_id].add(row_val)
 
     def _finalize_aliases(self):
         self.alias = {feat: tuple(sorted(aliases, key=str.lower)) for feat, aliases in self.alias.items()}

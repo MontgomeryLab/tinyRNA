@@ -1,21 +1,19 @@
 ######----------------------------- tinyRNA Configuration -----------------------------######
 #
-# In this file you can specify your configuration preferences for the workflow and
-# each workflow step.
+# In this file you can specify your configuration preferences for the workflow.
 #
 # If you want to use DEFAULT settings for the workflow, all you need to do is provide the path
 # to your Samples Sheet and Features Sheet in your Paths File, then make sure that the
 # 'paths_config' setting below points to your Paths File.
 #
 # We suggest that you also:
-#   1. Add a username to identify the person performing runs, if desired for record keeping
-#   2. Add a run directory name in your Paths File. If not provided, "run_directory" is used
-#   3. Add a run name to label your run directory and run-specific summary reports.
-#      If not provided, user_tinyrna will be used.
+#   1. Add a `user` below to identify the person performing runs.
+#   2. Add a `run_name` below to prefix your run directory and summary reports.
+#      If not provided, user_tinyrna is used.
 #
-# This file will be further processed at run time to generate the appropriate pipeline
-# settings for each workflow step. A copy of this processed configuration will be stored
-# in your run directory.
+# This file will be processed at run time to generate the appropriate settings
+# for each workflow step. A copy of the processed configuration will be saved
+# in your run directory for auto-documentation.
 #
 ######-------------------------------------------------------------------------------######
 
@@ -162,57 +160,58 @@ compress: False
 ######-------------------------------------------------------------------------------######
 
 
-##-- Report end-to-end hits w/ <=v mismatches; ignore qualities --##
+##-- Report end-to-end hits w/ <=v mismatches; ignore qualities (option -v) --##
 end_to_end: 0
 
-##-- Report all alignments per read (much slower than low -k) --##
+##-- Report all alignments per read (much slower than low -k) (option --all) --##
 all_aln: True
 
-##-- Seed for random number generator --##
+##-- Seed for random number generator (option --seed) --##
 seed: 0
 
-##-- Suppress SAM records for unaligned reads --##
+##-- Suppress SAM records for unaligned reads (option --no-unal) --##
 no_unal: True
 
-##-- Use shared mem for index; many bowtie's can share --##
+##-- Use shared mem for index; many bowtie's can share (option --shmem) --##
 ##-- Note: this requires further configuration of your OS --##
 ##-- http://bowtie-bio.sourceforge.net/manual.shtml#bowtie-options-shmem --##
 shared_memory: False
 
 ###-- Unused option inputs: Remove '#' in front to use --###
-##-- Hits are guaranteed best stratum, sorted; ties broken by quality --##
+##-- Hits are guaranteed best stratum, sorted; ties broken by quality (option --best) --##
 #best: False
 
-##-- Hits in sub-optimal strata aren't reported (requires best, ^^^^) --##
+##-- Hits in sub-optimal strata aren't reported (requires best, ^^^^) (option --strata) --##
 #strata: False
 
-##-- Max mismatches in seed (can be 0-3, default: -n 2) --##
+##-- Max mismatches in seed (can be 0-3, default: -n 2) (option --seedmms) --##
 #seedmms: 2
 
-##-- Seed length for seedmms (default: 28) --##
+##-- Seed length for seedmms (default: 28) (option --seedlen) --##
 #seedlen: 28
 
-##-- Do not align to reverse-compliment reference --##
-# norc: False
+##-- Do not align to forward/reverse-complement reference strand (options --norc and --nofw) --##
+#norc: False
+#nofw: False
 
-##-- Do not align to forward reference --##
-# nofw: False
+##-- Input quals are Phred+64 (same as --solexa1.3-quals) (option --phred64-quals) --##
+#bt_phred64: False
 
-##-- Input quals are Phred+64 (same as --solexa1.3-quals) --##
-# bt_phred64: False
+##-- Report up to <int> good alignments per read (default: 1) (option -k) --##
+#k_aln
 
-##-- Report up to <int> good alignments per read (default: 1) --##
-# k_aln
+##-- Suppress all alignments if > <int> exist (default: no limit) (option -m) --##
+#suppress_aln: 10
 
-##-- Number of bases to trim from 5' or 3' end of reads --##
-# trim5: 0
-# trim3: 0
+##-- Trim <int> bases from 5' (left) or 3' (right) end of reads (options --trim5 and --trim3) --##
+#trim5: 0
+#trim3: 0
 
-##-- Input quals are from GA Pipeline ver. < 1.3 --##
-# solexa: false
+##-- Input quals are from GA Pipeline ver. < 1.3 (option --solexa-quals) --##
+#solexa: false
 
-##-- Input quals are from GA Pipeline ver. >= 1.3 --##
-# solexa13: false
+##-- Input quals are from GA Pipeline ver. >= 1.3 (option --solexa1.3-quals) --##
+#solexa13: false
 
 
 ######--------------------------- FEATURE COUNTER OPTIONS ---------------------------######

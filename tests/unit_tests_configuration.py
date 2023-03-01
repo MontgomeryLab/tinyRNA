@@ -399,6 +399,10 @@ class PathsFileTest(unittest.TestCase):
 
 class ConfigurationTest(unittest.TestCase):
 
+    @classmethod
+    def setUpClass(cls):
+        cls.file = './testdata/config_files/run_config_template.yml'
+
     """Does get_templates copy the expected number of files for each context?"""
 
     def test_get_templates_contexts(self):
@@ -442,6 +446,65 @@ class ConfigurationTest(unittest.TestCase):
 
                     self.assertSetEqual(exp_set, act_set)
 
+    """Does setup_pipeline() create the proper run_name prefix?"""
+
+    def test_setup_pipeline_run_name(self):
+        # user_vals = ('"user"', None, "''", 0)
+        # run_vals =  ('"run"',  None, "''", 0)
+        # for a, b in itertools.product(user_vals, run_vals):
+        #   print("({'user': %6s, 'run_name': %5s}, )" % (a, b))
+
+        cases = [
+            ({'user': "user", 'run_name': "run"}, "run_{ts}"),
+            ({'user': "user", 'run_name':  None}, "user_tinyrna_{ts}"),
+            ({'user': "user", 'run_name':    ''}, "user_tinyrna_{ts}"),
+            ({'user': "user", 'run_name':     0}, "0_{ts}"),
+            ({'user':   None, 'run_name': "run"}, "run_{ts}"),
+            ({'user':   None, 'run_name':  None}, "tinyrna_{ts}"),
+            ({'user':   None, 'run_name':    ''}, "tinyrna_{ts}"),
+            ({'user':   None, 'run_name':     0}, "0_{ts}"),
+            ({'user':     '', 'run_name': "run"}, "run_{ts}"),
+            ({'user':     '', 'run_name':  None}, "tinyrna_{ts}"),
+            ({'user':     '', 'run_name':    ''}, "tinyrna_{ts}"),
+            ({'user':     '', 'run_name':     0}, "0_{ts}"),
+            ({'user':      0, 'run_name': "run"}, "run_{ts}"),
+            ({'user':      0, 'run_name':  None}, "0_tinyrna_{ts}"),
+            ({'user':      0, 'run_name':    ''}, "0_tinyrna_{ts}"),
+            ({'user':      0, 'run_name':     0}, "0_{ts}"),
+        ]
+
+        for inputs, output in cases:
+            config = Configuration(self.file, skip_setup=True)
+            config.config.update(inputs)
+            config.setup_pipeline()
+
+            actual = config['run_name']
+            expected = output.format(ts=config.dt)
+            self.assertEqual(actual, expected)
+
+    """Does setup_pipeline() create the proper run_directory suffix?"""
+
+    def test_setup_pipeline_run_directory(self):
+        run_name = "run"
+        cases = [
+            ({'run_directory':       "dir"}, "run_{ts}_dir"),
+            ({'run_directory':  "path/dir"}, "path/run_{ts}_dir"),
+            ({'run_directory': "path/dir/"}, "path/run_{ts}_dir"),
+            ({'run_directory':         "/"}, "run_{ts}"),
+            ({'run_directory':        None}, "run_{ts}"),
+            ({'run_directory':          ''}, "run_{ts}"),
+            ({'run_directory':           0}, "run_{ts}_0"),
+        ]
+
+        for inputs, output in cases:
+            config = Configuration(self.file, skip_setup=True)
+            config.config.update(inputs)
+            config['run_name'] = run_name
+            config.setup_pipeline()
+
+            actual = config['run_directory']
+            expected = output.format(ts=config.dt)
+            self.assertEqual(actual, expected)
 
 
 if __name__ == '__main__':

@@ -69,6 +69,7 @@ inputs:
   seedlen: int?
   best: boolean?
   strata: boolean?
+  suppress_aln: int?
   k_aln: int?
   all_aln: boolean?
   no_unal: boolean?
@@ -175,31 +176,29 @@ steps:
     scatter: [ reads, sample_basename ]
     scatterMethod: dotproduct
     in:
-      reads: preprocessing/uniq_seqs
-      sample_basename: sample_basenames
+      ebwt: ebwt
       bt_index_files:
         source: [ bt_build_optional/index_files, bt_index_files ]
         pickValue: first_non_null
         default: bt_index_files  # To appease the workflow validator
-      ebwt: ebwt
-      outfile: { valueFrom: $(inputs.sample_basename + "_aligned_seqs.sam") }
-      logfile: { valueFrom: $(inputs.sample_basename + "_console_output.log") }
+      reads: preprocessing/uniq_seqs
+      sample_basename: sample_basenames
       trim5: trim5
       trim3: trim3
       phred64: bt_phred64
       solexa: solexa
       solexa13: solexa13
       end_to_end: end_to_end
-      nofw: nofw
-      norc: norc
       seedmms: seedmms
       seedlen: seedlen
-      best: best
-      strata: strata
+      nofw: nofw
+      norc: norc
       k_aln: k_aln
       all_aln: all_aln
+      suppress_aln: suppress_aln
+      best: best
+      strata: strata
       no_unal: no_unal
-      un: { valueFrom: $(inputs.sample_basename + "_unaligned_seqs.fa") }
       threads: threads
       shared_memory: shared_memory
       seed: seed

@@ -18,7 +18,7 @@ inputs:
     type: string
     inputBinding:
       prefix: -x
-      position: 23
+      position: 24
     doc: "The basename of the index to be searched."
 
   # Only used by InitialWorkDirRequirement
@@ -29,18 +29,22 @@ inputs:
   reads:
     type: File
     inputBinding:
-      position: 24
+      position: 25
     doc: "File containing unpaired reads"
 
+  sample_basename:
+    type: string?
+    doc: "The basename of the original sample file (not reads file basename)"
+
   outfile:
-    type: string
+    type: string?
     inputBinding:
-      position: 25
+      position: 26
+      valueFrom: &out $(inputs.sample_basename + "_aligned_seqs.sam")
+    default: *out
     doc: "File to write hits to"
 
-  logfile:
-    type: string
-    doc: "File to write Bowtie's stdout and stderr streams to"
+  ### INPUT ###
 
   fastq:
     type: boolean?
@@ -102,64 +106,71 @@ inputs:
     default: 0
     doc: "report end-to-end hits w/ <=v mismatches; ignore qualities"
 
-  nofw:
-    type: boolean?
-    inputBinding:
-      prefix: --nofw
-      position: 8
-    doc: "do not align to forward reference strand"
-
-  norc:
-    type: boolean?
-    inputBinding:
-      prefix: --norc
-      position: 9
-    doc: "do not align to reverse-complement reference strand"
-
   seedmms:
     type: int?
     inputBinding:
       prefix: --seedmms
-      position: 10
+      position: 8
     doc: "max mismatches in seed (can be 0-3, default: -n 2)"
 
   seedlen:
     type: int?
     inputBinding:
       prefix: --seedlen
-      position: 11
+      position: 9
     doc: "seed length for --seedmms (default: 28)"
 
+  nofw:
+    type: boolean?
+    inputBinding:
+      prefix: --nofw
+      position: 10
+    doc: "do not align to forward reference strand"
+
+  norc:
+    type: boolean?
+    inputBinding:
+      prefix: --norc
+      position: 11
+    doc: "do not align to reverse-complement reference strand"
+
   ### REPORTING ###
-
-  best:
-    type: boolean?
-    inputBinding:
-      prefix: --best
-      position: 12
-    doc: "hits guaranteed best stratum; ties broken by quality"
-
-  strata:
-    type: boolean?
-    inputBinding:
-      prefix: --strata
-      position: 13
-    doc: "hits in sub-optimal strata aren't reported (requires --best)"
 
   k_aln:
     type: int?
     inputBinding:
       prefix: -k
-      position: 14
+      position: 12
     doc: "report up to <int> good alignments per read (default: 1)"
 
   all_aln:
     type: boolean?
     inputBinding:
       prefix: --all
-      position: 15
+      position: 13
     default: true
     doc: "report all alignments per read (much slower than low -k)"
+
+  suppress_aln:
+    type: int?
+    inputBinding:
+      prefix: -m
+      position: 14
+    doc: "suppress all alignments if > <int> exist (def: no limit)"
+
+  best:
+    type: boolean?
+    inputBinding:
+      prefix: --best
+      position: 15
+    doc: "hits guaranteed best stratum; ties broken by quality"
+
+  strata:
+    type: boolean?
+    inputBinding:
+      prefix: --strata
+      position: 16
+    doc: "hits in sub-optimal strata aren't reported (requires --best)"
 
   ### OUTPUT ###
 
@@ -167,7 +178,7 @@ inputs:
     type: boolean?
     inputBinding:
       prefix: -t
-      position: 16
+      position: 17
     default: true
     doc: "print wall-clock time taken by search phases"
 
@@ -175,14 +186,16 @@ inputs:
     type: string?
     inputBinding:
       prefix: --un
-      position: 17
+      position: 18
+      valueFrom: &un $(inputs.sample_basename + "_unaligned_seqs.fa")
+    default: *un
     doc: "write unaligned reads/pairs to file(s) <fname>"
 
   no_unal:
     type: boolean?
     inputBinding:
       prefix: --no-unal
-      position: 18
+      position: 19
     default: true
     doc: "suppress SAM records for unaligned reads"
 
@@ -192,7 +205,7 @@ inputs:
     type: boolean?
     inputBinding:
       prefix: --sam
-      position: 19
+      position: 20
     default: true
     doc: "write hits in SAM format"
 
@@ -202,14 +215,14 @@ inputs:
     type: int?
     inputBinding:
       prefix: --threads
-      position: 20
+      position: 21
     doc: "number of alignment threads to launch (default: 1)"
 
   shared_memory:
     type: boolean?
     inputBinding:
       prefix: --shmem
-      position: 21
+      position: 22
     doc: "use shared mem for index; many bowtie's can share"
 
   ### OTHER ###
@@ -218,19 +231,19 @@ inputs:
     type: int?
     inputBinding:
       prefix: --seed
-      position: 22
+      position: 23
     doc: "seed for random number generator"
 
 outputs:
   sam_out:
     type: File
     outputBinding:
-      glob: $(inputs.outfile)
+      glob: *out
 
   unal_seqs:
     type: File?
     outputBinding:
-      glob: $(inputs.un)
+      glob: *un
 
   console_output:
     type: stdout

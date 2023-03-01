@@ -22,7 +22,7 @@ gff_files:
 #- path:
 #  alias: [ ]
 
-##-- The final output directory for files produced by the pipeline --#
+##-- The suffix to use in the final output directory name (optional) --#
 run_directory: run_directory
 
 ##-- The directory for temporary files. Determined by cwltool if blank. --##
