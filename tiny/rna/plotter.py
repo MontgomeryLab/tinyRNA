@@ -402,7 +402,9 @@ def scatter_by_dge_class(counts_avg_df, dges, output_prefix, view_lims, include=
     """
 
     counts_avg_df, dges = filter_dge_classes(counts_avg_df, dges, include, exclude)
-    if counts_avg_df.empty or dges.empty: return
+    if counts_avg_df.empty or dges.empty:
+        print('ERROR: No classes passed filtering. Skipping scatter_by_dge_class.', file=sys.stderr)
+        return
 
     uniq_classes = pd.unique(counts_avg_df.index.get_level_values(1))
     class_colors = aqplt.assign_class_colors(uniq_classes)
@@ -442,6 +444,7 @@ def scatter_by_dge(counts_avg_df, dges, output_prefix, view_lims, pval=0.05):
     """
 
     if counts_avg_df.empty or dges.empty:
+        print('ERROR: Received empty counts data. Skipping scatter_by_dge.', file=sys.stderr)
         return
 
     for pair in dges:
