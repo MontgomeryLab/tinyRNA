@@ -15,6 +15,7 @@ import sys
 import os
 import re
 
+# This has to be done before importing matplotlib.pyplot
 # cwltool appears to unset all environment variables including those related to locale
 # This leads to warnings from plt's FontConfig manager, but only for pipeline/cwl runs
 curr_locale = locale.getlocale()
@@ -25,7 +26,6 @@ if curr_locale[0] is None:
 import matplotlib as mpl; mpl.use("PDF")
 import matplotlib.pyplot as plt
 import matplotlib.ticker as tix
-import matplotlib.axis
 from matplotlib.patches import Rectangle
 from matplotlib.transforms import Bbox
 from matplotlib.scale import LogTransform
@@ -233,39 +233,57 @@ class plotterlib:
             gscat: A scatter plot containing groups highlighted with different colors
         """
 
-        # Subset counts not in *groups (for example, points with p-val above threshold)
+        # Subset counts not in *groups (e.g., p-val above threshold)
         count_x_out = count_x.drop(itertools.chain(*groups))
         count_y_out = count_y.drop(itertools.chain(*groups))
+        has_outgroup = all(co.replace(0, pd.NA).dropna().any()
+                           for co in (count_x_out, count_y_out))
 
-        outgroup = count_x_out.any() and count_y_out.any()
-        group_it = iter(groups)
+        # Determine which groups we are able to plot on log scale
+        plottable_groups = self.get_nonzero_group_indexes(count_x, count_y, groups)
+        plot_labels = [labels[i] for i in plottable_groups]
+        plot_groups = [groups[i] for i in plottable_groups]
+        group_it = iter(plot_groups)
 
-        if outgroup:
-            gscat = self.scatter_simple(count_x_out, count_y_out, color='#B3B3B3', **kwargs)
-        else:
+        if has_outgroup:
+            x, y = count_x_out, count_y_out
+            gscat = self.scatter_simple(x, y, color='#B3B3B3', **kwargs)
+        elif plottable_groups:
             group = next(group_it)
-            gscat = self.scatter_simple(count_x.loc[group], count_y.loc[group], **kwargs)
-
-        # Add any remaining groups to the plot
-        zero_count_groups = []
-        for i, group in enumerate(group_it):
             x, y = count_x.loc[group], count_y.loc[group]
-            x_is_zeros = x.replace(0, pd.NA).dropna().empty
-            y_is_zeros = y.replace(0, pd.NA).dropna().empty
-            if x_is_zeros or y_is_zeros:
-                # This group and label won't be plotted
-                zero_count_groups.append(i)
-                continue
+            gscat = self.scatter_simple(x, y, **kwargs)
+        else:
+            has_outgroup = None
+            x = y = pd.Series(dtype='float64')
+            gscat = self.scatter_simple(x, y, **kwargs)
+
+        # Add remaining groups
+        for group in group_it:
+            x, y = count_x.loc[group], count_y.loc[group]
             gscat.scatter(x, y, edgecolor='none', **kwargs)
 
-        labels = [l for i, l in enumerate(labels) if i not in zero_count_groups]
-        groups = [g for i, g in enumerate(groups) if i not in zero_count_groups]
-
-        self.sort_point_groups_and_label(gscat, groups, labels, colors, outgroup, pval)
+        self.sort_point_groups_and_label(gscat, plot_groups, plot_labels, colors, has_outgroup, pval)
         self.set_square_scatter_view_lims(gscat, view_lims)
         self.set_scatter_ticks(gscat)
 
         return gscat
+
+    @staticmethod
+    def get_nonzero_group_indexes(count_x, count_y, groups):
+        """When scatter plotting groups for two conditions on a log scale, if one
+        of the conditions has all zero counts for the group, then none of the group's
+        points are actually plotted due to the singularity at 0. We want to skip
+        plotting these groups and omit them from the legend."""
+
+        non_zero_groups = []
+        for i, group in enumerate(groups):
+            x, y = count_x.loc[group], count_y.loc[group]
+            x_is_zeros = x.replace(0, pd.NA).dropna().empty
+            y_is_zeros = y.replace(0, pd.NA).dropna().empty
+            if not (x_is_zeros or y_is_zeros):
+                non_zero_groups.append(i)
+
+        return non_zero_groups
 
     @staticmethod
     def sort_point_groups_and_label(axes: plt.Axes, groups, labels, colors, outgroup, pval):
