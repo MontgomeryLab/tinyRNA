@@ -286,28 +286,38 @@ class plotterlib:
         return non_zero_groups
 
     @staticmethod
-    def sort_point_groups_and_label(axes: plt.Axes, groups, labels, colors, outgroup, pval):
-        """Sorts scatter groups so that less abundant groups are plotted on top to maximize visual representation.
-        After sorting, group colors and labels are assigned, and the legend is created."""
+    def sort_point_groups_and_label(axes: plt.Axes, groups, labels, colors, outgroup: Optional[bool], pval):
+        """Sorts scatter groups so that those with fewer points are rendered on top of the stack.
+        After sorting, group colors and labels are assigned, and the legend is created. Labels
+        in the legend are sorted by natural order with the outgroup always listed last.
+            Args:
+                axes: The scatter plot Axes object
+                groups: A list of DataFrames that were able to be plotted
+                labels: A list of names, one for each group, for the corresponding index in `groups`
+                colors: A dictionary of group labels and their assigned colors
+                outgroup: True if an out group was plotted, None if empty plot (no groups or out groups)
+        """
 
-        lorder = np.argsort([len(grp) for grp in groups if len(grp)])[::-1]   # Label index of groups sorted largest -> smallest
-        offset = int(bool(outgroup and len(groups)))                          # For shifting indices to allow optional outgroup
+        lorder = np.argsort([len(grp) for grp in groups if len(grp)])[::-1]   # Index of groups by size
+        offset = int(bool(outgroup))
         layers = axes.collections
 
         if outgroup:
             layers[0].set_label('p ≥ %g' % pval)
         if labels is None:
             labels = list(range(len(groups)))
+        if outgroup is None:
+            return
 
         groupsize_sorted = [(labels[i], layers[i + offset]) for i in lorder]
-        for i, (label, layer) in enumerate(groupsize_sorted, start=1):
+        for z, (label, layer) in enumerate(groupsize_sorted, start=offset+1):
             layer.set_label(re.sub(r'^_', ' _', label))                       # To allow labels that start with _
             layer.set_facecolor(colors[label])
-            layer.set_zorder(i)                                               # Plot in order of group size
+            layer.set_zorder(z)                                               # Plot in order of group size
 
         # Ensure lines remain on top of points
         for line in axes.lines:
-            line.set_zorder(len(groupsize_sorted) + 1)
+            line.set_zorder(len(layers) + 1)
 
         axes.legend()
 
