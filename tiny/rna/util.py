@@ -204,7 +204,8 @@ class ReadOnlyDict(dict):
     def __setitem__(self, *_):
         raise RuntimeError("Attempted to modify read-only dictionary after construction.")
 
-def sorted_natural(lines, reverse=False):
+
+def sorted_natural(lines, key=None, reverse=False):
     """Sorts alphanumeric strings with entire numbers considered in the sorting order,
     rather than the default behavior which is to sort by the individual ASCII values
     of the given number. Returns a sorted copy of the list, just like sorted().
@@ -213,7 +214,8 @@ def sorted_natural(lines, reverse=False):
     some time. Strange that there isn't something in the standard library for this."""
 
     convert = lambda text: int(text) if text.isdigit() else text.lower()
-    alphanum_key = lambda key: [convert(c) for c in re.split(r'(\d+)', key)]
+    extract = (lambda data: key(data)) if key is not None else lambda x: x
+    alphanum_key = lambda elem: [convert(c) for c in re.split(r'(\d+)', extract(elem))]
     return sorted(lines, key=alphanum_key, reverse=reverse)
 
 
