@@ -319,7 +319,10 @@ class plotterlib:
         for line in axes.lines:
             line.set_zorder(len(layers) + 1)
 
-        axes.legend()
+        # Sort the legend with outgroup last while retaining layer order
+        handles = sorted_natural(layers[offset:], key=lambda x: x.get_label())
+        if outgroup: handles.append(layers[0])
+        axes.legend(handles=handles)
 
     @staticmethod
     def assign_class_colors(classes):
