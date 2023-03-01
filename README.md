@@ -276,13 +276,14 @@ Simple static plots are generated from the outputs of tiny-count and tiny-deseq.
 tiny-deseq.r will produce a standard **PCA plot** from variance stabilizing transformed feature counts. This output is controlled by the `dge_pca_plot` key in the Run Config and by your experiment design. DGE outputs, including the PCA plot, will not be produced for experiments with less than 1 degree of freedom.
 
 ### Reducing Storage Usage
-The files produced by certain steps can be very large and after several runs this may present significant storage usage. You can remove the following subdirectories from a Run Directory to free up space, but **you will no longer be able to perform repeat analyses within it (i.e. `tiny recount` or `tiny replot`)**:
+The files produced by certain steps can be very large and after several runs this may present significant storage usage. You can remove the following subdirectories from a Run Directory to free up space, but **you will no longer be able to perform recount analyses within it** (i.e. `tiny recount`):
 - fastp (though we recommend keeping the reports)
 - collapser
 - bowtie
 
 Cleanup commands will be added to tinyRNA in a future release, but for now the following command will remove commonly large files while preserving report files:
 ```shell
+# Execute within the Run Directory you want to clean
 rm {fastp/*.fastq,{collapser,bowtie}/*.fa,bowtie/*.sam}
 ```
 
