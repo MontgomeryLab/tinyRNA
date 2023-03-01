@@ -208,10 +208,17 @@ class Configuration(ConfigBase):
 
     Ultimately, this class populates workflow settings and per-library settings. This
     is a convenience to the user as it is tedious to define inputs and outputs pertaining
-    to each workflow step. Settings are determined by the Paths, Samples, and Features Sheets.
-    Users may provide both relative and absolute paths
+    to each workflow step in a manner compatible with CWL. Settings are determined by the
+    Run Config, Paths File, Samples Sheet, and Features Sheet.
+    Users can provide both relative and absolute paths.
 
     IMPORTANT: Paths provided in any config file are evaluated relative to the containing config file.
+
+    Args:
+        config_file: The Run Config file path
+        validate_gffs: If true, validate GFFs (not all contexts need to)
+        skip_setup: If true, only load the Run Config and Paths File with
+            no further processing (useful for testing)
 
     Attributes:
         paths: the configuration object from processing the paths_config file.
@@ -219,20 +226,21 @@ class Configuration(ConfigBase):
             appropriately if 'run_bowtie_index' is set to 'true'
     """
 
-    def __init__(self, config_file: str, validate_inputs=False):
+    def __init__(self, config_file: str, validate_gffs=False, skip_setup=False):
         # Parse YAML configuration file
         super().__init__(config_file, RunConfigCompatibility)
 
         self.paths = self.load_paths_config()
         self.absorb_paths_file()
 
+        if skip_setup: return
         self.setup_pipeline()
         self.setup_file_groups()
         self.setup_ebwt_idx()
         self.process_samples_sheet()
         self.process_features_sheet()
         self.setup_step_inputs()
-        if validate_inputs: self.validate_inputs()
+        if validate_gffs: self.validate_inputs()
 
     def load_paths_config(self):
         """Returns a PathsFile object and updates keys related to the Paths File path"""
@@ -287,12 +295,17 @@ class Configuration(ConfigBase):
         self.dt = get_timestamp()
         self['run_date'], self['run_time'] = self.dt.split('_')
 
-        default_run_name = '_'.join(x for x in [self['user'], "tinyrna"] if x)
-        self['run_name'] = (self['run_name'] or default_run_name) + "_" + self.dt
+        # Ensure compatible string joins while preserving 0
+        for key in ('user', 'run_name', 'run_directory'):
+            self[key] = str(self[key]) if self[key] is not None else ''
 
-        # Create prefixed Run Directory name
-        run_dir_parent, run_dir = os.path.split(self['run_directory'].rstrip(os.sep))
-        self['run_directory'] = self.joinpath(run_dir_parent, self['run_name'] + "_" + run_dir)
+        default_run_name = '_'.join(x for x in [self['user'], "tinyrna"] if x)
+        self['run_name'] = f"{self['run_name'] or default_run_name}_{self.dt}"
+
+        # Prefix Run Directory basename while preserving subdirectory structure
+        rd_head, rd_tail = os.path.split(self['run_directory'].rstrip(os.sep))
+        basename = '_'.join(x for x in [self['run_name'], rd_tail] if x)
+        self['run_directory'] = self.joinpath(rd_head, basename)
 
         self.templates = resource_filename('tiny', 'templates/')
 
