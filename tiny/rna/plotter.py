@@ -686,23 +686,79 @@ def main():
         with mp.Pool(len(itinerary)) as pool:
             results = []
             for task, args, kwds in itinerary:
-                results.append(pool.apply_async(task, args, kwds, error_callback=err))
+                sentry = ExceptionManager(task)
+                results.append(pool.apply_async(task, args, kwds, error_callback=sentry))
             for result in results:
                 result.wait()
     else:
         # Don't use multiprocessing if only one plot type requested
-        # or if in debug mode (matplotlib compatibility)
+        # or if in debug mode (for matplotlib compatibility)
         for task, args, kwds in itinerary:
-            task(*args, **kwds)
+            try:
+                task(*args, **kwds)
+            except Exception as e:
+                ExceptionManager.add(task, e)
 
-def err(e):
-    """Allows us to print errors from a MP worker without discarding the other results"""
-    print(''.join(traceback.format_exception(type(e), e, e.__traceback__)))
-    print("\n\nPlotter encountered an error. Don't worry! You don't have to start over.\n"
-              "You can resume the pipeline at Plotter. To do so:\n\t"
+    ExceptionManager.print_exceptions()
+
+
+class ExceptionManager:
+    """Handles exception formatting for more user-friendly logging with cwltool
+
+    In multiprocessing mode, you should create an instance for each task
+    (plot type) and exceptions will be stored at the class level for ALL tasks.
+    In sequential mode, you should use the add() method
+
+    Exception tracebacks are printed to stdout as soon as they happen, and since
+    the CWL CommandLineTool for tiny-plot captures stdout, this goes to the log
+    file rather than terminal. Once plotting is complete, the user-friendly
+    error is printed to stderr which isn't captured, so the user sees it.
+    The message includes instructions for `tiny replot` followed by an
+    exception summary (sans noisy traceback), organized by task."""
+
+    excs = defaultdict(list)
+
+    def __init__(self, task):
+        self.task = task
+
+    def __call__(self, e):
+        """The multiprocessing error_callback target"""
+        self.add(self.task, e, from_mp_worker=True)
+
+    @classmethod
+    def add(cls, task, e, from_mp_worker=False):
+        """Prints task's traceback to stdout and stores exceptions for summary"""
+
+        if from_mp_worker:
+            print(e.__cause__.tb)
+        else:
+            ex_tuple = (type(e), e, e.__traceback__)
+            traceback.print_exception(*ex_tuple)
+
+        cls.excs[task].extend(traceback.format_exception_only(type(e), e))
+
+    @classmethod
+    def print_exceptions(cls):
+        """Prints exception summary to stderr for all tasks"""
+
+        if not cls.excs: return
+        print('\n'.join(['', '=' * 75, '=' * 75]), file=sys.stderr)
+        print("\nPlotter encountered an error. Don't worry! You don't have to start over.\n"
+              "You can resume the pipeline at tiny-plot. To do so:\n\t"
               "1. cd into your Run Directory\n\t"
               '2. Run "tiny replot --config your_run_config.yml"\n\t'
-              '   (that\'s the processed run config) ^^^\n\n', file=sys.stderr)
+              '   (that\'s the processed run config) ^^^\n', file=sys.stderr)
+
+        ex_sum = sum(len(ex) for ex in cls.excs.values())
+        header = "The following {} reported:"
+        plural = "exceptions were" if ex_sum > 1 else "exception was"
+
+        exc_list = [header.format(plural)]
+        for task, task_exceptions in cls.excs.items():
+            exc_list.append('\t' + f"In function {task.__name__}():")
+            exc_list.append('\t\t'.join(['', *task_exceptions]))
+
+        print('\n'.join(exc_list), file=sys.stderr)
 
 
 if __name__ == '__main__':
