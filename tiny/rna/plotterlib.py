@@ -15,6 +15,7 @@ import sys
 import os
 import re
 
+# This has to be done before importing matplotlib.pyplot
 # cwltool appears to unset all environment variables including those related to locale
 # This leads to warnings from plt's FontConfig manager, but only for pipeline/cwl runs
 curr_locale = locale.getlocale()
@@ -25,13 +26,14 @@ if curr_locale[0] is None:
 import matplotlib as mpl; mpl.use("PDF")
 import matplotlib.pyplot as plt
 import matplotlib.ticker as tix
-import matplotlib.axis
 from matplotlib.patches import Rectangle
 from matplotlib.transforms import Bbox
 from matplotlib.scale import LogTransform
 
 from typing import Union, Tuple, List, Optional
 from abc import ABC, abstractmethod
+
+from tiny.rna.util import sorted_natural
 
 
 class plotterlib:
@@ -233,65 +235,96 @@ class plotterlib:
             gscat: A scatter plot containing groups highlighted with different colors
         """
 
-        # Subset counts not in *groups (for example, points with p-val above threshold)
+        # Subset counts not in *groups (e.g., p-val above threshold)
         count_x_out = count_x.drop(itertools.chain(*groups))
         count_y_out = count_y.drop(itertools.chain(*groups))
+        has_outgroup = all(co.replace(0, pd.NA).dropna().any()
+                           for co in (count_x_out, count_y_out))
 
-        outgroup = count_x_out.any() and count_y_out.any()
-        group_it = iter(groups)
+        # Determine which groups we are able to plot on log scale
+        plottable_groups = self.get_nonzero_group_indexes(count_x, count_y, groups)
+        plot_labels = [labels[i] for i in plottable_groups]
+        plot_groups = [groups[i] for i in plottable_groups]
+        group_it = iter(plot_groups)
 
-        if outgroup:
-            gscat = self.scatter_simple(count_x_out, count_y_out, color='#B3B3B3', **kwargs)
-        else:
+        if has_outgroup:
+            x, y = count_x_out, count_y_out
+            gscat = self.scatter_simple(x, y, color='#B3B3B3', **kwargs)
+        elif plottable_groups:
             group = next(group_it)
-            gscat = self.scatter_simple(count_x.loc[group], count_y.loc[group], **kwargs)
-
-        # Add any remaining groups to the plot
-        zero_count_groups = []
-        for i, group in enumerate(group_it):
             x, y = count_x.loc[group], count_y.loc[group]
-            x_is_zeros = x.replace(0, pd.NA).dropna().empty
-            y_is_zeros = y.replace(0, pd.NA).dropna().empty
-            if x_is_zeros or y_is_zeros:
-                # This group and label won't be plotted
-                zero_count_groups.append(i)
-                continue
+            gscat = self.scatter_simple(x, y, **kwargs)
+        else:
+            has_outgroup = None
+            x = y = pd.Series(dtype='float64')
+            gscat = self.scatter_simple(x, y, **kwargs)
+
+        # Add remaining groups
+        for group in group_it:
+            x, y = count_x.loc[group], count_y.loc[group]
             gscat.scatter(x, y, edgecolor='none', **kwargs)
 
-        labels = [l for i, l in enumerate(labels) if i not in zero_count_groups]
-        groups = [g for i, g in enumerate(groups) if i not in zero_count_groups]
-
-        self.sort_point_groups_and_label(gscat, groups, labels, colors, outgroup, pval)
+        self.sort_point_groups_and_label(gscat, plot_groups, plot_labels, colors, has_outgroup, pval)
         self.set_square_scatter_view_lims(gscat, view_lims)
         self.set_scatter_ticks(gscat)
 
         return gscat
 
     @staticmethod
-    def sort_point_groups_and_label(axes: plt.Axes, groups, labels, colors, outgroup, pval):
-        """Sorts scatter groups so that less abundant groups are plotted on top to maximize visual representation.
-        After sorting, group colors and labels are assigned, and the legend is created."""
+    def get_nonzero_group_indexes(count_x, count_y, groups):
+        """When scatter plotting groups for two conditions on a log scale, if one
+        of the conditions has all zero counts for the group, then none of the group's
+        points are actually plotted due to the singularity at 0. We want to skip
+        plotting these groups and omit them from the legend."""
 
-        lorder = np.argsort([len(grp) for grp in groups if len(grp)])[::-1]   # Label index of groups sorted largest -> smallest
-        offset = int(bool(outgroup and len(groups)))                          # For shifting indices to allow optional outgroup
+        non_zero_groups = []
+        for i, group in enumerate(groups):
+            x, y = count_x.loc[group], count_y.loc[group]
+            x_is_zeros = x.replace(0, pd.NA).dropna().empty
+            y_is_zeros = y.replace(0, pd.NA).dropna().empty
+            if not (x_is_zeros or y_is_zeros):
+                non_zero_groups.append(i)
+
+        return non_zero_groups
+
+    @staticmethod
+    def sort_point_groups_and_label(axes: plt.Axes, groups, labels, colors, outgroup: Optional[bool], pval):
+        """Sorts scatter groups so that those with fewer points are rendered on top of the stack.
+        After sorting, group colors and labels are assigned, and the legend is created. Labels
+        in the legend are sorted by natural order with the outgroup always listed last.
+            Args:
+                axes: The scatter plot Axes object
+                groups: A list of DataFrames that were able to be plotted
+                labels: A list of names, one for each group, for the corresponding index in `groups`
+                colors: A dictionary of group labels and their assigned colors
+                outgroup: True if an out group was plotted, None if empty plot (no groups or out groups)
+        """
+
+        lorder = np.argsort([len(grp) for grp in groups if len(grp)])[::-1]   # Index of groups by size
+        offset = int(bool(outgroup))
         layers = axes.collections
 
         if outgroup:
             layers[0].set_label('p ≥ %g' % pval)
         if labels is None:
             labels = list(range(len(groups)))
+        if outgroup is None:
+            return
 
         groupsize_sorted = [(labels[i], layers[i + offset]) for i in lorder]
-        for i, (label, layer) in enumerate(groupsize_sorted, start=1):
+        for z, (label, layer) in enumerate(groupsize_sorted, start=offset+1):
             layer.set_label(re.sub(r'^_', ' _', label))                       # To allow labels that start with _
             layer.set_facecolor(colors[label])
-            layer.set_zorder(i)                                               # Plot in order of group size
+            layer.set_zorder(z)                                               # Plot in order of group size
 
         # Ensure lines remain on top of points
         for line in axes.lines:
-            line.set_zorder(len(groupsize_sorted) + 1)
+            line.set_zorder(len(layers) + 1)
 
-        axes.legend()
+        # Sort the legend with outgroup last while retaining layer order
+        handles = sorted_natural(layers[offset:], key=lambda x: x.get_label())
+        if outgroup: handles.append(layers[0])
+        axes.legend(handles=handles)
 
     @staticmethod
     def assign_class_colors(classes):
