@@ -33,6 +33,8 @@ from matplotlib.scale import LogTransform
 from typing import Union, Tuple, List, Optional
 from abc import ABC, abstractmethod
 
+from tiny.rna.util import sorted_natural
+
 
 class plotterlib:
 
