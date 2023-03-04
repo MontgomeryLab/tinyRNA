@@ -17,39 +17,20 @@ import unit_test_helpers as helpers
 
 resources = "./testdata/counter"
 
+# To run all test suites
+if __name__ == '__main__':
+    unittest.main()
 
-class MyTestCase(unittest.TestCase):
 
+class SamReaderTests(unittest.TestCase):
     @classmethod
     def setUpClass(self):
-        self.gff_file = f"{resources}/identity_choice_test.gff3"
-        self.short_gff_file = f"{resources}/single.gff3"
-        self.short_gff = helpers.read(self.short_gff_file)
-
         self.sam_file = f"{resources}/identity_choice_test.sam"
         self.short_sam_file = f"{resources}/single.sam"
         self.short_sam = helpers.read(self.short_sam_file)
 
-        self.maxDiff = None
-
-    # === HELPERS ===
-
-    def get_gff_attr_string(self, gff_line):
-        return gff_line.split('\t')[-1]
-
-    def parse_gff_attr(self, gff_file_content):
-        attr_str = self.get_gff_attr_string(gff_file_content)
-        return parse_GFF_attribute_string(attr_str)
-
-    def selector_with_template(self, updates_list):
-        """Returns a MockFeatureSelector with the specified updates to the default rule template"""
-
-        rules = [deepcopy(helpers.rules_template[0]) for _ in range(len(updates_list))]
-        for changes, template in zip(updates_list, rules):
-            template.update(changes)
-        return FeatureSelector(rules)
-
-    def exhaust_iterator(self, it):
+    @staticmethod
+    def exhaust_iterator(it):
         collections.deque(it, maxlen=0)
 
     # === TESTS ===
@@ -70,7 +51,7 @@ class MyTestCase(unittest.TestCase):
         self.assertEqual(sam_record['nt5end'], 'G')
 
     """Does our custom SAM parser produce the same pertinent info as HTSeq's BAM_reader?
-    
+
     A note on SAM files: reads are always stored 5' to 3', so antisense reads are actually
     recorded in reverse complement. HTSeq automatically performs this conversion, but we
     are only really concerned about a sequence's 5' end NT, so our alignment dicts performs
@@ -91,10 +72,144 @@ class MyTestCase(unittest.TestCase):
                 self.assertEqual(our['Name'].decode(), their.read.name)
                 self.assertEqual(our['nt5end'], chr(their.read.seq[0]))  # See note above
                 self.assertEqual(our['Strand'], helpers.strand_to_bool(their.iv.strand))
-                if our['Strand'] is False:                               # See note above
+                if our['Strand'] is False:  # See note above
                     self.assertEqual(our['Seq'][::-1].translate(helpers.complement), their.read.seq)
                 else:
                     self.assertEqual(our['Seq'], their.read.seq)
+
+    """Does SAM_reader._get_decollapsed_filename() create an appropriate filename?"""
+
+    def test_SAM_reader_get_decollapsed_filename(self):
+        reader = SAM_reader()
+        reader.file = "~/path/to/input/sam_file.sam"
+
+        sam_out = reader._get_decollapsed_filename()
+
+        self.assertEqual(sam_out, "sam_file_decollapsed.sam")
+
+    """Does SAM_reader._read_to_first_aln() correctly identify header lines and write them to the decollapsed file?"""
+
+    def test_SAM_reader_read_thru_header(self):
+        reader = SAM_reader(decollapse=True)
+        reader._decollapsed_filename = "mock_outfile_name.sam"
+
+        with open(self.short_sam_file, 'rb') as sam_in:
+            with patch('builtins.open', mock_open()) as sam_out:
+                line = reader._read_to_first_aln(sam_in)
+
+        expected_writelines = [
+            call('mock_outfile_name.sam', 'w'),
+            call().__enter__(),
+            call().writelines(["@SQ	SN:I	LN:21\n"]),
+            call().__exit__(None, None, None)
+        ]
+
+        sam_out.assert_has_calls(expected_writelines)
+        self.assertTrue(len(reader._header_lines) == 1)
+
+    """Does SAM_reader._write_decollapsed_sam() write the correct number of duplicates to the decollapsed file?"""
+
+    def test_SAM_reader_write_decollapsed_sam(self):
+        reader = SAM_reader(decollapse=True)
+        reader.collapser_type = "tiny-collapse"
+        reader._decollapsed_reads = [(b"0_count=5", b"mock line from SAM file")]
+        reader._decollapsed_filename = "mock_outfile_name.sam"
+
+        expected_writelines = [
+            call('mock_outfile_name.sam', 'ab'),
+            call().__enter__(),
+            call().writelines([b"mock line from SAM file"] * 5),
+            call().__exit__(None, None, None)
+        ]
+
+        with patch('builtins.open', mock_open()) as outfile:
+            reader._write_decollapsed_sam()
+
+        outfile.assert_has_calls(expected_writelines)
+        self.assertTrue(len(reader._decollapsed_reads) == 0)
+
+    """Does SAM_reader._parse_alignments() save lines and write them to the decollapsed file when appropriate?"""
+
+    def test_SAM_reader_parse_alignments_decollapse(self):
+        with patch.object(SAM_reader, "_write_decollapsed_sam") as write_fn, \
+                patch('tiny.rna.counter.hts_parsing.open', new_callable=mock_open) as mopen:
+            reader = SAM_reader(decollapse=True)
+            reader._decollapsed_reads = [0] * 99999  # At 100,001, buffer will be written
+            reader.file = self.short_sam_file  # File with single alignment
+
+            with open(self.short_sam_file, 'rb') as sam_in:
+                self.exhaust_iterator(reader._parse_alignments(sam_in))
+                write_fn.assert_not_called()
+
+                # Rewind and add one more alignment to push it over threshold
+                sam_in.seek(0)
+                self.exhaust_iterator(reader._parse_alignments(sam_in))
+                write_fn.assert_called_once()
+
+    """Does SAM_reader report a single read count for non-collapsed SAM records?"""
+
+    def test_SAM_reader_single_readcount_non_collapsed_SAM(self):
+        # Read non-collapsed.sam but duplicate its single record twice
+        with open(f"{resources}/non-collapsed.sam", 'rb') as f:
+            sam_lines = f.readlines()
+            sam_lines.extend([sam_lines[1]] * 2)
+            mock_file = mock_open(read_data=b''.join(sam_lines))
+
+        with patch('tiny.rna.counter.hts_parsing.open', new=mock_file):
+            reader = SAM_reader()
+            bundle, read_count = next(reader.bundle_multi_alignments('mock_file'))
+
+        self.assertEqual(bundle[0]['Name'], b'NON_COLLAPSED_QNAME')
+        self.assertEqual(len(bundle), 3)
+        self.assertEqual(read_count, 1)
+
+    """Are decollapsed outputs skipped when non-collapsed SAM files are supplied?"""
+
+    def test_SAM_reader_no_decollapse_non_collapsed_SAM_files(self):
+        stdout_capture = io.StringIO()
+        with patch.object(SAM_reader, "_write_decollapsed_sam") as write_sam, \
+                patch.object(SAM_reader, "_write_header_for_decollapsed_sam") as write_header:
+            with contextlib.redirect_stderr(stdout_capture):
+                reader = SAM_reader(decollapse=True)
+                records = reader.bundle_multi_alignments(f"{resources}/non-collapsed.sam")
+                self.exhaust_iterator(records)
+
+        write_sam.assert_not_called()
+        write_header.assert_not_called()
+        self.assertEqual(reader.collapser_type, None)
+        self.assertEqual(stdout_capture.getvalue(),
+                         "Alignments do not appear to be derived from a supported collapser input. "
+                         "Decollapsed SAM files will therefore not be produced.\n")
+
+
+class ReferenceFeaturesTests(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(self):
+        self.gff_file = f"{resources}/identity_choice_test.gff3"
+        self.short_gff_file = f"{resources}/single.gff3"
+        self.short_gff = helpers.read(self.short_gff_file)
+
+        self.maxDiff = None
+
+    # === HELPERS ===
+
+    def get_gff_attr_string(self, gff_line):
+        return gff_line.split('\t')[-1]
+
+    def parse_gff_attr(self, gff_file_content):
+        attr_str = self.get_gff_attr_string(gff_file_content)
+        return parse_GFF_attribute_string(attr_str)
+
+    def selector_with_template(self, updates_list):
+        """Returns a MockFeatureSelector with the specified updates to the default rule template"""
+
+        rules = [deepcopy(helpers.rules_template[0]) for _ in range(len(updates_list))]
+        for changes, template in zip(updates_list, rules):
+            template.update(changes)
+        return FeatureSelector(rules)
+
+    # === TESTS ===
 
     """Were only the correct attribute keys present in the parser result?"""
 
@@ -608,12 +723,8 @@ class MyTestCase(unittest.TestCase):
                 records = reader.bundle_multi_alignments(f"{resources}/non-collapsed.sam")
                 self.exhaust_iterator(records)
 
-        write_sam.assert_not_called()
-        write_header.assert_not_called()
-        self.assertEqual(reader.collapser_type, None)
-        self.assertEqual(stdout_capture.getvalue(),
-                         "Alignments do not appear to be derived from a supported collapser input. "
-                         "Decollapsed SAM files will therefore not be produced.\n")
+
+class CaseInsensitiveAttrsTests(unittest.TestCase):
 
     """Does CaseInsensitiveAttrs correctly store, check membership, and retrieve?"""
 
@@ -761,6 +872,3 @@ class GenomeParsingTests(unittest.TestCase):
         # The test is passed if this command
         # completes without throwing errors.
         rt.get(fs)
-
-if __name__ == '__main__':
-    unittest.main()
