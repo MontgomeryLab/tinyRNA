@@ -814,16 +814,16 @@ class ReferenceSeqs(ReferenceBase):
 
     def __init__(self, reference_seqs, **prefs):
         super().__init__(**prefs)
+        self.tags = defaultdict(set)
         self.seqs = reference_seqs
         self.alias = {}
-        self.tags = {}
 
     def get(self, selector):
         self.selector = selector
-        match_tuples = self.get_matches()
+        matches = self.get_matches()
 
         for seq_id, seq_len in self.seqs.items():
-            self.add_reference_seq(seq_id, seq_len, match_tuples)
+            self.add_reference_seq(seq_id, seq_len, matches)
 
         # GenomicArray is built. Clear cache...
         self.selector.overlap_cache.clear()
@@ -835,30 +835,32 @@ class ReferenceSeqs(ReferenceBase):
         aliases = {seq_id: () for seq_id in self.tags}
         return self.feats, aliases, self.tags
 
-    def get_matches(self):
+    def get_matches(self) -> Dict[str, List[Tuple[int, int, str]]]:
         """Stage 1 selection is skipped in sequence-based counting.
-        Simply build match_tuples for all rules. These will be used
+        Want the reference sequences to enter Stage 2 as though they
+        were features that matched every rule in Stage 1. Simply return
+        match_tuples and their classifier for all rules. These are used
         uniformly in each reference sequence's feature_record_tuple"""
 
-        return [(idx, rule['Hierarchy'], rule['Overlap'])
-                for idx, rule in sorted(
-                    enumerate(self.selector.rules_table),
-                    key=lambda x: x[1]['Hierarchy']
-                )]
+        matches_by_classifier = defaultdict(list)
 
-    def add_reference_seq(self, seq_id, seq_len, matches):
+        for idx, rule in enumerate(self.selector.rules_table):
+            match_tuple = (idx, rule['Hierarchy'], rule['Overlap'])
+            matches_by_classifier[rule['Class']].append(match_tuple)
 
-        # Features are classified in Reference Tables (Stage 1 selection)
-        # For compatibility, use the seq_id with an empty classifier (index 1)
-        tagged_id = (seq_id, '')
-        self.tags[seq_id] = {tagged_id}
+        return matches_by_classifier
 
-        for strand in ('+', '-'):
-            iv = HTSeq.GenomicInterval(seq_id, 0, seq_len, strand)
-            matches_by_shifted_iv = self.selector.build_interval_selectors(iv, matches, tagged_id)
-            strand = self.map_strand(strand)
+    def add_reference_seq(self, seq_id, seq_len, matches_by_classifier):
+        for classifier, matches in matches_by_classifier.items():
+            tagged_id = (seq_id, classifier)
+            self.tags[seq_id].add(tagged_id)
 
-            for shifted_iv, built_matches in matches_by_shifted_iv.items():
-                # Sort match tuples by rank for more efficient feature selection
-                sorted_matches = sorted(built_matches, key=lambda x: x[1])
-                self.feats[shifted_iv] += (tagged_id, strand, tuple(sorted_matches))
+            for strand in ('+', '-'):
+                iv = HTSeq.GenomicInterval(seq_id, 0, seq_len, strand)
+                matches_by_shifted_iv = self.selector.build_interval_selectors(iv, matches, tagged_id)
+                strand = self.map_strand(strand)
+
+                for shifted_iv, built_matches in matches_by_shifted_iv.items():
+                    # Sort match tuples by rank for more efficient feature selection
+                    sorted_matches = sorted(built_matches, key=lambda x: x[1])
+                    self.feats[shifted_iv] += (tagged_id, strand, tuple(sorted_matches))

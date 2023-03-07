@@ -33,9 +33,11 @@ class GFFValidator:
         self.gff_files = gff_files
 
     def validate(self):
-        print("Validating annotation files...")
+        print("Validating annotation files... ", end='')
         self.parse_and_validate_gffs(self.gff_files)
         self.validate_chroms(*self.seq_files)
+        print("done.")
+
         self.report.print_report()
         if self.report.errors:
             sys.exit(1)
@@ -243,9 +245,11 @@ class SamSqValidator:
         self.sq_headers = {}
 
     def validate(self):
-        print("Validating sequence identifiers in SAM files...")
+        print("Validating sequence identifiers in SAM files... ", end='')
         self.read_sq_headers()
         self.validate_sq_headers()
+        print("done.")
+
         self.report.print_report()
         if self.report.errors:
             sys.exit(1)
