@@ -5,6 +5,7 @@ import errno
 import time
 import sys
 import csv
+import re
 import os
 
 from pkg_resources import resource_filename
@@ -790,6 +791,7 @@ class CSVReader(csv.DictReader):
             raise ValueError("w-HH-at 'n t'heck are you doin")
 
     def rows(self):
+        self.replace_excel_ellipses()
         with open(os.path.expanduser(self.tinyrna_file), 'r', encoding='utf-8-sig') as f:
             super().__init__(f, fieldnames=self.tinyrna_fields, delimiter=',')
             header = next(self)
@@ -798,9 +800,36 @@ class CSVReader(csv.DictReader):
             # and it doesn't make sense to infer column identity
             self.validate_csv_header(header)
 
+            # For skipping rows that are empty or all whitespace cells
+            non_ws_cell = lambda cell: re.sub(r'^\s+$', '', cell)
+            empty_row = lambda row: not any(non_ws_cell(x) for x in row.values())
+
             for row in self:
                 self.row_num += 1
+                if empty_row(row): continue
                 yield row
+
+    def replace_excel_ellipses(self):
+        """Excel has an autocorrect setting that converts three periods to an ellipsis character.
+        The resulting ellipsis is not UTF-8 compatible and causes the decoder to fail. Switching
+        to the correct encoding is still problematic because the character, while visually correct,
+        doesn't compare equal to "..." so header validation fails. Just replace it."""
+
+        try:
+            with open(self.tinyrna_file, 'r', encoding='utf-8') as f:
+                next(f)
+        except UnicodeDecodeError as e:
+            if e.reason == "invalid continuation byte" and e.object[e.start] == 0xc9:
+                with open(self.tinyrna_file, 'r', encoding='latin-1') as f:
+                    lines = f.readlines()
+                    lines[0] = lines[0].replace("\xc9", '...')
+                    lines[0].encode('latin-1').decode('utf-8-sig')  # sanity check
+                # Encode with utf-8 rather than utf-8-sig for Excel compatibility
+                with open(self.tinyrna_file, 'w', encoding='utf-8') as f:
+                    f.writelines(lines)
+                print(f"Replaced invalid character in {self.doctype} header.")
+            else:
+                raise
 
     def validate_csv_header(self, header: OrderedDict):
         # The expected header values
