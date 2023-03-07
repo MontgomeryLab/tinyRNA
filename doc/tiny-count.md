@@ -27,7 +27,7 @@ Selection occurs in three stages, with the output of each stage as input to the 
 ![Feature Selection Diagram](../images/tiny-count_selection.png)
 
 ## Sequence-Based Counting Mode
-If GFF files aren't specified in your Paths File, Stage 1 selection is skipped and reads are counted by sequence rather than by feature. Reference sequence names and lengths are determined from the `@SQ` headers of input SAM files. In Stages 2 and 3, these reference sequences behave like features that had matched every rule in Stage 1.
+If GFF files aren't specified in your Paths File, Stage 1 selection is skipped and reads are counted by sequence rather than by feature. Reference sequence names and lengths are determined from the `@SQ` headers of input SAM files. In Stages 2 and 3, these reference sequences behave like features that had matched every rule in Stage 1. Selection takes place for both the sense and antisense copy of these sequences, and read counts are subset per-sequence if any `Classify as...` values are provided.
  
 ## Stage 1: Feature Attribute Parameters
 | _Features Sheet Selectors:_ | Select for... | with value... | Classify as... | Source Filter | Type Filter |
