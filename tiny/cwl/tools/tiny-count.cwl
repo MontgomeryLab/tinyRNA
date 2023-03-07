@@ -21,44 +21,44 @@ inputs:
   paths_file:
     type: File
     inputBinding:
-      prefix: -pf
+      prefix: --paths-file
 
   out_prefix:
     type: string
     inputBinding:
-      prefix: -o
+      prefix: --out-prefix
 
   # Optional inputs
 
   normalize_by_hits:
     type: string?
     inputBinding:
-      prefix: -nh
+      prefix: --normalize-by-hits
 
   decollapse:
     type: boolean?
     inputBinding:
-      prefix: -dc
+      prefix: --decollapse
 
   stepvector:
     type: string?
     inputBinding:
-      prefix: -sv
+      prefix: --stepvector
 
   all_features:
     type: boolean?
     inputBinding:
-      prefix: -a
+      prefix: --all-features
 
   is_pipeline:
     type: boolean?
     inputBinding:
-      prefix: -p
+      prefix: --is-pipeline
 
   diagnostics:
     type: boolean?
     inputBinding:
-      prefix: -d
+      prefix: --report-diags
 
   # The following optional inputs are for staging InitialWorkingDir files for pipeline execution
 

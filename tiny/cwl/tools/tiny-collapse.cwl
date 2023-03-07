@@ -12,7 +12,7 @@ inputs:
     type: File
     inputBinding:
       position: 0
-      prefix: -i
+      prefix: --input-file
     doc: "The optionally gzipped fastq files to collapse"
 
   # Collapsed fasta name
@@ -20,7 +20,7 @@ inputs:
     type: string
     inputBinding:
       position: 1
-      prefix: -o
+      prefix: --out-prefix
     doc: "The prefix for output files {prefix}_collapsed.fa and, if
       counts fall below threshold, {prefix}_collapsed_lowcounts.fa"
 
@@ -30,7 +30,7 @@ inputs:
     default: 0
     inputBinding:
       position: 2
-      prefix: -t
+      prefix: --threshold
     doc: "Sequences <= THRESHOLD will be omitted from {prefix}_collapsed.fa
       and will instead be placed in {prefix}_collapsed_lowcounts.fa"
 
@@ -40,7 +40,7 @@ inputs:
     default: false
     inputBinding:
       position: 3
-      prefix: -c
+      prefix: --compress
     doc: "Use gzip compression when writing fasta outputs"
 
   5p_trim:
