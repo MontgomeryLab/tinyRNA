@@ -11,85 +11,85 @@ inputs:
   raw_counts:
     type: File
     inputBinding:
-      prefix: -rc
+      prefix: --raw-counts
     doc: "Raw, non-normalized feature counts from Counter"
 
   rule_counts:
     type: File
     inputBinding:
-      prefix: -uc
+      prefix: --rule-counts
     doc: "Raw, non-normalized counts by matched rule from Counter"
 
   norm_counts:
     type: File?
     inputBinding:
-      prefix: -nc
+      prefix: --norm-counts
     doc: "Normalized feature counts from DESeq"
 
   dge_tables:
     type: File[]?
     inputBinding:
-      prefix: -dge
+      prefix: --dge-tables
     doc: "Sample comparison tables from DESeq"
 
   summ_stats:
     type: File
     inputBinding:
-      prefix: -ss
+      prefix: --summary-stats
     doc: "The summary stats csv from Counter"
 
   len_dist_tables:
     type: File[]
     inputBinding:
-      prefix: -len
+      prefix: --len-dist
     doc: "5' end nucleotide vs. length matrices from Counter"
 
   dge_pval:
     type: float?
     inputBinding:
-      prefix: -pv
+      prefix: --p-value
     doc: "The p-value to use for DGE scatter plots (default: 0.05)"
 
   style_sheet:
     type: File?
     inputBinding:
-      prefix: -s
+      prefix: --style-sheet
     doc: "A .mplstyle sheet to use instead of tinyrna default styles"
 
   vector_scatter:
     type: boolean?
     inputBinding:
-      prefix: -v
+      prefix: --vector-scatter
     doc: "If provided, scatter plots will have vectorized points (slower)"
 
   len_dist_min:
     type: int?
     inputBinding:
-      prefix: -ldi
+      prefix: --len-dist-min
     doc: "The first length to plot in the range for len_dist plots"
 
   len_dist_max:
     type: int?
     inputBinding:
-      prefix: -lda
+      prefix: --len-dist-max
     doc: "The last length to plot in the range for len_dist plots"
 
   dge_min:
     type: double?
     inputBinding:
-      prefix: -dgi
+      prefix: --dge-min
     doc: "The log2 lower view limit in DGE scatter plots"
 
   dge_max:
     type: double?
     inputBinding:
-      prefix: -dga
+      prefix: --dge-max
     doc: "The log2 upper view limit in DGE scatter plots"
 
   unknown_class_label:
     type: string?
     inputBinding:
-      prefix: -unk
+      prefix: --unknown-class
     doc: \
       'Use this label in class-related plots for counts which were '
       'assigned by rules lacking a "Classify as..." value'
@@ -97,13 +97,13 @@ inputs:
   unassigned_class_label:
     type: string?
     inputBinding:
-      prefix: -una
+      prefix: --unassigned-class
     doc: 'Use this label in class-related plots for unassigned counts'
 
   classes_include:
     type: string[]?
     inputBinding:
-      prefix: -ic
+      prefix: --classes-include
     doc: \
       'Only include these classes, if present, in class scatter '
       'plots (applies regardless of P value)'
@@ -111,7 +111,7 @@ inputs:
   classes_exclude:
     type: string[]?
     inputBinding:
-      prefix: -ec
+      prefix: --classes-exclude
     doc: \
       'Omit these classes, if present, from class scatter plots '
       '(applies regardless of P value)'
@@ -119,13 +119,13 @@ inputs:
   out_prefix:
     type: string?
     inputBinding:
-      prefix: -o
+      prefix: --out-prefix
     doc: "The prefix to use when naming output files (optional)"
 
   plot_requests:
     type: string[]
     inputBinding:
-      prefix: -p
+      prefix: --plots
     doc: "A list of desired plot types to produce"
 
 outputs:
