@@ -66,10 +66,6 @@ class YamlShop:
         doc.insert(target_idx, key, val)
         key_order.insert(target_idx, key)
 
-        if isinstance(val, (dict, list)):
-            print("Adding complex mappings not yet supported.\n"
-                  "Proceed with caution...", file=sys.stderr)
-
         # Comments & linebreaks are often (but not always!) attached to
         #   the preceding key. Move them down to the new key.
         inherit_prev = doc.ca.items[prec_key][2]
