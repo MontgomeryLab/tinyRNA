@@ -7,6 +7,7 @@ from typing import List, Tuple, Set, Dict, Mapping
 from tiny.rna.counter.hts_parsing import SAM_reader, ReferenceFeatures, ReferenceSeqs
 from .statistics import LibraryStats
 from .matching import *
+from ..util import append_to_exception
 
 # Type aliases for human readability
 match_tuple = Tuple[int, int, IntervalSelector]             # (rank, rule, IntervalSelector)
@@ -193,8 +194,9 @@ class FeatureSelector:
                         row[selector] = selector_builders[selector](defn)
             except Exception as e:
                 # Append to error message while preserving exception provenance and traceback
-                e.args = (str(e.args[0]) + '\n' + f"Error occurred while processing rule number {i + 1}",)
-                raise e.with_traceback(sys.exc_info()[2]) from e
+                msg = f"Error occurred while processing rule number {i + 1}"
+                append_to_exception(e, msg)
+                raise
 
         return rules_table
 

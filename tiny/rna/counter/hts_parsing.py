@@ -11,7 +11,7 @@ from urllib.parse import unquote
 from inspect import stack
 
 from tiny.rna.counter.matching import Wildcard
-from tiny.rna.util import report_execution_time, make_filename, ReportFormatter
+from tiny.rna.util import report_execution_time, make_filename, ReportFormatter, append_to_exception
 
 # For parse_GFF_attribute_string()
 _re_attr_main = re.compile(r"\s*([^\s=]+)[\s=]+(.*)")
@@ -116,8 +116,9 @@ class SAM_reader:
                 }
         except Exception as e:
             # Append to error message while preserving exception provenance and traceback
-            e.args = (str(e.args[0]) + '\n' + f"Error occurred on line {line_no} of {self.file}",)
-            raise e.with_traceback(sys.exc_info()[2]) from e
+            msg = f"Error occurred on line {line_no} of {self.file}"
+            append_to_exception(e, msg)
+            raise
 
     def _read_to_first_aln(self, file_obj: IO) -> Tuple[bytes, int]:
         """Advance file_obj past the SAM header and return the first alignment unparsed"""
@@ -510,11 +511,7 @@ def parse_gff(file, row_fn: Callable, alias_keys=None):
     except Exception as e:
         # Append to error message while preserving exception provenance and traceback
         extended_msg = f"Error occurred on line {gff.line_no} of {file}"
-        if type(e) is KeyError:
-            e.args += (extended_msg,)
-        else:
-            primary_msg = "%s\n%s" % (str(e.args[0]), extended_msg)
-            e.args = (primary_msg,) + e.args[1:]
+        append_to_exception(e, extended_msg)
         raise
 
 

@@ -231,3 +231,11 @@ def get_timestamp():
 def add_transparent_help(parser):
     parser.add_argument('-h', '--help', action="help", help=argparse.SUPPRESS)
 
+
+# Appends to an exception's error message while preserving its provenance and traceback
+def append_to_exception(e, msg):
+    if type(e) is KeyError:
+        e.args += (msg,)
+    else:
+        primary_msg = "%s\n%s" % (str(e.args[0]), msg)
+        e.args = (primary_msg,) + e.args[1:]
