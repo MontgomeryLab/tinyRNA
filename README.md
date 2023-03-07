@@ -270,7 +270,7 @@ Simple static plots are generated from the outputs of tiny-count and tiny-deseq.
 |:--------------------------------------------------------------------------------------------------------------------------------------------:|:--------------------------------------------------------------------------------------------------------------------------:|
 |                         <img src="images/plots/len_dist.jpg" width="80%" alt="len_dist 16-32"/></br></br>`len_dist`                          |               <img src="images/plots/pca_plot.jpg" width="80%" alt="PCA plot by DESeq2"/><br/>`dge_pca_plot`               |
 |                  <img src="images/plots/rule_chart.jpg" width="80%" alt="rule_chart with 10 rules"/><br/></br>`rule_charts`                  |       <img src="images/plots/class_chart.jpg" width="95%" alt="class_chart with 8 classes"/><br/></br>`class_charts`       |
-| <img src="images/plots/scatter_dge_class.jpg" width="80%" alt="sample_avg_scatter_by_dge_class"/><br/></br>`sample_avg_scatter_by_dge_class` | <img src="images/plots/scatter_dge.jpg" width="83%" alt="sample_avg_scatter_by_dge"/><br/></br>`sample_avg_scatter_by_dge` |
+| <img src="images/plots/scatter_dge_class.jpg" width="83%" alt="sample_avg_scatter_by_dge_class"/><br/></br>`sample_avg_scatter_by_dge_class` | <img src="images/plots/scatter_dge.jpg" width="80%" alt="sample_avg_scatter_by_dge"/><br/></br>`sample_avg_scatter_by_dge` |
 
 
 tiny-deseq.r will produce a standard **PCA plot** from variance stabilizing transformed feature counts. This output is controlled by the `dge_pca_plot` key in the Run Config and by your experiment design. DGE outputs, including the PCA plot, will not be produced for experiments with less than 1 degree of freedom.
