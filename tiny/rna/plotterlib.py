@@ -336,7 +336,7 @@ class plotterlib:
         else:
             colors = iter(plt.get_cmap("tab20"))
 
-        return {cls: next(colors) for cls in classes}
+        return {cls: next(colors) for cls in sorted_natural(classes)}
 
     def set_dge_class_legend_style(self):
         """Widens the "scatter" figure and moves plot to the left to accommodate legend"""
