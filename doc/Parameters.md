@@ -217,7 +217,7 @@ Feature expression levels are considered significant if their P value is less th
 |----------------|-------------------|--------------------------|
 |                | plot_style_sheet: | `--style-sheet MPLSTYLE` |
 
-The plot style sheet can be used to override the default Matplotlib styles used by tiny-plot. Unlike the other parameters, this option is found in the Paths File. See the [Plot Stylesheet documentation](Configuration.md#plot-stylesheet-details) for more information.
+The plot style sheet can be used to override the default Matplotlib styles used by tiny-plot. Unlike the other parameters, this option is found in the Paths File. The expected value for this parameter is the path to your modified style sheet. See the [Plot Style Sheet documentation](Configuration.md#plot-style-sheet-details) for more information.
 
 ### Vector Scatter
 | Run Config Key      | Commandline Argument |
@@ -241,7 +241,7 @@ The min and/or max bounds for plotted lengths can be set with this option. See [
 | plot_dge_scatter_min: | `--dge-min VALUE`    | 
 | plot_dge_scatter_max: | `--dge-max VALUE`    |
 
-The min and/or max bounds for DGE scatter plots can be set with this option. The value you provide should be a log2 count value and can be whole or fractional, e.g. `--dge-min 1.9` would produce a plot whose first tick mark is labeled 2 and would include points for feature counts as low as 3.74. Unspecified bounds are automatically calculated to fit the data, and will include the margin specified by the `axes.[x/y]margin` key in the [Plot Stylesheet](Configuration.md#plot-stylesheet-details).
+The min and/or max bounds for DGE scatter plots can be set with this option. The value you provide should be a log2 count value and can be whole or fractional, e.g. `--dge-min 1.9` would produce a plot whose first tick mark is labeled 2 and would include points for feature counts as low as 3.74. Unspecified bounds are automatically calculated to fit the data, and will include the margin specified by the `axes.[x/y]margin` key in the [Plot Style Sheet](Configuration.md#plot-style-sheet-details).
 
 ### Labels for Class-related Plots
 | Run Config Key         | Commandline Argument |

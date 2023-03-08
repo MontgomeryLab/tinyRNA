@@ -59,7 +59,7 @@ Rules are referred to by their row number in the Features Sheet and the first no
 - Alignments which do not overlap with any features
 
 #### Rule Chart Styles
-Percentage label darkness and bar colors reflect the magnitude of the rule's contribution. Magnitude is always considered on a 0-100% scale, rather than scaling down to the chart's view limits. These styles cannot be changed using a plot stylesheet.
+Percentage label darkness and bar colors reflect the magnitude of the rule's contribution. Magnitude is always considered on a 0-100% scale, rather than scaling down to the chart's view limits. These styles cannot be changed using a plot style sheet.
 
 
 
@@ -111,13 +111,25 @@ The control condition is plotted on the x-axis, but it must be specified in your
 #### View Limits
 Both the lower and upper bound of the plot's axes [can be set manually](Parameters.md#bounds-for-lendist-charts). Unspecified bounds are automatically calculated to fit the data.
 
+#### Zero-Count Features
+Due to the plot's log scale, points are not plotted for features that have 0 reads in one of the compared conditions. Zero-count features will be supported in a future release.
+
 
 
 ## sample_avg_scatter_by_dge_class
-The previous plot type can be extended to group and color differentially expressed features by class. Classes are sorted by abundance before plotting to maximize representation. You can also filter the classes displayed using [plot_class_scatter_filter](Parameters.md#filtering-classes-in-dge-class-scatter-plots)
+The previous plot type can be extended to group and color differentially expressed features by class.
 
 <p float="left" align="center">
     <img src="../images/plots/scatter_dge_class.jpg" width="100%" alt="sample_avg_scatter_by_dge_class"/>
 </p>
 
->**Tip**: if you find that two groups of interest share proximity and are too similar in color, you can change the group's color with a modified Plot Stylesheet. The groups will be colored in the same order they are listed in the legend (not including P value outgroup), e.g. changing the color of the ERGO group means changing the 5th color in the `axes.prop_cycle` color cycler. See the [config file documentation](Configuration.md#plot-stylesheet-details) for more info about the Plot Stylesheet.
+#### Filtering Classes
+You can filter which classes are displayed using [plot_class_scatter_filter](Parameters.md#filtering-classes-in-dge-class-scatter-plots).
+
+#### Zero-Count Classes
+If all features have 0 reads for a given class in one of the compared conditions, then that class is omitted from the plot and legend due to the plot's log scale. Zero-count classes will be supported in a future release.
+
+#### Customizing Group Colors
+If you find that two groups of interest share proximity and are too similar in color, you can change the group's color with a modified Plot Style Sheet. Group colors are assigned from the `axes.prop_cycle` color cycler when there are fewer groups than colors, or from the [tab20](https://matplotlib.org/3.5.2/tutorials/colors/colormaps.html#qualitative) colormap when groups outnumber colors. First, the total list of unique classes is gathered from the counts table and sorted, and the resulting list of classes is assigned colors in the order produced by the cycler. 
+
+For example, changing the color of the miRNA group in the above plot means changing the 6th color in the `axes.prop_cycle` list (assuming all classes are represented in the plot). The P value outgroup is always the same color and doesn't affect the assignment process. See the [config file documentation](Configuration.md#plot-style-sheet-details) for more info about the Plot Style Sheet.

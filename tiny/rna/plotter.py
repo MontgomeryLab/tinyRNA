@@ -18,7 +18,15 @@ from typing import Dict, Union, Tuple, DefaultDict, Iterable
 from pkg_resources import resource_filename
 
 from tiny.rna.plotterlib import plotterlib
-from tiny.rna.util import report_execution_time, make_filename, SmartFormatter, timestamp_format, add_transparent_help
+from tiny.rna.util import (
+    report_execution_time,
+    add_transparent_help,
+    timestamp_format,
+    SmartFormatter,
+    sorted_natural,
+    make_filename
+)
+
 
 aqplt: plotterlib = None
 RASTER: bool = True
@@ -185,7 +193,8 @@ def class_charts(raw_class_counts: pd.DataFrame, mapped_reads: pd.Series, out_pr
         kwargs: Additional keyword arguments to pass to pandas.DataFrame.plot()
     """
 
-    class_props = get_proportions_df(raw_class_counts, mapped_reads, class_na, scale).sort_index()
+    class_props = get_proportions_df(raw_class_counts, mapped_reads, class_na, scale)
+    class_props = class_props.reindex(sorted_natural(class_props.index))
     max_prop = class_props.max().max()
 
     for library in raw_class_counts:
