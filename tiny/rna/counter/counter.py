@@ -12,8 +12,15 @@ from tiny.rna.counter.validation import GFFValidator, SamSqValidator
 from tiny.rna.counter.features import Features, FeatureCounter
 from tiny.rna.counter.statistics import MergedStatsManager
 from tiny.rna.counter.hts_parsing import ReferenceFeatures, ReferenceSeqs, ReferenceBase
-from tiny.rna.util import report_execution_time, from_here, ReadOnlyDict, get_timestamp, add_transparent_help
 from tiny.rna.configuration import CSVReader, PathsFile, get_templates
+from tiny.rna.util import (
+    report_execution_time,
+    add_transparent_help,
+    append_to_exception,
+    get_timestamp,
+    ReadOnlyDict,
+    from_here
+)
 
 # Global variables for multiprocessing
 counter: FeatureCounter
@@ -114,19 +121,25 @@ def load_samples(samples_csv: str, is_pipeline: bool) -> List[Dict[str, str]]:
         return csv_row_file
 
     inputs = list()
+    sheet = CSVReader(samples_csv, "Samples Sheet")
 
-    for row in CSVReader(samples_csv, "Samples Sheet").rows():
-        library_name = f"{row['Group']}_rep_{row['Replicate']}"
-        library_file_name = get_library_filename(row['File'], samples_csv)
-        library_normalization = row['Normalization']
+    try:
+        for row in sheet.rows():
+            library_name = f"{row['Group']}_rep_{row['Replicate']}"
+            library_file_name = get_library_filename(row['File'], samples_csv)
+            library_normalization = row['Normalization']
 
-        record = {
-            "Name": library_name,
-            "File": library_file_name,
-            "Norm": library_normalization
-        }
+            record = {
+                "Name": library_name,
+                "File": library_file_name,
+                "Norm": library_normalization
+            }
 
-        if record not in inputs: inputs.append(record)
+            if record not in inputs: inputs.append(record)
+    except Exception as e:
+        msg = f"Error occurred on line {sheet.line_num} of {os.path.basename(samples_csv)}"
+        append_to_exception(e, msg)
+        raise
 
     return inputs
 
@@ -144,16 +157,22 @@ def load_config(features_csv: str, is_pipeline: bool) -> List[dict]:
             further digest to produce its rules table.
     """
 
+    sheet = CSVReader(features_csv, "Features Sheet")
     rules = list()
 
-    for rule in CSVReader(features_csv, "Features Sheet").rows():
-        rule['nt5end'] = rule['nt5end'].upper().translate({ord('U'): 'T'})  # Convert RNA base to cDNA base
-        rule['Identity'] = (rule.pop('Key'), rule.pop('Value'))             # Create identity tuple
-        rule['Hierarchy'] = int(rule['Hierarchy'])                          # Convert hierarchy to number
-        rule['Overlap'] = rule['Overlap'].lower()                           # Built later in reference parsers
+    try:
+        for rule in sheet.rows():
+            rule['nt5end'] = rule['nt5end'].upper().translate({ord('U'): 'T'})  # Convert RNA base to cDNA base
+            rule['Identity'] = (rule.pop('Key'), rule.pop('Value'))             # Create identity tuple
+            rule['Hierarchy'] = int(rule['Hierarchy'])                          # Convert hierarchy to number
+            rule['Overlap'] = rule['Overlap'].lower()                           # Built later in reference parsers
 
-        # Duplicate rule entries are not allowed
-        if rule not in rules: rules.append(rule)
+            # Duplicate rule entries are not allowed
+            if rule not in rules: rules.append(rule)
+    except Exception as e:
+        msg = f"Error occurred on line {sheet.line_num} of {os.path.basename(features_csv)}"
+        append_to_exception(e, msg)
+        raise
 
     return rules
 
