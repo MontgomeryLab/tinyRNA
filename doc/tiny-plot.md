@@ -59,7 +59,7 @@ Rules are referred to by their row number in the Features Sheet and the first no
 - Alignments which do not overlap with any features
 
 #### Rule Chart Styles
-Percentage label darkness and bar colors reflect the magnitude of the rule's contribution. Magnitude is always considered on a 0-100% scale, rather than scaling down to the chart's view limits. These styles cannot be changed using a plot stylesheet.
+Percentage label darkness and bar colors reflect the magnitude of the rule's contribution. Magnitude is always considered on a 0-100% scale, rather than scaling down to the chart's view limits. These styles cannot be changed using a plot style sheet.
 
 
 
@@ -110,6 +110,9 @@ The control condition is plotted on the x-axis, but it must be specified in your
 
 #### View Limits
 Both the lower and upper bound of the plot's axes [can be set manually](Parameters.md#bounds-for-lendist-charts). Unspecified bounds are automatically calculated to fit the data.
+
+#### Zero-Count Features
+Due to the plot's log scale, points are not plotted for features that have 0 reads in one of the compared conditions. Zero-count features will be supported in a future release.
 
 
 

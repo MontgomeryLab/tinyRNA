@@ -32,9 +32,9 @@ To make it simple to specify your fastq files and their locations, along with as
 
 Small RNAs can often be classified by sequence characteristics, such as length, strandedness, and 5' nucleotide. We provide a Features Sheet (`features.csv`) in which you can define selection rules to more accurately capture counts for the small RNAs of interest. [More info](#features-sheet-details).
 
-#### Plot Stylesheet
+#### Plot Style Sheet
 
-Plot styles can be optionally overridden using a matplotlibrc stylesheet. [More info](#plot-stylesheet-details).
+Plot styles can be optionally overridden using a matplotlibrc style sheet. [More info](#plot-style-sheet-details).
 
 ## Editing YAML Files
 The Run Config and Paths File are YAML formatted files that can be edited with a text editor. Changing values in these files is pretty straight forward, but it is useful to know a little about YAML syntax.
@@ -174,5 +174,5 @@ Examples:
 ### Case Sensitivity
 All selectors are case-insensitive.
 
-## Plot Stylesheet Details
-Matplotlib uses key-value "rc parameters" to allow for customization of its properties and styles, and one way these parameters can be specified is with a [matplotlibrc file](https://matplotlib.org/3.4.3/tutorials/introductory/customizing.html#a-sample-matplotlibrc-file), which we simply refer to as the Plot Stylesheet. You can obtain a copy of the default stylesheet used by tiny-plot with the command `tiny get-templates`. Please keep in mind that tiny-plot overrides these defaults for a few specific elements of certain plots. Feel free to reach out if there is a plot style you wish to override but find you are unable to.
+## Plot Style Sheet Details
+Matplotlib uses key-value "rc parameters" to allow for customization of its properties and styles, and one way these parameters can be specified is with a [matplotlibrc file](https://matplotlib.org/3.5.2/tutorials/introductory/customizing.html#a-sample-matplotlibrc-file), which we simply refer to as the Plot Style Sheet. You can obtain a copy of the default style sheet used by tiny-plot with the command `tiny get-templates`, and your modified style sheet can be passed using the [plot_style_sheet parameter](Parameters.md#style-sheet). Please keep in mind that tiny-plot overrides these defaults for a few specific elements of certain plots. Feel free to reach out if there is a plot style you wish to override but find you are unable to.

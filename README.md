@@ -161,7 +161,7 @@ At the core of tinyRNA is tiny-count, a highly flexible counting utility that al
 A wrapper R script for DESeq2 facilitates DGE analysis of counted sample files.
 
 ### `tiny-plot`
-The results of feature counting and DGE analysis are visualized with high resolution plot PDFs. User-defined plot styles are also supported via a Matplotlib stylesheet. 
+The results of feature counting and DGE analysis are visualized with high resolution plot PDFs. User-defined plot styles are also supported via a Matplotlib style sheet. 
 
 [Full documentation for tiny-plot can be found here.](doc/tiny-plot.md)
 

@@ -383,13 +383,13 @@ class plotterlib:
         x0, x1 = (minpos if x0 <= 0 else x0,
                   minpos if x1 <= 0 else x1)
 
-        # Get axes margin preferences from stylesheet
+        # Get axes margin preferences from style sheet
         rc_mar = {mpl.rcParams.get(f"axes.{m}", 0)
                   for m in ('xmargin', 'ymargin')}
 
         margin = max(rc_mar)
         if len(rc_mar) != 1:
-            print("Stylesheet values for axes.xmargin and axes.ymargin differ. "
+            print("Style sheet values for axes.xmargin and axes.ymargin differ. "
                   "The larger value will be chosen for the scatter plot margin.",
                   file=sys.stderr)
 
