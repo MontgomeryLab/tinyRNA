@@ -284,7 +284,7 @@ The files produced by certain steps can be very large and after several runs thi
 Cleanup commands will be added to tinyRNA in a future release, but for now the following command will remove commonly large files while preserving report files:
 ```shell
 # Execute within the Run Directory you want to clean
-rm {fastp/*.fastq,{collapser,bowtie}/*.fa,bowtie/*.sam}
+rm {fastp/*.fastq,{tiny-collapse,bowtie}/*.fa,bowtie/*.sam}
 ```
 
 
