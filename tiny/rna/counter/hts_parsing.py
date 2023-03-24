@@ -1,6 +1,7 @@
 import functools
 import os.path
 import HTSeq
+import pysam
 import sys
 import re
 
@@ -22,10 +23,6 @@ AlignmentDict = Dict[str, Union[str, int, bytes]]
 Bundle = Tuple[List[AlignmentDict], int]
 _re_tiny = r"\d+_count=\d+"
 _re_fastx = r"seq\d+_x(\d+)"
-_re_header = re.compile(r"^@(HD|SQ|RG|PG)(\t[A-Za-z][A-Za-z0-9]:[ -~]+)+$|^@CO\t.*")
-
-# For Alignment
-complement = {ord('A'): 'T', ord('T'): 'A', ord('G'): 'C', ord('C'): 'G'}
 
 
 class SAM_reader:
@@ -39,24 +36,24 @@ class SAM_reader:
         self._collapser_token = None
         self._decollapsed_filename = None
         self._decollapsed_reads = []
-        self._header_lines = []
-        self._header_dict = defaultdict(list)
+        self._header_dict = {}
+        self._header = None
 
     def bundle_multi_alignments(self, file: str) -> Iterator[Bundle]:
         """Bundles multi-alignments (determined by a shared QNAME) and reports the associated read's count"""
 
         self.file = file
-        with open(file, 'rb') as f:
-            aln_iter = iter(self._parse_alignments(f))
-            bundle, read_count = self._new_bundle(next(aln_iter))
+        pysam_reader = pysam.AlignmentFile(file)
+        aln_iter = iter(self._parse_alignments(pysam_reader))
+        bundle, read_count = self._new_bundle(next(aln_iter))
 
-            for aln in aln_iter:
-                if aln['Name'] != bundle[0]['Name']:
-                    yield bundle, read_count
-                    bundle, read_count = self._new_bundle(aln)
-                else:
-                    bundle.append(aln)
-            yield bundle, read_count
+        for aln in aln_iter:
+            if aln['Name'] != bundle[0]['Name']:
+                yield bundle, read_count
+                bundle, read_count = self._new_bundle(aln)
+            else:
+                bundle.append(aln)
+        yield bundle, read_count
 
         if self.decollapse and len(self._decollapsed_reads):
             self._write_decollapsed_sam()
@@ -72,92 +69,67 @@ class SAM_reader:
 
         return [aln], count
 
-    def _parse_alignments(self, file_obj: IO) -> Iterator[AlignmentDict]:
-        """Parses and yields individual SAM alignments from the open file_obj"""
+    def _parse_alignments(self, reader: pysam.AlignmentFile) -> Iterator[AlignmentDict]:
+        """Yields alignment dictionaries containing relevant info from each pysam.AlignedSegment"""
 
-        line, line_no = self._read_to_first_aln(file_obj)
-        decollapse_sam = self.decollapse
+        self._gather_metadata(reader)
+        first_line = len(str(self._header).splitlines()) + 1
+        complement = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G'}
 
-        try:
-            while line:
-                line_no += 1
-                cols = line.split(b'\t')
-
-                if decollapse_sam:
-                    self._decollapsed_reads.append((cols[0], line))
-                    if len(self._decollapsed_reads) > 100000:
+        for line_no, aln in enumerate(reader, start=first_line):
+            try:
+                if self.decollapse:
+                    self._decollapsed_reads.append(aln)
+                    if len(self._decollapsed_reads) > 100_000:
                         self._write_decollapsed_sam()
+                if aln.is_unmapped:
+                    continue
 
-                line = file_obj.readline()  # Next line
-                start = int(cols[3]) - 1
-                seq = cols[9]
+                seq = aln.query_sequence
+                start = aln.pos
                 length = len(seq)
+                strand = aln.is_forward
 
-                # Note: we assume sRNA sequencing data is NOT reversely stranded
-                if (int(cols[1]) & 16):
-                    strand = False  # -
+                if strand:
+                    nt5 = seq[0]
+                else:
                     try:
                         nt5 = complement[seq[-1]]
                     except KeyError:
-                        nt5 = chr(seq[-1])
-                else:
-                    strand = True  # +
-                    nt5 = chr(seq[0])
+                        nt5 = seq[-1]
+
+                # Note: we assume sRNA sequencing data is NOT reversely stranded
 
                 yield {
-                    "Name": cols[0],
+                    "Name": aln.query_name,
                     "Length": length,
                     "Seq": seq,
                     "nt5end": nt5,
-                    "Chrom": cols[2].decode(),
+                    "Chrom": aln.reference_name,
                     "Start": start,
                     "End": start + length,
                     "Strand": strand
                 }
-        except Exception as e:
-            # Append to error message while preserving exception provenance and traceback
-            msg = f"Error occurred on line {line_no} of {self.file}"
-            append_to_exception(e, msg)
-            raise
+            except Exception as e:
+                # Append to error message while preserving exception provenance and traceback
+                msg = f"Error occurred on line {line_no} of {self.file}"
+                append_to_exception(e, msg)
+                raise
 
-    def _read_to_first_aln(self, file_obj: IO) -> Tuple[bytes, int]:
-        """Advance file_obj past the SAM header and return the first alignment unparsed"""
+    def _gather_metadata(self, reader: pysam.AlignmentFile) -> None:
+        """Saves header information, determines which collapser utility (if any)
+        was used before alignment, and copies the input file's header to the
+        decollapsed output file if necessary."""
 
-        lineno = 1
-        line = file_obj.readline()
-        while line[0] == ord('@'):
-            self._parse_header_line(line.decode('utf-8'))
-            line = file_obj.readline()
-            lineno += 1
+        header = reader.header
+        first_aln = next(reader.head(1))
 
-        self._determine_collapser_type(line.decode())
-        if self.decollapse: self._write_header_for_decollapsed_sam()
+        self._header = header
+        self._header_dict = header.to_dict()  # performs validation
+        self._determine_collapser_type(first_aln.query_name)
 
-        return line, lineno
-
-    def _parse_header_line(self, header_line: str) -> None:
-        """Parses and saves information from the provided header line"""
-
-        self.validate_header_line(header_line)
-        self._header_lines.append(header_line)
-
-        # Header dict
-        rec_type = header_line[:3]
-        fields = header_line[3:].strip().split('\t')
-
-        if rec_type == "@CO":
-            self._header_dict[rec_type].append(fields[0])
-        else:
-            self._header_dict[rec_type].append(
-                {field[:2]: field[3:].strip() for field in fields}
-            )
-
-    def validate_header_line(self, line):
-        if not re.match(_re_header, line):
-            msg = "Invalid SAM header"
-            msg += f" in {os.path.basename(self.file)}" if self.file else ""
-            msg += ':\n\t' + f'"{line}"'
-            raise ValueError(msg)
+        if self.decollapse:
+            self._write_header_for_decollapsed_sam(str(header))
 
     def _determine_collapser_type(self, first_aln_line: str) -> None:
         """Attempts to determine the collapsing utility that was used before producing the
@@ -169,7 +141,7 @@ class SAM_reader:
         elif re.match(_re_fastx, first_aln_line) is not None:
             self.collapser_type = "fastx"
 
-            sort_order = self._header_dict.get('@HD', [{}])[0].get('SO', None)
+            sort_order = self._header_dict.get('HD', {}).get('SO', None)
             if sort_order is None or sort_order != "queryname":
                 raise ValueError("SAM files from fastx collapsed outputs must be sorted by queryname\n"
                                  "(and the @HD [...] SO header must be set accordingly).")
@@ -189,12 +161,12 @@ class SAM_reader:
             self._decollapsed_filename = make_filename([basename, "decollapsed"], ext='.sam')
         return self._decollapsed_filename
 
-    def _write_header_for_decollapsed_sam(self) -> None:
-        """Writes the input file's header lines to the decollapsed output file"""
+    def _write_header_for_decollapsed_sam(self, header_str) -> None:
+        """Writes the provided header to the decollapsed output file"""
 
         assert self.collapser_type is not None
         with open(self._get_decollapsed_filename(), 'w') as f:
-            f.writelines(self._header_lines)
+            f.write(header_str)
 
     def _write_decollapsed_sam(self) -> None:
         """Expands the collapsed alignments in the _decollapsed_reads buffer
@@ -202,12 +174,13 @@ class SAM_reader:
 
         assert self.collapser_type is not None
         aln_out, prev_name, seq_count = [], None, 0
-        for name, line in self._decollapsed_reads:
+        for aln in self._decollapsed_reads:
             # Parse count just once per multi-alignment
+            name = aln.query_name
             if name != prev_name:
                 seq_count = int(name.split(self.collapser_token)[-1])
 
-            aln_out.extend([line] * seq_count)
+            aln_out.extend([aln.to_string()] * seq_count)
             prev_name = name
 
         with open(self._get_decollapsed_filename(), 'ab') as sam_o:
@@ -220,9 +193,9 @@ class SAM_reader:
 
         if self._collapser_token is None:
             self._collapser_token = {
-                "tiny-collapse": b"=",
-                "fastx": b"_x",
-                "BioSeqZip": b":"
+                "tiny-collapse": "=",
+                "fastx": "_x",
+                "BioSeqZip": ":"
             }[self.collapser_type]
 
         return self._collapser_token
