@@ -73,22 +73,26 @@ class SAM_reader:
         """Yields alignment dictionaries containing relevant info from each pysam.AlignedSegment"""
 
         self._gather_metadata(reader)
+        decollapse, has_nm = self.decollapse, self.has_nm
         first_line = len(str(self._header).splitlines()) + 1
         complement = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G'}
+        aln: pysam.AlignedSegment
 
         for line_no, aln in enumerate(reader, start=first_line):
             try:
-                if self.decollapse:
+                if decollapse:
                     self._decollapsed_reads.append(aln)
                     if len(self._decollapsed_reads) > 100_000:
                         self._write_decollapsed_sam()
-                if aln.is_unmapped:
-                    continue
+
+                flag = aln.flag
+                if flag & 0x4:
+                    continue  # Unmapped
 
                 seq = aln.query_sequence
-                start = aln.pos
-                length = len(seq)
-                strand = aln.is_forward
+                start = aln.reference_start
+                length = aln.query_length
+                strand = not (flag & 16)  # Note: we assume sRNA sequencing data is NOT reversely stranded
 
                 if strand:
                     nt5 = seq[0]
@@ -98,17 +102,26 @@ class SAM_reader:
                     except KeyError:
                         nt5 = seq[-1]
 
-                # Note: we assume sRNA sequencing data is NOT reversely stranded
+                if has_nm:
+                    try:
+                        mismatches = aln.get_tag(b"NM")
+                    except KeyError:
+                        # If the first alignment had an NM tag, assume missing tag means NM:i:0
+                        mismatches = 0
+                else:
+                    # Calculate mismatches using the CIGAR string's I, D, and X operations
+                    mismatches = sum(length for op, length in aln.cigartuples if op in (1, 2, 8))
 
                 yield {
                     "Name": aln.query_name,
                     "Length": length,
                     "Seq": seq,
                     "nt5end": nt5,
-                    "Chrom": aln.reference_name,
+                    "Chrom": self.references[aln.reference_id],
                     "Start": start,
                     "End": start + length,
-                    "Strand": strand
+                    "Strand": strand,
+                    "Mismatches": mismatches
                 }
             except Exception as e:
                 # Append to error message while preserving exception provenance and traceback
@@ -127,6 +140,8 @@ class SAM_reader:
         self._header = header
         self._header_dict = header.to_dict()  # performs validation
         self._determine_collapser_type(first_aln.query_name)
+        self.has_nm = first_aln.has_tag("NM")
+        self.references = header.references
 
         if self.decollapse:
             self._write_header_for_decollapsed_sam(str(header))
