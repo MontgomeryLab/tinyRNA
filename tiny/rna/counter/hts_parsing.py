@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 from urllib.parse import unquote
 from inspect import stack
 
+from rna.counter.parsing.alignments import AlignmentIter
 from tiny.rna.counter.matching import Wildcard
 from tiny.rna.util import report_execution_time, make_filename, ReportFormatter, append_to_exception
 
@@ -32,19 +33,26 @@ class SAM_reader:
         self.decollapse = prefs.get("decollapse", False)
         self.out_prefix = prefs.get("out_prefix", None)
         self.collapser_type = None
+        self.references = []
+        self.has_nm = None
         self.file = None
+
         self._collapser_token = None
-        self._decollapsed_filename = None
-        self._decollapsed_reads = []
         self._header_dict = {}
         self._header = None
+
+        self._decollapsed_callback = self._write_decollapsed_sam if self.decollapse else None
+        self._decollapsed_filename = None
+        self._decollapsed_reads = []
 
     def bundle_multi_alignments(self, file: str) -> Iterator[Bundle]:
         """Bundles multi-alignments (determined by a shared QNAME) and reports the associated read's count"""
 
         self.file = file
         pysam_reader = pysam.AlignmentFile(file)
-        aln_iter = iter(self._parse_alignments(pysam_reader))
+        self._gather_metadata(pysam_reader)
+
+        aln_iter = AlignmentIter(pysam_reader, self.has_nm, self._decollapsed_callback, self._decollapsed_reads)
         bundle, read_count = self._new_bundle(next(aln_iter))
 
         for aln in aln_iter:
@@ -68,66 +76,6 @@ class SAM_reader:
             count = 1
 
         return [aln], count
-
-    def _parse_alignments(self, reader: pysam.AlignmentFile) -> Iterator[AlignmentDict]:
-        """Yields alignment dictionaries containing relevant info from each pysam.AlignedSegment"""
-
-        self._gather_metadata(reader)
-        decollapse, has_nm = self.decollapse, self.has_nm
-        first_line = len(str(self._header).splitlines()) + 1
-        complement = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G'}
-        aln: pysam.AlignedSegment
-
-        for line_no, aln in enumerate(reader, start=first_line):
-            try:
-                if decollapse:
-                    self._decollapsed_reads.append(aln)
-                    if len(self._decollapsed_reads) > 100_000:
-                        self._write_decollapsed_sam()
-
-                flag = aln.flag
-                if flag & 0x4:
-                    continue  # Unmapped
-
-                seq = aln.query_sequence
-                start = aln.reference_start
-                length = aln.query_length
-                strand = not (flag & 16)  # Note: we assume sRNA sequencing data is NOT reversely stranded
-
-                if strand:
-                    nt5 = seq[0]
-                else:
-                    try:
-                        nt5 = complement[seq[-1]]
-                    except KeyError:
-                        nt5 = seq[-1]
-
-                if has_nm:
-                    try:
-                        mismatches = aln.get_tag(b"NM")
-                    except KeyError:
-                        # If the first alignment had an NM tag, assume missing tag means NM:i:0
-                        mismatches = 0
-                else:
-                    # Calculate mismatches using the CIGAR string's I, D, and X operations
-                    mismatches = sum(length for op, length in aln.cigartuples if op in (1, 2, 8))
-
-                yield {
-                    "Name": aln.query_name,
-                    "Length": length,
-                    "Seq": seq,
-                    "nt5end": nt5,
-                    "Chrom": self.references[aln.reference_id],
-                    "Start": start,
-                    "End": start + length,
-                    "Strand": strand,
-                    "Mismatches": mismatches
-                }
-            except Exception as e:
-                # Append to error message while preserving exception provenance and traceback
-                msg = f"Error occurred on line {line_no} of {self.file}"
-                append_to_exception(e, msg)
-                raise
 
     def _gather_metadata(self, reader: pysam.AlignmentFile) -> None:
         """Saves header information, determines which collapser utility (if any)
