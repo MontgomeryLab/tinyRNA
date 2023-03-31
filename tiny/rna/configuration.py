@@ -771,6 +771,7 @@ class CSVReader(csv.DictReader):
            "5' End Nucleotide": "nt5end",
            "Length":            "Length",
            "Overlap":           "Overlap",
+           "Mismatches":        "Mismatch"
         }),
         "Samples Sheet": OrderedDict({
             "FASTQ/SAM Files":   "File",
@@ -858,6 +859,10 @@ class CSVReader(csv.DictReader):
             self.fieldnames = tuple(doc_ref_lowercase[key] for key in header_lowercase.values())
 
     def check_backward_compatibility(self, header_vals):
+        """Catch column differences from old versions so a helpful error can be provided"""
+
+        assert all(val.isupper() for val in header_vals), "Lowercase headers expected."
+
         compat_errors = []
         if self.doctype == "Features Sheet":
             if len(header_vals & {'alias by...', 'feature source'}):
@@ -886,6 +891,14 @@ class CSVReader(csv.DictReader):
                     "class is no longer determined by the Class= attribute. Please review the Stage 1",
                     'section in tiny-count\'s documentation, then rename the "Tag" column to',
                     '"Classify as..." to avoid this error.'
+                ]))
+
+            if 'mismatches' not in header_vals:
+                compat_errors.append('\n'.join([
+                    "It looks like you're using a Features Sheet from an earlier version of",
+                    'tinyRNA. An additional column, "Mismatches", is now expected. Please review'
+                    "the Stage 2 section in tiny-count's documentation for more info, then add"
+                    "the new column to your Features Sheet to avoid this error."
                 ]))
 
         if compat_errors: raise ValueError('\n\n'.join(compat_errors))

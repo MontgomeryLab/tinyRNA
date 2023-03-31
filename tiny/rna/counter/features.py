@@ -136,8 +136,8 @@ class FeatureSelector:
         # Stage 2
         hits = [(rank, rule, feat, strand)
                 for feat, strand, matches in candidates
-                for rule, rank, iv_match in matches
-                if alignment in iv_match]
+                for rule, rank, iv_match, nm_match in matches
+                if alignment in iv_match and alignment['NM'] in nm_match]
 
         if not hits: return {}
         hits.sort(key=lambda x: x[0])
@@ -178,6 +178,7 @@ class FeatureSelector:
             "Strand": StrandMatch,
             "nt5end": NtMatch,
             "Length": NumericalMatch,
+            "Mismatch": NumericalMatch,
             "Identity": lambda x:x
         }
 
@@ -261,7 +262,7 @@ class FeatureSelector:
                     continue
 
             # Replace the match tuple's definition with selector
-            built_match_tuple = (match[0], match[1], selector_obj)
+            built_match_tuple = (match[0], match[1], selector_obj, match[3])
             matches_by_interval[match_iv].append(built_match_tuple)
 
         return matches_by_interval

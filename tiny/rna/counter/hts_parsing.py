@@ -561,10 +561,10 @@ class ReferenceFeatures(ReferenceBase):
                     if self.column_filter_match(row, rule):
                         # Unclassified matches are pooled under '' empty string
                         identity_matches[rule['Class']].add(
-                            (index, rule['Hierarchy'], rule['Overlap'])
+                            (index, rule['Hierarchy'], rule['Overlap'], rule['Mismatch'])
                         )
 
-        # -> identity_matches: {classifier: {(rule, rank, overlap), ...}, ...}
+        # -> identity_matches: {classifier: {(rule, rank, overlap, mismatch), ...}, ...}
         return identity_matches
 
     def add_feature(self, feature_id: str, row, matches: defaultdict) -> str:
