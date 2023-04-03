@@ -85,6 +85,9 @@ class SAM_reader:
         header = reader.header
         first_aln = next(reader.head(1))
 
+        if first_aln.query_sequence is None:
+            raise ValueError("SAM alignments must include the read sequence.")
+
         self._header = header
         self._header_dict = header.to_dict()  # performs validation
         self._determine_collapser_type(first_aln.query_name)
@@ -459,9 +462,9 @@ class ReferenceFeatures(ReferenceBase):
     Children of the root ancestor are otherwise not stored in the reference tables.
 
     Match-tuples are created for each Features Sheet rule which matches a feature's attributes.
-    They are structured as (rank, rule, overlap). "Rank" is the hierarchy value of the matching
-    rule, "rule" is the index of that rule in FeatureSelector's rules table, and "overlap" is the
-    IntervalSelector per the rule's overlap requirements.
+    They are structured as (rank, rule, overlap, mismatches). "Rank" is the hierarchy value of
+    the matching rule, "rule" is the index of that rule in FeatureSelector's rules table, and
+    "overlap" is the IntervalSelector per the rule's overlap requirements.
 
     Source and type filters allow the user to define acceptable values for columns 2 and 3 of the
     GFF, respectively. These filters are inclusive (only rows with matching values are parsed),
