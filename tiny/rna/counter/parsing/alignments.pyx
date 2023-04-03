@@ -6,6 +6,8 @@ from pysam.libcalignmentfile cimport AlignmentFile, AlignedSegment
 from pysam.libcalignedsegment cimport pysam_bam_get_qname
 from pysam.libchtslib cimport bam_aux_get, bam_aux2i, BAM_FUNMAP, BAM_FREVERSE
 
+from typing import Callable
+
 cdef tuple cigar_mismatch = (1, 2, 8)
 
 cdef class AlignmentIter:
@@ -17,7 +19,7 @@ cdef class AlignmentIter:
     cdef bint decollapse
     cdef bint has_nm
 
-    def __init__(self, pysam_reader, has_nm, dc_callback, dc_queue):
+    def __init__(self, pysam_reader: AlignmentFile, has_nm: bool, dc_callback: Callable, dc_queue: list):
         self.reader = pysam_reader
         self.references = pysam_reader.header.references
         self.decollapse = dc_callback is not None

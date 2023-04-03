@@ -1,1 +1,1 @@
-from .sam_reader import AlignmentIter
+from .alignments import AlignmentIter
