@@ -87,38 +87,60 @@ class SamReaderTests(unittest.TestCase):
 
         self.assertEqual(sam_out, "sam_file_decollapsed.sam")
 
-    """Does SAM_reader._read_to_first_aln() correctly identify header lines and write them to the decollapsed file?"""
+    """Does SAM_reader._new_bundle report the correct read count for different collapser types?"""
 
-    def test_SAM_reader_read_thru_header(self):
+    def test_SAM_reader_new_bundle(self):
+        qnames = ["0_count=3", "seq0_x5", "non-collapsed"]
+        counts = [3, 5, 1]
+
+        reader = SAM_reader()
+        reader._header_dict = {'HD': {'SO': 'queryname'}}
+
+        for qname, expected in zip(qnames, counts):
+            reader._determine_collapser_type(qname)
+            _, read_count = reader._new_bundle({'Name': qname})
+            self.assertEqual(read_count, expected)
+
+    """Does SAM_reader._gather_metadata() correctly identify metadata and write the decollapsed file header?"""
+
+    def test_SAM_reader_gather_metadata(self):
         reader = SAM_reader(decollapse=True)
         reader._decollapsed_filename = "mock_outfile_name.sam"
 
-        with open(self.short_sam_file, 'rb') as sam_in:
-            with patch('builtins.open', mock_open()) as sam_out:
-                line = reader._read_to_first_aln(sam_in)
+        sam_in = pysam.AlignmentFile(self.short_sam_file)
+        with patch('builtins.open', mock_open()) as sam_out:
+            reader._gather_metadata(sam_in)
 
         expected_writelines = [
             call('mock_outfile_name.sam', 'w'),
             call().__enter__(),
-            call().writelines(["@SQ	SN:I	LN:21\n"]),
+            call().write("@SQ\tSN:I\tLN:21\n"),
             call().__exit__(None, None, None)
         ]
 
         sam_out.assert_has_calls(expected_writelines)
-        self.assertTrue(len(reader._header_lines) == 1)
+        self.assertEqual(reader.collapser_type, 'tiny-collapse')
+        self.assertDictEqual(reader._header_dict, {'SQ': [{'SN': "I", 'LN': 21}]})
+        self.assertEqual(reader.references, ('I',))
+        self.assertTrue(reader.has_nm)
 
     """Does SAM_reader._write_decollapsed_sam() write the correct number of duplicates to the decollapsed file?"""
 
     def test_SAM_reader_write_decollapsed_sam(self):
+        header = pysam.AlignmentHeader()
+        alignment = pysam.AlignedSegment(header)
+        alignment.query_name = "0_count=5"
+
         reader = SAM_reader(decollapse=True)
         reader.collapser_type = "tiny-collapse"
-        reader._decollapsed_reads = [(b"0_count=5", b"mock line from SAM file")]
+        reader._collapser_token = "="
+        reader._decollapsed_reads = [alignment]
         reader._decollapsed_filename = "mock_outfile_name.sam"
 
         expected_writelines = [
             call('mock_outfile_name.sam', 'ab'),
             call().__enter__(),
-            call().writelines([b"mock line from SAM file"] * 5),
+            call().writelines([alignment.to_string()] * 5),
             call().__exit__(None, None, None)
         ]
 
@@ -131,37 +153,28 @@ class SamReaderTests(unittest.TestCase):
     """Does SAM_reader._parse_alignments() save lines and write them to the decollapsed file when appropriate?"""
 
     def test_SAM_reader_parse_alignments_decollapse(self):
-        with patch.object(SAM_reader, "_write_decollapsed_sam") as write_fn, \
-                patch('tiny.rna.counter.hts_parsing.open', new_callable=mock_open) as mopen:
+        with patch.object(SAM_reader, "_write_decollapsed_sam") as write_fn:
+            # Set up SAM_reader class
             reader = SAM_reader(decollapse=True)
-            reader._decollapsed_reads = [0] * 99999  # At 100,001, buffer will be written
-            reader.file = self.short_sam_file  # File with single alignment
+            reader.collapser_type = "tiny-collapse"
+            reader._decollapsed_reads = buffer = [0] * 99999  # At 100,001, expect buffer to be written
+            reader.file = self.short_sam_file                 # File with single alignment
 
-            with open(self.short_sam_file, 'rb') as sam_in:
-                self.exhaust_iterator(reader._parse_alignments(sam_in))
-                write_fn.assert_not_called()
+            # Set up AlignmentIter class
+            sam_in = pysam.AlignmentFile(reader.file)
+            callback = reader._write_decollapsed_sam
+            first_aln_offset = sam_in.tell()
+            has_nm = True
+            aln_iter = AlignmentIter(sam_in, has_nm, callback, buffer)
 
-                # Rewind and add one more alignment to push it over threshold
-                sam_in.seek(0)
-                self.exhaust_iterator(reader._parse_alignments(sam_in))
-                write_fn.assert_called_once()
+            # Add 100,000th alignment to the buffer
+            self.exhaust_iterator(aln_iter)
+            write_fn.assert_not_called()
 
-    """Does SAM_reader report a single read count for non-collapsed SAM records?"""
-
-    def test_SAM_reader_single_readcount_non_collapsed_SAM(self):
-        # Read non-collapsed.sam but duplicate its single record twice
-        with open(f"{resources}/non-collapsed.sam", 'rb') as f:
-            sam_lines = f.readlines()
-            sam_lines.extend([sam_lines[1]] * 2)
-            mock_file = mock_open(read_data=b''.join(sam_lines))
-
-        with patch('tiny.rna.counter.hts_parsing.open', new=mock_file):
-            reader = SAM_reader()
-            bundle, read_count = next(reader.bundle_multi_alignments('mock_file'))
-
-        self.assertEqual(bundle[0]['Name'], b'NON_COLLAPSED_QNAME')
-        self.assertEqual(len(bundle), 3)
-        self.assertEqual(read_count, 1)
+            # Rewind and add one more alignment to push it over threshold
+            sam_in.seek(first_aln_offset)
+            self.exhaust_iterator(aln_iter)
+            write_fn.assert_called_once()
 
     """Are decollapsed outputs skipped when non-collapsed SAM files are supplied?"""
 
