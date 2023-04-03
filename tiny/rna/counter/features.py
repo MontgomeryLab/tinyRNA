@@ -2,17 +2,19 @@ import HTSeq
 import sys
 
 from collections import defaultdict
-from typing import List, Tuple, Set, Dict, Mapping
+from typing import List, Tuple, Set, Dict, Mapping, Union
 
-from tiny.rna.counter.hts_parsing import SAM_reader, ReferenceFeatures, ReferenceSeqs
+from tiny.rna.counter.hts_parsing import ReferenceFeatures, ReferenceSeqs, SAM_reader
 from .statistics import LibraryStats
 from .matching import *
 from ..util import append_to_exception
 
 # Type aliases for human readability
-match_tuple = Tuple[int, int, IntervalSelector]             # (rank, rule, IntervalSelector)
-unbuilt_match_tuple = Tuple[int, int, str]                  # (rank, rule, interval selector keyword)
-feature_record_tuple = Tuple[str, str, Tuple[match_tuple]]  # (feature ID, strand, match tuple)
+interval_selector = Union[IntervalSelector, Wildcard]
+mismatch_selector = Union[NumericalMatch, Wildcard]
+match_tuple = Tuple[int, int, interval_selector, mismatch_selector]  # (rank, rule, IntervalSelector, NumericalMatch)
+unbuilt_match_tuple = Tuple[int, int, str, mismatch_selector]        # (rank, rule, overlap, NumericalMatch)
+feature_record_tuple = Tuple[str, str, Tuple[match_tuple]]           # (feature ID, strand, match tuple)
 
 
 class Features(metaclass=Singleton):
@@ -89,14 +91,12 @@ class FeatureSelector:
 
     The first round of selection was performed during GFF parsing.
 
-    The second round is performed against the hierarchy values and
-    IntervalSelectors in each candidate's match-tuples.
+    The second round is performed against the overlap and mismatch selectors
+    which are stored in each candidate's match tuples. These matches are then
+    sorted by hierarchy value.
 
     If more than one candidate remains, a final round of selection is performed
-    against sequence attributes: strand, 5' end nucleotide, and length. Rules for
-    5' end nucleotides support lists (e.g. C,G,U) and wildcards (e.g. "all").
-    Rules for length support lists, wildcards, and ranges (e.g. 20-27) which
-    may be intermixed in the same rule.
+    against sequence attributes: strand, 5' end nucleotide, and length.
     """
 
     rules_table: List[dict]
@@ -122,7 +122,7 @@ class FeatureSelector:
                 ( featureID, strand, ( match_tuple, ... ) )
 
             Each match_tuple represents a rule which matched the feature on identity:
-                ( rule, rank, IntervalSelector )
+                ( rule, rank, IntervalSelector, NumericalSelector )
 
         Args:
             candidates: a list of tuples, each representing features associated with
