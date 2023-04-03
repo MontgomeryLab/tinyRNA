@@ -342,8 +342,5 @@ class SamSqValidator:
 
     def read_sq_headers(self):
         for file in self.sam_files:
-            sr = SAM_reader()
-            pr = pysam.AlignmentFile(file, check_sq=True)
-            sr._gather_metadata(pr)
-
-            self.sq_headers[file] = sr._header_dict.get('SQ', [])
+            pr = pysam.AlignmentFile(file, check_sq=False)
+            self.sq_headers[file] = pr.header.to_dict().get('SQ', [])
