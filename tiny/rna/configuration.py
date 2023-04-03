@@ -861,11 +861,11 @@ class CSVReader(csv.DictReader):
     def check_backward_compatibility(self, header_vals):
         """Catch column differences from old versions so a helpful error can be provided"""
 
-        assert all(val.isupper() for val in header_vals), "Lowercase headers expected."
+        header_vals_lc = {val.lower() for val in header_vals}
 
         compat_errors = []
         if self.doctype == "Features Sheet":
-            if len(header_vals & {'alias by...', 'feature source'}):
+            if len(header_vals_lc & {'alias by...', 'feature source'}):
                 compat_errors.append('\n'.join([
                     "It looks like you're using a Features Sheet from an earlier version of",
                     "tinyRNA. Feature aliases and GFF files are now defined in the Paths File.",
@@ -874,7 +874,7 @@ class CSVReader(csv.DictReader):
                     "your Features Sheet to avoid this error."
                 ]))
 
-            if len(header_vals & {'source filter', 'type filter'}) != 2:
+            if len(header_vals_lc & {'source filter', 'type filter'}) != 2:
                 compat_errors.append('\n'.join([
                     "It looks like you're using a Features Sheet from an earlier version of",
                     "tinyRNA. Source and type filters are now defined in the Features Sheet.",
@@ -883,7 +883,7 @@ class CSVReader(csv.DictReader):
                     '"Source Filter" and "Type Filter" to your Features Sheet to avoid this error.'
                 ]))
 
-            if 'tag' in header_vals:
+            if 'tag' in header_vals_lc:
                 compat_errors.append('\n'.join([
                     "It looks like you're using a Features Sheet from a version of tinyRNA",
                     'that offered "tagged counting". The "Tag" header has been repurposed as a feature',
@@ -893,7 +893,7 @@ class CSVReader(csv.DictReader):
                     '"Classify as..." to avoid this error.'
                 ]))
 
-            if 'mismatches' not in header_vals:
+            if 'mismatches' not in header_vals_lc:
                 compat_errors.append('\n'.join([
                     "It looks like you're using a Features Sheet from an earlier version of",
                     'tinyRNA. An additional column, "Mismatches", is now expected. Please review'
