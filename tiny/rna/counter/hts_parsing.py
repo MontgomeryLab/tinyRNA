@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 from urllib.parse import unquote
 from inspect import stack
 
-from rna.counter.parsing.alignments import AlignmentIter
+from tiny.rna.counter.parsing import AlignmentIter
 from tiny.rna.counter.matching import Wildcard
 from tiny.rna.util import report_execution_time, make_filename, ReportFormatter, append_to_exception
 
@@ -20,7 +20,7 @@ _re_attr_main = re.compile(r"\s*([^\s=]+)[\s=]+(.*)")
 _re_attr_empty = re.compile(r"^\s*$")
 
 # For SAM_reader
-AlignmentDict = Dict[str, Union[str, int, bytes]]
+AlignmentDict = Dict[str, Union[str, int]]
 Bundle = Tuple[List[AlignmentDict], int]
 _re_tiny = r"\d+_count=\d+"
 _re_fastx = r"seq\d+_x(\d+)"
@@ -40,6 +40,7 @@ class SAM_reader:
         self._collapser_token = None
         self._header_dict = {}
         self._header = None
+        self._iter = None
 
         self._decollapsed_callback = self._write_decollapsed_sam if self.decollapse else None
         self._decollapsed_filename = None
@@ -48,14 +49,14 @@ class SAM_reader:
     def bundle_multi_alignments(self, file: str) -> Iterator[Bundle]:
         """Bundles multi-alignments (determined by a shared QNAME) and reports the associated read's count"""
 
-        self.file = file
         pysam_reader = pysam.AlignmentFile(file)
+        self.file = file
+
         self._gather_metadata(pysam_reader)
+        self._iter = AlignmentIter(pysam_reader, self.has_nm, self._decollapsed_callback, self._decollapsed_reads)
+        bundle, read_count = self._new_bundle(next(self._iter))
 
-        aln_iter = AlignmentIter(pysam_reader, self.has_nm, self._decollapsed_callback, self._decollapsed_reads)
-        bundle, read_count = self._new_bundle(next(aln_iter))
-
-        for aln in aln_iter:
+        for aln in self._iter:
             if aln['Name'] != bundle[0]['Name']:
                 yield bundle, read_count
                 bundle, read_count = self._new_bundle(aln)
@@ -70,17 +71,16 @@ class SAM_reader:
         """Wraps the provided alignment in a list and reports the read's count"""
 
         if self.collapser_type is not None:
-            token = self.collapser_token
-            count = int(aln['Name'].split(token)[-1])
+            token = self._collapser_token
+            count = int(aln['Name'].rsplit(token, 1)[1])
         else:
             count = 1
 
         return [aln], count
 
     def _gather_metadata(self, reader: pysam.AlignmentFile) -> None:
-        """Saves header information, determines which collapser utility (if any)
-        was used before alignment, and copies the input file's header to the
-        decollapsed output file if necessary."""
+        """Saves header information, examines the first alignment to determine which collapser utility was used (if any), and whether the alignment has a query sequence and NM tag.
+        The input file's header is written to the decollapsed output file if necessary."""
 
         header = reader.header
         first_aln = next(reader.head(1))
@@ -94,15 +94,17 @@ class SAM_reader:
         if self.decollapse:
             self._write_header_for_decollapsed_sam(str(header))
 
-    def _determine_collapser_type(self, first_aln_line: str) -> None:
+    def _determine_collapser_type(self, qname: str) -> None:
         """Attempts to determine the collapsing utility that was used before producing the
         input alignment file, then checks basic requirements for the utility's outputs."""
 
-        if re.match(_re_tiny, first_aln_line) is not None:
+        if re.match(_re_tiny, qname) is not None:
             self.collapser_type = "tiny-collapse"
+            self._collapser_token = "="
 
-        elif re.match(_re_fastx, first_aln_line) is not None:
+        elif re.match(_re_fastx, qname) is not None:
             self.collapser_type = "fastx"
+            self._collapser_token = "_x"
 
             sort_order = self._header_dict.get('HD', {}).get('SO', None)
             if sort_order is None or sort_order != "queryname":
@@ -141,7 +143,7 @@ class SAM_reader:
             # Parse count just once per multi-alignment
             name = aln.query_name
             if name != prev_name:
-                seq_count = int(name.split(self.collapser_token)[-1])
+                seq_count = int(name.rsplit(self._collapser_token, 1)[1])
 
             aln_out.extend([aln.to_string()] * seq_count)
             prev_name = name
@@ -149,19 +151,6 @@ class SAM_reader:
         with open(self._get_decollapsed_filename(), 'ab') as sam_o:
             sam_o.writelines(aln_out)
             self._decollapsed_reads.clear()
-
-    @property
-    def collapser_token(self) -> bytes:
-        """Returns the split token to be used for determining read count from the QNAME field"""
-
-        if self._collapser_token is None:
-            self._collapser_token = {
-                "tiny-collapse": "=",
-                "fastx": "_x",
-                "BioSeqZip": ":"
-            }[self.collapser_type]
-
-        return self._collapser_token
 
 
 def infer_strandedness(sam_file: str, intervals: dict) -> str:
