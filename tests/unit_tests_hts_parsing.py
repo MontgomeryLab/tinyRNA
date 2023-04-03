@@ -45,8 +45,8 @@ class SamReaderTests(unittest.TestCase):
         self.assertEqual(sam_record['Start'], 15064569)
         self.assertEqual(sam_record['End'], 15064590)
         self.assertEqual(sam_record['Strand'], False)
-        self.assertEqual(sam_record['Name'], b"0_count=5")
-        self.assertEqual(sam_record['Seq'], b"CAAGACAGAGCTTCACCGTTC")
+        self.assertEqual(sam_record['Name'], "0_count=5")
+        self.assertEqual(sam_record['Seq'], "CAAGACAGAGCTTCACCGTTC")
         self.assertEqual(sam_record['Length'], 21)
         self.assertEqual(sam_record['nt5end'], 'G')
 
@@ -69,13 +69,13 @@ class SamReaderTests(unittest.TestCase):
                 self.assertEqual(our['Chrom'], their.iv.chrom)
                 self.assertEqual(our['Start'], their.iv.start)
                 self.assertEqual(our['End'], their.iv.end)
-                self.assertEqual(our['Name'].decode(), their.read.name)
+                self.assertEqual(our['Name'], their.read.name)
                 self.assertEqual(our['nt5end'], chr(their.read.seq[0]))  # See note above
                 self.assertEqual(our['Strand'], helpers.strand_to_bool(their.iv.strand))
                 if our['Strand'] is False:  # See note above
-                    self.assertEqual(our['Seq'][::-1].translate(helpers.complement), their.read.seq)
+                    self.assertEqual(our['Seq'][::-1].translate(helpers.complement), their.read.seq.decode())
                 else:
-                    self.assertEqual(our['Seq'], their.read.seq)
+                    self.assertEqual(our['Seq'], their.read.seq.decode())
 
     """Does SAM_reader._get_decollapsed_filename() create an appropriate filename?"""
 
