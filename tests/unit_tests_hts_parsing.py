@@ -15,6 +15,7 @@ from tiny.rna.counter.hts_parsing import *
 import unit_test_helpers as helpers
 
 resources = "./testdata/counter"
+wc = Wildcard()  # used in many tests as a 'n/a' value
 
 # To run all test suites
 if __name__ == '__main__':
@@ -256,7 +257,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
         steps = list(feats[iv].array[iv.start:iv.end].get_steps(values_only=True))
 
         self.assertEqual((type(feats), type(alias), type(tags)), (HTSeq.GenomicArrayOfSets, dict, defaultdict))
-        self.assertEqual(steps, [{(("Gene:WBGene00023193", 'tag'), False, ((1, 2, IntervalPartialMatch(iv)),))}])
+        self.assertEqual(steps, [{(("Gene:WBGene00023193", 'tag'), False, ((1, 2, IntervalPartialMatch(iv), wc),))}])
         self.assertEqual(alias, {"Gene:WBGene00023193": ('Y74C9A.6',)})
         self.assertDictEqual(tags, {"Gene:WBGene00023193": {('Gene:WBGene00023193', 'tag')}})
 
@@ -280,7 +281,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
         steps = list(feats[iv].array[iv.start:iv.end].get_steps(values_only=True))
 
         self.assertEqual((type(feats), type(alias), type(tags)), (HTSeq.GenomicArrayOfSets, dict, defaultdict))
-        self.assertEqual(steps, [{(("Gene:WBGene00023193", 'tag'), False, ((1, 2, IntervalPartialMatch(iv)),))}])
+        self.assertEqual(steps, [{(("Gene:WBGene00023193", 'tag'), False, ((1, 2, IntervalPartialMatch(iv), wc),))}])
         self.assertDictEqual(alias, {"Gene:WBGene00023193": ('Y74C9A.6',)})
         self.assertDictEqual(tags, {"Gene:WBGene00023193": {('Gene:WBGene00023193', 'tag')}})
 
@@ -365,7 +366,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
 
         expected_matches = [
             set(),
-            {(('Gene:WBGene00023193', ''), False, ((0, 1, ivm), (1, 2, ivm), (2, 3, ivm)))},
+            {(('Gene:WBGene00023193', ''), False, ((0, 1, ivm, wc), (1, 2, ivm, wc), (2, 3, ivm, wc)))},
             set()
         ]
 
@@ -466,10 +467,10 @@ class ReferenceFeaturesTests(unittest.TestCase):
         sib_ivs = [HTSeq.GenomicInterval('I', 99, 110, '-'), HTSeq.GenomicInterval('I', 110, 120, '-'),
                    HTSeq.GenomicInterval('I', 139, 150, '-')]
 
-        rule1_gp =  {f"{iv.start}:{iv.end}": ((0, 2, IntervalPartialMatch(iv)),) for iv in gp_ivs}
-        rule1_p2 =  {f"{iv.start}:{iv.end}": ((0, 2, IntervalPartialMatch(iv)),) for iv in p2_ivs}
-        rule2_sib = {f"{iv.start}:{iv.end}": (1, 3, IntervalPartialMatch(iv))    for iv in sib_ivs}
-        rule3_sib = {f"{iv.start}:{iv.end}": (2, 0, IntervalPartialMatch(iv))    for iv in sib_ivs}
+        rule1_gp =  {f"{iv.start}:{iv.end}": ((0, 2, IntervalPartialMatch(iv), wc),) for iv in gp_ivs}
+        rule1_p2 =  {f"{iv.start}:{iv.end}": ((0, 2, IntervalPartialMatch(iv), wc),) for iv in p2_ivs}
+        rule2_sib = {f"{iv.start}:{iv.end}": (1, 3, IntervalPartialMatch(iv), wc)    for iv in sib_ivs}
+        rule3_sib = {f"{iv.start}:{iv.end}": (2, 0, IntervalPartialMatch(iv), wc)    for iv in sib_ivs}
 
         # For tables that store features in tagged form
         GrandParent, Parent2, Sibling = ('GrandParent',''), ('Parent2',''), ('Sibling','')
@@ -502,7 +503,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
 
         child2_iv =     HTSeq.GenomicInterval('I', 39, 50, '-')
         exp_alias =     {'Child2': ('Child2Name',)}
-        exp_feats =     [set(), {(('Child2', ''), False, ((0, 0, IntervalPartialMatch(child2_iv)),))}, set()]
+        exp_feats =     [set(), {(('Child2', ''), False, ((0, 0, IntervalPartialMatch(child2_iv), wc),))}, set()]
         exp_intervals = {'Child2': [child2_iv]}
         exp_classes =   {'Child2': ('NA',)}
         exp_filtered =  {"GrandParent", "ParentWithGrandparent", "Parent2", "Child1", "Sibling"}
@@ -527,7 +528,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
 
         child1_iv =     HTSeq.GenomicInterval('I', 29, 40, '-')
         exp_alias =     {'Child1': ('SharedName',)}
-        exp_feats =     [set(), {(('Child1', ''), False, ((0, 0, IntervalPartialMatch(child1_iv)),))}, set()]
+        exp_feats =     [set(), {(('Child1', ''), False, ((0, 0, IntervalPartialMatch(child1_iv), wc),))}, set()]
         exp_intervals = {'Child1': [child1_iv]}
         exp_classes =   {'Child1': ('NA',)}
         exp_filtered =  {"GrandParent", "ParentWithGrandparent", "Parent2", "Child2", "Sibling"}
@@ -574,8 +575,8 @@ class ReferenceFeaturesTests(unittest.TestCase):
         iv = IntervalPartialMatch(HTSeq.GenomicInterval('n/a', 3746, 3909))
         expected_feats = [
             set(), {
-                ((feat_id, 'tagged_match'), False, ((0, 1, iv),)),
-                ((feat_id, ''),             False, ((1, 2, iv),))
+                ((feat_id, 'tagged_match'), False, ((0, 1, iv, wc),)),
+                ((feat_id, ''),             False, ((1, 2, iv, wc),))
             },
             set()
         ]
@@ -606,12 +607,12 @@ class ReferenceFeaturesTests(unittest.TestCase):
         Child2_iv = IntervalPartialMatch(HTSeq.GenomicInterval('n/a', 39, 50))
         expected_feats = [
             set(), {
-                (('Parent2', 'shared'), False, ((0, 1, Parent2_iv), (1, 2, Parent2_iv))),
-                (('Parent2', ''),       False, ((2, 3, Parent2_iv),)),
+                (('Parent2', 'shared'), False, ((0, 1, Parent2_iv, wc), (1, 2, Parent2_iv, wc))),
+                (('Parent2', ''),       False, ((2, 3, Parent2_iv, wc),)),
             },
             set(), {
-                (('Parent2', 'shared'), False, ((0, 1, Child2_iv), (1, 2, Child2_iv))),
-                (('Parent2', ''),       False, ((2, 3, Child2_iv),))
+                (('Parent2', 'shared'), False, ((0, 1, Child2_iv, wc), (1, 2, Child2_iv, wc))),
+                (('Parent2', ''),       False, ((2, 3, Child2_iv, wc),))
             },
             set()
         ]
@@ -651,7 +652,7 @@ class ReferenceSequencesTests(unittest.TestCase):
     def test_add_reference_seq_single(self):
         seq_id = "seq"
         seq_len = 10
-        matches = {'': [(0, 0, "partial")]}
+        matches = {'': [(0, 0, "partial", wc)]}
 
         rs = self.ReferenceSeqs_add(seq_id, seq_len, matches)
         actual = self.get_steps(rs, seq_id)
@@ -660,7 +661,7 @@ class ReferenceSequencesTests(unittest.TestCase):
         # and the overlap selector should have the same interval.
         # For these selectors, same interval on both strands.
         iv = HTSeq.GenomicInterval(seq_id, 0, seq_len)
-        match_tuple = ((0, 0, IntervalPartialMatch(iv)),)
+        match_tuple = ((0, 0, IntervalPartialMatch(iv), wc),)
 
         expected = {
             (0, 10): {
@@ -677,7 +678,7 @@ class ReferenceSequencesTests(unittest.TestCase):
     def test_add_reference_seq_shared_classifier(self):
         seq_id = "seq"
         seq_len = 10
-        matches = {'shared': [(0, 0, "partial"), (1, 1, "nested")]}
+        matches = {'shared': [(0, 0, "partial", wc), (1, 1, "nested", wc)]}
 
         rs = self.ReferenceSeqs_add(seq_id, seq_len, matches)
         actual = self.get_steps(rs, seq_id)
@@ -686,7 +687,7 @@ class ReferenceSequencesTests(unittest.TestCase):
         # and the overlap selector should have the same interval.
         # For these selectors, same interval on both strands.
         iv = HTSeq.GenomicInterval(seq_id, 0, seq_len)
-        match_tuples = (0, 0, IntervalPartialMatch(iv)), (1, 1, IntervalNestedMatch(iv))
+        match_tuples = (0, 0, IntervalPartialMatch(iv), wc), (1, 1, IntervalNestedMatch(iv), wc)
 
         expected = {
             (0, 10): {
@@ -704,7 +705,7 @@ class ReferenceSequencesTests(unittest.TestCase):
     def test_add_reference_seq_shared_iv(self):
         seq_id = "seq"
         seq_len = 10
-        matches = {'exact': [(0, 0, "exact, 2, -2")], 'nested': [(1, 1, "nested, 2, -2")]}
+        matches = {'exact': [(0, 0, "exact, 2, -2", wc)], 'nested': [(1, 1, "nested, 2, -2", wc)]}
 
         rs = self.ReferenceSeqs_add(seq_id, seq_len, matches)
         actual = self.get_steps(rs, seq_id)
@@ -713,8 +714,8 @@ class ReferenceSequencesTests(unittest.TestCase):
         # and the overlap selector should have the same interval.
         # For these selectors, same interval on both strands.
         iv = HTSeq.GenomicInterval(seq_id, 2, seq_len - 2)
-        match_exact =  ((0, 0, IntervalExactMatch(iv)),)
-        match_nested = ((1, 1, IntervalNestedMatch(iv)),)
+        match_exact =  ((0, 0, IntervalExactMatch(iv), wc),)
+        match_nested = ((1, 1, IntervalNestedMatch(iv), wc),)
 
         expected = {
             (0, 2): set(),
@@ -737,8 +738,8 @@ class ReferenceSequencesTests(unittest.TestCase):
         seq_id = "seq"
         seq_len = 10
         matches = {
-            "class1": [(0, 0, "nested, 1, -1"), (0, 0, "exact, 5, 0")],
-            "class2": [(0, 0, "5' anchored, 5, 0")]
+            "class1": [(0, 0, "nested, 1, -1", wc), (0, 0, "exact, 5, 0", wc)],
+            "class2": [(0, 0, "5' anchored, 5, 0", wc)]
         }
 
         rs = self.ReferenceSeqs_add(seq_id, seq_len, matches)
@@ -746,19 +747,19 @@ class ReferenceSequencesTests(unittest.TestCase):
 
         # Since nested shift is symmetric, iv is same on both strands
         iv_n = HTSeq.GenomicInterval(seq_id, 1, seq_len-1)
-        match_nested = ((0, 0, IntervalNestedMatch(iv_n)),)
+        match_nested = ((0, 0, IntervalNestedMatch(iv_n), wc),)
 
         # Since exact and anchored shift is asymmetric and by the same
         # amount, iv differs per strand but is shared by both selectors.
         # If they both had the same classifier then these match tuples
         # would share the same record tuple on both strands
         iv_e5_s = HTSeq.GenomicInterval(seq_id, 5, seq_len, '+')
-        match_exact_sense = ((0, 0, IntervalExactMatch(iv_e5_s)),)
-        match_5anch_sense = ((0, 0, Interval5pMatch(iv_e5_s)),)
+        match_exact_sense = ((0, 0, IntervalExactMatch(iv_e5_s), wc),)
+        match_5anch_sense = ((0, 0, Interval5pMatch(iv_e5_s), wc),)
 
         iv_e5_a = HTSeq.GenomicInterval(seq_id, 0, seq_len-5, '-')
-        match_exact_antis = ((0, 0, IntervalExactMatch(iv_e5_a)),)
-        match_5anch_antis = ((0, 0, Interval5pMatch(iv_e5_a)),)
+        match_exact_antis = ((0, 0, IntervalExactMatch(iv_e5_a), wc),)
+        match_5anch_antis = ((0, 0, Interval5pMatch(iv_e5_a), wc),)
 
         expected = {
             (0, 1): {
