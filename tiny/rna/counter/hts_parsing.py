@@ -151,8 +151,8 @@ class SAM_reader:
             aln_out.extend([aln.to_string()] * seq_count)
             prev_name = name
 
-        with open(self._get_decollapsed_filename(), 'ab') as sam_o:
-            sam_o.writelines(aln_out)
+        with open(self._get_decollapsed_filename(), 'a') as sam_o:
+            sam_o.write('\n'.join(aln_out))
             self._decollapsed_reads.clear()
 
 
@@ -773,7 +773,7 @@ class ReferenceSeqs(ReferenceBase):
         matches_by_classifier = defaultdict(list)
 
         for idx, rule in enumerate(self.selector.rules_table):
-            match_tuple = (idx, rule['Hierarchy'], rule['Overlap'])
+            match_tuple = (idx, rule['Hierarchy'], rule['Overlap'], rule['Mismatch'])
             matches_by_classifier[rule['Class']].append(match_tuple)
 
         return matches_by_classifier
