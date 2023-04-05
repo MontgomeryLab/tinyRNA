@@ -83,8 +83,7 @@ class LibraryStats:
                     self.rule_counts[rule] += rcorr_count
 
         if self.diags is not None:
-            self.diags.record_diagnostics(assignments.keys(), n_candidates, aln, bundle)
-            self.diags.record_alignment_details(aln, bundle, assignments.keys())
+            self.diags.record_assignments(assignments.keys(), aln, bundle, n_candidates)
 
     def finalize_bundle(self, bundle: dict) -> None:
         """Called at the conclusion of processing each multiple-alignment bundle"""
@@ -464,75 +463,90 @@ class SummaryStats(MergedStat):
 
 class Diagnostics:
 
-    aln_diag_categories = ['Eliminated counts', 'No feature counts',
-                           'Uncounted alignments (+)', 'Uncounted alignments (-)']
+    summary_categories = ['Eliminated counts', 'No feature counts',
+                          'Uncounted alignments (+)', 'Uncounted alignments (-)']
+
+    alignment_columns =  ["Sequence", "Normalized Count", "Chrom", "Strand",
+                          "Start", "End", "Candidates", "Assigned Features"]
 
     complement = bytes.maketrans(b'ACGTacgt', b'TGCAtgca')
+    map_strand = {True: '+', False: '-', None: '.'}
 
     def __init__(self, out_prefix: str):
         self.prefix = out_prefix
-        self.alignment_diags = {stat: 0 for stat in Diagnostics.aln_diag_categories}
+        self.assignment_diags = {stat: 0 for stat in Diagnostics.summary_categories}
         self.selection_diags = defaultdict(Counter)
         self.alignments = []
 
-    def record_alignment_details(self, aln, bundle, assignments):
+    def record_assignments(self, assignments, alignment, bundle, n_candidates):
+        self.record_alignment_details(assignments, alignment, bundle, n_candidates)
+        self.record_summary_diagnostics(assignments, alignment, bundle, n_candidates)
+
+    def record_alignment_details(self, assignments, aln, bundle, n_candidates):
         """Record detailed alignment info if user elects to save diagnostics info with the run
 
         This is called once per locus per read (every alignment) when the user elects to save
         diagnostics. The recorded information is later written to {library['Name']}_aln_table.txt
         after the entire SAM file has been processed."""
 
+        # Map internal strand representation to +/-/.
+        strand = self.map_strand[aln['Strand']]
+
         # Perform reverse complement for anti-sense reads
-        read = aln['Seq'] \
-            if aln['Strand'] is True \
+        read = aln['Seq'] if strand == '+' \
             else aln['Seq'][::-1].translate(self.complement)
 
-        # sequence, cor_counts, strand, start, end, feat1;feat2;feat3
-        self.alignments.append((read, bundle['corr_count'], aln['Strand'], aln['Start'], aln['End'],
-                                ';'.join(assignments)))
+        # Indicate classifier in parentheses if present. Report NONE if no assignments
+        feats = ';'.join(f"{feat_id}({tag})" if tag else feat_id
+                         for feat_id, tag in assignments) \
+                or "NONE"
 
-    def record_diagnostics(self, assignments, n_candidates, aln, bundle):
+        # sequence, cor_counts, chrom, strand, start, end, candidates, feat1;feat2;feat3
+        row = (read, bundle['corr_count'], aln['Chrom'], strand, aln['Start'], aln['End'], n_candidates, feats)
+        self.alignments.append(row)
+
+    def record_summary_diagnostics(self, assignments, aln, bundle, n_candidates):
         """Records basic diagnostic info"""
 
         if len(assignments) == 0:
             if aln['Strand'] is True:
-                self.alignment_diags['Uncounted alignments (+)'] += 1
+                self.assignment_diags['Uncounted alignments (+)'] += 1
             else:
-                self.alignment_diags['Uncounted alignments (-)'] += 1
+                self.assignment_diags['Uncounted alignments (-)'] += 1
             if n_candidates == 0:
-                self.alignment_diags['No feature counts'] += bundle['corr_count']
+                self.assignment_diags['No feature counts'] += bundle['corr_count']
             else:
-                self.alignment_diags['Eliminated counts'] += bundle['corr_count']
+                self.assignment_diags['Eliminated counts'] += bundle['corr_count']
 
 
 class MergedDiags(MergedStat):
     def __init__(self):
-        self.aln_diags = pd.DataFrame(columns=Diagnostics.aln_diag_categories)
+        self.assignment_diags = pd.DataFrame(index=Diagnostics.summary_categories)
         self.selection_diags = {}
         self.alignment_tables = {}
 
     def add_library(self, other: LibraryStats):
         other_lib = other.library['Name']
         self.alignment_tables[other_lib] = other.diags.alignments
-        self.selection_diags[other_lib] = other.diags.selection_diags
-        self.aln_diags.loc[other_lib] = other.diags.alignment_diags
+        # self.selection_diags[other_lib] = other.diags.selection_diags  Not currently collected
+        self.assignment_diags[other_lib] = self.assignment_diags.index.map(other.diags.assignment_diags)
 
     def write_output_logfile(self):
-        self.write_alignment_diags()
+        self.write_assignment_diags()
         # self.write_selection_diags()  Not currently collected
         self.write_alignment_tables()
 
-    def write_alignment_diags(self):
-        MergedStat.df_to_csv(self.aln_diags, "Sample", self.prefix, "alignment_diags", sort_axis="index")
+    def write_assignment_diags(self):
+        MergedStat.df_to_csv(self.assignment_diags, "Assignment Diags", self.prefix, "assignment_diags")
 
     def write_alignment_tables(self):
+        header = Diagnostics.alignment_columns
         for library_name, table in self.alignment_tables.items():
-            outfile = make_filename([self.prefix, library_name, 'aln_table'], ext='.txt')
-            with open(outfile, 'w') as imf:
-                imf.writelines(
-                    # sequence, cor_counts, strand, start, end, feat1a/feat1b;feat2;...
-                    map(lambda rec: "%s\t%f\t%c\t%d\t%d\t%s\n" % rec, table)
-                )
+            outfile = make_filename([self.prefix, library_name, 'alignment_table'], ext='.csv')
+            with open(outfile, 'w') as ao:
+                csv_writer = csv.writer(ao)
+                csv_writer.writerow(header)
+                csv_writer.writerows(table)
 
     def write_selection_diags(self):
         out = []
