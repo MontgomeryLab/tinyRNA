@@ -87,7 +87,7 @@ selector, M, N
  If these features match rules with `5' anchored` and `3' anchored` overlap selectors, they will be downgraded to `anchored` selectors. Alignments overlapping these features are evaluated for shared start and/or end coordinates, but 5' and 3' ends are not distinguished.
 
 ### Mismatches
-The Mismatch column allows you to place constraints the edit distance, or the number of mismatches and indels, from the alignment to the reference. The Mismatch definition is explicit, i.e., a value of 3 means exactly 3, not 3 or less. Definitions support ranges (e.g., 0-3), lists (e.g., 1, 3), wildcards, and single values.
+The Mismatches column allows you to place constraints the edit distance, or the number of mismatches and indels, from the alignment to the reference. The Mismatch definition is explicit, i.e., a value of 3 means exactly 3, not 3 or less. Definitions support ranges (e.g., 0-3), lists (e.g., 1, 3), wildcards, and single values.
 
 #### Edit Distance Determination
 An alignment's edit distance is determined from its NM tag. If the first alignment in a SAM file doesn't have an NM tag, then the edit distance is calculated from the CIGAR string for all subsequent alignments in the file. If the first alignment has an NM tag then any subsequent alignments missing the tag will have a default edit distance of 0.
