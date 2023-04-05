@@ -35,13 +35,13 @@ cdef class AlignmentIter:
 
     cdef dict _next_alignment(self):
         cdef:
-            AlignedSegment aln = next(self.reader)                  # Equivalent API calls:
+            AlignedSegment aln = next(self.reader)                  # Equivalent Python API calls:
             int flag = aln._delegate.core.flag                          # aln.flag
-            str seq = aln.query_sequence                                # aln.query_sequence
+            str seq = aln.query_sequence
             int start = aln._delegate.core.pos                          # aln.reference_start
             int length = aln._delegate.core.l_qseq                      # aln.query_length
             bint strand = (flag & BAM_FREVERSE) == 0                    # aln.is_forward
-            str nt5 = self._get_nt5(seq, strand)
+            str nt5 = AlignmentIter._get_nt5(seq, strand)
             str name = pysam_bam_get_qname(aln._delegate).decode()      # aln.query_name
 
         if (flag & BAM_FUNMAP) != 0:                                    # aln.is_unmapped
@@ -78,7 +78,8 @@ cdef class AlignmentIter:
         # Calculate mismatches using the CIGAR string's I, D, and X operations
         return sum(op_len for op, op_len in aln.cigartuples if op in cigar_mismatch)
 
-    cdef str _get_nt5(self, str seq, bint strand):
+    @staticmethod
+    cdef str _get_nt5(str seq, bint strand):
         cdef str nt
 
         if strand:

@@ -138,9 +138,9 @@ class SamReaderTests(unittest.TestCase):
         reader._decollapsed_filename = "mock_outfile_name.sam"
 
         expected_writelines = [
-            call('mock_outfile_name.sam', 'ab'),
+            call('mock_outfile_name.sam', 'a'),
             call().__enter__(),
-            call().writelines([alignment.to_string()] * 5),
+            call().write('\n'.join([alignment.to_string()] * 5)),
             call().__exit__(None, None, None)
         ]
 
