@@ -114,10 +114,13 @@ class MergedStat(ABC):
     prefix = None
 
     @abstractmethod
-    def add_library(self, other: LibraryStats): pass
+    def add_library(self, other: LibraryStats): ...
 
     @abstractmethod
-    def write_output_logfile(self): pass
+    def finalize(self): ...
+
+    @abstractmethod
+    def write_output_logfile(self): ...
 
     @staticmethod
     def add_warning(msg):
@@ -160,6 +163,15 @@ class MergedStatsManager:
             self.merged_stats.append(MergedDiags())
 
     def write_report_files(self) -> None:
+        try:
+            for in_process in self.merged_stats:
+                in_process.finalize()
+
+            # Validate stats now that all libraries have been processed
+            StatisticsValidator(self.merged_stats).validate()
+        finally:
+            self.print_warnings()
+
         for output_stat in self.merged_stats:
             output_stat.write_output_logfile()
         self.print_warnings()
