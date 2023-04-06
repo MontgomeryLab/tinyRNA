@@ -411,9 +411,12 @@ class SummaryStats(MergedStat):
     def __init__(self):
         self.missing_fastp_outputs = []
         self.missing_collapser_outputs = []
+        self.finalized = False
 
     def add_library(self, other: LibraryStats):
         """Add incoming summary stats as new column in the master table"""
+
+        assert not self.finalized, "Cannot add libraries after SummaryStats object has been finalized."
 
         other.library['basename'] = self.get_library_basename(other)
         other_summary = {
@@ -435,7 +438,22 @@ class SummaryStats(MergedStat):
 
         self.pipeline_stats_df[other.library["Name"]] = self.pipeline_stats_df.index.map(other_summary)
 
-    def write_output_logfile(self):
+    @staticmethod
+    def get_mapped_seqs(other: LibraryStats):
+        return sum([other.library_stats[stat] for stat in [
+            "Total Assigned Sequences",
+            "Total Unassigned Sequences"
+        ]])
+
+    @staticmethod
+    def get_mapped_reads(other: LibraryStats):
+        return sum([other.library_stats[stat] for stat in [
+            'Reads Assigned to Multiple Features',
+            'Reads Assigned to Single Feature',
+            'Total Unassigned Reads'
+        ]])
+
+    def finalize(self):
         if len(self.missing_fastp_outputs):
             missing = '\n\t'.join(self.missing_fastp_outputs)
             self.add_warning("Total Reads and Retained Reads could not be determined for the following libraries "
@@ -448,7 +466,11 @@ class SummaryStats(MergedStat):
         # Only display conditional categories if they were collected for at least one library
         empty_rows = self.pipeline_stats_df.loc[self.conditional_categories].isna().all(axis='columns')
         self.pipeline_stats_df.drop(empty_rows.index[empty_rows], inplace=True)
+        self.pipeline_stats_df = self.sort_cols_and_round(self.pipeline_stats_df)
+        self.finalized = True
 
+    def write_output_logfile(self):
+        assert self.finalized, "SummaryStats object must be finalized before writing output."
         self.df_to_csv(self.pipeline_stats_df, "Summary Statistics", self.prefix, "summary_stats")
 
     def library_has_collapser_outputs(self, other: LibraryStats) -> bool:
@@ -517,21 +539,6 @@ class SummaryStats(MergedStat):
         sam_basename = os.path.splitext(os.path.basename(other.library['File']))[0]
         lib_basename = sam_basename.replace("_aligned_seqs", "")
         return lib_basename
-
-    @staticmethod
-    def get_mapped_seqs(other: LibraryStats):
-        return sum([other.library_stats[stat] for stat in [
-            "Total Assigned Sequences",
-            "Total Unassigned Sequences"
-        ]])
-
-    @staticmethod
-    def get_mapped_reads(other: LibraryStats):
-        return sum([other.library_stats[stat] for stat in [
-            'Reads Assigned to Multiple Features',
-            'Reads Assigned to Single Feature',
-            'Total Unassigned Reads'
-        ]])
 
 
 class Diagnostics:
