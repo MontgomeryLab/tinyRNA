@@ -385,12 +385,18 @@ class NtLenMatrices(MergedStat):
 class AlignmentStats(MergedStat):
     def __init__(self):
         self.alignment_stats_df = pd.DataFrame(index=LibraryStats.summary_categories)
+        self.finalized = False
 
     def add_library(self, other: LibraryStats):
+        assert not self.finalized, "Cannot add libraries after AlignmentStats object has been finalized."
         library, stats = other.library['Name'], other.library_stats
         self.alignment_stats_df[library] = self.alignment_stats_df.index.map(stats)
 
+    def finalize(self):
+        self.finalized = True  # Nothing else to do
+
     def write_output_logfile(self):
+        assert self.finalized, "AlignmentStats object must be finalized before writing output."
         self.df_to_csv(self.alignment_stats_df, "Alignment Statistics", self.prefix, 'alignment_stats')
 
 
