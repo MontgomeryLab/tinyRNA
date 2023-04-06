@@ -334,30 +334,33 @@ class RuleCounts(MergedStat):
 class NtLenMatrices(MergedStat):
     def __init__(self):
         self.nt_len_matrices = {}
+        self.finalized = False
 
     def add_library(self, other: LibraryStats):
+        assert not self.finalized, "Cannot add libraries after NtLenMatrices object has been finalized."
+
         name = other.library['Name']
-        self.nt_len_matrices[name] = [
+        self.nt_len_matrices[name] = (
             other.mapped_nt_len,
             other.assigned_nt_len
-        ]
+        )
 
-    def write_output_logfile(self):
-        """Writes each library's 5' end nucleotide / length matrices to their own files."""
+    def finalize(self):
+        self.nt_len_matrices = dict(sorted(self.nt_len_matrices.items()))
+        for lib_name, (mapped, assigned) in self.nt_len_matrices.items():
+            mapped_nt_len_df = self.finalize_mapped(mapped)
+            assigned_nt_len_df = self.finalize_assigned(assigned)
+            self.nt_len_matrices[lib_name] = (mapped_nt_len_df, assigned_nt_len_df)
 
-        for lib_name, matrices in self.nt_len_matrices.items():
-            sanitized_lib_name = lib_name.replace('/', '_')
-            self.write_mapped_len_dist(matrices[0], sanitized_lib_name)
-            self.write_assigned_len_dist(matrices[1], sanitized_lib_name)
+        self.finalized = True
 
-    def write_mapped_len_dist(self, matrix, sanitized_lib_name):
+    def finalize_mapped(self, mapped: DefaultDict[str, Counter]) -> pd.DataFrame:
         # Whole number counts because number of reads mapped is always integer
-        mapped_nt_len_df = pd.DataFrame(matrix).sort_index().fillna(0)
-        mapped_nt_len_df.to_csv(f'{self.prefix}_{sanitized_lib_name}_mapped_nt_len_dist.csv')
+        return pd.DataFrame(mapped).sort_index().fillna(0)
 
-    def write_assigned_len_dist(self, matrix, sanitized_lib_name):
+    def finalize_assigned(self, assigned: DefaultDict[str, Counter]) -> pd.DataFrame:
         # Fractional counts due to (loci count) and/or (assigned feature count) normalization
-        assigned_nt_len_df = pd.DataFrame(matrix).sort_index().round(decimals=2)
+        assigned_nt_len_df = pd.DataFrame(assigned).sort_index().round(decimals=2)
 
         # Drop non-nucleotide columns if they don't contain counts
         assigned_nt_len_df.drop([
@@ -366,8 +369,17 @@ class NtLenMatrices(MergedStat):
         ], axis='columns', inplace=True)
 
         # Assign default count of 0 for remaining cases
-        assigned_nt_len_df.fillna(0, inplace=True)
-        assigned_nt_len_df.to_csv(f'{self.prefix}_{sanitized_lib_name}_assigned_nt_len_dist.csv')
+        return assigned_nt_len_df.fillna(0)
+
+    def write_output_logfile(self):
+        """Writes each library's 5' end nucleotide / length matrices to separate files."""
+
+        assert self.finalized, "NtLenMatrices object must be finalized before writing output."
+
+        for lib_name, (mapped, assigned) in self.nt_len_matrices.items():
+            sanitized_lib_name = lib_name.replace('/', '_')
+            mapped.to_csv(f'{self.prefix}_{sanitized_lib_name}_mapped_nt_len_dist.csv')
+            assigned.to_csv(f'{self.prefix}_{sanitized_lib_name}_assigned_nt_len_dist.csv')
 
 
 class AlignmentStats(MergedStat):
