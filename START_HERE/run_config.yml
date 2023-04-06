@@ -225,9 +225,11 @@ shared_memory: False
 ##-- If True: show all parsed features in the counts csv, regardless of count/identity --##
 counter_all_features: False
 
-##-- If True: counts will be normalized by genomic hits AND selected feature count --##
-##-- If False: counts will only be normalized by genomic hits --##
-counter_normalize_by_hits: True
+##-- If True: counts are normalized by genomic hits (number of multi-alignments) --##
+counter_normalize_by_genomic_hits: False
+
+##-- If True: counts are normalized by feature hits (selected feature count per-locus) --##
+counter_normalize_by_feature_hits: True
 
 ##-- If True: a decollapsed copy of each SAM file will be produced (useful for IGV) --##
 counter_decollapse: False

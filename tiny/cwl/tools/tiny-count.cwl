@@ -30,10 +30,15 @@ inputs:
 
   # Optional inputs
 
-  normalize_by_hits:
+  normalize_by_feature_hits:
     type: string?
     inputBinding:
-      prefix: --normalize-by-hits
+      prefix: --normalize-by-feature-hits
+
+  normalize_by_genomic_hits:
+    type: string?
+    inputBinding:
+      prefix: --normalize-by-genomic-hits
 
   decollapse:
     type: boolean?

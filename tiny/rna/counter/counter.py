@@ -53,7 +53,9 @@ def get_args():
     optional_args.add_argument('-o', '--out-prefix', metavar='PREFIX', default='tiny-count_{timestamp}',
                                help='The output prefix to use for file names. All occurrences of the '
                                     'substring {timestamp} will be replaced with the current date and time.')
-    optional_args.add_argument('-nh', '--normalize-by-hits', metavar='T/F', default='T',
+    optional_args.add_argument('-ng', '--normalize-by-genomic-hits', metavar='T/F', default='T',
+                               help='If T/true, normalize counts by genomic hits.')
+    optional_args.add_argument('-nh', '--normalize-by-feature-hits', metavar='T/F', default='T',
                                help='If T/true, normalize counts by (selected) overlapping feature counts.')
     optional_args.add_argument('-dc', '--decollapse', action='store_true',
                                help='Create a decollapsed copy of all SAM files listed in your Samples Sheet. '
@@ -80,7 +82,8 @@ def get_args():
     else:
         args_dict = vars(args)
         args_dict['out_prefix'] = args.out_prefix.replace('{timestamp}', get_timestamp())
-        args_dict['normalize_by_hits'] = args.normalize_by_hits.lower() in ['t', 'true']
+        for tf in ('normalize_by_feature_hits', 'normalize_by_genomic_hits'):
+            args_dict[tf] = args_dict[tf].lower() in ['t', 'true']
         return ReadOnlyDict(args_dict)
 
 
@@ -221,11 +224,11 @@ def map_and_reduce(libraries, paths, prefs):
         with mp.Pool(len(libraries)) as pool:
             async_results = pool.imap_unordered(counter.count_reads, libraries)
 
-            for stats_result in async_results:
-                summary.add_library(stats_result)
+            for result in async_results:
+                summary.add_library_stats(result)
     else:
         # Only one library, multiprocessing not beneficial for task
-        summary.add_library(counter.count_reads(libraries[0]))
+        summary.add_library_stats(counter.count_reads(libraries[0]))
 
     return summary
 

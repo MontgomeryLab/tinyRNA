@@ -87,7 +87,8 @@ inputs:
   counter_decollapse: boolean?
   counter_stepvector: string?
   counter_all_features: boolean?
-  counter_normalize_by_hits: boolean?
+  counter_normalize_by_feature_hits: boolean?
+  counter_normalize_by_genomic_hits: boolean?
 
   # tiny-deseq inputs
   run_deseq: boolean
@@ -214,8 +215,11 @@ steps:
       gff_files: gff_files
       out_prefix: run_name
       all_features: counter_all_features
-      normalize_by_hits:
-        source: counter_normalize_by_hits
+      normalize_by_feature_hits:
+        source: counter_normalize_by_feature_hits
+        valueFrom: $(String(self))  # convert boolean -> string
+      normalize_by_genomic_hits:
+        source: counter_normalize_by_genomic_hits
         valueFrom: $(String(self))  # convert boolean -> string
       decollapse: counter_decollapse
       stepvector: counter_stepvector
