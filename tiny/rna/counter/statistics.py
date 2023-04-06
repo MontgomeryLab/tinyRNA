@@ -200,33 +200,28 @@ class FeatureCounts(MergedStat):
     def __init__(self, Features_obj):
         self.feat_counts_df = pd.DataFrame(index=set.union(*Features_obj.classes.values()))
         self.aliases = Features_obj.aliases
+        self.finalized = False
         self.norm_prefs = {}
 
     def add_library(self, other: LibraryStats) -> None:
+        assert not self.finalized, "Cannot add libraries after FeatureCounts object has been finalized."
         self.feat_counts_df[other.library["Name"]] = self.feat_counts_df.index.map(other.feat_counts)
         self.norm_prefs[other.library["Name"]] = other.library['Norm']
 
     def write_output_logfile(self) -> None:
-        fc = self.write_feature_counts()
-        self.write_norm_counts(fc)
+        self.write_feature_counts()
+        self.write_norm_counts()
 
-    def write_feature_counts(self) -> pd.DataFrame:
-        """Writes selected features and their associated counts to {prefix}_out_feature_counts.csv
+    def finalize(self):
+        """Called once all libraries have been counted and added to the FeatureCounts object.
 
-        If a features.csv rule defined an 'Alias by...' other than "ID", then the associated features will
-        be aliased to the value associated with this key and displayed in the Feature Name column, and
-        the feature's true "ID" will be indicated in the Feature ID column. If multiple aliases exist for
-        a feature then they will be joined by ", " in the Feature Name column. A Feature Class column also
-        follows.
+        This method will:
+        - Name the multi-index columns: "Feature ID" and "Classifier"
+        - Add a Feature Name column containing the values associated with user-defined alias tags
+        - Sort columns by name and round decimal values to 2 places.
 
-        For example, if the rule contained an 'Alias by...' which aliases gene1 to abc123,def456,123.456
-        and is both ALG and CSR class, then the Feature ID, Feature Name, and Feature Class column of the
-        output file for this feature will read:
-            gene1, "abc123,def456,123.456", "ALG,CSR"
-
-        Subsequent columns represent the counts from each library processed by Counter. Column titles are
-        formatted for each library as {group}_rep_{replicate}
-        """
+        Aliases are concatenated by ", " if multiple exist for a feature. Alias values are not
+        added for the "ID" tag as the Feature ID column already contains this information."""
 
         # Sort columns by title and round all counts to 2 decimal places
         summary = self.sort_cols_and_round(self.feat_counts_df)
@@ -235,14 +230,27 @@ class FeatureCounts(MergedStat):
         # Sort by index, make index its own column, and rename it to Feature ID
         summary = summary.sort_index().reset_index().rename(columns={"level_0": "Feature ID", "level_1": "Classifier"})
 
-        summary.to_csv(self.prefix + '_feature_counts.csv', index=False)
-        return summary
+        self.feat_counts_df = summary
+        self.finalized = True
 
-    def write_norm_counts(self, counts: pd.DataFrame):
+    def write_feature_counts(self):
+        """Writes selected features and their associated counts to {prefix}_feature_counts.csv
+        Should be called after finalize()"""
+
+        assert self.finalized, "FeatureCounts object must be finalized before writing output."
+        self.feat_counts_df.to_csv(self.prefix + '_feature_counts.csv', index=False)
+
+    def write_norm_counts(self):
+        """Writes normalized feature counts to {prefix}_norm_counts.csv
+        Normalization method is determined by Samples Sheet's Normalization column.
+        Should be called after finalize()"""
+
+        assert self.finalized, "FeatureCounts object must be finalized before writing output."
 
         if all([norm in ['1', "", None] for norm in self.norm_prefs.values()]):
             return
 
+        counts = self.feat_counts_df.copy()
         for library, norm in self.norm_prefs.items():
             if norm in ['1', "", None]:
                 continue
