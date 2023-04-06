@@ -45,18 +45,17 @@ class LibraryStats:
 
         bundle_read = aln_bundle[0]
         loci_counts = len(aln_bundle)
-        corr_counts = read_counts / loci_counts if self.norm_gh else read_counts
+        corr_counts = round(read_counts / loci_counts, 2) if self.norm_gh else read_counts
         nt5, seqlen = bundle_read['nt5end'], bundle_read['Length']
-
-        # Fill in 5p nt/length matrix
-        self.mapped_nt_len[nt5][seqlen] += read_counts
 
         return {
             'read_count': read_counts,
             'corr_count': corr_counts,
             'assigned_ftags': set(),
-            'assigned_reads': 0,
-            'nt5_counts': self.assigned_nt_len[nt5],
+            'assigned_reads': 0.0,
+            'unassigned_reads': 0.0,
+            'nt5_assigned': self.assigned_nt_len[nt5],
+            'nt5_mapped': self.mapped_nt_len[nt5],
             'seq_length': seqlen,
             'mapping_stat':
                 "Assigned Single-Mapping Reads"
@@ -71,9 +70,9 @@ class LibraryStats:
         corr_count = bundle['corr_count']
 
         if asgn_count == 0:
-            self.library_stats['Total Unassigned Reads'] += corr_count
+            bundle['unassigned_reads'] += corr_count
         else:
-            fcorr_count = corr_count / asgn_count if self.norm_fh else corr_count
+            fcorr_count = round(corr_count / asgn_count, 2) if self.norm_fh else corr_count
             bundle['assigned_reads'] += fcorr_count * asgn_count
             bundle['assigned_ftags'] |= assignments.keys()
 
@@ -96,11 +95,16 @@ class LibraryStats:
             self.library_stats['Total Unassigned Sequences'] += 1
         else:
             self.library_stats['Total Assigned Sequences'] += 1
-            assigned_reads = bundle['assigned_reads']
+            assigned_reads = round(bundle['assigned_reads'], 2)
+            unassigned_reads = round(bundle['unassigned_reads'], 2)
 
+            self.library_stats['Total Unassigned Reads'] += unassigned_reads
             self.library_stats['Total Assigned Reads'] += assigned_reads
             self.library_stats[bundle['mapping_stat']] += assigned_reads
-            bundle['nt5_counts'][bundle['seq_length']] += assigned_reads
+
+            seqlen = bundle['seq_length']
+            bundle['nt5_assigned'][seqlen] += assigned_reads
+            bundle['nt5_mapped'][seqlen] += assigned_reads + unassigned_reads
 
             if assigned_feat_count == 1:
                 self.library_stats['Reads Assigned to Single Feature'] += assigned_reads
@@ -156,7 +160,7 @@ class MergedStatsManager:
         self.merged_stats = [
             FeatureCounts(Features_obj), RuleCounts(features_csv),
             AlignmentStats(), SummaryStats(),
-            NtLenMatrices()
+            NtLenMatrices(prefs)
         ]
 
         if prefs.get('report_diags', False):
@@ -332,8 +336,10 @@ class RuleCounts(MergedStat):
 
 
 class NtLenMatrices(MergedStat):
-    def __init__(self):
+    def __init__(self, prefs):
         self.nt_len_matrices = {}
+        self.norm_gh = prefs.get('normalize_by_genomic_hits', True)
+        self.norm_fh = prefs.get('normalize_by_feature_hits', True)
         self.finalized = False
 
     def add_library(self, other: LibraryStats):
@@ -355,12 +361,11 @@ class NtLenMatrices(MergedStat):
         self.finalized = True
 
     def finalize_mapped(self, mapped: DefaultDict[str, Counter]) -> pd.DataFrame:
-        # Whole number counts because number of reads mapped is always integer
-        return pd.DataFrame(mapped).sort_index().fillna(0)
+        return pd.DataFrame(mapped).sort_index().fillna(0).round(decimals=2)
 
     def finalize_assigned(self, assigned: DefaultDict[str, Counter]) -> pd.DataFrame:
         # Fractional counts due to (loci count) and/or (assigned feature count) normalization
-        assigned_nt_len_df = pd.DataFrame(assigned).sort_index().round(decimals=2)
+        assigned_nt_len_df = pd.DataFrame(assigned, dtype='float64').sort_index().round(decimals=2)
 
         # Drop non-nucleotide columns if they don't contain counts
         assigned_nt_len_df.drop([
@@ -378,8 +383,37 @@ class NtLenMatrices(MergedStat):
 
         for lib_name, (mapped, assigned) in self.nt_len_matrices.items():
             sanitized_lib_name = lib_name.replace('/', '_')
-            mapped.to_csv(f'{self.prefix}_{sanitized_lib_name}_mapped_nt_len_dist.csv')
-            assigned.to_csv(f'{self.prefix}_{sanitized_lib_name}_assigned_nt_len_dist.csv')
+            self._write_mapped(mapped, sanitized_lib_name)
+            self._write_assigned(assigned, sanitized_lib_name)
+
+    def _write_mapped(self, mapped: pd.DataFrame, lib_name: str):
+        """Writes the mapped matrix to a file.
+
+        Conceptually, mapped reads should always be a whole number. If either
+        normalization step is disabled, these counts will be fractional. However,
+        even when both normalization steps are enabled, we still get fractional
+        counts that are very close to a whole number due to the way these counts
+        are tallied. They are fractional up to this point for the validation step.
+
+        Floating point error is at the root of this issue. If in LibraryStats we
+        instead increment these counts by the raw read count, then the matrix's
+        sum will disagree with the Mapped Reads summary stat because the constituent
+        stats of Mapped Reads are based on rounded values. Rounding maintains the
+        finite representation of these values. If we didn't round them and allowed
+        floating point error to accumulate over potentially millions+ of alignments,
+        then the disagreement between all stats would grow unpredictably and there
+        wouldn't be a meaningful way to validate them."""
+
+        if self.norm_gh ^ self.norm_fh:
+            mapped.to_csv(f'{self.prefix}_{lib_name}_mapped_nt_len_dist.csv')
+        else:
+            mapped_whole_numbers = mapped.astype('int64')
+            mapped_whole_numbers.to_csv(f'{self.prefix}_{lib_name}_mapped_nt_len_dist.csv')
+
+    def _write_assigned(self, assigned: pd.DataFrame, lib_name: str):
+        """Writes the assigned matrix to a file (no further work required)."""
+
+        assigned.to_csv(f'{self.prefix}_{lib_name}_assigned_nt_len_dist.csv')
 
 
 class AlignmentStats(MergedStat):
