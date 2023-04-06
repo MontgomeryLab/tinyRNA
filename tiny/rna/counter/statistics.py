@@ -272,30 +272,63 @@ class FeatureCounts(MergedStat):
 
 class RuleCounts(MergedStat):
     def __init__(self, features_csv):
+        self.rules = self.read_features_sheet(features_csv)
         self.rule_counts_df = pd.DataFrame()
-        self.features_csv = features_csv
+        self.finalized = False
 
     def add_library(self, other: LibraryStats):
+        assert not self.finalized, "Cannot add libraries after RuleCounts object has been finalized."
         counts = pd.Series(other.rule_counts, name=other.library['Name'])
         self.rule_counts_df = self.rule_counts_df.join(counts, how='outer')
 
-    def write_output_logfile(self):
-        # Reread the Features Sheet since FeatureSelector.rules_table is processed and less readable
-        with open(self.features_csv, 'r', encoding='utf-8-sig') as f:
-            # Convert each CSV row to a string with values labeled by column headers
-            rules = ['; '.join([
-                        ': '.join(
-                            [col.replace("...", ""), val])
-                        for col, val in row.items()])
-                     for row in csv.DictReader(f)]
-
+    def finalize(self):
+        rules = self.get_rule_strings()
         self.rule_counts_df = self.sort_cols_and_round(self.rule_counts_df)
+
+        # Add Rule String column to the left of the counts
         order = ["Rule String"] + self.rule_counts_df.columns.to_list()
-
         self.rule_counts_df = self.rule_counts_df.join(pd.Series(rules, name="Rule String"), how="outer")[order].fillna(0)
-        self.rule_counts_df.loc["Mapped Reads"] = SummaryStats.pipeline_stats_df.loc["Mapped Reads"]
 
+        # Add Mapped Reads row below the counts
+        self.rule_counts_df.loc["Mapped Reads"] = SummaryStats.pipeline_stats_df.loc["Mapped Reads"]
+        self.finalized = True
+
+    def write_output_logfile(self):
+        assert self.finalized, "RuleCounts object must be finalized before writing output."
         self.df_to_csv(self.rule_counts_df, "Rule Index", self.prefix, 'counts_by_rule', sort_axis=None)
+
+    def read_features_sheet(self, features_csv):
+        """Reads the Features Sheet and returns a list of rules in
+        the same order as the FeatureSelector.rules_table. We don't use the
+        CSVReader class here because it returns rows with shortened column names,
+        and we want to preserve the full column names for the Rule String column
+        of the output table."""
+
+        with open(features_csv, 'r', encoding='utf-8-sig') as f:
+            return [row for row in csv.DictReader(f)]
+
+    def get_inverted_classifiers(self):
+        """Returns a dictionary of classifiers and the indices of the rules
+        where they are defined. Note the use of the user-facing column name
+        rather than the internal shortname for "Classify as..." since the
+        CSVReader class wasn't used."""
+
+        inverted_classifiers = defaultdict(list)
+        for i, rule in enumerate(self.rules):
+            inverted_classifiers[rule['Classify as...']].append(i)
+
+        return dict(inverted_classifiers)
+
+    def get_rule_strings(self):
+        """Returns a list of formatted strings representing
+        each rule in the Features Sheet."""
+
+        rows = []
+        for rule in self.rules:
+            row = [': '.join([col.replace('...', ''), defn])
+                   for col, defn in rule.items()]
+            rows.append('; '.join(row))
+        return rows
 
 
 class NtLenMatrices(MergedStat):
