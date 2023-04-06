@@ -27,7 +27,8 @@ class LibraryStats:
         self.library = {'Name': 'Unassigned', 'File': 'Unassigned', 'Norm': '1'}
         self.out_prefix = out_prefix
         self.diags = Diagnostics(out_prefix) if report_diags else None
-        self.norm = prefs.get('normalize_by_hits', True)
+        self.norm_gh = prefs.get('normalize_by_genomic_hits', True)
+        self.norm_fh = prefs.get('normalize_by_feature_hits', True)
 
         self.feat_counts = Counter()
         self.rule_counts = Counter()
@@ -44,7 +45,7 @@ class LibraryStats:
 
         bundle_read = aln_bundle[0]
         loci_counts = len(aln_bundle)
-        corr_counts = read_counts / loci_counts
+        corr_counts = read_counts / loci_counts if self.norm_gh else read_counts
         nt5, seqlen = bundle_read['nt5end'], bundle_read['Length']
 
         # Fill in 5p nt/length matrix
@@ -72,7 +73,7 @@ class LibraryStats:
         if asgn_count == 0:
             self.library_stats['Total Unassigned Reads'] += corr_count
         else:
-            fcorr_count = corr_count / asgn_count if self.norm else corr_count
+            fcorr_count = corr_count / asgn_count if self.norm_fh else corr_count
             bundle['assigned_reads'] += fcorr_count * asgn_count
             bundle['assigned_ftags'] |= assignments.keys()
 
