@@ -1,5 +1,6 @@
 import functools
 import subprocess
+import pysam
 import sys
 import os
 
@@ -341,8 +342,5 @@ class SamSqValidator:
 
     def read_sq_headers(self):
         for file in self.sam_files:
-            with open(file, 'rb') as f:
-                reader = SAM_reader()
-                reader._read_to_first_aln(f)
-
-            self.sq_headers[file] = reader._header_dict.get('@SQ', [])
+            pr = pysam.AlignmentFile(file, check_sq=False)
+            self.sq_headers[file] = pr.header.to_dict().get('SQ', [])

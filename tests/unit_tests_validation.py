@@ -6,7 +6,7 @@ import io
 from glob import glob
 from unittest.mock import patch, mock_open
 
-from rna.counter.validation import GFFValidator, ReportFormatter, SamSqValidator
+from tiny.rna.counter.validation import GFFValidator, ReportFormatter, SamSqValidator
 
 
 class GFFValidatorTest(unittest.TestCase):
@@ -314,6 +314,23 @@ class SamSqValidatorTest(unittest.TestCase):
                 {'SN': chrom[0]} if not chrom[1] else
                 {'LN': chrom[1]}
                 for chrom in chroms]
+
+    """Does read_sq_headers() return the expected data?"""
+
+    def test_read_sq_headers(self):
+        sam_file = 'testdata/counter/validation/sam/sq_headers.sam'
+        expected = {
+            sam_file: [
+                {'SN': 'I',  'LN': 123},
+                {'SN': 'II', 'LN': 456},
+                {'SN': 'III'}
+            ],
+        }
+
+        validator = SamSqValidator([sam_file])
+        validator.read_sq_headers()
+
+        self.assertDictEqual(validator.sq_headers, expected)
 
     """Does SamSqValidator correctly identify missing @SQ headers?"""
 

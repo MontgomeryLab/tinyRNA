@@ -22,9 +22,10 @@ rules_template = [{'Identity': ("*", "*"),
                    'Filter_t': "",
                    'Strand': "both",
                    'Hierarchy': 0,
+                   'Overlap': "partial",
+                   'Mismatch': "",
                    'nt5end': "all",
-                   'Length': "all",   # A string is expected by FeatureSelector due to support for lists and ranges
-                   'Overlap': "partial"}]
+                   'Length': "all",}]   # A string is expected by FeatureSelector due to support for lists and ranges
 
 
 def csv_factory(type: str, rows: List[dict], header=()):
@@ -130,7 +131,7 @@ def get_dir_checksum_tree(root_path: str) -> dict:
     return dir_tree
 
 
-def make_parsed_sam_record(Name="0_count=1", Seq="CAAGACAGAGCTTCACCGTTC", Chrom='I', Start=15064570, Strand:bool = True):
+def make_parsed_sam_record(Name="0_count=1", Seq="CAAGACAGAGCTTCACCGTTC", Chrom='I', Start=15064570, Strand=True, NM=0):
     return {
         "Name": Name,
         "Length": len(Seq),
@@ -139,7 +140,8 @@ def make_parsed_sam_record(Name="0_count=1", Seq="CAAGACAGAGCTTCACCGTTC", Chrom=
         "Chrom": Chrom,
         "Start": Start,
         "End": Start + len(Seq),
-        "Strand": Strand
+        "Strand": Strand,
+        "NM": NM
     }
 
 
@@ -186,7 +188,7 @@ def strand_to_bool(strand):
 
 
 # For performing reverse complement
-complement = bytes.maketrans(b'ACGTacgt', b'TGCAtgca')
+complement = str.maketrans('ACGTacgt', 'TGCAtgca')
 
 
 class ShellCapture:

@@ -1,7 +1,7 @@
-Select for...,with value...,Classify as...,Source Filter,Type Filter,Hierarchy,Strand,5' End Nucleotide,Length,Overlap
-Class,mask,masked,,,1,both,all,all,Partial
-Class,miRNA,miRNA,,,2,sense,all,16-24,5' anchored
-Class,piRNA,piRNA-5'A,,,2,both,A,24-32,Nested
-Class,piRNA,piRNA-5'T,,,2,both,T,24-32,Nested
-Class,siRNA,siRNA,,,2,both,all,15-22,Nested
-Class,unk,unknown,,,3,both,all,all,Nested
+Select for...,with value...,Classify as...,Source Filter,Type Filter,Hierarchy,Overlap,Mismatches,Strand,5' End Nucleotide,Length
+Class,mask,masked,,,1,Partial,,both,all,all
+Class,miRNA,miRNA,,,2,5' anchored,,sense,all,16-24
+Class,piRNA,piRNA-5'A,,,2,Nested,,both,A,24-32
+Class,piRNA,piRNA-5'T,,,2,Nested,,both,T,24-32
+Class,siRNA,siRNA,,,2,Nested,,both,all,15-22
+Class,unk,unknown,,,3,Nested,,both,all,all
