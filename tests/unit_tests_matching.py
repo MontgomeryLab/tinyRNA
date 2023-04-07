@@ -20,15 +20,15 @@ class MyTestCase(unittest.TestCase):
         iv = HTSeq.GenomicInterval('I', 0, 10, '+')
 
         # Match tuples formed during GFF parsing
-        match_tuples = [('n/a', 'n/a', 'partial'),
-                        ('n/a', 'n/a', 'nested'),
-                        ('n/a', 'n/a', 'exact'),
-                        ('n/a', 'n/a', 'anchored'),
-                        ('n/a', 'n/a', "5' anchored"),
-                        ('n/a', 'n/a', "3' anchored"),
-                        ('n/a', 'n/a', "5'anchored"),   # spaces should be optional
-                        ('n/a', 'n/a', "3'anchored")]
-        match_tuples += [('n/a', 'n/a', kwd) for kwd in Wildcard.kwds]
+        match_tuples = [('n/a', 'n/a', 'partial', Wildcard()),
+                        ('n/a', 'n/a', 'nested', Wildcard()),
+                        ('n/a', 'n/a', 'exact', Wildcard()),
+                        ('n/a', 'n/a', 'anchored', Wildcard()),
+                        ('n/a', 'n/a', "5' anchored", Wildcard()),
+                        ('n/a', 'n/a', "3' anchored", Wildcard()),
+                        ('n/a', 'n/a', "5'anchored", Wildcard()),   # spaces should be optional
+                        ('n/a', 'n/a', "3'anchored", Wildcard())]
+        match_tuples += [('n/a', 'n/a', kwd, Wildcard()) for kwd in Wildcard.kwds]
 
         result = fs.build_interval_selectors(iv, match_tuples)
 

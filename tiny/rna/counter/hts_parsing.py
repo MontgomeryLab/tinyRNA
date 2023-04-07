@@ -1,6 +1,7 @@
 import functools
 import os.path
 import HTSeq
+import pysam
 import sys
 import re
 
@@ -10,6 +11,7 @@ from abc import ABC, abstractmethod
 from urllib.parse import unquote
 from inspect import stack
 
+from tiny.rna.counter.parsing import AlignmentIter
 from tiny.rna.counter.matching import Wildcard
 from tiny.rna.util import report_execution_time, make_filename, ReportFormatter, append_to_exception
 
@@ -18,14 +20,10 @@ _re_attr_main = re.compile(r"\s*([^\s=]+)[\s=]+(.*)")
 _re_attr_empty = re.compile(r"^\s*$")
 
 # For SAM_reader
-AlignmentDict = Dict[str, Union[str, int, bytes]]
+AlignmentDict = Dict[str, Union[str, int]]
 Bundle = Tuple[List[AlignmentDict], int]
 _re_tiny = r"\d+_count=\d+"
 _re_fastx = r"seq\d+_x(\d+)"
-_re_header = re.compile(r"^@(HD|SQ|RG|PG)(\t[A-Za-z][A-Za-z0-9]:[ -~]+)+$|^@CO\t.*")
-
-# For Alignment
-complement = {ord('A'): 'T', ord('T'): 'A', ord('G'): 'C', ord('C'): 'G'}
 
 
 class SAM_reader:
@@ -35,28 +33,36 @@ class SAM_reader:
         self.decollapse = prefs.get("decollapse", False)
         self.out_prefix = prefs.get("out_prefix", None)
         self.collapser_type = None
+        self.references = []
+        self.has_nm = None
         self.file = None
+
         self._collapser_token = None
+        self._header_dict = {}
+        self._header = None
+        self._iter = None
+
+        self._decollapsed_callback = self._write_decollapsed_sam if self.decollapse else None
         self._decollapsed_filename = None
         self._decollapsed_reads = []
-        self._header_lines = []
-        self._header_dict = defaultdict(list)
 
     def bundle_multi_alignments(self, file: str) -> Iterator[Bundle]:
         """Bundles multi-alignments (determined by a shared QNAME) and reports the associated read's count"""
 
+        pysam_reader = pysam.AlignmentFile(file)
         self.file = file
-        with open(file, 'rb') as f:
-            aln_iter = iter(self._parse_alignments(f))
-            bundle, read_count = self._new_bundle(next(aln_iter))
 
-            for aln in aln_iter:
-                if aln['Name'] != bundle[0]['Name']:
-                    yield bundle, read_count
-                    bundle, read_count = self._new_bundle(aln)
-                else:
-                    bundle.append(aln)
-            yield bundle, read_count
+        self._gather_metadata(pysam_reader)
+        self._iter = AlignmentIter(pysam_reader, self.has_nm, self._decollapsed_callback, self._decollapsed_reads)
+        bundle, read_count = self._new_bundle(next(self._iter))
+
+        for aln in self._iter:
+            if aln['Name'] != bundle[0]['Name']:
+                yield bundle, read_count
+                bundle, read_count = self._new_bundle(aln)
+            else:
+                bundle.append(aln)
+        yield bundle, read_count
 
         if self.decollapse and len(self._decollapsed_reads):
             self._write_decollapsed_sam()
@@ -65,111 +71,45 @@ class SAM_reader:
         """Wraps the provided alignment in a list and reports the read's count"""
 
         if self.collapser_type is not None:
-            token = self.collapser_token
-            count = int(aln['Name'].split(token)[-1])
+            token = self._collapser_token
+            count = int(aln['Name'].rsplit(token, 1)[1])
         else:
             count = 1
 
         return [aln], count
 
-    def _parse_alignments(self, file_obj: IO) -> Iterator[AlignmentDict]:
-        """Parses and yields individual SAM alignments from the open file_obj"""
+    def _gather_metadata(self, reader: pysam.AlignmentFile) -> None:
+        """Saves header information, examines the first alignment to determine which collapser utility was used (if any), and whether the alignment has a query sequence and NM tag.
+        The input file's header is written to the decollapsed output file if necessary."""
 
-        line, line_no = self._read_to_first_aln(file_obj)
-        decollapse_sam = self.decollapse
+        header = reader.header
+        first_aln = next(reader.head(1))
 
-        try:
-            while line:
-                line_no += 1
-                cols = line.split(b'\t')
+        if first_aln.query_sequence is None:
+            raise ValueError("SAM alignments must include the read sequence.")
 
-                if decollapse_sam:
-                    self._decollapsed_reads.append((cols[0], line))
-                    if len(self._decollapsed_reads) > 100000:
-                        self._write_decollapsed_sam()
+        self._header = header
+        self._header_dict = header.to_dict()  # performs validation
+        self._determine_collapser_type(first_aln.query_name)
+        self.has_nm = first_aln.has_tag("NM")
+        self.references = header.references
 
-                line = file_obj.readline()  # Next line
-                start = int(cols[3]) - 1
-                seq = cols[9]
-                length = len(seq)
+        if self.decollapse:
+            self._write_header_for_decollapsed_sam(str(header))
 
-                # Note: we assume sRNA sequencing data is NOT reversely stranded
-                if (int(cols[1]) & 16):
-                    strand = False  # -
-                    try:
-                        nt5 = complement[seq[-1]]
-                    except KeyError:
-                        nt5 = chr(seq[-1])
-                else:
-                    strand = True  # +
-                    nt5 = chr(seq[0])
-
-                yield {
-                    "Name": cols[0],
-                    "Length": length,
-                    "Seq": seq,
-                    "nt5end": nt5,
-                    "Chrom": cols[2].decode(),
-                    "Start": start,
-                    "End": start + length,
-                    "Strand": strand
-                }
-        except Exception as e:
-            # Append to error message while preserving exception provenance and traceback
-            msg = f"Error occurred on line {line_no} of {self.file}"
-            append_to_exception(e, msg)
-            raise
-
-    def _read_to_first_aln(self, file_obj: IO) -> Tuple[bytes, int]:
-        """Advance file_obj past the SAM header and return the first alignment unparsed"""
-
-        lineno = 1
-        line = file_obj.readline()
-        while line[0] == ord('@'):
-            self._parse_header_line(line.decode('utf-8'))
-            line = file_obj.readline()
-            lineno += 1
-
-        self._determine_collapser_type(line.decode())
-        if self.decollapse: self._write_header_for_decollapsed_sam()
-
-        return line, lineno
-
-    def _parse_header_line(self, header_line: str) -> None:
-        """Parses and saves information from the provided header line"""
-
-        self.validate_header_line(header_line)
-        self._header_lines.append(header_line)
-
-        # Header dict
-        rec_type = header_line[:3]
-        fields = header_line[3:].strip().split('\t')
-
-        if rec_type == "@CO":
-            self._header_dict[rec_type].append(fields[0])
-        else:
-            self._header_dict[rec_type].append(
-                {field[:2]: field[3:].strip() for field in fields}
-            )
-
-    def validate_header_line(self, line):
-        if not re.match(_re_header, line):
-            msg = "Invalid SAM header"
-            msg += f" in {os.path.basename(self.file)}" if self.file else ""
-            msg += ':\n\t' + f'"{line}"'
-            raise ValueError(msg)
-
-    def _determine_collapser_type(self, first_aln_line: str) -> None:
+    def _determine_collapser_type(self, qname: str) -> None:
         """Attempts to determine the collapsing utility that was used before producing the
         input alignment file, then checks basic requirements for the utility's outputs."""
 
-        if re.match(_re_tiny, first_aln_line) is not None:
+        if re.match(_re_tiny, qname) is not None:
             self.collapser_type = "tiny-collapse"
+            self._collapser_token = "="
 
-        elif re.match(_re_fastx, first_aln_line) is not None:
+        elif re.match(_re_fastx, qname) is not None:
             self.collapser_type = "fastx"
+            self._collapser_token = "_x"
 
-            sort_order = self._header_dict.get('@HD', [{}])[0].get('SO', None)
+            sort_order = self._header_dict.get('HD', {}).get('SO', None)
             if sort_order is None or sort_order != "queryname":
                 raise ValueError("SAM files from fastx collapsed outputs must be sorted by queryname\n"
                                  "(and the @HD [...] SO header must be set accordingly).")
@@ -189,12 +129,12 @@ class SAM_reader:
             self._decollapsed_filename = make_filename([basename, "decollapsed"], ext='.sam')
         return self._decollapsed_filename
 
-    def _write_header_for_decollapsed_sam(self) -> None:
-        """Writes the input file's header lines to the decollapsed output file"""
+    def _write_header_for_decollapsed_sam(self, header_str) -> None:
+        """Writes the provided header to the decollapsed output file"""
 
         assert self.collapser_type is not None
         with open(self._get_decollapsed_filename(), 'w') as f:
-            f.writelines(self._header_lines)
+            f.write(header_str)
 
     def _write_decollapsed_sam(self) -> None:
         """Expands the collapsed alignments in the _decollapsed_reads buffer
@@ -202,30 +142,18 @@ class SAM_reader:
 
         assert self.collapser_type is not None
         aln_out, prev_name, seq_count = [], None, 0
-        for name, line in self._decollapsed_reads:
+        for aln in self._decollapsed_reads:
             # Parse count just once per multi-alignment
+            name = aln.query_name
             if name != prev_name:
-                seq_count = int(name.split(self.collapser_token)[-1])
+                seq_count = int(name.rsplit(self._collapser_token, 1)[1])
 
-            aln_out.extend([line] * seq_count)
+            aln_out.extend([aln.to_string()] * seq_count)
             prev_name = name
 
-        with open(self._get_decollapsed_filename(), 'ab') as sam_o:
-            sam_o.writelines(aln_out)
+        with open(self._get_decollapsed_filename(), 'a') as sam_o:
+            sam_o.write('\n'.join(aln_out))
             self._decollapsed_reads.clear()
-
-    @property
-    def collapser_token(self) -> bytes:
-        """Returns the split token to be used for determining read count from the QNAME field"""
-
-        if self._collapser_token is None:
-            self._collapser_token = {
-                "tiny-collapse": b"=",
-                "fastx": b"_x",
-                "BioSeqZip": b":"
-            }[self.collapser_type]
-
-        return self._collapser_token
 
 
 def infer_strandedness(sam_file: str, intervals: dict) -> str:
@@ -534,9 +462,9 @@ class ReferenceFeatures(ReferenceBase):
     Children of the root ancestor are otherwise not stored in the reference tables.
 
     Match-tuples are created for each Features Sheet rule which matches a feature's attributes.
-    They are structured as (rank, rule, overlap). "Rank" is the hierarchy value of the matching
-    rule, "rule" is the index of that rule in FeatureSelector's rules table, and "overlap" is the
-    IntervalSelector per the rule's overlap requirements.
+    They are structured as (rank, rule, overlap, mismatches). "Rank" is the hierarchy value of
+    the matching rule, "rule" is the index of that rule in FeatureSelector's rules table, and
+    "overlap" is the IntervalSelector per the rule's overlap requirements.
 
     Source and type filters allow the user to define acceptable values for columns 2 and 3 of the
     GFF, respectively. These filters are inclusive (only rows with matching values are parsed),
@@ -625,10 +553,10 @@ class ReferenceFeatures(ReferenceBase):
                     if self.column_filter_match(row, rule):
                         # Unclassified matches are pooled under '' empty string
                         identity_matches[rule['Class']].add(
-                            (index, rule['Hierarchy'], rule['Overlap'])
+                            (index, rule['Hierarchy'], rule['Overlap'], rule['Mismatch'])
                         )
 
-        # -> identity_matches: {classifier: {(rule, rank, overlap), ...}, ...}
+        # -> identity_matches: {classifier: {(rule, rank, overlap, mismatch), ...}, ...}
         return identity_matches
 
     def add_feature(self, feature_id: str, row, matches: defaultdict) -> str:
@@ -845,7 +773,7 @@ class ReferenceSeqs(ReferenceBase):
         matches_by_classifier = defaultdict(list)
 
         for idx, rule in enumerate(self.selector.rules_table):
-            match_tuple = (idx, rule['Hierarchy'], rule['Overlap'])
+            match_tuple = (idx, rule['Hierarchy'], rule['Overlap'], rule['Mismatch'])
             matches_by_classifier[rule['Class']].append(match_tuple)
 
         return matches_by_classifier
