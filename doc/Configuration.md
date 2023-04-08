@@ -136,7 +136,7 @@ Supported values are:
 - **Any number**: the corresponding library's counts are divided by this number (useful for spike-in normalization)
 - **RPM or rpm**: the corresponding library's counts are divided by (its mapped read count / 1,000,000)
 
->**NOTE**: These normalizations operate independently of tiny-count's --normalize-by-hits commandline option. The former is concerned with per-library normalization, whereas the latter is concerned with normalization by selected feature count at each locus ([more info](tiny-count.md#count-normalization)). The commandline option does not enable or disable the normalizations detailed above.
+>**NOTE**: These normalizations operate independently of tiny-count's --normalize-by-genomic/feature-hits commandline options. The former is concerned with per-library normalization, whereas the latter is concerned with normalization by each sequence's alignment count and the number of selected features at each locus ([more info](tiny-count.md#count-normalization)). The commandline option does not enable or disable the normalizations detailed above.
 
 ### Low DF Experiments
 DESeq2 requires that your experiment design has at least one degree of freedom. If your experiment doesn't include at least one sample group with more than one replicate, tiny-deseq.r will be skipped and DGE related plots will not be produced.

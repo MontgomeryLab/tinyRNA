@@ -70,12 +70,19 @@ Optional arguments:
 
 Copies the template configuration files required by tiny-count into the current directory. This argument can't be combined with `--paths-file`. All other arguments are ignored when provided, and once the templates have been copied tiny-count exits.
 
-### Normalize by Hits
-| Run Config Key             | Commandline Argument      |
-|----------------------------|---------------------------|
-| counter-normalize-by-hits: | `--normalize-by-hits T/F` |
+### Normalize by Genomic Hits
+| Run Config Key                     | Commandline Argument              |
+|------------------------------------|-----------------------------------|
+| counter_normalize_by_genomic_hits: | `--normalize-by-genomic-hits T/F` |
 
-By default, tiny-count will divide the number of counts associated with each sequence, twice, before they are assigned to a feature. Each unique sequence's count is determined by tiny-collapse (or a compatible collapsing utility) and is preserved through the alignment process. The original count is divided first by the number of loci that the sequence aligns to, and second by the number of features passing selection at each locus. Switching this option "off" disables the latter normalization step.
+By default, tiny-count will increment feature counts by a normalized amount to avoid overcounting. Each unique sequence's read count is determined by tiny-collapse (or a compatible collapsing utility) and is preserved through the alignment process. For sequences with multiple alignments, a portion of the sequence's original count is allocated to each of its alignments to be assigned to features that pass selection at the locus. This portion is the original count divided by the number of alignments, or _genomic hits_. By disabling this normalization step, each of the sequence's alignments will be allocated the full original read count rather than the normalized portion.
+
+### Normalize by Feature Hits
+| Run Config Key                     | Commandline Argument              |
+|------------------------------------|-----------------------------------|
+| counter_normalize_by_feature_hits: | `--normalize-by-feature-hits T/F` |
+
+By default, tiny-count will increment feature counts by a normalized amount to avoid overcounting. Each sequence alignment locus is allocated a portion of the sequence's original read count (depending on `counter_normalize_by_genomic_hits`), and once selection is complete the allocated count is divided by the number of selected features, or _feature hits_, at the alignment. The resulting value is added to the totals for each matching feature. By disabling this normalization step, each selected feature will receive the full amount allocated to the locus rather than the normalized portion.
 
 ### Decollapse
 | Run Config Key      | Commandline Argument   |
