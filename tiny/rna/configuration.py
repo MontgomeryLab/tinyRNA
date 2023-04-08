@@ -896,8 +896,8 @@ class CSVReader(csv.DictReader):
             if 'mismatches' not in header_vals_lc:
                 compat_errors.append('\n'.join([
                     "It looks like you're using a Features Sheet from an earlier version of",
-                    'tinyRNA. An additional column, "Mismatches", is now expected. Please review'
-                    "the Stage 2 section in tiny-count's documentation for more info, then add"
+                    'tinyRNA. An additional column, "Mismatches", is now expected. Please review',
+                    "the Stage 2 section in tiny-count's documentation for more info, then add",
                     "the new column to your Features Sheet to avoid this error."
                 ]))
 
