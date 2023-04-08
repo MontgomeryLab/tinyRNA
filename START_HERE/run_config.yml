@@ -235,7 +235,7 @@ counter_decollapse: False
 ##-- Select the StepVector implementation that is used. Options: HTSeq or Cython --##
 counter_stepvector: 'Cython'
 
-##-- If True: produce diagnostic logs to indicate what was eliminated and why --##
+##-- If True: produce alignment tables and assignment diagnostics for uncounted reads --##
 counter_diags: False
 
 
