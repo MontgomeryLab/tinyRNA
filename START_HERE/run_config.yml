@@ -226,7 +226,7 @@ shared_memory: False
 counter_all_features: False
 
 ##-- If True: counts are normalized by genomic hits (number of multi-alignments) --##
-counter_normalize_by_genomic_hits: False
+counter_normalize_by_genomic_hits: True
 
 ##-- If True: counts are normalized by feature hits (selected feature count per-locus) --##
 counter_normalize_by_feature_hits: True
@@ -328,7 +328,7 @@ dir_name_logs: logs
 #
 ###########################################################################################
 
-version: 1.3.0
+version: 1.4.0
 
 ######--------------------------- DERIVED FROM PATHS FILE ---------------------------######
 #

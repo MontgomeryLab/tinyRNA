@@ -15,7 +15,7 @@ EMAIL = 'ajtate@colostate.edu'
 AUTHOR = 'Kristen Brown, Alex Tate'
 PLATFORM = 'Unix'
 REQUIRES_PYTHON = '>=3.9.0'
-VERSION = '1.3.0'
+VERSION = '1.4.0'
 REQUIRED = []  # Required packages are installed via Conda's environment.yml
 
 
