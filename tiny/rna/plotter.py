@@ -256,6 +256,13 @@ def get_proportions_df(counts_df: pd.DataFrame, mapped_totals: pd.Series, un: st
 
 def load_mapped_reads(summary_stats_file: str) -> pd.Series:
     """Produces a Series of mapped reads per library for calculating proportions in class charts.
+    If normalization by genomic hits and/or feature hits was disabled during the counting run,
+    then the normal "Mapped Reads" calculation will be an inflated count, so in summary stats
+    it is differentiated as:
+        "Normalized Mapped Reads" and "Non-normalized Mapped Reads"
+
+    For proper calculation of proportions with non-normalized counts, the
+    "Non-normalized Mapped Reads" stat has to be used.
 
     Args:
         summary_stats_file: the summary stats csv produced by tiny-count
@@ -263,7 +270,11 @@ def load_mapped_reads(summary_stats_file: str) -> pd.Series:
     Returns: a Series containing mapped reads per sample
     """
 
-    return pd.read_csv(summary_stats_file, index_col=0).loc["Mapped Reads",:]
+    stats = pd.read_csv(summary_stats_file, index_col=0)
+    if "Mapped Reads" in stats.index:
+        return stats.loc['Mapped Reads']
+    else:
+        return stats.loc['Non-normalized Mapped Reads']
 
 
 def get_sample_rep_dict(df: pd.DataFrame) -> dict:
