@@ -18,7 +18,8 @@ from ..util import make_filename, report_execution_time
 
 class LibraryStats:
 
-    summary_categories = ['Total Assigned Reads', 'Total Unassigned Reads',
+    summary_categories = ['Mapped Reads Basis',
+                          'Total Assigned Reads', 'Total Unassigned Reads',
                           'Total Assigned Sequences', 'Total Unassigned Sequences',
                           'Assigned Single-Mapping Reads', 'Assigned Multi-Mapping Reads',
                           'Reads Assigned to Single Feature', 'Sequences Assigned to Single Feature',
@@ -47,6 +48,7 @@ class LibraryStats:
         loci_counts = len(aln_bundle)
         corr_counts = round(read_counts / loci_counts, 2) if self.norm_gh else read_counts
         nt5, seqlen = bundle_read['nt5end'], bundle_read['Length']
+        self.library_stats['Mapped Reads Basis'] += read_counts
 
         return {
             'read_count': read_counts,
@@ -118,7 +120,7 @@ class MergedStat(ABC):
     def add_library(self, other: LibraryStats): ...
 
     @abstractmethod
-    def finalize(self): ...
+    def finalize(self): ...  # Called before validating stats
 
     @abstractmethod
     def write_output_logfile(self): ...
@@ -158,7 +160,7 @@ class MergedStatsManager:
 
         self.merged_stats = [
             FeatureCounts(Features_obj), RuleCounts(features_csv),
-            AlignmentStats(), SummaryStats(),
+            AlignmentStats(), SummaryStats(prefs),
             NtLenMatrices(prefs)
         ]
 
@@ -427,6 +429,7 @@ class AlignmentStats(MergedStat):
         self.alignment_stats_df[library] = self.alignment_stats_df.index.map(stats)
 
     def finalize(self):
+        self.alignment_stats_df.drop(index="Mapped Reads Basis", inplace=True)  # Handled by SummaryStats
         self.alignment_stats_df = self.sort_cols_and_round(self.alignment_stats_df)
         self.finalized = True
 
@@ -437,15 +440,17 @@ class AlignmentStats(MergedStat):
 
 class SummaryStats(MergedStat):
 
-    constant_categories     = ["Mapped Sequences", "Mapped Reads", "Assigned Reads"]
     conditional_categories  = ["Total Reads", "Retained Reads", "Unique Sequences"]
-    summary_categories      = conditional_categories + constant_categories
+    counted_categories      = ["Mapped Sequences", "Normalized Mapped Reads", "Mapped Reads", "Assigned Reads"]
+    summary_categories      = conditional_categories + counted_categories
 
     pipeline_stats_df = pd.DataFrame(index=summary_categories)
 
-    def __init__(self):
-        self.missing_fastp_outputs = []
+    def __init__(self, prefs):
+        self.norm_gh = prefs.get('normalize_by_genomic_hits', True)
+        self.norm_fh = prefs.get('normalize_by_feature_hits', True)
         self.missing_collapser_outputs = []
+        self.missing_fastp_outputs = []
         self.finalized = False
 
     def add_library(self, other: LibraryStats):
@@ -455,10 +460,14 @@ class SummaryStats(MergedStat):
 
         other.library['basename'] = self.get_library_basename(other)
         other_summary = {
-            "Mapped Sequences": self.get_mapped_seqs(other),
-            "Mapped Reads": self.get_mapped_reads(other),
+            "Mapped Sequences": self.calculate_mapped_seqs(other),
+            "Mapped Reads": self.calculate_mapped_reads(other),
             "Assigned Reads": other.library_stats["Total Assigned Reads"]
         }
+
+        if not (self.norm_gh and self.norm_fh):
+            norm_mapped = other.library_stats['Mapped Reads Basis']
+            other_summary['Normalized Mapped Reads'] = norm_mapped
 
         if self.library_has_fastp_outputs(other):
             total_reads, retained_reads = self.get_fastp_stats(other)
@@ -474,14 +483,14 @@ class SummaryStats(MergedStat):
         self.pipeline_stats_df[other.library["Name"]] = self.pipeline_stats_df.index.map(other_summary)
 
     @staticmethod
-    def get_mapped_seqs(other: LibraryStats):
+    def calculate_mapped_seqs(other: LibraryStats):
         return sum([other.library_stats[stat] for stat in [
             "Total Assigned Sequences",
             "Total Unassigned Sequences"
         ]])
 
     @staticmethod
-    def get_mapped_reads(other: LibraryStats):
+    def calculate_mapped_reads(other: LibraryStats):
         return sum([other.library_stats[stat] for stat in [
             'Reads Assigned to Multiple Features',
             'Reads Assigned to Single Feature',
@@ -506,7 +515,18 @@ class SummaryStats(MergedStat):
 
     def write_output_logfile(self):
         assert self.finalized, "SummaryStats object must be finalized before writing output."
-        self.df_to_csv(self.pipeline_stats_df, "Summary Statistics", self.prefix, "summary_stats")
+
+        if self.norm_gh and self.norm_fh:
+            # No need to differentiate when default normalization is on
+            irrelevant = "Normalized Mapped Reads"
+            out_df = self.pipeline_stats_df.drop(index=irrelevant)
+        else:
+            # With normalization steps turned off, the Mapped Reads stat might be
+            # inflated but necessary for calculating proportions in tiny-plot.
+            differentiate = {'Mapped Reads': "Non-normalized Mapped Reads"}
+            out_df = self.pipeline_stats_df.rename(index=differentiate)
+
+        self.df_to_csv(out_df, "Summary Statistics", self.prefix, "summary_stats")
 
     def library_has_collapser_outputs(self, other: LibraryStats) -> bool:
         # Collapser outputs may have been gzipped. Accept either filename.
@@ -700,7 +720,7 @@ class StatisticsValidator:
 
     def validate_stats(self, aln_stats, sum_stats):
         # SummaryStats categories
-        MS, MR, AR = "Mapped Sequences", "Mapped Reads", "Assigned Reads"
+        MS, MR, AR, NMR = "Mapped Sequences", "Mapped Reads", "Assigned Reads", "Normalized Mapped Reads"
 
         # AlignmentStats categories
         TAR, TUR = "Total Assigned Reads", "Total Unassigned Reads"
@@ -728,6 +748,10 @@ class StatisticsValidator:
         if not self.approx_equal(a_df.loc[TAR], s_df.loc[AR]):
             MergedStat.add_warning("Alignment stats and summary stats disagree on the number of assigned reads.")
             MergedStat.add_warning(self.indent_table(a_df.loc[TAR], s_df.loc[AR], index=("Alignment Stats", "Summary Stats")))
+
+        if s_df.loc[NMR].gt(s_df.loc[MR]).any():
+            MergedStat.add_warning("Summary stats reports normalized mapped reads > non-normalized mapped reads.")
+            MergedStat.add_warning(self.indent_table(s_df.loc[NMR], s_df.loc(MR), index=("Normalized", "Non-normalized")))
 
         if not self.approx_equal(res.loc["Sum"].sum(), 0):
             MergedStat.add_warning("Unexpected disagreement between alignment and summary statistics.")
