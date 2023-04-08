@@ -1,4 +1,5 @@
 import pandas as pd
+import traceback
 import gzip
 import json
 import mmap
@@ -8,11 +9,11 @@ import os
 import re
 
 from abc import abstractmethod, ABC
-from typing import Tuple, Optional, Union
+from typing import Tuple, Optional, Union, List, DefaultDict
 from collections import Counter, defaultdict
 from glob import glob
 
-from ..util import make_filename
+from ..util import make_filename, report_execution_time
 
 
 class LibraryStats:
@@ -156,6 +157,8 @@ class MergedStatsManager:
 
     def __init__(self, Features_obj, features_csv, prefs):
         MergedStat.prefix = prefs.get('out_prefix', '')
+        self.verify_stats = prefs.get('verify_stats')
+        self.prefs = prefs
 
         self.merged_stats = [
             FeatureCounts(Features_obj), RuleCounts(features_csv),
@@ -166,19 +169,20 @@ class MergedStatsManager:
         if prefs.get('report_diags', False):
             self.merged_stats.append(MergedDiags())
 
+    @report_execution_time('Validating and writing report files')
     def write_report_files(self) -> None:
         try:
             for in_process in self.merged_stats:
                 in_process.finalize()
 
-            # Validate stats now that all libraries have been processed
-            StatisticsValidator(self.merged_stats).validate()
+            if self.verify_stats:
+                # Validate stats now that all libraries have been processed
+                StatisticsValidator(self.merged_stats).validate()
         finally:
             self.print_warnings()
 
         for output_stat in self.merged_stats:
             output_stat.write_output_logfile()
-        self.print_warnings()
 
     def add_library(self, other: LibraryStats) -> None:
         for merger in self.merged_stats:
@@ -427,7 +431,8 @@ class AlignmentStats(MergedStat):
         self.alignment_stats_df[library] = self.alignment_stats_df.index.map(stats)
 
     def finalize(self):
-        self.finalized = True  # Nothing else to do
+        self.alignment_stats_df = self.sort_cols_and_round(self.alignment_stats_df)
+        self.finalized = True
 
     def write_output_logfile(self):
         assert self.finalized, "AlignmentStats object must be finalized before writing output."
@@ -659,3 +664,142 @@ class MergedDiags(MergedStat):
         selection_summary_filename = make_filename([self.prefix, 'selection_diags'], ext='.txt')
         with open(selection_summary_filename, 'w') as f:
             f.write('\n'.join(out))
+
+
+class StatisticsValidator:
+
+    filename_suffix = 'stats_check.csv'
+
+    def __init__(self, merged_stats: List[MergedStat]):
+        self.stats = {type(stat).__name__: stat for stat in merged_stats}
+        self.prefix = MergedStat.prefix
+
+    def validate(self):
+        """Check the counts reported in all MergedStat objects for internal consistency.
+        This step should be allowed to fail without preventing outputs from being written."""
+
+        try:
+            self.validate_stats(self.stats['AlignmentStats'], self.stats['SummaryStats'])
+            self.validate_counts(self.stats['FeatureCounts'], self.stats['RuleCounts'], self.stats['SummaryStats'])
+            self.validate_nt_len_matrices(self.stats['NtLenMatrices'], self.stats['SummaryStats'])
+        except Exception as e:
+            print(traceback.format_exc(), file=sys.stderr)
+            MergedStat.add_warning("Error validating statistics: " + str(e))
+
+    def validate_stats(self, aln_stats, sum_stats):
+        # SummaryStats categories
+        MS, MR, AR = "Mapped Sequences", "Mapped Reads", "Assigned Reads"
+
+        # AlignmentStats categories
+        TAR, TUR = "Total Assigned Reads", "Total Unassigned Reads"
+        TAS, TUS = "Total Assigned Sequences", "Total Unassigned Sequences"
+        ASMR, AMMR = "Assigned Single-Mapping Reads", "Assigned Multi-Mapping Reads"
+        RASF, RAMF = "Reads Assigned to Single Feature", "Reads Assigned to Multiple Features"
+        SASF, SAMF = "Sequences Assigned to Single Feature", "Sequences Assigned to Multiple Features"
+
+        a_df = aln_stats.alignment_stats_df
+        s_df = sum_stats.pipeline_stats_df
+        table = pd.concat([s_df.loc[[MR, MS], :], a_df])
+
+        res = pd.DataFrame(columns=a_df.columns)
+        res.loc["TAS - (SASF + SAMF)"] = table.loc[TAS] - (table.loc[SASF] + table.loc[SAMF])
+        res.loc["TAR - (ASMR + AMMR)"] = table.loc[TAR] - (table.loc[ASMR] + table.loc[AMMR])
+        res.loc["TAR - (RASF + RAMF)"] = table.loc[TAR] - (table.loc[RASF] + table.loc[RAMF])
+        res.loc["MS - (TUS + TAS)"] = table.loc[MS] - (table.loc[TUS] + table.loc[TAS])
+        res.loc["MS - (TUS + SASF + SAMF)"] = table.loc[MS] - (table.loc[TUS] + table.loc[SASF] + table.loc[SAMF])
+        res.loc["MR - (TUR + TAR)"] = table.loc[MR] - (table.loc[TUR] + table.loc[TAR])
+        res.loc["MR - (TUR + RASF + RAMF)"] = table.loc[MR] - (table.loc[TUR] + table.loc[RASF] + table.loc[RAMF])
+        res.loc["MR - (TUR + ASMR + AMMR)"] = table.loc[MR] - (table.loc[TUR] + table.loc[ASMR] + table.loc[AMMR])
+        res.loc["Sum"] = res.sum(axis=0)
+        res = res.round(decimals=2)
+
+        if not self.approx_equal(a_df.loc[TAR], s_df.loc[AR]):
+            MergedStat.add_warning("Alignment stats and summary stats disagree on the number of assigned reads.")
+            MergedStat.add_warning(self.indent_table(a_df.loc[TAR], s_df.loc[AR], index=("Alignment Stats", "Summary Stats")))
+
+        if not self.approx_equal(res.loc["Sum"].sum(), 0):
+            MergedStat.add_warning("Unexpected disagreement between alignment and summary statistics.")
+            MergedStat.add_warning(f"See the checksum table ({self.filename_suffix})")
+            MergedStat.df_to_csv(res, "Checksum", self.prefix, self.filename_suffix)
+
+    def validate_counts(self, feat_counts, rule_counts, sum_stats):
+        f_df = feat_counts.feat_counts_df
+        r_df = rule_counts.rule_counts_df
+        s_df = sum_stats.pipeline_stats_df
+        s_sum = s_df.loc["Assigned Reads"]
+
+        # Get sum of assigned counts in the RuleCounts table
+        r_rows = r_df.index.difference(["Mapped Reads"], sort=False)
+        r_cols = r_df.columns.difference(["Rule Index", "Rule String"], sort=False)
+        r_df_sum = r_df.loc[r_rows, r_cols].sum(axis=0)
+        r_df_mapped = r_df.loc["Mapped Reads", r_cols]
+
+        # Get sum of assigned counts in the FeatureCounts table
+        f_cols = f_df.columns.difference(["Feature ID", "Classifier", "Feature Name"], sort=False)
+        f_df_sum = f_df[f_cols].sum(axis=0)
+
+        # Compare assigned counts in FeatureCounts, RuleCounts, and SummaryStats
+        if not self.approx_equal(r_df_sum, f_df_sum):
+            MergedStat.add_warning("Rule counts and feature counts disagree on the number of assigned reads:")
+            MergedStat.add_warning(self.indent_table(r_df_sum, f_df_sum, index=("Rule Counts", "Feature Counts")))
+        if not self.approx_equal(r_df_sum, s_sum):
+            MergedStat.add_warning("Rule counts and summary stats disagree on the number of assigned reads:")
+            MergedStat.add_warning(self.indent_table(r_df_sum, s_sum, index=("Rule Counts", "Summary Stats")))
+        if r_df_sum.gt(r_df_mapped).any():
+            MergedStat.add_warning("Rule counts reports assigned reads > mapped reads.")
+            MergedStat.add_warning(self.indent_table(r_df_sum, r_df_mapped, index=("Assigned", "Mapped")))
+
+        # Compare counts per classifier in FeatureCounts to corresponding rules in RuleCounts
+        f_cols = f_df.columns.difference(["Feature ID", "Feature Name"], sort=False)
+        f_cls_sums = f_df[f_cols].groupby("Classifier").sum()
+        r_cls_idxs = rule_counts.get_inverted_classifiers()
+        for cls, counts in f_cls_sums.iterrows():
+            f_cls_sum = f_cls_sums.loc[cls].sum()
+            r_cls_sum = sum(r_df.loc[rule, r_cols].sum() for rule in r_cls_idxs[cls])
+            if not self.approx_equal(f_cls_sum, r_cls_sum):
+                MergedStat.add_warning(f'Feature counts and rule counts disagree on counts for the "{cls}" classifier.')
+                MergedStat.add_warning(self.indent_vs(f_cls_sum, r_cls_sum))
+
+    def validate_nt_len_matrices(self, matrices, sum_stats):
+        s_df = sum_stats.pipeline_stats_df
+        w_mapped = "Length matrix for {} disagrees with summary stats on the number of mapped reads."
+        w_assigned = "Length matrix for {} disagrees with summary stats on the number of assigned reads."
+
+        for lib_name, (mapped, assigned) in matrices.nt_len_matrices.items():
+            m_sum = mapped.sum().sum()
+            a_sum = assigned.sum().sum()
+            if not self.approx_equal(m_sum, s_df.loc["Mapped Reads", lib_name]):
+                MergedStat.add_warning(w_mapped.format(lib_name))
+                MergedStat.add_warning(self.indent_vs(m_sum, s_df.loc['Mapped Reads', lib_name]))
+            if not self.approx_equal(a_sum, s_df.loc["Assigned Reads", lib_name]):
+                MergedStat.add_warning(w_assigned.format(lib_name))
+                MergedStat.add_warning(self.indent_vs(a_sum, s_df.loc['Assigned Reads', lib_name]))
+
+    @staticmethod
+    def approx_equal(x: Union[pd.Series, int], y: Union[pd.Series, int], tolerance=0.01):
+        """Tolerate small differences in floating point numbers due to floating point error.
+        The error tends to be greater for stats that are incremented many times by small
+        amounts. The default tolerance is definitely too generous for the error,
+        but seems conceptually appropriate for read counts."""
+
+        approx = abs(x - y) < tolerance
+        if isinstance(approx, pd.Series):
+            approx = approx.all()
+
+        return approx
+
+    @staticmethod
+    def indent_table(*series: pd.Series, index: tuple, indent=1):
+        """Joins the series into a table and adds its string
+        representation to the warning log with each line indented."""
+
+        table_str = str(pd.DataFrame(tuple(series), index=index))
+        table_ind = '\n'.join('\t' * indent + line for line in table_str.splitlines())
+        return table_ind
+
+    @staticmethod
+    def indent_vs(stat_a: Union[int, float], stat_b: Union[int, float], indent=1):
+        """Simply indents the string representation of two numbers being compared
+        and formats them to two decimal places."""
+
+        return '\t' * indent + f"{stat_a:.2f} vs {stat_b:.2f}"
