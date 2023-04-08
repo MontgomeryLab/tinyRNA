@@ -89,21 +89,19 @@ class LibraryStats:
         """Called at the conclusion of processing each multiple-alignment bundle"""
 
         assigned_feat_count = len({feat[0] for feat in bundle['assigned_ftags']})
+        unassigned_reads = round(bundle['unassigned_reads'], 2)
+        assigned_reads = round(bundle['assigned_reads'], 2)
+
+        self.library_stats['Total Unassigned Reads'] += unassigned_reads
+        bundle['nt5_mapped'][bundle['seq_length']] += assigned_reads + unassigned_reads
 
         if assigned_feat_count == 0:
             self.library_stats['Total Unassigned Sequences'] += 1
         else:
             self.library_stats['Total Assigned Sequences'] += 1
-            assigned_reads = round(bundle['assigned_reads'], 2)
-            unassigned_reads = round(bundle['unassigned_reads'], 2)
-
-            self.library_stats['Total Unassigned Reads'] += unassigned_reads
             self.library_stats['Total Assigned Reads'] += assigned_reads
             self.library_stats[bundle['mapping_stat']] += assigned_reads
-
-            seqlen = bundle['seq_length']
-            bundle['nt5_assigned'][seqlen] += assigned_reads
-            bundle['nt5_mapped'][seqlen] += assigned_reads + unassigned_reads
+            bundle['nt5_assigned'][bundle['seq_length']] += assigned_reads
 
             if assigned_feat_count == 1:
                 self.library_stats['Reads Assigned to Single Feature'] += assigned_reads
