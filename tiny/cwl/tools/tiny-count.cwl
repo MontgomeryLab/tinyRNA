@@ -145,5 +145,10 @@ outputs:
     outputBinding:
       glob: $(inputs.out_prefix)_selection_diags.txt
 
+  stats_check:
+    type: File?
+    outputBinding:
+      glob: "*_stats_check.csv"
+
   console_output:
     type: stdout
