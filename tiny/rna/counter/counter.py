@@ -54,17 +54,17 @@ def get_args():
                                help='The output prefix to use for file names. All occurrences of the '
                                     'substring {timestamp} will be replaced with the current date and time.')
     optional_args.add_argument('-ng', '--normalize-by-genomic-hits', metavar='T/F', default='T',
-                               help='If T/true, normalize counts by genomic hits.')
+                               help='Normalize counts by genomic hits.')
     optional_args.add_argument('-nf', '--normalize-by-feature-hits', metavar='T/F', default='T',
-                               help='If T/true, normalize counts by feature hits.')
+                               help='Normalize counts by feature hits.')
+    optional_args.add_argument('-vs', '--verify-stats', metavar='T/F', default='T',
+                               help='Verify that all reported stats are internally consistent.')
     optional_args.add_argument('-dc', '--decollapse', action='store_true',
                                help='Create a decollapsed copy of all SAM files listed in your Samples Sheet. '
                                     'This option is ignored for non-collapsed inputs.')
     optional_args.add_argument('-sv', '--stepvector', choices=['Cython', 'HTSeq'], default='Cython',
                                help='Select which StepVector implementation is used to find '
                                     'features overlapping an interval.')
-    optional_args.add_argument('-vs', '--verify-stats', metavar='T/F', default='T',
-                                 help='If T/true, verify that all reported stats are internally consistent.')
     optional_args.add_argument('-a', '--all-features', action='store_true', help=argparse.SUPPRESS)
                                #help='Represent all features in output counts table, '
                                #     'even if they did not match in Stage 1 selection.')

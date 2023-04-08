@@ -114,8 +114,8 @@ Diagnostic information will include intermediate alignment files for each librar
 
 ### Full tiny-count Help String
 ```
-tiny-count (-pf FILE | --get-templates) [-o PREFIX] [-nh T/F] [-dc]
-           [-sv {Cython,HTSeq}] [-p] [-d]
+tiny-count (-pf FILE | --get-templates) [-o PREFIX] [-ng T/F] [-nf T/F]
+                  [-vs T/F] [-dc] [-sv {Cython,HTSeq}] [-p] [-d]
 
 tiny-count is a precision counting tool for hierarchical classification and
 quantification of small RNA-seq reads
@@ -139,9 +139,13 @@ Optional arguments:
                         occurrences of the substring {timestamp} will be
                         replaced with the current date and time. (default:
                         tiny-count_{timestamp})
-  -nh T/F, --normalize-by-hits T/F
-                        If T/true, normalize counts by (selected) overlapping
-                        feature counts. (default: T)
+  -ng T/F, --normalize-by-genomic-hits T/F
+                        Normalize counts by genomic hits. (default: T)
+  -nf T/F, --normalize-by-feature-hits T/F
+                        Normalize counts by feature hits. (default: T)
+  -vs T/F, --verify-stats T/F
+                        Verify that all reported stats are internally
+                        consistent. (default: T)
   -dc, --decollapse     Create a decollapsed copy of all SAM files listed in
                         your Samples Sheet. This option is ignored for non-
                         collapsed inputs. (default: False)
