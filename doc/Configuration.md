@@ -157,6 +157,7 @@ Selectors in the Features Sheet can be specified as a single value, a list of co
 | `Type Filter`   |    ✓     |   ✓    |  ✓   |       |
 | `Hierarchy`     |          |   ✓    |      |       |
 | `Overlap`       |    ✓     |   ✓    |      |       |
+| `Mismatches`    |    ✓     |   ✓    |  ✓   |   ✓   |
 | `Strand`        |    ✓     |   ✓    |      |       |
 | `5' nt`         |    ✓     |   ✓    |  ✓   |       |
 | `Length`        |    ✓     |   ✓    |  ✓   |   ✓   |

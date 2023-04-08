@@ -27,7 +27,7 @@ class FeaturesTests(unittest.TestCase):
         fs = FeatureSelector(rules)
 
         # Feature with specified coordinates, matching rule 0 with hierarchy 0 and the appropriate selector for iv_rule
-        selectors = fs.build_interval_selectors(feat_iv, [(0, 0, iv_rule)])
+        selectors = fs.build_interval_selectors(feat_iv, [(0, 0, iv_rule, Wildcard())])
         match_tuple = (selectors[feat_iv][0],)
         feat = {(feat_id, strand_to_bool(strand), match_tuple)}
 
@@ -398,19 +398,19 @@ class FeaturesTests(unittest.TestCase):
         fs = FeatureSelector(deepcopy(rules_template))
         iv = HTSeq.GenomicInterval('I', 10, 20, '+')
 
-        match_tuples = [('n/a', 'n/a', 'partial'),
-                        ('n/a', 'n/a', 'nested'),
-                        ('n/a', 'n/a', 'exact'),
-                        ('n/a', 'n/a', "5' anchored"),
-                        ('n/a', 'n/a', "3' anchored"),
+        match_tuples = [('n/a', 'n/a', 'partial', 'n/a'),
+                        ('n/a', 'n/a', 'nested', 'n/a'),
+                        ('n/a', 'n/a', 'exact', 'n/a'),
+                        ('n/a', 'n/a', "5' anchored", 'n/a'),
+                        ('n/a', 'n/a', "3' anchored", 'n/a'),
                         # iv_shifted_1                        Shift values:
-                        ('n/a', 'n/a', 'partial, -5, 5'),       # 5': -5    3': 5
-                        ('n/a', 'n/a', 'nested, -5, 5'),        # 5': -5    3': 5
+                        ('n/a', 'n/a', 'partial, -5, 5', 'n/a'),       # 5': -5    3': 5
+                        ('n/a', 'n/a', 'nested, -5, 5', 'n/a'),        # 5': -5    3': 5
                         # iv_shifted_2
-                        ('n/a', 'n/a', 'exact, -10, 10'),       # 5': -10   3': 10
+                        ('n/a', 'n/a', 'exact, -10, 10', 'n/a'),       # 5': -10   3': 10
                         # iv_shifted_3
-                        ('n/a', 'n/a', "5' anchored, -1, -1"),  # 5': -1    3': -1
-                        ('n/a', 'n/a', "3' anchored, -1, -1")]  # 5': -1    3': -1
+                        ('n/a', 'n/a', "5' anchored, -1, -1", 'n/a'),  # 5': -1    3': -1
+                        ('n/a', 'n/a', "3' anchored, -1, -1", 'n/a')]  # 5': -1    3': -1
 
         iv_shifted_1 = HTSeq.GenomicInterval('I', 5, 25, '+')
         iv_shifted_2 = HTSeq.GenomicInterval('I', 0, 30, '+')

@@ -130,15 +130,15 @@ outputs:
     outputBinding:
       glob: "*_decollapsed.sam"
 
-  intermed_out_files:
+  alignment_tables:
     type: File[]?
     outputBinding:
-      glob: "*_aln_table.txt"
+      glob: "*_alignment_table.csv"
 
-  alignment_diags:
+  assignment_diags:
     type: File?
     outputBinding:
-      glob: $(inputs.out_prefix)_alignment_diags.csv
+      glob: $(inputs.out_prefix)_assignment_diags.csv
 
   selection_diags:
     type: File?

@@ -228,8 +228,8 @@ steps:
       fastp_logs: preprocessing/json_report_file
       collapsed_fa: preprocessing/uniq_seqs
     out: [ feature_counts, rule_counts, norm_counts, mapped_nt_len_dist, assigned_nt_len_dist,
-           alignment_stats, summary_stats, decollapsed_sams, intermed_out_files,
-           alignment_diags, selection_diags ]
+           alignment_stats, summary_stats, decollapsed_sams, alignment_tables,
+           assignment_diags, selection_diags ]
 
   tiny-deseq:
     run: ../tools/tiny-deseq.cwl
@@ -325,7 +325,7 @@ steps:
         source: [ tiny-count/feature_counts, tiny-count/rule_counts, tiny-count/norm_counts,
                   tiny-count/mapped_nt_len_dist, tiny-count/assigned_nt_len_dist,
                   tiny-count/alignment_stats, tiny-count/summary_stats, tiny-count/decollapsed_sams,
-                  tiny-count/alignment_diags, tiny-count/selection_diags, tiny-count/intermed_out_files,
+                  tiny-count/assignment_diags, tiny-count/selection_diags, tiny-count/alignment_tables,
                   features_csv ]
       dir_name: dir_name_tiny-count
     out: [ subdir ]

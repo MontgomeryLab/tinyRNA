@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os
 import sys
+import pysam
 import setuptools
 
 from setuptools.command.install import install
@@ -40,9 +41,10 @@ def get_cython_extension_defs():
     error out if there are build issues, and therefore must be used as optional imports."""
 
     pyx_files = [
-        # (file path, optional)
-        ('tiny/rna/counter/stepvector/_stepvector.pyx', True),
-        ('tests/cython_tests/stepvector/test_cython.pyx', True)
+        # (file path, optional, include)
+        ('tiny/rna/counter/stepvector/_stepvector.pyx', True, []),
+        ('tests/cython_tests/stepvector/test_cython.pyx', True, []),
+        ('tiny/rna/counter/parsing/alignments.pyx', False, pysam.get_include())
     ]
 
     cxx_extension_args = {
@@ -61,9 +63,10 @@ def get_cython_extension_defs():
     return [setuptools.Extension(
                 pyx_filename.replace('./', '').replace('/', '.').rstrip('.pyx'),
                 sources=[pyx_filename],
+                include_dirs=include,
                 optional=optional,
                 **cxx_extension_args)
-            for pyx_filename, optional in pyx_files]
+            for pyx_filename, optional, include in pyx_files]
 
 
 def get_macos_sdk_path():
@@ -120,6 +123,7 @@ setuptools.setup(
     ext_modules=cythonize(
         get_cython_extension_defs(),
         compiler_directives={'language_level': '3'},
+        include_path=pysam.get_include(),
         gdb_debug=False
     ),
     scripts=scripts,

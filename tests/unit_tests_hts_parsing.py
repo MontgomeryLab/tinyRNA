@@ -15,6 +15,7 @@ from tiny.rna.counter.hts_parsing import *
 import unit_test_helpers as helpers
 
 resources = "./testdata/counter"
+wc = Wildcard()  # used in many tests as a 'n/a' value
 
 # To run all test suites
 if __name__ == '__main__':
@@ -44,8 +45,8 @@ class SamReaderTests(unittest.TestCase):
         self.assertEqual(sam_record['Start'], 15064569)
         self.assertEqual(sam_record['End'], 15064590)
         self.assertEqual(sam_record['Strand'], False)
-        self.assertEqual(sam_record['Name'], b"0_count=5")
-        self.assertEqual(sam_record['Seq'], b"CAAGACAGAGCTTCACCGTTC")
+        self.assertEqual(sam_record['Name'], "0_count=5")
+        self.assertEqual(sam_record['Seq'], "CAAGACAGAGCTTCACCGTTC")
         self.assertEqual(sam_record['Length'], 21)
         self.assertEqual(sam_record['nt5end'], 'G')
 
@@ -68,13 +69,13 @@ class SamReaderTests(unittest.TestCase):
                 self.assertEqual(our['Chrom'], their.iv.chrom)
                 self.assertEqual(our['Start'], their.iv.start)
                 self.assertEqual(our['End'], their.iv.end)
-                self.assertEqual(our['Name'].decode(), their.read.name)
+                self.assertEqual(our['Name'], their.read.name)
                 self.assertEqual(our['nt5end'], chr(their.read.seq[0]))  # See note above
                 self.assertEqual(our['Strand'], helpers.strand_to_bool(their.iv.strand))
                 if our['Strand'] is False:  # See note above
-                    self.assertEqual(our['Seq'][::-1].translate(helpers.complement), their.read.seq)
+                    self.assertEqual(our['Seq'][::-1].translate(helpers.complement), their.read.seq.decode())
                 else:
-                    self.assertEqual(our['Seq'], their.read.seq)
+                    self.assertEqual(our['Seq'], their.read.seq.decode())
 
     """Does SAM_reader._get_decollapsed_filename() create an appropriate filename?"""
 
@@ -86,38 +87,60 @@ class SamReaderTests(unittest.TestCase):
 
         self.assertEqual(sam_out, "sam_file_decollapsed.sam")
 
-    """Does SAM_reader._read_to_first_aln() correctly identify header lines and write them to the decollapsed file?"""
+    """Does SAM_reader._new_bundle report the correct read count for different collapser types?"""
 
-    def test_SAM_reader_read_thru_header(self):
+    def test_SAM_reader_new_bundle(self):
+        qnames = ["0_count=3", "seq0_x5", "non-collapsed"]
+        counts = [3, 5, 1]
+
+        reader = SAM_reader()
+        reader._header_dict = {'HD': {'SO': 'queryname'}}
+
+        for qname, expected in zip(qnames, counts):
+            reader._determine_collapser_type(qname)
+            _, read_count = reader._new_bundle({'Name': qname})
+            self.assertEqual(read_count, expected)
+
+    """Does SAM_reader._gather_metadata() correctly identify metadata and write the decollapsed file header?"""
+
+    def test_SAM_reader_gather_metadata(self):
         reader = SAM_reader(decollapse=True)
         reader._decollapsed_filename = "mock_outfile_name.sam"
 
-        with open(self.short_sam_file, 'rb') as sam_in:
-            with patch('builtins.open', mock_open()) as sam_out:
-                line = reader._read_to_first_aln(sam_in)
+        sam_in = pysam.AlignmentFile(self.short_sam_file)
+        with patch('builtins.open', mock_open()) as sam_out:
+            reader._gather_metadata(sam_in)
 
         expected_writelines = [
             call('mock_outfile_name.sam', 'w'),
             call().__enter__(),
-            call().writelines(["@SQ	SN:I	LN:21\n"]),
+            call().write("@SQ\tSN:I\tLN:21\n"),
             call().__exit__(None, None, None)
         ]
 
         sam_out.assert_has_calls(expected_writelines)
-        self.assertTrue(len(reader._header_lines) == 1)
+        self.assertEqual(reader.collapser_type, 'tiny-collapse')
+        self.assertDictEqual(reader._header_dict, {'SQ': [{'SN': "I", 'LN': 21}]})
+        self.assertEqual(reader.references, ('I',))
+        self.assertTrue(reader.has_nm)
 
     """Does SAM_reader._write_decollapsed_sam() write the correct number of duplicates to the decollapsed file?"""
 
     def test_SAM_reader_write_decollapsed_sam(self):
+        header = pysam.AlignmentHeader()
+        alignment = pysam.AlignedSegment(header)
+        alignment.query_name = "0_count=5"
+
         reader = SAM_reader(decollapse=True)
         reader.collapser_type = "tiny-collapse"
-        reader._decollapsed_reads = [(b"0_count=5", b"mock line from SAM file")]
+        reader._collapser_token = "="
+        reader._decollapsed_reads = [alignment]
         reader._decollapsed_filename = "mock_outfile_name.sam"
 
         expected_writelines = [
-            call('mock_outfile_name.sam', 'ab'),
+            call('mock_outfile_name.sam', 'a'),
             call().__enter__(),
-            call().writelines([b"mock line from SAM file"] * 5),
+            call().write('\n'.join([alignment.to_string()] * 5)),
             call().__exit__(None, None, None)
         ]
 
@@ -130,37 +153,28 @@ class SamReaderTests(unittest.TestCase):
     """Does SAM_reader._parse_alignments() save lines and write them to the decollapsed file when appropriate?"""
 
     def test_SAM_reader_parse_alignments_decollapse(self):
-        with patch.object(SAM_reader, "_write_decollapsed_sam") as write_fn, \
-                patch('tiny.rna.counter.hts_parsing.open', new_callable=mock_open) as mopen:
+        with patch.object(SAM_reader, "_write_decollapsed_sam") as write_fn:
+            # Set up SAM_reader class
             reader = SAM_reader(decollapse=True)
-            reader._decollapsed_reads = [0] * 99999  # At 100,001, buffer will be written
-            reader.file = self.short_sam_file  # File with single alignment
+            reader.collapser_type = "tiny-collapse"
+            reader._decollapsed_reads = buffer = [0] * 99999  # At 100,001, expect buffer to be written
+            reader.file = self.short_sam_file                 # File with single alignment
 
-            with open(self.short_sam_file, 'rb') as sam_in:
-                self.exhaust_iterator(reader._parse_alignments(sam_in))
-                write_fn.assert_not_called()
+            # Set up AlignmentIter class
+            sam_in = pysam.AlignmentFile(reader.file)
+            callback = reader._write_decollapsed_sam
+            first_aln_offset = sam_in.tell()
+            has_nm = True
+            aln_iter = AlignmentIter(sam_in, has_nm, callback, buffer)
 
-                # Rewind and add one more alignment to push it over threshold
-                sam_in.seek(0)
-                self.exhaust_iterator(reader._parse_alignments(sam_in))
-                write_fn.assert_called_once()
+            # Add 100,000th alignment to the buffer
+            self.exhaust_iterator(aln_iter)
+            write_fn.assert_not_called()
 
-    """Does SAM_reader report a single read count for non-collapsed SAM records?"""
-
-    def test_SAM_reader_single_readcount_non_collapsed_SAM(self):
-        # Read non-collapsed.sam but duplicate its single record twice
-        with open(f"{resources}/non-collapsed.sam", 'rb') as f:
-            sam_lines = f.readlines()
-            sam_lines.extend([sam_lines[1]] * 2)
-            mock_file = mock_open(read_data=b''.join(sam_lines))
-
-        with patch('tiny.rna.counter.hts_parsing.open', new=mock_file):
-            reader = SAM_reader()
-            bundle, read_count = next(reader.bundle_multi_alignments('mock_file'))
-
-        self.assertEqual(bundle[0]['Name'], b'NON_COLLAPSED_QNAME')
-        self.assertEqual(len(bundle), 3)
-        self.assertEqual(read_count, 1)
+            # Rewind and add one more alignment to push it over threshold
+            sam_in.seek(first_aln_offset)
+            self.exhaust_iterator(aln_iter)
+            write_fn.assert_called_once()
 
     """Are decollapsed outputs skipped when non-collapsed SAM files are supplied?"""
 
@@ -256,7 +270,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
         steps = list(feats[iv].array[iv.start:iv.end].get_steps(values_only=True))
 
         self.assertEqual((type(feats), type(alias), type(tags)), (HTSeq.GenomicArrayOfSets, dict, defaultdict))
-        self.assertEqual(steps, [{(("Gene:WBGene00023193", 'tag'), False, ((1, 2, IntervalPartialMatch(iv)),))}])
+        self.assertEqual(steps, [{(("Gene:WBGene00023193", 'tag'), False, ((1, 2, IntervalPartialMatch(iv), wc),))}])
         self.assertEqual(alias, {"Gene:WBGene00023193": ('Y74C9A.6',)})
         self.assertDictEqual(tags, {"Gene:WBGene00023193": {('Gene:WBGene00023193', 'tag')}})
 
@@ -280,7 +294,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
         steps = list(feats[iv].array[iv.start:iv.end].get_steps(values_only=True))
 
         self.assertEqual((type(feats), type(alias), type(tags)), (HTSeq.GenomicArrayOfSets, dict, defaultdict))
-        self.assertEqual(steps, [{(("Gene:WBGene00023193", 'tag'), False, ((1, 2, IntervalPartialMatch(iv)),))}])
+        self.assertEqual(steps, [{(("Gene:WBGene00023193", 'tag'), False, ((1, 2, IntervalPartialMatch(iv), wc),))}])
         self.assertDictEqual(alias, {"Gene:WBGene00023193": ('Y74C9A.6',)})
         self.assertDictEqual(tags, {"Gene:WBGene00023193": {('Gene:WBGene00023193', 'tag')}})
 
@@ -365,7 +379,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
 
         expected_matches = [
             set(),
-            {(('Gene:WBGene00023193', ''), False, ((0, 1, ivm), (1, 2, ivm), (2, 3, ivm)))},
+            {(('Gene:WBGene00023193', ''), False, ((0, 1, ivm, wc), (1, 2, ivm, wc), (2, 3, ivm, wc)))},
             set()
         ]
 
@@ -466,10 +480,10 @@ class ReferenceFeaturesTests(unittest.TestCase):
         sib_ivs = [HTSeq.GenomicInterval('I', 99, 110, '-'), HTSeq.GenomicInterval('I', 110, 120, '-'),
                    HTSeq.GenomicInterval('I', 139, 150, '-')]
 
-        rule1_gp =  {f"{iv.start}:{iv.end}": ((0, 2, IntervalPartialMatch(iv)),) for iv in gp_ivs}
-        rule1_p2 =  {f"{iv.start}:{iv.end}": ((0, 2, IntervalPartialMatch(iv)),) for iv in p2_ivs}
-        rule2_sib = {f"{iv.start}:{iv.end}": (1, 3, IntervalPartialMatch(iv))    for iv in sib_ivs}
-        rule3_sib = {f"{iv.start}:{iv.end}": (2, 0, IntervalPartialMatch(iv))    for iv in sib_ivs}
+        rule1_gp =  {f"{iv.start}:{iv.end}": ((0, 2, IntervalPartialMatch(iv), wc),) for iv in gp_ivs}
+        rule1_p2 =  {f"{iv.start}:{iv.end}": ((0, 2, IntervalPartialMatch(iv), wc),) for iv in p2_ivs}
+        rule2_sib = {f"{iv.start}:{iv.end}": (1, 3, IntervalPartialMatch(iv), wc)    for iv in sib_ivs}
+        rule3_sib = {f"{iv.start}:{iv.end}": (2, 0, IntervalPartialMatch(iv), wc)    for iv in sib_ivs}
 
         # For tables that store features in tagged form
         GrandParent, Parent2, Sibling = ('GrandParent',''), ('Parent2',''), ('Sibling','')
@@ -502,7 +516,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
 
         child2_iv =     HTSeq.GenomicInterval('I', 39, 50, '-')
         exp_alias =     {'Child2': ('Child2Name',)}
-        exp_feats =     [set(), {(('Child2', ''), False, ((0, 0, IntervalPartialMatch(child2_iv)),))}, set()]
+        exp_feats =     [set(), {(('Child2', ''), False, ((0, 0, IntervalPartialMatch(child2_iv), wc),))}, set()]
         exp_intervals = {'Child2': [child2_iv]}
         exp_classes =   {'Child2': ('NA',)}
         exp_filtered =  {"GrandParent", "ParentWithGrandparent", "Parent2", "Child1", "Sibling"}
@@ -527,7 +541,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
 
         child1_iv =     HTSeq.GenomicInterval('I', 29, 40, '-')
         exp_alias =     {'Child1': ('SharedName',)}
-        exp_feats =     [set(), {(('Child1', ''), False, ((0, 0, IntervalPartialMatch(child1_iv)),))}, set()]
+        exp_feats =     [set(), {(('Child1', ''), False, ((0, 0, IntervalPartialMatch(child1_iv), wc),))}, set()]
         exp_intervals = {'Child1': [child1_iv]}
         exp_classes =   {'Child1': ('NA',)}
         exp_filtered =  {"GrandParent", "ParentWithGrandparent", "Parent2", "Child2", "Sibling"}
@@ -574,8 +588,8 @@ class ReferenceFeaturesTests(unittest.TestCase):
         iv = IntervalPartialMatch(HTSeq.GenomicInterval('n/a', 3746, 3909))
         expected_feats = [
             set(), {
-                ((feat_id, 'tagged_match'), False, ((0, 1, iv),)),
-                ((feat_id, ''),             False, ((1, 2, iv),))
+                ((feat_id, 'tagged_match'), False, ((0, 1, iv, wc),)),
+                ((feat_id, ''),             False, ((1, 2, iv, wc),))
             },
             set()
         ]
@@ -606,12 +620,12 @@ class ReferenceFeaturesTests(unittest.TestCase):
         Child2_iv = IntervalPartialMatch(HTSeq.GenomicInterval('n/a', 39, 50))
         expected_feats = [
             set(), {
-                (('Parent2', 'shared'), False, ((0, 1, Parent2_iv), (1, 2, Parent2_iv))),
-                (('Parent2', ''),       False, ((2, 3, Parent2_iv),)),
+                (('Parent2', 'shared'), False, ((0, 1, Parent2_iv, wc), (1, 2, Parent2_iv, wc))),
+                (('Parent2', ''),       False, ((2, 3, Parent2_iv, wc),)),
             },
             set(), {
-                (('Parent2', 'shared'), False, ((0, 1, Child2_iv), (1, 2, Child2_iv))),
-                (('Parent2', ''),       False, ((2, 3, Child2_iv),))
+                (('Parent2', 'shared'), False, ((0, 1, Child2_iv, wc), (1, 2, Child2_iv, wc))),
+                (('Parent2', ''),       False, ((2, 3, Child2_iv, wc),))
             },
             set()
         ]
@@ -651,7 +665,7 @@ class ReferenceSequencesTests(unittest.TestCase):
     def test_add_reference_seq_single(self):
         seq_id = "seq"
         seq_len = 10
-        matches = {'': [(0, 0, "partial")]}
+        matches = {'': [(0, 0, "partial", wc)]}
 
         rs = self.ReferenceSeqs_add(seq_id, seq_len, matches)
         actual = self.get_steps(rs, seq_id)
@@ -660,7 +674,7 @@ class ReferenceSequencesTests(unittest.TestCase):
         # and the overlap selector should have the same interval.
         # For these selectors, same interval on both strands.
         iv = HTSeq.GenomicInterval(seq_id, 0, seq_len)
-        match_tuple = ((0, 0, IntervalPartialMatch(iv)),)
+        match_tuple = ((0, 0, IntervalPartialMatch(iv), wc),)
 
         expected = {
             (0, 10): {
@@ -677,7 +691,7 @@ class ReferenceSequencesTests(unittest.TestCase):
     def test_add_reference_seq_shared_classifier(self):
         seq_id = "seq"
         seq_len = 10
-        matches = {'shared': [(0, 0, "partial"), (1, 1, "nested")]}
+        matches = {'shared': [(0, 0, "partial", wc), (1, 1, "nested", wc)]}
 
         rs = self.ReferenceSeqs_add(seq_id, seq_len, matches)
         actual = self.get_steps(rs, seq_id)
@@ -686,7 +700,7 @@ class ReferenceSequencesTests(unittest.TestCase):
         # and the overlap selector should have the same interval.
         # For these selectors, same interval on both strands.
         iv = HTSeq.GenomicInterval(seq_id, 0, seq_len)
-        match_tuples = (0, 0, IntervalPartialMatch(iv)), (1, 1, IntervalNestedMatch(iv))
+        match_tuples = (0, 0, IntervalPartialMatch(iv), wc), (1, 1, IntervalNestedMatch(iv), wc)
 
         expected = {
             (0, 10): {
@@ -704,7 +718,7 @@ class ReferenceSequencesTests(unittest.TestCase):
     def test_add_reference_seq_shared_iv(self):
         seq_id = "seq"
         seq_len = 10
-        matches = {'exact': [(0, 0, "exact, 2, -2")], 'nested': [(1, 1, "nested, 2, -2")]}
+        matches = {'exact': [(0, 0, "exact, 2, -2", wc)], 'nested': [(1, 1, "nested, 2, -2", wc)]}
 
         rs = self.ReferenceSeqs_add(seq_id, seq_len, matches)
         actual = self.get_steps(rs, seq_id)
@@ -713,8 +727,8 @@ class ReferenceSequencesTests(unittest.TestCase):
         # and the overlap selector should have the same interval.
         # For these selectors, same interval on both strands.
         iv = HTSeq.GenomicInterval(seq_id, 2, seq_len - 2)
-        match_exact =  ((0, 0, IntervalExactMatch(iv)),)
-        match_nested = ((1, 1, IntervalNestedMatch(iv)),)
+        match_exact =  ((0, 0, IntervalExactMatch(iv), wc),)
+        match_nested = ((1, 1, IntervalNestedMatch(iv), wc),)
 
         expected = {
             (0, 2): set(),
@@ -737,8 +751,8 @@ class ReferenceSequencesTests(unittest.TestCase):
         seq_id = "seq"
         seq_len = 10
         matches = {
-            "class1": [(0, 0, "nested, 1, -1"), (0, 0, "exact, 5, 0")],
-            "class2": [(0, 0, "5' anchored, 5, 0")]
+            "class1": [(0, 0, "nested, 1, -1", wc), (0, 0, "exact, 5, 0", wc)],
+            "class2": [(0, 0, "5' anchored, 5, 0", wc)]
         }
 
         rs = self.ReferenceSeqs_add(seq_id, seq_len, matches)
@@ -746,19 +760,19 @@ class ReferenceSequencesTests(unittest.TestCase):
 
         # Since nested shift is symmetric, iv is same on both strands
         iv_n = HTSeq.GenomicInterval(seq_id, 1, seq_len-1)
-        match_nested = ((0, 0, IntervalNestedMatch(iv_n)),)
+        match_nested = ((0, 0, IntervalNestedMatch(iv_n), wc),)
 
         # Since exact and anchored shift is asymmetric and by the same
         # amount, iv differs per strand but is shared by both selectors.
         # If they both had the same classifier then these match tuples
         # would share the same record tuple on both strands
         iv_e5_s = HTSeq.GenomicInterval(seq_id, 5, seq_len, '+')
-        match_exact_sense = ((0, 0, IntervalExactMatch(iv_e5_s)),)
-        match_5anch_sense = ((0, 0, Interval5pMatch(iv_e5_s)),)
+        match_exact_sense = ((0, 0, IntervalExactMatch(iv_e5_s), wc),)
+        match_5anch_sense = ((0, 0, Interval5pMatch(iv_e5_s), wc),)
 
         iv_e5_a = HTSeq.GenomicInterval(seq_id, 0, seq_len-5, '-')
-        match_exact_antis = ((0, 0, IntervalExactMatch(iv_e5_a)),)
-        match_5anch_antis = ((0, 0, Interval5pMatch(iv_e5_a)),)
+        match_exact_antis = ((0, 0, IntervalExactMatch(iv_e5_a), wc),)
+        match_5anch_antis = ((0, 0, Interval5pMatch(iv_e5_a), wc),)
 
         expected = {
             (0, 1): {

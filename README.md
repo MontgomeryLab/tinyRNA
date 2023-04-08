@@ -239,14 +239,23 @@ Two tables are produced:
 
 #### Diagnostics
 
-Diagnostic information will include intermediate alignment files for each library and an additional stats table with information about counts that were not assigned to a feature. Intermediate alignment files include the following information about each alignment, regardless of feature assignment status:
+Diagnostic information can optionally be produced. If enabled, tiny-count will provide a table for each library which contains feature assignment info on a per-alignment basis, along with a single table that summarizes unassigned counts.
 
-- The alignment's SEQ field, reverse complemented for the - strand
-- The sequence's count normalized by its multi-alignment locus count
-- Feature IDs of all features assigned to the alignment
-- Strand, start, and end position
+The alignment tables (**... alignment_table.csv**) include the following information per-alignment:
 
-The unassigned counts table includes the following, with a column per library:
+| Column            | Description                                                                                                                                                        |
+|-------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Sequence          | The read sequence, reverse complemented if antisense                                                                                                               |
+| Normalized Count  | The reads available for assignment (the sequence's original read count normalized by genomic hits)                                                                 |
+| Chrom             | The alignment's RNAME field                                                                                                                                        |
+| Strand            | The alignment's strand                                                                                                                                             |
+| Start             | The alignment's start coordinate                                                                                                                                   |
+| End               | The alignment's end coordinate                                                                                                                                     |
+| Candidates        | The number of features overlapping the alignment by at last one nucleotide                                                                                         |
+| Assigned Features | Feature IDs of all features assigned to the alignment. `NONE` if no features were assigned. If the assigning rule has a classifier, it is included in parentheses. |
+
+
+The unassigned counts table (**assignment_diags.csv**) includes the following, with a column per library:
 
 | Stat                              | Description                                                                                                                                   |
 |-----------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------|

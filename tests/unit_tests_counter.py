@@ -36,10 +36,11 @@ class CounterTests(unittest.TestCase):
             'Filter_s':  "",
             'Filter_t':  "",
             'Hierarchy': "1",
+            'Overlap':   "Partial",
+            'Mismatch':  "",
             'Strand':    "antisense",
             "nt5end":    '"C,G,U"',  # Needs to be double-quoted due to commas
             'Length':    "all",
-            'Overlap':   "Partial"
         }
 
         # Represents the parsed Features Sheet row above
@@ -51,10 +52,11 @@ class CounterTests(unittest.TestCase):
             'Filter_s':  _row['Filter_s'],
             'Filter_t':  _row['Filter_t'],
             'Hierarchy': int(_row['Hierarchy']),
+            'Overlap':   _row['Overlap'].lower(),
+            'Mismatch':  _row['Mismatch'],
             'Strand':    _row['Strand'],
             'nt5end':    _row["nt5end"].upper().translate({ord('U'): 'T'}),
             'Length':    _row['Length'],
-            'Overlap':   _row['Overlap'].lower()
         }]
 
         # Represents an unparsed Samples Sheet row
