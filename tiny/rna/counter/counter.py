@@ -55,8 +55,8 @@ def get_args():
                                     'substring {timestamp} will be replaced with the current date and time.')
     optional_args.add_argument('-ng', '--normalize-by-genomic-hits', metavar='T/F', default='T',
                                help='If T/true, normalize counts by genomic hits.')
-    optional_args.add_argument('-nh', '--normalize-by-feature-hits', metavar='T/F', default='T',
-                               help='If T/true, normalize counts by (selected) overlapping feature counts.')
+    optional_args.add_argument('-nf', '--normalize-by-feature-hits', metavar='T/F', default='T',
+                               help='If T/true, normalize counts by feature hits.')
     optional_args.add_argument('-dc', '--decollapse', action='store_true',
                                help='Create a decollapsed copy of all SAM files listed in your Samples Sheet. '
                                     'This option is ignored for non-collapsed inputs.')

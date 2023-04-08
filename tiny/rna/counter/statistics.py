@@ -24,10 +24,9 @@ class LibraryStats:
                           'Reads Assigned to Single Feature', 'Sequences Assigned to Single Feature',
                           'Reads Assigned to Multiple Features', 'Sequences Assigned to Multiple Features']
 
-    def __init__(self, out_prefix: str = None, report_diags: bool = False, **prefs):
+    def __init__(self, **prefs):
         self.library = {'Name': 'Unassigned', 'File': 'Unassigned', 'Norm': '1'}
-        self.out_prefix = out_prefix
-        self.diags = Diagnostics(out_prefix) if report_diags else None
+        self.diags = Diagnostics(**prefs) if prefs.get('report_diags') else None
         self.norm_gh = prefs.get('normalize_by_genomic_hits', True)
         self.norm_fh = prefs.get('normalize_by_feature_hits', True)
 
@@ -184,7 +183,7 @@ class MergedStatsManager:
         for output_stat in self.merged_stats:
             output_stat.write_output_logfile()
 
-    def add_library(self, other: LibraryStats) -> None:
+    def add_library_stats(self, other: LibraryStats) -> None:
         for merger in self.merged_stats:
             merger.add_library(other)
         self.chrom_misses.update(other.chrom_misses)
@@ -196,8 +195,8 @@ class MergedStatsManager:
             self.warnings.append("between your bowtie indexes and GFF files, or your bowtie indexes may")
             self.warnings.append("contain chromosomes not defined in your GFF files.")
             self.warnings.append("The chromosome names and their alignment counts are:")
-            for chr in sorted(self.chrom_misses.keys()):
-                self.warnings.append("\t" + chr + ": " + str(self.chrom_misses[chr]))
+            for chrom in sorted(self.chrom_misses.keys()):
+                self.warnings.append("\t" + chrom + ": " + str(self.chrom_misses[chrom]))
             self.warnings.append("\n")
 
         for warning in self.warnings:
@@ -635,13 +634,15 @@ class MergedDiags(MergedStat):
         self.selection_diags[other_lib] = other.diags.selection_diags
         self.aln_diags.loc[other_lib] = other.diags.alignment_diags
 
+    def finalize(self): pass
+
     def write_output_logfile(self):
         self.write_alignment_diags()
         # self.write_selection_diags()  Not currently collected
         self.write_alignment_tables()
 
     def write_alignment_diags(self):
-        MergedStat.df_to_csv(self.aln_diags, "Sample", self.prefix, "alignment_diags", sort_axis="index")
+        self.df_to_csv(self.aln_diags, "Sample", self.prefix, "alignment_diags", sort_axis="index")
 
     def write_alignment_tables(self):
         for library_name, table in self.alignment_tables.items():
