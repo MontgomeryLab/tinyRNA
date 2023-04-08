@@ -589,8 +589,7 @@ class Diagnostics:
     complement = bytes.maketrans(b'ACGTacgt', b'TGCAtgca')
     map_strand = {True: '+', False: '-', None: '.'}
 
-    def __init__(self, out_prefix: str):
-        self.prefix = out_prefix
+    def __init__(self):
         self.assignment_diags = {stat: 0 for stat in Diagnostics.summary_categories}
         self.selection_diags = defaultdict(Counter)
         self.alignments = []
@@ -648,7 +647,7 @@ class MergedDiags(MergedStat):
         # self.selection_diags[other_lib] = other.diags.selection_diags  Not currently collected
         self.assignment_diags[other_lib] = self.assignment_diags.index.map(other.diags.assignment_diags)
 
-    def finalize(self): pass
+    def finalize(self): pass  # Nothing to do
 
     def write_output_logfile(self):
         self.write_assignment_diags()
