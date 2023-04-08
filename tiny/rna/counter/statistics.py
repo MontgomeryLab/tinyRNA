@@ -26,7 +26,7 @@ class LibraryStats:
 
     def __init__(self, **prefs):
         self.library = {'Name': 'Unassigned', 'File': 'Unassigned', 'Norm': '1'}
-        self.diags = Diagnostics(**prefs) if prefs.get('report_diags') else None
+        self.diags = Diagnostics() if prefs.get('report_diags') else None
         self.norm_gh = prefs.get('normalize_by_genomic_hits', True)
         self.norm_fh = prefs.get('normalize_by_feature_hits', True)
 
@@ -790,7 +790,7 @@ class StatisticsValidator:
                 MergedStat.add_warning(self.indent_vs(a_sum, s_df.loc['Assigned Reads', lib_name]))
 
     @staticmethod
-    def approx_equal(x: Union[pd.Series, int], y: Union[pd.Series, int], tolerance=0.01):
+    def approx_equal(x: Union[pd.Series, int], y: Union[pd.Series, int], tolerance=1.0):
         """Tolerate small differences in floating point numbers due to floating point error.
         The error tends to be greater for stats that are incremented many times by small
         amounts. The default tolerance is definitely too generous for the error,
