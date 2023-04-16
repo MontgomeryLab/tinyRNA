@@ -437,7 +437,8 @@ class NtLenMatrices(MergedStat):
 
 class AlignmentStats(MergedStat):
     def __init__(self):
-        self.alignment_stats_df = pd.DataFrame(index=LibraryStats.summary_categories)
+        self.alignment_stats_df = (pd.DataFrame(index=LibraryStats.summary_categories)
+                                   .rename_axis("Alignment Statistics"))
         self.finalized = False
 
     def add_library(self, other: LibraryStats):
@@ -447,12 +448,12 @@ class AlignmentStats(MergedStat):
 
     def finalize(self):
         self.alignment_stats_df.drop(index="Mapped Reads Basis", inplace=True)  # Handled by SummaryStats
-        self.alignment_stats_df = self.sort_cols_and_round(self.alignment_stats_df)
+        self.alignment_stats_df.sort_index(axis="columns", inplace=True)
         self.finalized = True
 
     def write_output_logfile(self):
         assert self.finalized, "AlignmentStats object must be finalized before writing output."
-        self.df_to_csv(self.alignment_stats_df, "Alignment Statistics", self.prefix, 'alignment_stats')
+        self.df_to_csv(self.alignment_stats_df, self.prefix, 'alignment_stats')
 
 
 class SummaryStats(MergedStat):
