@@ -120,10 +120,21 @@ class MergedStat(ABC):
     def add_library(self, other: LibraryStats): ...
 
     @abstractmethod
-    def finalize(self): ...  # Called before validating stats
+    def finalize(self):
+        """Called once all libraries have been added to the MergedStatsManager.
+        The implementation of this method should perform any preparation steps required for
+        stats validation, such as building dataframes or sorting columns so the appropriate
+        comparisons can be made, but it should not perform any operations that reduce decimal
+        precision, such as rounding or conversion to int. Validation depends on this precision
+        for internal consistency checks. Rounding should instead be done in write_output_logfile()"""
+        ...
 
     @abstractmethod
-    def write_output_logfile(self): ...
+    def write_output_logfile(self):
+        """Called once all stats classes have been validated.
+        The implementation of this method should round counts to the appropriate decimal
+        precision or convert float values to int if necessary, then write output CSV files."""
+        ...
 
     @staticmethod
     def add_warning(msg):
