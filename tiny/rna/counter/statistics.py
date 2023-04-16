@@ -46,7 +46,7 @@ class LibraryStats:
 
         bundle_read = aln_bundle[0]
         loci_counts = len(aln_bundle)
-        corr_counts = round(read_counts / loci_counts, 8) if self.norm_gh else read_counts
+        corr_counts = read_counts / loci_counts if self.norm_gh else read_counts
         nt5, seqlen = bundle_read['nt5end'], bundle_read['Length']
         self.library_stats['Mapped Reads Basis'] += read_counts
 
@@ -74,7 +74,7 @@ class LibraryStats:
         if asgn_count == 0:
             bundle['unassigned_reads'] += corr_count
         else:
-            fcorr_count = round(corr_count / asgn_count, 8) if self.norm_fh else corr_count
+            fcorr_count = corr_count / asgn_count if self.norm_fh else corr_count
             bundle['assigned_reads'] += fcorr_count * asgn_count
             bundle['assigned_ftags'] |= assignments.keys()
 
@@ -91,8 +91,8 @@ class LibraryStats:
         """Called at the conclusion of processing each multiple-alignment bundle"""
 
         assigned_feat_count = len({feat[0] for feat in bundle['assigned_ftags']})
-        unassigned_reads = round(bundle['unassigned_reads'], 8)
-        assigned_reads = round(bundle['assigned_reads'], 8)
+        unassigned_reads = bundle['unassigned_reads']
+        assigned_reads = bundle['assigned_reads']
 
         self.library_stats['Total Unassigned Reads'] += unassigned_reads
         bundle['nt5_mapped'][bundle['seq_length']] += assigned_reads + unassigned_reads
