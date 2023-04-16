@@ -374,18 +374,23 @@ class NtLenMatrices(MergedStat):
     def finalize(self):
         self.nt_len_matrices = dict(sorted(self.nt_len_matrices.items()))
         for lib_name, (mapped, assigned) in self.nt_len_matrices.items():
-            mapped_nt_len_df = self.finalize_mapped(mapped)
-            assigned_nt_len_df = self.finalize_assigned(assigned)
+            mapped_nt_len_df = self._finalize_mapped(mapped)
+            assigned_nt_len_df = self._finalize_assigned(assigned)
             self.nt_len_matrices[lib_name] = (mapped_nt_len_df, assigned_nt_len_df)
 
         self.finalized = True
 
-    def finalize_mapped(self, mapped: DefaultDict[str, Counter]) -> pd.DataFrame:
-        return pd.DataFrame(mapped).sort_index().fillna(0).round(decimals=2)
+    def _finalize_mapped(self, mapped: DefaultDict[str, Counter]) -> pd.DataFrame:
+        return (pd.DataFrame(mapped, dtype='float64')
+                .rename_axis("Length")
+                .sort_index()
+                .fillna(0))
 
-    def finalize_assigned(self, assigned: DefaultDict[str, Counter]) -> pd.DataFrame:
+    def _finalize_assigned(self, assigned: DefaultDict[str, Counter]) -> pd.DataFrame:
         # Fractional counts due to (loci count) and/or (assigned feature count) normalization
-        assigned_nt_len_df = pd.DataFrame(assigned, dtype='float64').sort_index().round(decimals=2)
+        assigned_nt_len_df = (pd.DataFrame(assigned, dtype='float64')
+                              .rename_axis("Length")
+                              .sort_index())
 
         # Drop non-nucleotide columns if they don't contain counts
         assigned_nt_len_df.drop([
@@ -413,27 +418,21 @@ class NtLenMatrices(MergedStat):
         normalization step is disabled, these counts will be fractional. However,
         even when both normalization steps are enabled, we still get fractional
         counts that are very close to a whole number due to the way these counts
-        are tallied. They are fractional up to this point for the validation step.
+        are tallied. Floating point error is at the root of this issue. Up to
+        this point, they are fractional and rounded only by the limitations of
+        float representation for the purpose of validation."""
 
-        Floating point error is at the root of this issue. If in LibraryStats we
-        instead increment these counts by the raw read count, then the matrix's
-        sum will disagree with the Mapped Reads summary stat because the constituent
-        stats of Mapped Reads are based on rounded values. Rounding maintains the
-        finite representation of these values. If we didn't round them and allowed
-        floating point error to accumulate over potentially millions+ of alignments,
-        then the disagreement between all stats would grow unpredictably and there
-        wouldn't be a meaningful way to validate them."""
+        postfix = f"{lib_name}_mapped_nt_len_dist"
 
         if self.norm_gh ^ self.norm_fh:
-            mapped.to_csv(f'{self.prefix}_{lib_name}_mapped_nt_len_dist.csv')
+            self.df_to_csv(mapped, self.prefix, postfix, sort_axis=None)
         else:
-            mapped_whole_numbers = mapped.astype('int64')
-            mapped_whole_numbers.to_csv(f'{self.prefix}_{lib_name}_mapped_nt_len_dist.csv')
+            self.df_to_csv(mapped.astype('int64'), self.prefix, postfix, sort_axis=None)
 
     def _write_assigned(self, assigned: pd.DataFrame, lib_name: str):
         """Writes the assigned matrix to a file (no further work required)."""
 
-        assigned.to_csv(f'{self.prefix}_{lib_name}_assigned_nt_len_dist.csv')
+        self.df_to_csv(assigned, self.prefix, f"{lib_name}_assigned_nt_len_dist", sort_axis=None)
 
 
 class AlignmentStats(MergedStat):
