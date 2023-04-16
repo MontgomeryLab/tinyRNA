@@ -146,16 +146,26 @@ class MergedStat(ABC):
         return df.round(decimals=2).sort_index(axis=axis)
 
     @staticmethod
-    def df_to_csv(df: pd.DataFrame, idx_name: str, prefix: str, postfix: str = None, sort_axis="columns"):
+    def df_to_csv(df: pd.DataFrame, prefix: str, postfix: str = None, sort_axis="columns"):
+        """Rounds counts, optionally sorts , and writes the dataframe
+        to CSV with the appropriate index label and filename.
+
+        Args:
+            df: The dataframe to write to CSV
+            prefix: The output filename prefix (required)
+            postfix: The optional filename postfix. If not provided, a postfix is created from
+                the index name, which will be split on space, joined on "_", and made lowercase.
+            sort_axis: The axis to sort. Default: columns. If None, neither axis is sorted.
+        """
+
         if postfix is None:
-            postfix = '_'.join(map(str.lower, idx_name.split(' ')))
+            postfix = '_'.join(map(str.lower, df.index.name.split(' ')))
 
         if sort_axis is not None:
             out_df = MergedStat.sort_cols_and_round(df, axis=sort_axis)
         else:
             out_df = df.round(decimals=2)
 
-        out_df.index.name = idx_name
         file_name = make_filename([prefix, postfix])
         out_df.to_csv(file_name)
 
