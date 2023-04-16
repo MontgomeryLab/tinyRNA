@@ -299,21 +299,19 @@ class FeatureCounts(MergedStat):
 class RuleCounts(MergedStat):
     def __init__(self, features_csv):
         self.rules = self.read_features_sheet(features_csv)
-        self.rule_counts_df = pd.DataFrame()
+        self.rule_counts_df = pd.DataFrame(index=range(len(self.rules))).rename_axis("Rule Index")
         self.finalized = False
 
     def add_library(self, other: LibraryStats):
         assert not self.finalized, "Cannot add libraries after RuleCounts object has been finalized."
-        counts = pd.Series(other.rule_counts, name=other.library['Name'])
-        self.rule_counts_df = self.rule_counts_df.join(counts, how='outer')
+        self.rule_counts_df[other.library["Name"]] = self.rule_counts_df.index.map(other.rule_counts)
 
     def finalize(self):
-        rules = self.get_rule_strings()
-        self.rule_counts_df = self.sort_cols_and_round(self.rule_counts_df)
+        self.rule_counts_df = self.rule_counts_df.sort_index(axis="columns").fillna(0)
 
-        # Add Rule String column to the left of the counts
-        order = ["Rule String"] + self.rule_counts_df.columns.to_list()
-        self.rule_counts_df = self.rule_counts_df.join(pd.Series(rules, name="Rule String"), how="outer")[order].fillna(0)
+        # Add Rule String column
+        rules = self.get_rule_strings()
+        self.rule_counts_df.insert(0, "Rule String", rules)
 
         # Add Mapped Reads row below the counts
         self.rule_counts_df.loc["Mapped Reads"] = SummaryStats.pipeline_stats_df.loc["Mapped Reads"]
@@ -321,7 +319,7 @@ class RuleCounts(MergedStat):
 
     def write_output_logfile(self):
         assert self.finalized, "RuleCounts object must be finalized before writing output."
-        self.df_to_csv(self.rule_counts_df, "Rule Index", self.prefix, 'counts_by_rule', sort_axis=None)
+        self.df_to_csv(self.rule_counts_df, self.prefix, 'counts_by_rule', sort_axis=None)
 
     def read_features_sheet(self, features_csv):
         """Reads the Features Sheet and returns a list of rules in
