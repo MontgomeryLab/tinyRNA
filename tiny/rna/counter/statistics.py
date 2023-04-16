@@ -462,7 +462,7 @@ class SummaryStats(MergedStat):
     counted_categories      = ["Mapped Sequences", "Normalized Mapped Reads", "Mapped Reads", "Assigned Reads"]
     summary_categories      = conditional_categories + counted_categories
 
-    pipeline_stats_df = pd.DataFrame(index=summary_categories)
+    pipeline_stats_df = pd.DataFrame(index=summary_categories).rename_axis("Summary Statistics")
 
     def __init__(self, prefs):
         self.norm_gh = prefs.get('normalize_by_genomic_hits', True)
@@ -528,7 +528,7 @@ class SummaryStats(MergedStat):
         # Only display conditional categories if they were collected for at least one library
         empty_rows = self.pipeline_stats_df.loc[self.conditional_categories].isna().all(axis='columns')
         self.pipeline_stats_df.drop(empty_rows.index[empty_rows], inplace=True)
-        self.pipeline_stats_df = self.sort_cols_and_round(self.pipeline_stats_df)
+        self.pipeline_stats_df.sort_index(axis="columns", inplace=True)
         self.finalized = True
 
     def write_output_logfile(self):
@@ -544,7 +544,7 @@ class SummaryStats(MergedStat):
             differentiate = {'Mapped Reads': "Non-normalized Mapped Reads"}
             out_df = self.pipeline_stats_df.rename(index=differentiate)
 
-        self.df_to_csv(out_df, "Summary Statistics", self.prefix, "summary_stats")
+        self.df_to_csv(out_df, self.prefix, "summary_stats")
 
     def library_has_collapser_outputs(self, other: LibraryStats) -> bool:
         # Collapser outputs may have been gzipped. Accept either filename.
