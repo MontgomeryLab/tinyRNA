@@ -673,7 +673,7 @@ class Diagnostics:
 
 class MergedDiags(MergedStat):
     def __init__(self):
-        self.assignment_diags = pd.DataFrame(index=Diagnostics.summary_categories)
+        self.assignment_diags = pd.DataFrame(index=Diagnostics.summary_categories).rename_axis("Assignment Diags")
         self.selection_diags = {}
         self.alignment_tables = {}
 
@@ -691,7 +691,7 @@ class MergedDiags(MergedStat):
         self.write_alignment_tables()
 
     def write_assignment_diags(self):
-        self.df_to_csv(self.assignment_diags, "Assignment Diags", self.prefix, "assignment_diags")
+        self.df_to_csv(self.assignment_diags, self.prefix)
 
     def write_alignment_tables(self):
         header = Diagnostics.alignment_columns
