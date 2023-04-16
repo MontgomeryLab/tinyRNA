@@ -718,8 +718,6 @@ class MergedDiags(MergedStat):
 
 class StatisticsValidator:
 
-    filename_suffix = 'stats_check.csv'
-
     def __init__(self, merged_stats: List[MergedStat]):
         self.stats = {type(stat).__name__: stat for stat in merged_stats}
         self.prefix = MergedStat.prefix
@@ -772,9 +770,10 @@ class StatisticsValidator:
             MergedStat.add_warning(self.indent_table(s_df.loc[NMR], s_df.loc(MR), index=("Normalized", "Non-normalized")))
 
         if not self.approx_equal(res.loc["Sum"].sum(), 0):
+            outfile_name = "stats_check"
             MergedStat.add_warning("Unexpected disagreement between alignment and summary statistics.")
-            MergedStat.add_warning(f"See the checksum table ({self.filename_suffix})")
-            MergedStat.df_to_csv(res, "Checksum", self.prefix, self.filename_suffix)
+            MergedStat.add_warning(f"See the checksum table ({outfile_name}.csv)")
+            MergedStat.df_to_csv(res, self.prefix, outfile_name)
 
     def validate_counts(self, feat_counts, rule_counts, sum_stats):
         f_df = feat_counts.feat_counts_df
@@ -789,7 +788,7 @@ class StatisticsValidator:
         r_df_mapped = r_df.loc["Mapped Reads", r_cols]
 
         # Get sum of assigned counts in the FeatureCounts table
-        f_cols = f_df.columns.difference(["Feature ID", "Classifier", "Feature Name"], sort=False)
+        f_cols = f_df.columns.difference(["Feature Name"], sort=False)
         f_df_sum = f_df[f_cols].sum(axis=0)
 
         # Compare assigned counts in FeatureCounts, RuleCounts, and SummaryStats
@@ -804,8 +803,7 @@ class StatisticsValidator:
             MergedStat.add_warning(self.indent_table(r_df_sum, r_df_mapped, index=("Assigned", "Mapped")))
 
         # Compare counts per classifier in FeatureCounts to corresponding rules in RuleCounts
-        f_cols = f_df.columns.difference(["Feature ID", "Feature Name"], sort=False)
-        f_cls_sums = f_df[f_cols].groupby("Classifier").sum()
+        f_cls_sums = f_df[f_cols].groupby(level="Classifier").sum()
         r_cls_idxs = rule_counts.get_inverted_classifiers()
         for cls, counts in f_cls_sums.iterrows():
             f_cls_sum = f_cls_sums.loc[cls].sum()
@@ -830,7 +828,7 @@ class StatisticsValidator:
                 MergedStat.add_warning(self.indent_vs(a_sum, s_df.loc['Assigned Reads', lib_name]))
 
     @staticmethod
-    def approx_equal(x: Union[pd.Series, int], y: Union[pd.Series, int], tolerance=2.0):
+    def approx_equal(x: Union[pd.Series, int], y: Union[pd.Series, int], tolerance=0.01):
         """Tolerate small differences in floating point numbers due to floating point error.
         The error tends to be greater for stats that are incremented many times by small
         amounts. The default tolerance is likely too generous."""
