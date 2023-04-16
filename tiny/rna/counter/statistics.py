@@ -226,6 +226,7 @@ class MergedStatsManager:
 class FeatureCounts(MergedStat):
     def __init__(self, Features_obj):
         self.feat_counts_df = pd.DataFrame(index=set.union(*Features_obj.classes.values()))
+        self.feat_counts_df.index.names = ["Feature ID", "Classifier"]
         self.aliases = Features_obj.aliases
         self.finalized = False
         self.norm_prefs = {}
@@ -250,12 +251,10 @@ class FeatureCounts(MergedStat):
         Aliases are concatenated by ", " if multiple exist for a feature. Alias values are not
         added for the "ID" tag as the Feature ID column already contains this information."""
 
-        # Sort columns by title and round all counts to 2 decimal places
-        summary = self.sort_cols_and_round(self.feat_counts_df)
+        # Order columns alphabetically by header (sample_rep_n)
+        summary = self.feat_counts_df.sort_index(axis="columns")
         # Add Feature Name column, which is the feature alias (default is blank if no alias exists)
         summary.insert(0, "Feature Name", summary.index.map(lambda feat: ', '.join(self.aliases.get(feat[0], ''))))
-        # Sort by index, make index its own column, and rename it to Feature ID
-        summary = summary.sort_index().reset_index().rename(columns={"level_0": "Feature ID", "level_1": "Classifier"})
 
         self.feat_counts_df = summary
         self.finalized = True
@@ -265,7 +264,7 @@ class FeatureCounts(MergedStat):
         Should be called after finalize()"""
 
         assert self.finalized, "FeatureCounts object must be finalized before writing output."
-        self.feat_counts_df.to_csv(self.prefix + '_feature_counts.csv', index=False)
+        self.df_to_csv(self.feat_counts_df, self.prefix, "feature_counts", sort_axis="index")
 
     def write_norm_counts(self):
         """Writes normalized feature counts to {prefix}_norm_counts.csv
@@ -294,7 +293,7 @@ class FeatureCounts(MergedStat):
 
             counts[library] = counts[library] / factor
 
-        counts.to_csv(self.prefix + '_norm_counts.csv', index=False)
+        self.df_to_csv(counts, self.prefix, "norm_counts", sort_axis="index")
 
 
 class RuleCounts(MergedStat):
