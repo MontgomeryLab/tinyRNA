@@ -141,14 +141,8 @@ class MergedStat(ABC):
         MergedStatsManager.warnings.append(msg)
 
     @staticmethod
-    def sort_cols_and_round(df: pd.DataFrame, axis="columns") -> pd.DataFrame:
-        """Convenience function to sort columns by title and round all values to 2 decimal places"""
-        return df.round(decimals=2).sort_index(axis=axis)
-
-    @staticmethod
-    def df_to_csv(df: pd.DataFrame, prefix: str, postfix: str = None, sort_axis="columns"):
-        """Rounds counts, optionally sorts , and writes the dataframe
-        to CSV with the appropriate index label and filename.
+    def df_to_csv(df: pd.DataFrame, prefix: str, postfix: str = None, sort_axis: Optional[str] = "columns"):
+        """Rounds counts, optionally sorts an axis, and writes the dataframe to CSV with the appropriate filename.
 
         Args:
             df: The dataframe to write to CSV
@@ -162,7 +156,7 @@ class MergedStat(ABC):
             postfix = '_'.join(map(str.lower, df.index.name.split(' ')))
 
         if sort_axis is not None:
-            out_df = MergedStat.sort_cols_and_round(df, axis=sort_axis)
+            out_df = df.round(decimals=2).sort_index(axis=sort_axis)
         else:
             out_df = df.round(decimals=2)
 
