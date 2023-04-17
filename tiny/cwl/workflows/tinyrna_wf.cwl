@@ -87,7 +87,8 @@ inputs:
   counter_decollapse: boolean?
   counter_stepvector: string?
   counter_all_features: boolean?
-  counter_normalize_by_hits: boolean?
+  counter_normalize_by_feature_hits: boolean?
+  counter_normalize_by_genomic_hits: boolean?
 
   # tiny-deseq inputs
   run_deseq: boolean
@@ -214,8 +215,11 @@ steps:
       gff_files: gff_files
       out_prefix: run_name
       all_features: counter_all_features
-      normalize_by_hits:
-        source: counter_normalize_by_hits
+      normalize_by_feature_hits:
+        source: counter_normalize_by_feature_hits
+        valueFrom: $(String(self))  # convert boolean -> string
+      normalize_by_genomic_hits:
+        source: counter_normalize_by_genomic_hits
         valueFrom: $(String(self))  # convert boolean -> string
       decollapse: counter_decollapse
       stepvector: counter_stepvector
@@ -225,7 +229,7 @@ steps:
       collapsed_fa: preprocessing/uniq_seqs
     out: [ feature_counts, rule_counts, norm_counts, mapped_nt_len_dist, assigned_nt_len_dist,
            alignment_stats, summary_stats, decollapsed_sams, alignment_tables,
-           assignment_diags, selection_diags ]
+           assignment_diags, selection_diags, stats_check ]
 
   tiny-deseq:
     run: ../tools/tiny-deseq.cwl
@@ -322,7 +326,7 @@ steps:
                   tiny-count/mapped_nt_len_dist, tiny-count/assigned_nt_len_dist,
                   tiny-count/alignment_stats, tiny-count/summary_stats, tiny-count/decollapsed_sams,
                   tiny-count/assignment_diags, tiny-count/selection_diags, tiny-count/alignment_tables,
-                  features_csv ]
+                  tiny-count/stats_check, features_csv ]
       dir_name: dir_name_tiny-count
     out: [ subdir ]
 

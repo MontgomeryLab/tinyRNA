@@ -30,10 +30,15 @@ inputs:
 
   # Optional inputs
 
-  normalize_by_hits:
+  normalize_by_feature_hits:
     type: string?
     inputBinding:
-      prefix: --normalize-by-hits
+      prefix: --normalize-by-feature-hits
+
+  normalize_by_genomic_hits:
+    type: string?
+    inputBinding:
+      prefix: --normalize-by-genomic-hits
 
   decollapse:
     type: boolean?
@@ -139,6 +144,11 @@ outputs:
     type: File?
     outputBinding:
       glob: $(inputs.out_prefix)_selection_diags.txt
+
+  stats_check:
+    type: File?
+    outputBinding:
+      glob: "*_stats_check.csv"
 
   console_output:
     type: stdout

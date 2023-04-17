@@ -196,7 +196,7 @@ And this feature matched a rule in your Features Sheet defining _Classify as..._
 | 406904     | miRNA      | mir-1, hsa-miR-1 | 1234         | 999          | ... |
 
 #### Normalized Counts
-If your Samples Sheet has settings for Normalization, an additional copy of the Feature Counts table is produced with the specified per-library normalizations applied.
+If your Samples Sheet has settings for Normalization, an additional copy of the Feature Counts table is produced with the specified per-library normalizations applied. Note that these normalizations are [unrelated to normalization by genomic/feature hits](doc/Configuration.md#applying-custom-normalization).
 
 #### Counts by Rule
 This table shows the counts assigned by each rule on a per-library basis. It is indexed by the rule's corresponding row number in the Features Sheet, where the first non-header row is considered row 0. For convenience a Rule String column is added which contains a human friendly concatenation of each rule. Finally, a Mapped Reads row is added which represents each library's total read counts which were available for assignment prior to counting/selection.
@@ -228,6 +228,13 @@ A single table of summary statistics includes columns for each library and the f
 | <nobr>Mapped Sequences</nobr> | Total genome-mapping sequences passing quality filtering                                                                                   |
 | Mapped Reads                  | Total genome-mapping reads passing quality filtering prior to counting/selection                                                           |                                                          |
 | Assigned Reads                | Total genome-mapping reads passing quality filtering that were assigned to at least one feature due to a rule match in your Features Sheet |
+
+When normalization by feature and/or genomic hits is disabled, the following stats are reported instead of `Mapped Reads`:
+
+| Stat                        | Description                                                                      |
+|-----------------------------|----------------------------------------------------------------------------------|
+| Normalized Mapped Reads     | The true mapped read count                                                       |
+| Non-normalized Mapped Reads | The sum of assigned and unassigned reads according to the normalization settings |
 
 #### 5'nt vs. Length Matrix
 

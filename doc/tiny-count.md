@@ -138,7 +138,7 @@ Examples:
 >**Tip:** you may specify U and T bases in your rules. Uracil bases will be converted to thymine when your Features Sheet is loaded. N bases are also allowed.
 
 ## Count Normalization
-Small RNA reads passing selection will receive a normalized count increment. By default, read counts are normalized twice before being assigned to a feature. The second normalization step can be disabled in `run_config.yml` if desired. Counts for each small RNA sequence are divided: 
+Small RNA reads passing selection will receive a normalized count increment. By default, read counts are normalized twice before being assigned to a feature. Both normalization steps can be disabled in `run_config.yml` if desired. Counts for each small RNA sequence are divided: 
 1. By the number of loci it aligns to in the genome.
 2. By the number of _selected_ features for each of its alignments.
 

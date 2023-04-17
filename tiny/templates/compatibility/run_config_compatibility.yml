@@ -6,6 +6,12 @@
 #  - Renames are evaluated before additions; preceding_key should use the new name if version renames it
 
 
+1.4.0:
+  rename:
+    - counter_normalize_by_hits: counter_normalize_by_feature_hits
+  add:
+    - preceding_key: counter_normalize_by_feature_hits
+      counter_normalize_by_genomic_hits: True
 1.3.0:
   remove: []
   rename:
