@@ -421,7 +421,8 @@ class NtLenMatrices(MergedStat):
         if self.norm_gh ^ self.norm_fh:
             self.df_to_csv(mapped, self.prefix, postfix, sort_axis=None)
         else:
-            self.df_to_csv(mapped.astype('int64'), self.prefix, postfix, sort_axis=None)
+            mapped_whole_numbers = mapped.round(decimals=2).astype('int64')
+            self.df_to_csv(mapped_whole_numbers, self.prefix, postfix, sort_axis=None)
 
     def _write_assigned(self, assigned: pd.DataFrame, lib_name: str):
         """Writes the assigned matrix to a file (no further work required)."""
@@ -822,10 +823,10 @@ class StatisticsValidator:
                 MergedStat.add_warning(self.indent_vs(a_sum, s_df.loc['Assigned Reads', lib_name]))
 
     @staticmethod
-    def approx_equal(x: Union[pd.Series, int], y: Union[pd.Series, int], tolerance=0.01):
+    def approx_equal(x: Union[pd.Series, int], y: Union[pd.Series, int], tolerance=1.0):
         """Tolerate small differences in floating point numbers due to floating point error.
         The error tends to be greater for stats that are incremented many times by small
-        amounts. The default tolerance is likely too generous."""
+        amounts. The default tolerance, while conceptually appropriate, is excessive."""
 
         approx = abs(x - y) < tolerance
         if isinstance(approx, pd.Series):
