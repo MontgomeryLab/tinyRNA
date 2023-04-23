@@ -101,7 +101,7 @@ A custom Cython implementation of HTSeq's StepVector is used for finding feature
 ### Is Pipeline
 | Run Config Key | Commandline Argument |
 |----------------|----------------------|
-|                | `--is-pipeline`      |
+|                | `--in-pipeline`      |
 
 This commandline argument tells tiny-count that it is running as a workflow step rather than a standalone/manual run. Under these conditions tiny-count will look for all input files in the current working directory regardless of the paths defined in the Samples Sheet and Features Sheet.
 
@@ -152,7 +152,7 @@ Optional arguments:
   -sv {Cython,HTSeq}, --stepvector {Cython,HTSeq}
                         Select which StepVector implementation is used to find
                         features overlapping an interval. (default: Cython)
-  -p, --is-pipeline     Indicates that tiny-count was invoked as part of a
+  -p, --in-pipeline     Indicates that tiny-count was invoked as part of a
                         pipeline run and that input files should be sourced as
                         such. (default: False)
   -d, --report-diags    Produce diagnostic information about

@@ -82,7 +82,7 @@ inputs:
   features_csv: File
   gff_files: File[]?
   aligned_seqs: File[]?
-  is_pipeline: boolean?
+  in_pipeline: boolean?
   counter_diags: boolean?
   counter_decollapse: boolean?
   counter_stepvector: string?
@@ -223,7 +223,7 @@ steps:
         valueFrom: $(String(self))  # convert boolean -> string
       decollapse: counter_decollapse
       stepvector: counter_stepvector
-      is_pipeline: {default: true}
+      in_pipeline: {default: true}
       diagnostics: counter_diags
       fastp_logs: preprocessing/json_report_file
       collapsed_fa: preprocessing/uniq_seqs

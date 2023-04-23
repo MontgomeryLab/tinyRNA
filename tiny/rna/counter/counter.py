@@ -67,7 +67,7 @@ def get_args():
     optional_args.add_argument('-a', '--all-features', action='store_true', help=argparse.SUPPRESS)
                                #help='Represent all features in output counts table, '
                                #     'even if they did not match in Stage 1 selection.')
-    optional_args.add_argument('-p', '--is-pipeline', action='store_true',
+    optional_args.add_argument('-p', '--in-pipeline', action='store_true',
                                help='Indicates that tiny-count was invoked as part of a pipeline run '
                                     'and that input files should be sourced as such.')
     optional_args.add_argument('-d', '--report-diags', action='store_true',
@@ -122,12 +122,12 @@ def load_samples(samples_csv: str, in_pipeline: bool) -> List[Dict[str, str]]:
     return inputs
 
 
-def load_config(features_csv: str, is_pipeline: bool) -> List[dict]:
+def load_config(features_csv: str, in_pipeline: bool) -> List[dict]:
     """Parses the Features Sheet to provide inputs to FeatureSelector and reference parsers
 
     Args:
         features_csv: a csv file which defines feature sources and selection rules
-        is_pipeline: not currently used; helps properly locate input files
+        in_pipeline: not currently used; helps properly locate input files
 
     Returns:
         rules: a list of dictionaries, each representing a parsed row from input.
@@ -212,13 +212,13 @@ def map_and_reduce(libraries, paths, prefs):
 def main():
     # Get command line arguments.
     args = get_args()
-    is_pipeline = args['is_pipeline']
+    in_pipeline = args['in_pipeline']
 
     try:
         # Load and validate config files and input files
-        paths = PathsFile(args['paths_file'], is_pipeline)
-        libraries = load_samples(paths['samples_csv'], is_pipeline)
-        selection = load_config(paths['features_csv'], is_pipeline)
+        paths = PathsFile(args['paths_file'], in_pipeline)
+        libraries = load_samples(paths['samples_csv'], in_pipeline)
+        selection = load_config(paths['features_csv'], in_pipeline)
         reference = load_references(paths, libraries, selection, args)
 
         # global for multiprocessing
@@ -233,7 +233,7 @@ def main():
     except Exception as e:
         if type(e) is SystemExit: return
         traceback.print_exception(*sys.exc_info())
-        if args['is_pipeline']:
+        if in_pipeline:
             print("\n\ntiny-count encountered an error. Don't worry! You don't have to start over.\n"
                   "You can resume the pipeline at tiny-count. To do so:\n\t"
                   "1. cd into your Run Directory\n\t"
