@@ -12,14 +12,13 @@ from tiny.rna.counter.validation import GFFValidator, SamSqValidator
 from tiny.rna.counter.features import Features, FeatureCounter
 from tiny.rna.counter.statistics import MergedStatsManager
 from tiny.rna.counter.hts_parsing import ReferenceFeatures, ReferenceSeqs, ReferenceBase
-from tiny.rna.configuration import CSVReader, PathsFile, get_templates
+from tiny.rna.configuration import PathsFile, SamplesSheet, CSVReader, get_templates
 from tiny.rna.util import (
     report_execution_time,
     add_transparent_help,
     append_to_exception,
     get_timestamp,
-    ReadOnlyDict,
-    from_here
+    ReadOnlyDict
 )
 
 # Global variables for multiprocessing
@@ -89,15 +88,15 @@ def get_args():
         return ReadOnlyDict(args_dict)
 
 
-def load_samples(samples_csv: str, is_pipeline: bool) -> List[Dict[str, str]]:
+def load_samples(samples_csv: str, in_pipeline: bool) -> List[Dict[str, str]]:
     """Parses the Samples Sheet to determine library names and alignment files for counting
 
     Sample files may have a .fastq(.gz) extension (i.e. when tiny-count is called as part of a
-    pipeline run) or a .sam extension (i.e. when tiny-count is called as a standalone tool).
+    pipeline run) or a .sam/.bam extension (i.e. when tiny-count is called as a standalone tool).
 
     Args:
         samples_csv: a csv file which defines sample group, replicate, and file location
-        is_pipeline: helps locate sample SAM files. If true, files are assumed to reside
+        in_pipeline: helps locate sample SAM files. If true, files are assumed to reside
             in the working directory. If false, files are assumed to reside in the same
             directory as their source FASTQ files with '_aligned_seqs.sam' appended
             (i.e. /dir/sample1.fastq -> /dir/sample1_aligned_seqs.sam).
@@ -107,44 +106,18 @@ def load_samples(samples_csv: str, is_pipeline: bool) -> List[Dict[str, str]]:
         library name and the location of its SAM file for counting.
     """
 
-    def get_library_filename(csv_row_file: str, samples_csv: str) -> str:
-        """The input samples.csv may contain either fastq or sam files"""
-
-        file_ext = os.path.splitext(csv_row_file)[1].lower()
-
-        # If the sample file has a fastq(.gz) extension, infer the name of its pipeline-produced .sam file
-        if file_ext in [".fastq", ".gz"]:
-            # Fix relative paths to be relative to sample_csv's path, rather than relative to cwd
-            csv_row_file = os.path.basename(csv_row_file) if is_pipeline else from_here(samples_csv, csv_row_file)
-            csv_row_file = os.path.splitext(csv_row_file)[0] + "_aligned_seqs.sam"
-        elif file_ext == ".sam":
-            if not os.path.isabs(csv_row_file):
-                raise ValueError("The following file must be expressed as an absolute path:\n%s" % (csv_row_file,))
-        else:
-            raise ValueError("The filenames defined in your Samples Sheet must have a .fastq(.gz) or .sam extension.\n"
-                             "The following filename contained neither:\n%s" % (csv_row_file,))
-        return csv_row_file
-
+    context = "Pipeline Step" if in_pipeline else "Standalone Run"
+    samples = SamplesSheet(samples_csv, context=context)
     inputs = list()
-    sheet = CSVReader(samples_csv, "Samples Sheet")
 
-    try:
-        for row in sheet.rows():
-            library_name = f"{row['Group']}_rep_{row['Replicate']}"
-            library_file_name = get_library_filename(row['File'], samples_csv)
-            library_normalization = row['Normalization']
+    for file, group_rep, norm in zip(samples.hts_samples, samples.groups_reps, samples.normalizations):
+        record = {
+            "Name": "_rep_".join(group_rep),
+            "File": file,
+            "Norm": norm
+        }
 
-            record = {
-                "Name": library_name,
-                "File": library_file_name,
-                "Norm": library_normalization
-            }
-
-            if record not in inputs: inputs.append(record)
-    except Exception as e:
-        msg = f"Error occurred on line {sheet.line_num} of {os.path.basename(samples_csv)}"
-        append_to_exception(e, msg)
-        raise
+        if record not in inputs: inputs.append(record)
 
     return inputs
 
