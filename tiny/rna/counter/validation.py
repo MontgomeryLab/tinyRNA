@@ -229,24 +229,24 @@ class GFFValidator:
         return FeatureSelector.build_selectors([selector_defs])[0]
 
 
-class SamSqValidator:
+class AlignmentSqValidator:
     """Validates @SQ headers for tiny-count's sequence-based counting mode"""
 
     targets = {
         "inter sq": "Sequence identifiers with inconsistent lengths",
-        "intra sq": "SAM files with repeated sequence identifiers",
-        "incomplete sq": "SAM files with incomplete @SQ headers",
-        "missing sq": "SAM files that lack @SQ headers"
+        "intra sq": "alignment files with repeated sequence identifiers",
+        "incomplete sq": "alignment files with incomplete @SQ headers",
+        "missing sq": "alignment files that lack @SQ headers"
     }
 
-    def __init__(self, sam_files):
+    def __init__(self, alignment_files):
         self.report = ReportFormatter(self.targets)
-        self.sam_files = sam_files
+        self.alignment_files = alignment_files
         self.reference_seqs = {}
         self.sq_headers = {}
 
     def validate(self):
-        print("Validating sequence identifiers in SAM files... ", end='')
+        print("Validating sequence identifiers in alignment files... ", end='')
         self.read_sq_headers()
         self.validate_sq_headers()
         print("done.")
@@ -279,7 +279,7 @@ class SamSqValidator:
         Sequences with consistent length definitions are added to self.reference_seqs"""
 
         seq_lengths = defaultdict(set)
-        for sam in self.sam_files:
+        for sam in self.alignment_files:
             for sq in self.sq_headers[sam]:
                 seq_id = sq['SN']
                 seq_len = int(sq['LN'])
@@ -299,7 +299,7 @@ class SamSqValidator:
         """Returns a dictionary of SAM files that contain duplicate sequence identifiers"""
 
         bad_files = {}
-        for file in self.sam_files:
+        for file in self.alignment_files:
             sq = self.sq_headers[file]
             id_count = Counter(seq['SN'] for seq in sq)
             duplicates = [seq_id for seq_id, count in id_count.items() if count > 1]
@@ -326,7 +326,7 @@ class SamSqValidator:
         if incomplete:
             report['incomplete sq'] = sorted_natural(incomplete)
 
-        header = "Every SAM file must have complete @SQ headers with SN and LN\n" \
+        header = "Every alignment file must have complete @SQ headers with SN and LN\n" \
                  "fields when performing sequence-based counting.\n"
         self.report.add_error_section(header, report)
 
@@ -341,6 +341,6 @@ class SamSqValidator:
         self.report.add_error_section(header, report)
 
     def read_sq_headers(self):
-        for file in self.sam_files:
+        for file in self.alignment_files:
             pr = pysam.AlignmentFile(file, check_sq=False)
             self.sq_headers[file] = pr.header.to_dict().get('SQ', [])

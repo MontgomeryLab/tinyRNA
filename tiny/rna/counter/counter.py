@@ -8,7 +8,7 @@ import os
 
 from typing import List, Dict
 
-from tiny.rna.counter.validation import GFFValidator, SamSqValidator
+from tiny.rna.counter.validation import GFFValidator, AlignmentSqValidator
 from tiny.rna.counter.features import Features, FeatureCounter
 from tiny.rna.counter.statistics import MergedStatsManager
 from tiny.rna.counter.hts_parsing import ReferenceFeatures, ReferenceSeqs, ReferenceBase
@@ -91,19 +91,17 @@ def get_args():
 def load_samples(samples_csv: str, in_pipeline: bool) -> List[Dict[str, str]]:
     """Parses the Samples Sheet to determine library names and alignment files for counting
 
-    Sample files may have a .fastq(.gz) extension (i.e. when tiny-count is called as part of a
+    Sample files can have a .fastq(.gz) extension (i.e. when tiny-count is called as part of a
     pipeline run) or a .sam/.bam extension (i.e. when tiny-count is called as a standalone tool).
 
     Args:
         samples_csv: a csv file which defines sample group, replicate, and file location
-        in_pipeline: helps locate sample SAM files. If true, files are assumed to reside
-            in the working directory. If false, files are assumed to reside in the same
-            directory as their source FASTQ files with '_aligned_seqs.sam' appended
-            (i.e. /dir/sample1.fastq -> /dir/sample1_aligned_seqs.sam).
+        in_pipeline: helps locate sample alignment files. If true, files are assumed to
+            reside in the working directory.
 
     Returns:
-        inputs: a list of dictionaries for each library, where each dictionary defines the
-        library name and the location of its SAM file for counting.
+        inputs: a list of dictionaries for each library. Each dictionary holds
+        the library's name, file location, and normalization preferences.
     """
 
     context = "Pipeline Step" if in_pipeline else "Standalone Run"
@@ -170,13 +168,13 @@ def load_references(paths: PathsFile, libraries: List[dict], rules: List[dict], 
     """
 
     gff_files = paths.get_gff_config()
-    sam_files = [lib['File'] for lib in libraries]
+    aln_files = [lib['File'] for lib in libraries]
 
     if gff_files:
-        GFFValidator(gff_files, rules, alignments=sam_files).validate()
+        GFFValidator(gff_files, rules, alignments=aln_files).validate()
         references = ReferenceFeatures(gff_files, **prefs)
     else:
-        sq_validator = SamSqValidator(sam_files)
+        sq_validator = AlignmentSqValidator(aln_files)
 
         # Reuse sq_validator's parsing results to save time
         sq_validator.validate()
