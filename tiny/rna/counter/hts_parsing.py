@@ -1,4 +1,5 @@
 import functools
+import itertools
 import os.path
 import HTSeq
 import pysam
@@ -197,15 +198,15 @@ class AlignmentReader:
             self._decollapsed_reads.clear()
 
 
-def infer_strandedness(sam_file: str, intervals: dict) -> str:
-    """Infers strandedness from a sample SAM file and intervals from a parsed GFF file
+def infer_strandedness(alignment_file: str, intervals: dict) -> str:
+    """Infers strandedness from a sample alignment file and intervals from a parsed GFF file
 
     Credit: this technique is an adaptation of those in RSeQC's infer_experiment.py.
     It has been modified to accept a GFF reference file rather than a BED file,
-    and to use HTSeq rather than bx-python.
+    and to use our AlignmentReader rather than bx-python.
 
     Args:
-        sam_file: the path of the SAM file to evaluate
+        alignment_file: the path of the alignment file to evaluate
         intervals: the intervals instance attribute of ReferenceFeatures, populated by .get()
     """
 
@@ -216,18 +217,14 @@ def infer_strandedness(sam_file: str, intervals: dict) -> str:
         iv_convert.strand = '.'
         unstranded[iv_convert] = orig_iv.strand
 
-    # Assumes read_SAM() defaults to non-reverse strandedness
-    sample_read = read_SAM(sam_file)
+    # Assumes AlignmentReader defaults to non-reverse strandedness
+    sample_read = AlignmentReader().bundle_multi_alignments(alignment_file)
     gff_sam_map = Counter()
-    for count in range(1, 20000):
-        try:
-            rec = next(sample_read)
-            strandless = HTSeq.GenomicInterval(rec['Chrom'], rec['Start'], rec['End'])
-            sam_strand = rec['strand']
-            gff_strand = ':'.join(unstranded[strandless].get_steps())
-            gff_sam_map[sam_strand + gff_strand] += 1
-        except StopIteration:
-            break
+    for rec, _ in zip(itertools.chain(*sample_read), range(20000)):
+        strandless = HTSeq.GenomicInterval(rec['Chrom'], rec['Start'], rec['End'])
+        sam_strand = rec['strand']
+        gff_strand = ':'.join(unstranded[strandless].get_steps())
+        gff_sam_map[sam_strand + gff_strand] += 1
 
     non_rev = (gff_sam_map['++'] + gff_sam_map['--']) / sum(gff_sam_map.values())
     reverse = (gff_sam_map['+-'] + gff_sam_map['-+']) / sum(gff_sam_map.values())
