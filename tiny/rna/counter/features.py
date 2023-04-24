@@ -4,7 +4,7 @@ import sys
 from collections import defaultdict
 from typing import List, Tuple, Set, Dict, Mapping, Union
 
-from tiny.rna.counter.hts_parsing import ReferenceFeatures, ReferenceSeqs, SAM_reader
+from tiny.rna.counter.hts_parsing import ReferenceFeatures, ReferenceSeqs, AlignmentReader
 from .statistics import LibraryStats
 from .matching import *
 from ..util import append_to_exception
@@ -32,7 +32,7 @@ class FeatureCounter:
 
     def __init__(self, references, selection_rules, **prefs):
         self.stats = LibraryStats(**prefs)
-        self.sam_reader = SAM_reader(**prefs)
+        self.alignment_reader = AlignmentReader(**prefs)
         self.selector = FeatureSelector(selection_rules, **prefs)
 
         if isinstance(references, ReferenceFeatures):
@@ -48,7 +48,7 @@ class FeatureCounter:
     def count_reads(self, library: dict):
         """Collects statistics on features assigned to each alignment associated with each read"""
 
-        read_seq = self.sam_reader.bundle_multi_alignments(library["File"])
+        read_seq = self.alignment_reader.bundle_multi_alignments(library["File"])
         self.stats.assign_library(library)
 
         # For each sequence in the sam file...
@@ -85,7 +85,7 @@ class FeatureSelector:
     """Performs hierarchical selection given a set of candidate features for a locus
 
     Two sources of data serve as targets for selection: feature attributes (sourced from
-    input GFF files), and sequence attributes (sourced from input SAM files).
+    input GFF files), and sequence attributes (sourced from input alignment files).
     All candidate features are assumed to have matched at least one Identity selector,
     as determined by hts_parsing.ReferenceFeatures.get_matches_and_classes()
 

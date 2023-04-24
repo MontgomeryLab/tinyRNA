@@ -59,7 +59,7 @@ def get_args():
     optional_args.add_argument('-vs', '--verify-stats', metavar='T/F', default='T',
                                help='Verify that all reported stats are internally consistent.')
     optional_args.add_argument('-dc', '--decollapse', action='store_true',
-                               help='Create a decollapsed copy of all SAM files listed in your Samples Sheet. '
+                               help='Create a decollapsed SAM copy of all files listed in your Samples Sheet. '
                                     'This option is ignored for non-collapsed inputs.')
     optional_args.add_argument('-sv', '--stepvector', choices=['Cython', 'HTSeq'], default='Cython',
                                help='Select which StepVector implementation is used to find '

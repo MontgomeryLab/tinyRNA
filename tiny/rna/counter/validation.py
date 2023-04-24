@@ -7,7 +7,7 @@ import os
 from collections import Counter, defaultdict
 from typing import List, Dict
 
-from tiny.rna.counter.hts_parsing import parse_gff, ReferenceFeatures, SAM_reader
+from tiny.rna.counter.hts_parsing import parse_gff, ReferenceFeatures
 from tiny.rna.counter.features import FeatureSelector
 from tiny.rna.util import ReportFormatter, sorted_natural, gzip_open
 
@@ -18,7 +18,7 @@ class GFFValidator:
 
     targets = {
         "ID attribute": "Features missing a valid identifier attribute",
-        "sam files": "Potentially incompatible SAM alignment files",
+        "alignment files": "Potentially incompatible alignment files",
         "seq chromosomes": "Chromosomes present in sequence files",
         "gff chromosomes": "Chromosomes present in GFF files",
         "strand": "Features missing strand information",
@@ -210,7 +210,7 @@ class GFFValidator:
                   for file, chroms in suspect_files.items()}
 
         summary = {
-            "sam files": chroms,
+            "alignment files": chroms,
             "gff chromosomes": sorted(self.chrom_set)
         }
 

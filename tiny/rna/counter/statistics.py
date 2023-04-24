@@ -634,7 +634,7 @@ class Diagnostics:
 
         This is called once per locus per read (every alignment) when the user elects to save
         diagnostics. The recorded information is later written to {library['Name']}_aln_table.txt
-        after the entire SAM file has been processed."""
+        after the entire alignment file has been processed."""
 
         # Map internal strand representation to +/-/.
         strand = self.map_strand[aln['Strand']]
