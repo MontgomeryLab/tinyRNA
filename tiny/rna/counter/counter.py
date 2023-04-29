@@ -146,7 +146,7 @@ def load_config(features_csv: str, in_pipeline: bool) -> List[dict]:
             # Duplicate rule entries are not allowed
             if rule not in rules: rules.append(rule)
     except Exception as e:
-        msg = f"Error occurred on line {sheet.line_num} of {os.path.basename(features_csv)}"
+        msg = f"Error occurred on line {sheet.row_num} of {os.path.basename(features_csv)}"
         append_to_exception(e, msg)
         raise
 
