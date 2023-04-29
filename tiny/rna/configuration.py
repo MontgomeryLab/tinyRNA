@@ -692,8 +692,10 @@ class SamplesSheet:
 
                 if is_control: self.control_condition = group_name
         except Exception as e:
-            msg = f"Error occurred on line {self.csv.line_num} of {self.basename}"
-            append_to_exception(e, msg)
+            if not isinstance(e, AssertionError):
+                # Validation steps already indicate row, exception likely from something else
+                msg = f"Error occurred on line {self.csv.row_num} of {self.basename}"
+                append_to_exception(e, msg)
             raise
 
         self.is_compatible_df = self.validate_deseq_compatibility(reps_per_group)
@@ -762,7 +764,7 @@ class SamplesSheet:
             .format(row_num=self.csv.row_num, selfname=self.basename)
 
     def validate_normalization(self, norm):
-        assert re.fullmatch(r"(\s*[\d.]+\s*)|(rpm)", norm, re.IGNORECASE) or not norm, \
+        assert re.fullmatch(r"\s*((?:\d+(?:\.\d*)?|\.\d+)|(rpm))\s*", norm, re.IGNORECASE) or not norm, \
             "Invalid normalization value in {selfname} (row {row_num})" \
             .format(selfname=self.basename, row_num=self.csv.row_num)
 
