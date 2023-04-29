@@ -16,12 +16,12 @@ class CounterTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(self):
-        self.gff_file = f"{resources}/identity_choice_test.gff3"
-        self.short_gff_file = f"{resources}/single.gff3"
+        self.gff_file = f"{resources}/gff/identity_choice_test.gff3"
+        self.short_gff_file = f"{resources}/gff/single.gff3"
         self.short_gff = helpers.read(self.short_gff_file)
 
-        self.sam_file = f"{resources}/identity_choice_test.sam"
-        self.short_sam_file = f"{resources}/single.sam"
+        self.sam_file = f"{resources}/sam/identity_choice_test.sam"
+        self.short_sam_file = f"{resources}/sam/single.sam"
         self.short_sam = helpers.read(self.short_sam_file)
 
         self.strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}

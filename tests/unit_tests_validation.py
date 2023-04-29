@@ -6,7 +6,13 @@ import io
 from glob import glob
 from unittest.mock import patch, mock_open
 
-from tiny.rna.counter.validation import GFFValidator, ReportFormatter, SamSqValidator
+from tiny.rna.counter.validation import GFFValidator, ReportFormatter, AlignmentSqValidator
+
+resources = "./testdata/counter"
+
+# To run all test suites
+if __name__ == '__main__':
+    unittest.main()
 
 
 class GFFValidatorTest(unittest.TestCase):
@@ -104,7 +110,7 @@ class GFFValidatorTest(unittest.TestCase):
 
     def test_ebwt_chroms(self):
         validator = self.make_gff_validator()
-        ebwt_prefix = "./testdata/counter/validation/ebwt/ram1"
+        ebwt_prefix = f"{resources}/validation/ebwt/ram1"
 
         # Chroms are shared
         validator.chrom_set = {'ram1'}
@@ -122,7 +128,7 @@ class GFFValidatorTest(unittest.TestCase):
 
     def test_genome_chroms(self):
         validator = self.make_gff_validator()
-        fasta_file = "./testdata/counter/validation/genome/genome.fasta"
+        fasta_file = f"{resources}/validation/genome/genome.fasta"
 
         # Chroms are shared
         validator.chrom_set = {'chr1', 'chr2', 'chr3'}
@@ -140,8 +146,8 @@ class GFFValidatorTest(unittest.TestCase):
 
     def test_alignments_heuristic(self):
         validator = self.make_gff_validator()
-        sam_files = ['./testdata/counter/identity_choice_test.sam',
-                     './testdata/counter/single.sam']
+        sam_files = [f'{resources}/sam/identity_choice_test.sam',
+                     f'{resources}/sam/single.sam']
 
         sam_chroms = {
             sam_files[0]: {'I', 'V', 'MtDNA'},

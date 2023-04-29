@@ -25,8 +25,8 @@ if __name__ == '__main__':
 class SamReaderTests(unittest.TestCase):
     @classmethod
     def setUpClass(self):
-        self.sam_file = f"{resources}/identity_choice_test.sam"
-        self.short_sam_file = f"{resources}/single.sam"
+        self.sam_file = f"{resources}/sam/identity_choice_test.sam"
+        self.short_sam_file = f"{resources}/sam/single.sam"
         self.short_sam = helpers.read(self.short_sam_file)
 
     @staticmethod
@@ -59,8 +59,8 @@ class SamReaderTests(unittest.TestCase):
     """
 
     def test_sam_parser_comparison(self):
-        file = f"{resources}/Lib304_test.sam"
-        ours = SAM_reader().bundle_multi_alignments(file)
+        file = f"{resources}/sam/Lib304_test.sam"
+        ours = AlignmentReader().bundle_multi_alignments(file)
         theirs = HTSeq.bundle_multiple_alignments(HTSeq.BAM_Reader(file))
 
         for (our_bundle, _), their_bundle in zip(ours, theirs):
@@ -183,8 +183,8 @@ class SamReaderTests(unittest.TestCase):
         with patch.object(SAM_reader, "_write_decollapsed_sam") as write_sam, \
                 patch.object(SAM_reader, "_write_header_for_decollapsed_sam") as write_header:
             with contextlib.redirect_stderr(stdout_capture):
-                reader = SAM_reader(decollapse=True)
-                records = reader.bundle_multi_alignments(f"{resources}/non-collapsed.sam")
+                reader = AlignmentReader(decollapse=True)
+                records = reader.bundle_multi_alignments(f"{resources}/sam/non-collapsed.sam")
                 self.exhaust_iterator(records)
 
         write_sam.assert_not_called()
@@ -199,8 +199,8 @@ class ReferenceFeaturesTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(self):
-        self.gff_file = f"{resources}/identity_choice_test.gff3"
-        self.short_gff_file = f"{resources}/single.gff3"
+        self.gff_file = f"{resources}/gff/identity_choice_test.gff3"
+        self.short_gff_file = f"{resources}/gff/single.gff3"
         self.short_gff = helpers.read(self.short_gff_file)
 
         self.maxDiff = None
@@ -365,7 +365,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
     def test_ref_tables_identity_matches_multisource_concat(self):
         feature_source = {
             self.short_gff_file: ["ID"],
-            f"{resources}/single2.gff3": ["ID"]
+            f"{resources}/gff/single2.gff3": ["ID"]
         }
 
         kwargs = {'all_features': True}
@@ -392,7 +392,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
 
     def test_ref_tables_discontinuous_aliases(self):
         kwargs = {'all_features': True}
-        feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
+        feature_source = {f"{resources}/gff/discontinuous.gff3": ["Name"]}
         mock_selector = self.selector_with_template(helpers.rules_template)
 
         _, alias, _ = ReferenceFeatures(feature_source, **kwargs).get(mock_selector)
@@ -408,7 +408,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
 
     def test_ref_tables_discontinuous_no_match_all_features_false(self):
         kwargs = {'all_features': False}
-        feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
+        feature_source = {f"{resources}/gff/discontinuous.gff3": ["Name"]}
         mock_selector = self.selector_with_template([{'Identity': ('No', 'Match')}])
 
         expected_err = "No features were retained while parsing your GFF file.\n" \
@@ -425,7 +425,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
     def test_ref_tables_discontinuous_features(self):
 
         kwargs = {'all_features': True}
-        feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
+        feature_source = {f"{resources}/gff/discontinuous.gff3": ["Name"]}
         feature_selector = self.selector_with_template([{'Identity': ('No', 'Match')}])
 
         # Features that fail to match on identity are not added to the StepVector,
@@ -440,7 +440,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
 
     def test_ref_tables_discontinuous_intervals(self):
         kwargs = {'all_features': True}
-        feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
+        feature_source = {f"{resources}/gff/discontinuous.gff3": ["Name"]}
         feature_selector = self.selector_with_template(helpers.rules_template)
 
         grandparent_iv = HTSeq.GenomicInterval('I', 0, 10, '-')
@@ -467,7 +467,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
     performed for intervals in this test."""
 
     def test_ref_tables_discontinuous_identity_matches(self):
-        feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
+        feature_source = {f"{resources}/gff/discontinuous.gff3": ["Name"]}
         feature_selector = self.selector_with_template([
             {'Identity': ('Class', 'NA'), 'Hierarchy': 2},                  # Rule 1
             {'Identity': ('Name', 'Sibling3'), 'Hierarchy': 3},             # Rule 2
@@ -511,7 +511,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
     def test_ref_tables_source_filter(self):
 
         kwargs = {'all_features': False}
-        feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
+        feature_source = {f"{resources}/gff/discontinuous.gff3": ["Name"]}
         feature_selector = self.selector_with_template([{'Filter_s': "Source2Name"}])
 
         child2_iv =     HTSeq.GenomicInterval('I', 39, 50, '-')
@@ -536,7 +536,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
     def test_ref_tables_type_filter(self):
 
         kwargs = {'all_features': False}
-        feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
+        feature_source = {f"{resources}/gff/discontinuous.gff3": ["Name"]}
         feature_selector = self.selector_with_template([{'Filter_t': "CDS"}])
 
         child1_iv =     HTSeq.GenomicInterval('I', 29, 40, '-')
@@ -561,7 +561,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
     def test_ref_tables_both_filter(self):
 
         kwargs = {'all_features': False}
-        feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
+        feature_source = {f"{resources}/gff/discontinuous.gff3": ["Name"]}
         feature_selector = self.selector_with_template([{'Filter_s': "SourceName", 'Filter_t': "gene"}])
 
         rt = ReferenceFeatures(feature_source, **kwargs)
@@ -577,7 +577,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
     def test_ref_tables_tagged_match_single(self):
         kwargs = {'all_features': False}
         feat_id = "Gene:WBGene00023193"
-        feature_source = {f"{resources}/single.gff3": ["sequence_name"]}
+        feature_source = {f"{resources}/gff/single.gff3": ["sequence_name"]}
         feature_selector = self.selector_with_template([
             {'Identity': ("ID", feat_id), 'Class': "tagged_match", 'Hierarchy': 1},
             {'Identity': ("ID", feat_id), 'Class': "",             'Hierarchy': 2}
@@ -604,7 +604,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
     """Does ReferenceFeatures.get() correctly merge records for discontinuous features matching multiple tagged rules?"""
 
     def test_ref_tables_tagged_match_merging(self):
-        feature_source = {f"{resources}/discontinuous.gff3": ['Name']}
+        feature_source = {f"{resources}/gff/discontinuous.gff3": ['Name']}
 
         # All rules match the same root feature
         feature_selector = self.selector_with_template([
