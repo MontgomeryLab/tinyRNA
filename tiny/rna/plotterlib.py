@@ -241,8 +241,8 @@ class plotterlib:
         has_outgroup = all(co.replace(0, pd.NA).dropna().any()
                            for co in (count_x_out, count_y_out))
 
-        # Determine which groups we are able to plot on log scale
-        plottable_groups = self.get_nonzero_group_indexes(count_x, count_y, groups)
+        # Make all counts log-compatible, or drop the group if it is zero in both conditions
+        plottable_groups = self.nonzero_group_indexes(count_x, count_y, groups, view_lims)
         plot_labels = [labels[i] for i in plottable_groups]
         plot_groups = [groups[i] for i in plottable_groups]
         group_it = iter(plot_groups)
@@ -271,19 +271,33 @@ class plotterlib:
         return gscat
 
     @staticmethod
-    def get_nonzero_group_indexes(count_x, count_y, groups):
-        """When scatter plotting groups for two conditions on a log scale, if one
-        of the conditions has all zero counts for the group, then none of the group's
-        points are actually plotted due to the singularity at 0. We want to skip
-        plotting these groups and omit them from the legend."""
+    def nonzero_group_indexes(count_x, count_y, groups, view_lims):
+        """When scatter plotting features on a log scale, if the feature has a count of
+        zero in either condition then it is omitted from the plot by default due to the
+        singularity at 0, but we want to represent them nonetheless. So, we set their count
+        in the zero condition to the lower plot limit so that they are plotted on the very
+        edge of the plot space. Otherwise, approximating zero for these features would
+        shrink the plot.
+
+        We still want to omit features that are zero in both conditions, and if an entire
+        group consists of zero counts, its label should be omitted from the legend. This
+        is accomplished by omitting its index from the returned list."""
 
         non_zero_groups = []
+        minpos = min(view_lims)
         for i, group in enumerate(groups):
             x, y = count_x.loc[group], count_y.loc[group]
             x_is_zeros = x.replace(0, pd.NA).dropna().empty
             y_is_zeros = y.replace(0, pd.NA).dropna().empty
-            if not (x_is_zeros or y_is_zeros):
+
+            if not (x_is_zeros and y_is_zeros):
                 non_zero_groups.append(i)
+
+                # Replace counts that are zero in only one condition
+                x.loc[(x == 0) & (y != 0)] = minpos
+                y.loc[(y == 0) & (x != 0)] = minpos
+                count_x.loc[group] = x
+                count_y.loc[group] = y
 
         return non_zero_groups
 
