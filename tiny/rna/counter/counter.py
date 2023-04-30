@@ -65,9 +65,7 @@ def get_args():
     optional_args.add_argument('-sv', '--stepvector', choices=['Cython', 'HTSeq'], default='Cython',
                                help='Select which StepVector implementation is used to find '
                                     'features overlapping an interval.')
-    optional_args.add_argument('-a', '--all-features', action='store_true', help=argparse.SUPPRESS)
-                               #help='Represent all features in output counts table, '
-                               #     'even if they did not match in Stage 1 selection.')
+    optional_args.add_argument('-a', '--all-features', action='store_true', help=argparse.SUPPRESS)  # deprecated
     optional_args.add_argument('-p', '--is-pipeline', action='store_true',
                                help='Indicates that tiny-count was invoked as part of a pipeline run '
                                     'and that input files should be sourced as such.')

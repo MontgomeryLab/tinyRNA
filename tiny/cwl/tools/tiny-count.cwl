@@ -50,11 +50,6 @@ inputs:
     inputBinding:
       prefix: --stepvector
 
-  all_features:
-    type: boolean?
-    inputBinding:
-      prefix: --all-features
-
   is_pipeline:
     type: boolean?
     inputBinding:
