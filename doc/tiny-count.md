@@ -7,10 +7,16 @@ For an explanation of tiny-count's parameters in the Run Config and by commandli
 tiny-count offers a variety of options for refining your analysis. You might find that repeat analyses are required while tuning these options to your goals. Using the command `tiny recount`, tinyRNA will run the workflow starting at the tiny-count step using inputs from a prior end-to-end run to save time. See the [pipeline resume documentation](Pipeline.md#resuming-a-prior-analysis) for details and prerequisites.
 
 ## Running as a Standalone Tool
+Skip to [Feature Selection](#feature-selection) if you are using the tinyRNA workflow.
+
 If you would like to run tiny-count as a standalone tool, not as part of an end-to-end or resumed analysis, you can do so with the command `tiny-count`. The command has [one required argument](Parameters.md#full-tiny-count-help-string): your Paths File. Your Samples Sheet will need to list SAM or BAM alignment files rather than FASTQ files in the `Input Files` column. Alignment files from third party sources are also supported, and if they have been produced from reads collapsed by tiny-collapse or fastx, tiny-count will honor the reported read counts.
 
 #### Input File Requirements
-The SAM/BAM files provided during standalone runs _must_ be ordered so that multi-mapping read alignments are listed adjacent to one another. This adjacency convention is required for proper normalization by genomic hits. For this reason, files with ambiguous sorting or grouping (`SO:unsorted`, `SO:unknown`, or `GO:none`) will be rejected unless they were produced by an alignment tool that we recognize for following the adjacency convention. At this time, this includes Bowtie, Bowtie2, and STAR (an admittedly incomplete list).
+The SAM/BAM files provided during standalone runs _must_ be ordered so that multi-mapping read alignments are listed adjacent to one another. This adjacency convention is required for proper normalization by genomic hits. For this reason, files with ambiguous order will be rejected unless they were produced by an alignment tool that we recognize for following the adjacency convention. At this time, this includes Bowtie, Bowtie2, and STAR (an admittedly incomplete list).
+
+#### BAM File Tips
+- Use the `--no-PG` option with `samtools view` when converting alignments 
+- Pysam will issue two warnings about missing index files; they can be ignored
 
 #### Using Non-collapsed Sequence Alignments
 While third-party SAM files from non-collapsed reads are supported, there are some caveats. These files will result in substantially higher resource usage and runtimes; we strongly recommend collapsing prior to alignment. Additionally, the sequence-related stats produced by tiny-count will no longer represent _unique_ sequences. These stats will instead refer to all sequences with unique QNAMEs (that is, multi-alignment bundles still cary a sequence count of 1).
