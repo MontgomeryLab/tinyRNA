@@ -28,7 +28,9 @@ _re_fastx = r"seq\d+_x(\d+)"
 
 
 class AlignmentReader:
-    """A minimal SAM/BAM reader that bundles multiple-alignments and only parses data relevant to the workflow."""
+    """A SAM/BAM wrapper for Pysam that bundles multiple-alignments and only retrieves data relevant to the workflow."""
+
+    compatible_unordered = ("bowtie", "bowtie2", "star")  # unordered files from these tools don't require sorting
 
     def __init__(self, **prefs):
         self.decollapse = prefs.get("decollapse", False)
@@ -112,7 +114,8 @@ class AlignmentReader:
 
         Headers that report unsorted/unknown sorting order are likely still compatible, but
         since the SAM/BAM standard doesn't address alignment adjacency, we have to assume
-        that it is implementation dependent. Therefore, we check the last reported @PG
+        that it is implementation dependent. Therefore, if all other checks for strict
+        compatibility/incompatibility pass, we check the last reported @PG
         header against a short (incomplete) list of alignment tools that are known to
         follow the adjacency convention."""
 
@@ -141,7 +144,7 @@ class AlignmentReader:
         # to handle the alignments is one that produces adjacent alignments by default
         pg_header = self._header_dict.get('PG', [{}])
         last_prog = pg_header[-1].get('ID', "")
-        if last_prog.lower() not in ("bowtie", "bowtie2", "star"):
+        if last_prog.lower() not in self.compatible_unordered:
             raise ValueError(error.format(reason="multi-mapping adjacency couldn't be determined"))
 
     def _determine_collapser_type(self, qname: str) -> None:
