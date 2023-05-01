@@ -180,11 +180,10 @@ class GFFValidator:
 
         for file in sam_files:
             file_chroms = set()
-            with open(file, 'rb') as f:
-                for i, line in zip(range(subset_size), f):
-                    if line[0] == ord('@'): continue
-                    file_chroms.add(line.split(b'\t')[2].strip().decode())
-                    if i % 10000 == 0 and len(file_chroms & self.chrom_set): break
+            reader = pysam.AlignmentFile(file)
+            for i, aln in enumerate(reader.head(subset_size)):
+                file_chroms.add(aln.reference_name)
+                if i % 10000 == 0 and len(file_chroms & self.chrom_set): break
 
             if not len(file_chroms & self.chrom_set):
                 files_wo_overlap[file] = file_chroms
