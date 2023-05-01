@@ -28,6 +28,7 @@ class AlignmentReaderTests(unittest.TestCase):
         self.sam_file = f"{resources}/sam/identity_choice_test.sam"
         self.short_sam_file = f"{resources}/sam/single.sam"
         self.short_sam = helpers.read(self.short_sam_file)
+        self.short_bam_file = f"{resources}/bam/single.bam"
 
     @staticmethod
     def exhaust_iterator(it):
@@ -50,7 +51,22 @@ class AlignmentReaderTests(unittest.TestCase):
         self.assertEqual(sam_record['Length'], 21)
         self.assertEqual(sam_record['nt5end'], 'G')
 
-    """Does our custom SAM parser produce the same pertinent info as HTSeq's BAM_reader?
+    """Did AlignmentReader correctly skip header values and parse all pertinent info from a single record BAM file?"""
+
+    def test_AlignmentReader_single_bam(self):
+        bam_bundle, read_count = next(AlignmentReader().bundle_multi_alignments(self.short_bam_file))
+        bam_record = bam_bundle[0]
+
+        self.assertEqual(bam_record['Chrom'], "I")
+        self.assertEqual(bam_record['Start'], 15064569)
+        self.assertEqual(bam_record['End'], 15064590)
+        self.assertEqual(bam_record['Strand'], False)
+        self.assertEqual(bam_record['Name'], "0_count=5")
+        self.assertEqual(bam_record['Seq'], "CAAGACAGAGCTTCACCGTTC")
+        self.assertEqual(bam_record['Length'], 21)
+        self.assertEqual(bam_record['nt5end'], 'G')
+
+    """Does our AlignmentReader produce the same pertinent info from a SAM file as HTSeq's BAM_reader?
 
     A note on SAM files: reads are always stored 5' to 3', so antisense reads are actually
     recorded in reverse complement. HTSeq automatically performs this conversion, but we
@@ -77,7 +93,28 @@ class AlignmentReaderTests(unittest.TestCase):
                 else:
                     self.assertEqual(our['Seq'], their.read.seq.decode())
 
-    """Does SAM_reader._get_decollapsed_filename() create an appropriate filename?"""
+    """Does our AlignmentReader produce the same pertinent info from a BAM file as HTSeq's BAM_reader?"""
+
+    def test_bam_parser_comparison(self):
+        file = f"{resources}/bam/Lib304_test.bam"
+        ours = AlignmentReader().bundle_multi_alignments(file)
+        theirs = HTSeq.bundle_multiple_alignments(HTSeq.BAM_Reader(file))
+
+        for (our_bundle, _), their_bundle in zip(ours, theirs):
+            self.assertEqual(len(our_bundle), len(their_bundle))
+            for our, their in zip(our_bundle, their_bundle):
+                self.assertEqual(our['Chrom'], their.iv.chrom)
+                self.assertEqual(our['Start'], their.iv.start)
+                self.assertEqual(our['End'], their.iv.end)
+                self.assertEqual(our['Name'], their.read.name)
+                self.assertEqual(our['nt5end'], chr(their.read.seq[0]))  # See note above
+                self.assertEqual(our['Strand'], helpers.strand_to_bool(their.iv.strand))
+                if our['Strand'] is False:  # See note above
+                    self.assertEqual(our['Seq'][::-1].translate(helpers.complement), their.read.seq.decode())
+                else:
+                    self.assertEqual(our['Seq'], their.read.seq.decode())
+
+    """Does AlignmentReader._get_decollapsed_filename() create an appropriate filename?"""
 
     def test_AlignmentReader_get_decollapsed_filename(self):
         reader = AlignmentReader()
@@ -106,21 +143,28 @@ class AlignmentReaderTests(unittest.TestCase):
     def test_AlignmentReader_gather_metadata(self):
         reader = AlignmentReader(decollapse=True)
         reader._decollapsed_filename = "mock_outfile_name.sam"
-
+        reader._assign_library(self.short_sam_file)
         sam_in = pysam.AlignmentFile(self.short_sam_file)
+
         with patch('builtins.open', mock_open()) as sam_out:
             reader._gather_metadata(sam_in)
 
         expected_writelines = [
             call('mock_outfile_name.sam', 'w'),
             call().__enter__(),
-            call().write("@SQ\tSN:I\tLN:21\n"),
+            call().write("@HD\tSO:unsorted\n@SQ\tSN:I\tLN:21\n@PG\tID:bowtie\n"),
             call().__exit__(None, None, None)
         ]
 
+        expected_header_dict = {
+            'HD': {'SO': 'unsorted'},
+            'SQ': [{'LN': 21, 'SN': 'I'}],
+            'PG': [{'ID': 'bowtie'}]
+        }
+
         sam_out.assert_has_calls(expected_writelines)
         self.assertEqual(reader.collapser_type, 'tiny-collapse')
-        self.assertDictEqual(reader._header_dict, {'SQ': [{'SN': "I", 'LN': 21}]})
+        self.assertDictEqual(reader._header_dict, expected_header_dict)
         self.assertEqual(reader.references, ('I',))
         self.assertTrue(reader.has_nm)
 
@@ -193,6 +237,81 @@ class AlignmentReaderTests(unittest.TestCase):
         self.assertEqual(stdout_capture.getvalue(),
                          "Alignments do not appear to be derived from a supported collapser input. "
                          "Decollapsed SAM files will therefore not be produced.\n")
+
+    """Is incompatible alignment file ordering correctly identified from @HD header values?"""
+
+    def test_AlignmentReader_incompatible_HD_header(self):
+        # Valid SO values: ["unknown", "unsorted", "queryname", "coordinate"]
+        # Valid GO values: ["none", "query", "reference"]
+        
+        strictly_compatible = [
+            {'HD': {'SO': "queryname"}},
+            {'HD': {'GO': "query"}},
+        ]
+
+        # Should not throw error
+        for header in strictly_compatible:
+            reader = AlignmentReader()
+            reader._header_dict = header
+            reader._assign_library("mock_infile.sam")
+            reader._check_for_incompatible_order()
+
+        strictly_incompatible = [
+            ({'HD': {'SO': "coordinate"}}, "by coordinate"),
+            ({'HD': {'GO': "reference"}},  "by reference"),
+            ({'HD': {}},                   "sorting/grouping couldn't be determined"),
+            ({},                           "sorting/grouping couldn't be determined"),
+        ]
+
+        # Should throw error
+        for header, message in strictly_incompatible:
+            reader = AlignmentReader()
+            reader._header_dict = header
+            reader._assign_library("mock_infile.sam")
+            with self.assertRaisesRegex(ValueError, message):
+                reader._check_for_incompatible_order()
+
+    """Is incompatible alignment file ordering correctly identified from @PG header values?"""
+
+    def test_AlignmentReader_incompatible_PG_header(self):
+        # SO = ["unknown", "unsorted", "queryname", "coordinate"]
+        # GO = ["none", "query", "reference"]
+
+        self.assertEqual(AlignmentReader.compatible_unordered, ("bowtie", "bowtie2", "star"))
+        SO_unordered = [{'SO': "unknown"}, {'SO': "unsorted"}]
+        GO_unordered = [{'GO': "none"}]
+        compatible = [
+            {'PG': [{'ID': tool}], 'HD': un_so, 'GO': un_go}
+            for tool in AlignmentReader.compatible_unordered
+            for un_so in SO_unordered
+            for un_go in GO_unordered
+        ]
+
+        # Only the last reported PG ID matters
+        multiple_tools = [{'ID': "INCOMPATIBLE"}, {'ID': "bowtie"}]
+        compatible += [{'PG': multiple_tools, 'HD': {'SO': "unsorted"}}]
+
+        # Should not throw error
+        for header in compatible:
+            reader = AlignmentReader()
+            reader._header_dict = header
+            reader._assign_library("mock_infile.sam")
+            reader._check_for_incompatible_order()
+
+        incompatible = [
+            {'PG': [{'ID': "INCOMPATIBLE"}], 'HD': un_so, 'GO': un_go}
+            for un_so in SO_unordered
+            for un_go in GO_unordered
+        ]
+
+        # Should throw error
+        expected_error = "adjacency couldn't be determined"
+        for header in incompatible:
+            reader = AlignmentReader()
+            reader._header_dict = header
+            reader._assign_library("mock_infile.sam")
+            with self.assertRaisesRegex(ValueError, expected_error):
+                reader._check_for_incompatible_order()
 
 
 class ReferenceFeaturesTests(unittest.TestCase):

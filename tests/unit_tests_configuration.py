@@ -10,6 +10,14 @@ from unit_test_helpers import csv_factory, paths_template_file, make_paths_file
 from tiny.rna.util import r_reserved_keywords
 
 
+def patch_isfile():
+    return patch('tiny.rna.configuration.os.path.isfile', return_value=True)
+
+
+def patch_open(read_data):
+    return patch('tiny.rna.configuration.open', mock_open(read_data=read_data))
+
+
 class BowtieIndexesTest(unittest.TestCase):
     @classmethod
     def setUpClass(self):
@@ -150,37 +158,60 @@ class BowtieIndexesTest(unittest.TestCase):
 
 class SamplesSheetTest(unittest.TestCase):
 
+    @classmethod
+    def setUpClass(cls):
+        cls.contexts = ["Pipeline Start", "Pipeline Step", "Standalone Run"]
+
     """Does SamplesSheet catch multi-assignment of control condition?"""
 
     def test_validate_control_group(self):
-        sheet = csv_factory("samples.csv", [
-            {'File': '1.fastq', 'Group': 'G1', 'Replicate': '1', 'Control': True, 'Normalization': ''},  # Good
-            {'File': '2.fastq', 'Group': 'G1', 'Replicate': '2', 'Control': True, 'Normalization': ''},  # Good
-            {'File': '3.fastq', 'Group': 'G2', 'Replicate': '1', 'Control': True, 'Normalization': ''}   # Bad
-        ])                                                                 # ^^^
+        rows = [
+            {'File': '1', 'Group': 'G1', 'Replicate': '1', 'Control': True, 'Normalization': ''},  # Good
+            {'File': '2', 'Group': 'G1', 'Replicate': '2', 'Control': True, 'Normalization': ''},  # Good
+            {'File': '3', 'Group': 'G2', 'Replicate': '1', 'Control': True, 'Normalization': ''}   # Bad
+        ]                        # ^^^^                               ^^^^
 
-        exp_contains = r".*(multiple control conditions).*"
-        with self.assertRaisesRegex(AssertionError, exp_contains), \
-                patch('tiny.rna.configuration.open', mock_open(read_data=sheet)), \
-                patch('tiny.rna.configuration.os.path.isfile', return_value=True):
-            SamplesSheet('mock_filename')
+        start_sheet = csv_factory("samples.csv", [dict(r, File=f"{i}.fastq") for i, r in enumerate(rows)])
+        step_sheet =  csv_factory("samples.csv", [dict(r, File=f"{i}.sam")   for i, r in enumerate(rows)])
+        run_sheet = step_sheet
+
+        with patch_isfile():
+            # Control condition should not be evaluated in Pipeline Step or Standalone Run context
+            with patch_open(step_sheet):
+                SamplesSheet('mock_filename', context="Pipeline Step")
+            with patch_open(run_sheet):
+                SamplesSheet('mock_filename', context="Standalone Run")
+
+            # Control condition should be evaluated in Pipeline Start context
+            exp_contains = r".*(multiple control conditions).*"
+            with self.assertRaisesRegex(AssertionError, exp_contains), patch_open(start_sheet):
+                SamplesSheet('mock_filename', context="Pipeline Start")
 
     """Does SamplesSheet catch duplicate entries for the same group and rep?"""
+
     def test_validate_group_rep(self):
-        sheet = csv_factory("samples.csv", [
-            {'File': '1.fastq', 'Group': 'G1', 'Replicate': '1', 'Control': True, 'Normalization': ''},  # Good
-            {'File': '2.fastq', 'Group': 'G1', 'Replicate': '2', 'Control': True, 'Normalization': ''},  # Good
-            {'File': '3.fastq', 'Group': 'G1', 'Replicate': '2', 'Control': True, 'Normalization': ''}   # Bad
-        ])                             # ^^^                ^^^
+        rows = [
+            {'File': '1', 'Group': 'G1', 'Replicate': '1', 'Control': True, 'Normalization': ''},  # Good
+            {'File': '2', 'Group': 'G1', 'Replicate': '2', 'Control': True, 'Normalization': ''},  # Good
+            {'File': '3', 'Group': 'G1', 'Replicate': '2', 'Control': True, 'Normalization': ''}   # Bad
+        ]                        # ^^^^               ^^^
+
+        start_sheet = csv_factory("samples.csv", [dict(r, File=f"{i}.fastq") for i, r in enumerate(rows)])
+        step_sheet =  csv_factory("samples.csv", [dict(r, File=f"{i}.sam")   for i, r in enumerate(rows)])
+        run_sheet = step_sheet
+        contexts = list(zip(self.contexts, [start_sheet, step_sheet, run_sheet]))
 
         exp_contains = r".*(same group and replicate).*"
-        with self.assertRaisesRegex(AssertionError, exp_contains), \
-                patch('tiny.rna.configuration.open', mock_open(read_data=sheet)), \
-                patch('tiny.rna.configuration.os.path.isfile', return_value=True):
-            SamplesSheet('mock_filename')
 
-    """Does SamplesSheet catch fastq files that don't exist, have a bad file extension, or are listed more than once?"""
+        # Validation should take place in all contexts
+        for context, sheet in contexts:
+            with self.assertRaisesRegex(AssertionError, exp_contains), patch_open(sheet), patch_isfile():
+                SamplesSheet('mock_filename', context=context)
+
+    """Does SamplesSheet catch bad fastq entries in Pipeline Start context?"""
+
     def test_validate_fastq_filepath(self):
+        context = "Pipeline Start"
         csv_rows = [
             {'File': '1.fastq', 'Group': 'G1', 'Replicate': '1', 'Control': True, 'Normalization': ''},  # Good
             {'File': '1.fastq', 'Group': 'G1', 'Replicate': '2', 'Control': True, 'Normalization': ''},  # Bad
@@ -189,28 +220,50 @@ class SamplesSheetTest(unittest.TestCase):
         sheet = csv_factory("samples.csv", csv_rows)
 
         # File doesn't exist
-        exp_contains = r".*(was not found).*"
-        with self.assertRaisesRegex(AssertionError, exp_contains), \
-                patch('tiny.rna.configuration.open', mock_open(read_data=sheet)):
-            SamplesSheet('mock_filename')
+        exp_contains = r".*(fastq file on row 1 of mock_filename was not found).*"
+        with self.assertRaisesRegex(AssertionError, exp_contains), patch_open(sheet):
+            SamplesSheet('mock_filename', context=context)
 
         # Duplicate filename
-        exp_contains = r".*(listed more than once).*"
-        with self.assertRaisesRegex(AssertionError, exp_contains), \
-                patch('tiny.rna.configuration.open', mock_open(read_data=sheet)), \
-                patch('tiny.rna.configuration.os.path.isfile', return_value=True):
-            SamplesSheet('mock_filename')
+        exp_contains = r".*(listed more than once).*\(row 2\)"
+        with self.assertRaisesRegex(AssertionError, exp_contains), patch_open(sheet), patch_isfile():
+            SamplesSheet('mock_filename', context=context)
 
         # Bad file extension
-        exp_contains = r".*(\.fastq\(\.gz\) extension).*"
-        csv_rows.pop(0)
-        sheet = csv_factory("samples.csv", csv_rows)
-        with self.assertRaisesRegex(AssertionError, exp_contains), \
-                patch('tiny.rna.configuration.open', mock_open(read_data=sheet)), \
-                patch('tiny.rna.configuration.os.path.isfile', return_value=True):
-            SamplesSheet('mock_filename')
+        sheet = csv_factory("samples.csv", csv_rows[1:])  # remove duplicate entry
+        exp_contains = r".*(\.fastq\(\.gz\) extension).*\(row 2\)"
+        with self.assertRaisesRegex(AssertionError, exp_contains), patch_open(sheet), patch_isfile():
+            SamplesSheet('mock_filename', context=context)
 
-    """Does validate_r_safe_sample_groups detect group names that will cause namespace collisions in R?"""
+    """Does SamplesSheet catch bad alignment file entries in Standalone Run context?"""
+
+    def test_validate_alignments_filepath(self):
+        context = "Standalone Run"
+        csv_rows = [
+            {'File': '1.sam', 'Group': 'G1', 'Replicate': '1', 'Control': True, 'Normalization': ''},  # Good
+            {'File': '1.sam', 'Group': 'G1', 'Replicate': '2', 'Control': True, 'Normalization': ''},  # Good
+            {'File': '1.bam', 'Group': 'G1', 'Replicate': '3', 'Control': True, 'Normalization': ''},  # Bad
+            {'File': '2.xyz', 'Group': 'G2', 'Replicate': '1', 'Control': True, 'Normalization': ''}   # Bad
+        ]          # ^^^^^^^
+        sheet = csv_factory("samples.csv", csv_rows)
+
+        # File doesn't exist
+        exp_contains = r".*(file on row 1 of mock_filename was not found).*"
+        with self.assertRaisesRegex(AssertionError, exp_contains), patch_open(sheet):
+            SamplesSheet('mock_filename', context=context)
+
+        # Duplicate filename
+        exp_contains = r".*(listed more than once).*\(row 2\)"
+        with self.assertRaisesRegex(AssertionError, exp_contains), patch_open(sheet), patch_isfile():
+            SamplesSheet('mock_filename', context=context)
+
+        # Bad file extension
+        sheet = csv_factory("samples.csv", csv_rows[1:])  # remove duplicate entry
+        exp_contains = r".*(\.sam or \.bam extension).*\(row 3\)"
+        with self.assertRaisesRegex(AssertionError, exp_contains), patch_open(sheet), patch_isfile():
+            SamplesSheet('mock_filename', context=context)
+
+    """Does validate_r_safe_sample_groups() detect group names that will cause namespace collisions in R?"""
 
     def test_validate_r_safe_sample_groups(self):
         non_alphanum_chars = [bad.join(('a', 'b')) for bad in "~!@#$%^&*()+-=`<>?/,:;\"'[]{}\| \t\n\r\f\v"]
@@ -226,6 +279,45 @@ class SamplesSheetTest(unittest.TestCase):
             msg = " ≈ ".join(bad)
             with self.assertRaisesRegex(AssertionError, msg):
                 SamplesSheet.validate_r_safe_sample_groups(dict.fromkeys(bad))
+
+    """Does validate_normalization() do what it should?"""
+
+    def test_validate_normalization(self):
+        good = [
+            {'File': '1.fastq', 'Group': 'G1', 'Replicate': '1', 'Control': False, 'Normalization': 'rpm'},      # Good
+            {'File': '2.fastq', 'Group': 'G1', 'Replicate': '2', 'Control': False, 'Normalization': 'RPM'},      # Good
+            {'File': '3.fastq', 'Group': 'G1', 'Replicate': '3', 'Control': False, 'Normalization': ' RPM '},    # Good
+            {'File': '4.fasta', 'Group': 'G2', 'Replicate': '1', 'Control': False, 'Normalization': '  1'},      # Good
+            {'File': '5.fasta', 'Group': 'G2', 'Replicate': '2', 'Control': False, 'Normalization': '1.1'},      # Good
+            {'File': '6.fasta', 'Group': 'G2', 'Replicate': '3', 'Control': False, 'Normalization': ''},         # Good
+        ]                                                                                          # ^^^^
+
+        start_sheet = csv_factory("samples.csv", [dict(r, File=f"{i}.fastq") for i, r in enumerate(good)])
+        step_sheet = csv_factory("samples.csv", [dict(r, File=f"{i}.sam") for i, r in enumerate(good)])
+        run_sheet = step_sheet
+
+        # These SHOULD NOT throw an error
+        for context, sheet in zip(self.contexts, [start_sheet, step_sheet, run_sheet]):
+            with patch_open(sheet), patch_isfile():
+                SamplesSheet("mock_filename", context=context)
+
+        bad = [
+            {'File': '1.fastq', 'Group': 'G1', 'Replicate': '1', 'Control': False, 'Normalization': 'abc'},      # Bad
+            {'File': '2.fastq', 'Group': 'G1', 'Replicate': '2', 'Control': False, 'Normalization': '123.rpm'},  # Bad
+            {'File': '3.fastq', 'Group': 'G1', 'Replicate': '3', 'Control': False, 'Normalization': '.'},        # Bad
+            {'File': '1.fastq', 'Group': 'G2', 'Replicate': '1', 'Control': False, 'Normalization': '_'},        # Bad
+        ]
+
+        start_sheet = csv_factory("samples.csv", [dict(r, File=f"{i}.fastq") for i, r in enumerate(bad)])
+        step_sheet = csv_factory("samples.csv", [dict(r, File=f"{i}.sam") for i, r in enumerate(bad)])
+        run_sheet = step_sheet
+
+        exp_contains = r".*(Invalid normalization value).*"
+
+        # These SHOULD throw an error
+        for context, sheet in zip(self.contexts, [start_sheet, step_sheet, run_sheet]):
+            with self.assertRaisesRegex(AssertionError, exp_contains), patch_open(sheet), patch_isfile():
+                SamplesSheet("mock_filename", context=context)
 
 
 class PathsFileTest(unittest.TestCase):
@@ -344,11 +436,11 @@ class PathsFileTest(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, r".*(check the release notes).*"):
             config.check_backward_compatibility()
 
-    """Does PathsFile map all paths to the working directory when in_pipeline=True?"""
+    """Does PathsFile map all paths to the working directory when context=True?"""
 
     def test_pipeline_mapping(self):
         # There are entries in the template Paths File that will cause FileNotFound
-        #  when in_pipeline=True (they're not in the template directory). Since
+        #  when context=True (they're not in the template directory). Since
         #  file existence isn't relevant for this test, we patch that out.
         with patch('tiny.rna.configuration.os.path.isfile', return_value=True):
             config = make_paths_file(in_pipeline=True)

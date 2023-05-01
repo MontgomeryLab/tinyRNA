@@ -7,6 +7,7 @@ from unit_test_helpers import read, make_parsed_alignment, rules_template, stran
 
 resources = "./testdata/counter"
 
+
 class FeaturesTests(unittest.TestCase):
 
     @classmethod
