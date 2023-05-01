@@ -154,7 +154,7 @@ def load_config(features_csv: str, in_pipeline: bool) -> List[dict]:
 
 
 def load_references(paths: PathsFile, libraries: List[dict], rules: List[dict], prefs) -> ReferenceBase:
-    """Determines the reference source (GFF or SAM @SQ headers) and constructs the appropriate object
+    """Determines the reference source (GFF or alignment @SQ headers) and constructs the appropriate object
 
     Args:
         paths: a PathsFile object that optionally contains a `gff_files` configuration
@@ -191,7 +191,7 @@ def map_and_reduce(libraries, paths, prefs):
     # MergedStatsManager handles final output files, regardless of multiprocessing status
     summary = MergedStatsManager(Features, paths['features_csv'], prefs)
 
-    # Use a multiprocessing pool if multiple sam files were provided
+    # Use a multiprocessing pool if multiple alignment files were provided
     if len(libraries) > 1:
         mp.set_start_method("fork")
         with mp.Pool(len(libraries)) as pool:

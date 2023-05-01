@@ -3,7 +3,7 @@ from copy import deepcopy
 
 from unittest.mock import patch, call
 from tiny.rna.counter.features import *
-from unit_test_helpers import read, make_parsed_sam_record, rules_template, strand_to_bool
+from unit_test_helpers import read, make_parsed_alignment, rules_template, strand_to_bool
 
 resources = "./testdata/counter"
 
@@ -115,7 +115,7 @@ class FeaturesTests(unittest.TestCase):
         htsgas[iv_none] += "Should not match"
 
         # Create mock SAM alignment with non-overlapping interval
-        sam_aln = make_parsed_sam_record(**{'Start': 2, 'Chrom': chrom, 'Strand': strand_to_bool(strand)})
+        sam_aln = make_parsed_alignment(**{'Start': 2, 'Chrom': chrom, 'Strand': strand_to_bool(strand)})
 
         """
         iv_none: 0 |--| 2
@@ -143,7 +143,7 @@ class FeaturesTests(unittest.TestCase):
         htsgas[iv_none] += "Non-overlapping feature"
 
         # Create mock SAM alignment which overlaps iv_olap by one base
-        sam_aln = make_parsed_sam_record(**{'Chrom': chrom, 'Strand': strand_to_bool(strand), 'Start': 0, 'Seq': 'AT'})
+        sam_aln = make_parsed_alignment(**{'Chrom': chrom, 'Strand': strand_to_bool(strand), 'Start': 0, 'Seq': 'AT'})
 
         """
         iv_none:    2 |-| 3
@@ -170,7 +170,7 @@ class FeaturesTests(unittest.TestCase):
         mock_bundle = ["mock_alignment"]
         mock_read_count = 1
 
-        instance.sam_reader.bundle_multi_alignments.return_value = iter([(mock_bundle, mock_read_count)])
+        instance.alignment_reader.bundle_multi_alignments.return_value = iter([(mock_bundle, mock_read_count)])
         instance.assign_features.return_value = ({"mock_feat"}, 1)
 
         expected_calls_to_stats = [
@@ -195,11 +195,11 @@ class FeaturesTests(unittest.TestCase):
         feat, fs = self.make_feature_for_interval_test(iv_rule, "Nested Overlap", chrom, strand, start, stop)
 
         aln_base = {'Seq': 'ATGC', 'Chrom': chrom, 'Strand': strand_to_bool(strand)}
-        aln_spill_lo = make_parsed_sam_record(**dict(aln_base, Start=start - 1, Name="spill"))
-        aln_spill_hi = make_parsed_sam_record(**dict(aln_base, Start=start + 2, Name="spill"))
-        aln_contained = make_parsed_sam_record(**dict(aln_base, Seq="N", Start=7, Name="contained"))
-        aln_contained_lo = make_parsed_sam_record(**dict(aln_base, Start=start, Name="contained"))
-        aln_contained_hi = make_parsed_sam_record(**dict(aln_base, Start=start + 1, Name="contained"))
+        aln_spill_lo = make_parsed_alignment(**dict(aln_base, Start=start - 1, Name="spill"))
+        aln_spill_hi = make_parsed_alignment(**dict(aln_base, Start=start + 2, Name="spill"))
+        aln_contained = make_parsed_alignment(**dict(aln_base, Seq="N", Start=7, Name="contained"))
+        aln_contained_lo = make_parsed_alignment(**dict(aln_base, Start=start, Name="contained"))
+        aln_contained_hi = make_parsed_alignment(**dict(aln_base, Start=start + 1, Name="contained"))
 
         """
         aln:                  |ATGC|
@@ -225,10 +225,10 @@ class FeaturesTests(unittest.TestCase):
         feat, fs = self.make_feature_for_interval_test(iv_rule, "Partial Overlap", chrom, strand, start, stop)
 
         aln_base = {'Seq': 'ATGC', 'Chrom': chrom, 'Strand': strand_to_bool(strand)}
-        aln_spill_lo = make_parsed_sam_record(**dict(aln_base, Start=start - 1, Name="spill"))
-        aln_spill_hi = make_parsed_sam_record(**dict(aln_base, Start=start + 2, Name="spill"))
-        aln_contained_lo = make_parsed_sam_record(**dict(aln_base, Start=start, Name="contained"))
-        aln_contained_hi = make_parsed_sam_record(**dict(aln_base, Start=start + 1, Name="contained"))
+        aln_spill_lo = make_parsed_alignment(**dict(aln_base, Start=start - 1, Name="spill"))
+        aln_spill_hi = make_parsed_alignment(**dict(aln_base, Start=start + 2, Name="spill"))
+        aln_contained_lo = make_parsed_alignment(**dict(aln_base, Start=start, Name="contained"))
+        aln_contained_hi = make_parsed_alignment(**dict(aln_base, Start=start + 1, Name="contained"))
 
         """
         aln:                  |ATGC|
@@ -253,11 +253,11 @@ class FeaturesTests(unittest.TestCase):
 
         aln_match = {'Seq': 'ATGC', 'Chrom': chrom, 'Strand': strand_to_bool(strand)}
         aln_short = {'Seq': 'NNN', 'Chrom': chrom, 'Strand': strand_to_bool(strand)}
-        aln_exact = make_parsed_sam_record(**dict(aln_match, Start=start, Name="exact"))
-        aln_short_lo = make_parsed_sam_record(**dict(aln_short, Start=start, Name="match lo"))
-        aln_short_hi = make_parsed_sam_record(**dict(aln_short, Start=start + 1, Name="match hi"))
-        aln_spill_lo = make_parsed_sam_record(**dict(aln_match, Start=start - 1, Name="spill lo"))
-        aln_spill_hi = make_parsed_sam_record(**dict(aln_match, Start=start + 1, Name="spill hi"))
+        aln_exact = make_parsed_alignment(**dict(aln_match, Start=start, Name="exact"))
+        aln_short_lo = make_parsed_alignment(**dict(aln_short, Start=start, Name="match lo"))
+        aln_short_hi = make_parsed_alignment(**dict(aln_short, Start=start + 1, Name="match hi"))
+        aln_spill_lo = make_parsed_alignment(**dict(aln_match, Start=start - 1, Name="spill lo"))
+        aln_spill_hi = make_parsed_alignment(**dict(aln_match, Start=start + 1, Name="spill hi"))
 
         """
         aln_match:            |ATGC|
@@ -300,10 +300,10 @@ class FeaturesTests(unittest.TestCase):
         feat_A, fs = self.make_feature_for_interval_test(iv_rule, "5' Anchored Overlap (+)", chrom, '+', start, end)
         aln_base = {'Start': start, 'Chrom': chrom, 'Strand': True}
         aln = {
-            'aln_none': make_parsed_sam_record(**dict(aln_base, Start=start + 1, Seq="ATGC")),
-            'aln_long': make_parsed_sam_record(**dict(aln_base, Seq="ATGCNN")),
-            'aln_exact': make_parsed_sam_record(**dict(aln_base, Seq="ATGCN")),
-            'aln_short': make_parsed_sam_record(**dict(aln_base, Seq="ATGC")),
+            'aln_none': make_parsed_alignment(**dict(aln_base, Start=start + 1, Seq="ATGC")),
+            'aln_long': make_parsed_alignment(**dict(aln_base, Seq="ATGCNN")),
+            'aln_exact': make_parsed_alignment(**dict(aln_base, Seq="ATGCN")),
+            'aln_short': make_parsed_alignment(**dict(aln_base, Seq="ATGC")),
         }
 
         self.assertEqual(fs.choose(feat_A, aln['aln_none']), {})
@@ -347,10 +347,10 @@ class FeaturesTests(unittest.TestCase):
         feat_A, fs = self.make_feature_for_interval_test(iv_rule, "3' Anchored Overlap (+)", chrom, '+', start, end)
         aln_base = {'Start': start, 'Chrom': chrom, 'Strand': True}
         aln = {
-            'aln_none': make_parsed_sam_record(**dict(aln_base, Seq="ATGC")),
-            'aln_long': make_parsed_sam_record(**dict(aln_base, Start=start - 1, Seq="ATGCNN")),
-            'aln_exact': make_parsed_sam_record(**dict(aln_base, Seq="ATGCN")),
-            'aln_short': make_parsed_sam_record(**dict(aln_base, Start=start + 1, Seq="ATGC")),
+            'aln_none': make_parsed_alignment(**dict(aln_base, Seq="ATGC")),
+            'aln_long': make_parsed_alignment(**dict(aln_base, Start=start - 1, Seq="ATGCNN")),
+            'aln_exact': make_parsed_alignment(**dict(aln_base, Seq="ATGCN")),
+            'aln_short': make_parsed_alignment(**dict(aln_base, Start=start + 1, Seq="ATGC")),
         }
 
         self.assertEqual(fs.choose(feat_A, aln['aln_none']), {})

@@ -171,10 +171,10 @@ class GFFValidator:
     def alignment_chroms_mismatch_heuristic(self, sam_files: List[str], subset_size=50000) -> Dict[str, set]:
         """Since alignment files can be very large, we only check that there's at least one shared
         chromosome identifier and only the first subset_size lines are read from each file. The
-        returned dictionary contains only the SAM files whose sampled chromosome set failed to
+        returned dictionary contains only the alignment files whose sampled chromosome set failed to
         intersect with the chromosomes parsed from GFF files.
         Returns:
-            a dictionary of {SAM filename: SAM chromosomes sampled}"""
+            a dictionary of {alignment filename: alignment chromosomes sampled}"""
 
         files_wo_overlap = {}
 
@@ -296,7 +296,7 @@ class AlignmentSqValidator:
         return bad_seqs
 
     def get_duplicate_identifiers(self) -> Dict[str, List[str]]:
-        """Returns a dictionary of SAM files that contain duplicate sequence identifiers"""
+        """Returns a dictionary of alignment files that contain duplicate sequence identifiers"""
 
         bad_files = {}
         for file in self.alignment_files:
@@ -308,13 +308,13 @@ class AlignmentSqValidator:
         return bad_files
 
     def get_incomplete_sq_headers(self) -> List[str]:
-        """Returns a list of SAM files that have incomplete @SQ headers"""
+        """Returns a list of alignment files that have incomplete @SQ headers"""
 
         return [file for file, sqs in self.sq_headers.items()
                 if not all("SN" in sq and "LN" in sq for sq in sqs)]
 
     def get_missing_headers(self) -> List[str]:
-        """Returns a list of SAM files that lack @SQ headers"""
+        """Returns a list of alignment files that lack @SQ headers"""
 
         return [file for file, sqs in self.sq_headers.items()
                 if len(sqs) == 0]

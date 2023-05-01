@@ -131,7 +131,7 @@ def get_dir_checksum_tree(root_path: str) -> dict:
     return dir_tree
 
 
-def make_parsed_sam_record(Name="0_count=1", Seq="CAAGACAGAGCTTCACCGTTC", Chrom='I', Start=15064570, Strand=True, NM=0):
+def make_parsed_alignment(Name="0_count=1", Seq="CAAGACAGAGCTTCACCGTTC", Chrom='I', Start=15064570, Strand=True, NM=0):
     return {
         "Name": Name,
         "Length": len(Seq),

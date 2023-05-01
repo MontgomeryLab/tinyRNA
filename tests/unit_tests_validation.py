@@ -237,7 +237,7 @@ class GFFValidatorTest(unittest.TestCase):
         exp_warnings = '\n'.join([
             "GFF files and sequence files might not contain the same chromosome identifiers.",
             "This is determined from a subset of each sequence file, so false positives may be reported.",
-            "\t" + f"{validator.targets['sam files']}: ",
+            "\t" + f"{validator.targets['alignment files']}: ",
             "\t\t" + "sam1: ",
             "\t\t\t" + f"Chromosomes sampled: {', '.join(sorted(suspect_files['sam1']))}",
             "\t\t" + "sam2: ",
@@ -304,7 +304,7 @@ class GFFValidatorTest(unittest.TestCase):
 class SamSqValidatorTest(unittest.TestCase):
     @classmethod
     def setUpClass(self):
-        self.syntax_header = "Every SAM file must have complete @SQ headers with SN and LN\n" \
+        self.syntax_header = "Every alignment file must have complete @SQ headers with SN and LN\n" \
                              "fields when performing sequence-based counting.\n"
 
         self.identifier_header = "Sequence identifiers must be unique and have consistent length definitions.\n"
@@ -333,12 +333,12 @@ class SamSqValidatorTest(unittest.TestCase):
             ],
         }
 
-        validator = SamSqValidator([sam_file])
+        validator = AlignmentSqValidator([sam_file])
         validator.read_sq_headers()
 
         self.assertDictEqual(validator.sq_headers, expected)
 
-    """Does SamSqValidator correctly identify missing @SQ headers?"""
+    """Does AlignmentSqValidator correctly identify missing @SQ headers?"""
 
     def test_missing_sq_headers(self):
         mock_files = ['sam1', 'sam2']
@@ -349,18 +349,18 @@ class SamSqValidatorTest(unittest.TestCase):
 
         expected = '\n'.join([
             self.syntax_header,
-            "\t" + f"{SamSqValidator.targets['missing sq']}: ",
+            "\t" + f"{AlignmentSqValidator.targets['missing sq']}: ",
             "\t\t" + mock_files[1]
         ])
 
-        validator = SamSqValidator(mock_files)
+        validator = AlignmentSqValidator(mock_files)
         validator.sq_headers = mock_sam_headers
         validator.validate_sq_headers()
 
         self.assertListEqual(validator.report.errors, [expected])
         self.assertListEqual(validator.report.warnings, [])
 
-    """Does SamSqValidator correctly identify incomplete @SQ headers?"""
+    """Does AlignmentSqValidator correctly identify incomplete @SQ headers?"""
 
     def test_incomplete_sq_headers(self):
         mock_files = ['sam1', 'sam2', 'sam3']
@@ -372,19 +372,19 @@ class SamSqValidatorTest(unittest.TestCase):
 
         expected = '\n'.join([
             self.syntax_header,
-            "\t" + f"{SamSqValidator.targets['incomplete sq']}: ",
+            "\t" + f"{AlignmentSqValidator.targets['incomplete sq']}: ",
             "\t\t" + mock_files[1],
             "\t\t" + mock_files[2],
         ])
 
-        validator = SamSqValidator(mock_files)
+        validator = AlignmentSqValidator(mock_files)
         validator.sq_headers = mock_sam_headers
         validator.validate_sq_headers()
 
         self.assertListEqual(validator.report.errors, [expected])
         self.assertListEqual(validator.report.warnings, [])
 
-    """Does SamSqValidator correctly identify duplicate identifiers?"""
+    """Does AlignmentSqValidator correctly identify duplicate identifiers?"""
 
     def test_duplicate_identifiers(self):
         mock_files = ['sam1', 'sam2', 'sam3']
@@ -396,18 +396,18 @@ class SamSqValidatorTest(unittest.TestCase):
 
         expected = '\n'.join([
             self.identifier_header,
-            "\t" + f"{SamSqValidator.targets['intra sq']}: ",
+            "\t" + f"{AlignmentSqValidator.targets['intra sq']}: ",
             "\t\t" + mock_files[2],
         ])
 
-        validator = SamSqValidator(mock_files)
+        validator = AlignmentSqValidator(mock_files)
         validator.sq_headers = mock_sam_headers
         validator.validate_sq_headers()
 
         self.assertListEqual(validator.report.errors, [expected])
         self.assertListEqual(validator.report.warnings, [])
 
-    """Does SamSqValidator correctly identify identifiers with inconsistent length definitions?"""
+    """Does AlignmentSqValidator correctly identify identifiers with inconsistent length definitions?"""
 
     def test_inconsistent_identifier_length(self):
         mock_files = ['sam1', 'sam2', 'sam3']
@@ -419,12 +419,12 @@ class SamSqValidatorTest(unittest.TestCase):
 
         expected = '\n'.join([
             self.identifier_header,
-            "\t" + f"{SamSqValidator.targets['inter sq']}: ",
+            "\t" + f"{AlignmentSqValidator.targets['inter sq']}: ",
             "\t\t" + 'chr1',
             "\t\t" + 'chr2',
         ])
 
-        validator = SamSqValidator(mock_files)
+        validator = AlignmentSqValidator(mock_files)
         validator.sq_headers = mock_sam_headers
         validator.validate_sq_headers()
 
