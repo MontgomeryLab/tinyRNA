@@ -193,11 +193,11 @@ class AlignmentReader:
             if name != prev_name:
                 seq_count = int(name.rsplit(self._collapser_token, 1)[1])
 
-            aln_out.extend([aln.to_string()] * seq_count)
+            aln_out.extend([aln.to_string() + '\n'] * seq_count)
             prev_name = name
 
         with open(self._get_decollapsed_filename(), 'a') as sam_o:
-            sam_o.write('\n'.join(aln_out))
+            sam_o.writelines(aln_out)
             self._decollapsed_reads.clear()
 
 
