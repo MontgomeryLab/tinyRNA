@@ -833,7 +833,7 @@ class CSVReader(csv.DictReader):
            "Mismatches":        "Mismatch"
         }),
         "Samples Sheet": OrderedDict({
-            "FASTQ/SAM Files":   "File",
+            "Input Files":       "File",
             "Sample/Group Name": "Group",
             "Replicate Number":  "Replicate",
             "Control":           "Control",
@@ -958,6 +958,15 @@ class CSVReader(csv.DictReader):
                     'tinyRNA. An additional column, "Mismatches", is now expected. Please review',
                     "the Stage 2 section in tiny-count's documentation for more info, then add",
                     "the new column to your Features Sheet to avoid this error."
+                ]))
+
+        if self.doctype == "Samples Sheet":
+            if 'fastq/sam files' in header_vals_lc:
+                compat_errors.append('\n'.join([
+                    "It looks like you're using a Samples Sheet from an earlier version of",
+                    'tinyRNA. The "FASTQ/SAM files" column has been renamed to "Input Files"',
+                    'due to the addition of BAM file support. Please rename the column in',
+                    "your Samples Sheet to avoid this error."
                 ]))
 
         if compat_errors: raise ValueError('\n\n'.join(compat_errors))
