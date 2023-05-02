@@ -55,10 +55,10 @@ inputs:
     inputBinding:
       prefix: --all-features
 
-  is_pipeline:
+  in_pipeline:
     type: boolean?
     inputBinding:
-      prefix: --is-pipeline
+      prefix: --in-pipeline
 
   diagnostics:
     type: boolean?

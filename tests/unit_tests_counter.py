@@ -7,7 +7,7 @@ from collections import defaultdict
 
 import unit_test_helpers as helpers
 import tiny.rna.counter.counter as counter
-from tiny.rna.util import from_here
+from tiny.rna.configuration import ConfigBase
 
 resources = "./testdata/counter"
 
@@ -16,12 +16,12 @@ class CounterTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(self):
-        self.gff_file = f"{resources}/identity_choice_test.gff3"
-        self.short_gff_file = f"{resources}/single.gff3"
+        self.gff_file = f"{resources}/gff/identity_choice_test.gff3"
+        self.short_gff_file = f"{resources}/gff/single.gff3"
         self.short_gff = helpers.read(self.short_gff_file)
 
-        self.sam_file = f"{resources}/identity_choice_test.sam"
-        self.short_sam_file = f"{resources}/single.sam"
+        self.sam_file = f"{resources}/sam/identity_choice_test.sam"
+        self.short_sam_file = f"{resources}/sam/single.sam"
         self.short_sam = helpers.read(self.short_sam_file)
 
         self.strand = {'sense': tuple('+'), 'antisense': tuple('-'), 'both': ('+', '-')}
@@ -96,13 +96,13 @@ class CounterTests(unittest.TestCase):
     def test_load_samples_single_cmd(self):
         mock_samp_sheet_path = '/dev/null'
         inp_file = "test.fastq"
-        exp_file = from_here(mock_samp_sheet_path, "test_aligned_seqs.sam")
+        exp_file = ConfigBase.joinpath(mock_samp_sheet_path, "test_aligned_seqs.sam")
 
         row = dict(self.csv_samp_row_dict, **{'File': inp_file})
         csv = self.csv("samples.csv", [row])
 
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
-            inputs_step = counter.load_samples(mock_samp_sheet_path, is_pipeline=False)
+            inputs_step = counter.load_samples(mock_samp_sheet_path, in_pipeline=False)
 
         expected_result = self.get_loaded_samples_row(row, exp_file)
         self.assertEqual(inputs_step, expected_result)
@@ -118,7 +118,7 @@ class CounterTests(unittest.TestCase):
         csv = self.csv("samples.csv", [row])
 
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
-            inputs_pipeline = counter.load_samples(mock_samp_sheet_path, is_pipeline=True)
+            inputs_pipeline = counter.load_samples(mock_samp_sheet_path, in_pipeline=True)
 
         expected_result = self.get_loaded_samples_row(row, exp_file)
         self.assertEqual(inputs_pipeline, expected_result)
@@ -144,24 +144,10 @@ class CounterTests(unittest.TestCase):
 
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
             dummy_file = '/dev/null'
-            inputs = counter.load_samples(dummy_file, is_pipeline=False)
+            inputs = counter.load_samples(dummy_file, in_pipeline=False)
 
         expected_result = self.get_loaded_samples_row(row, sam_filename)
         self.assertEqual(inputs, expected_result)
-
-    """Does load_samples throw ValueError if a non-absolute path to a SAM file is provided?"""
-
-    def test_load_samples_nonabs_path(self):
-        bad = "./dne.sam"
-        row = dict(self.csv_samp_row_dict, **{'File': bad})
-        csv = self.csv("samples.csv", [row])
-
-        expected_error = "The following file must be expressed as an absolute path:\n" + bad
-
-        with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
-            with self.assertRaisesRegex(ValueError, expected_error):
-                dummy_file = '/dev/null'
-                counter.load_samples(dummy_file, False)
 
     """Does load_samples throw ValueError if sample filename does not have a .fastq or .sam extension?"""
 
@@ -187,7 +173,7 @@ class CounterTests(unittest.TestCase):
 
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
             dummy_file = '/dev/null'
-            ruleset = counter.load_config(dummy_file, is_pipeline=False)
+            ruleset = counter.load_config(dummy_file, in_pipeline=False)
 
         expected_ruleset = self.parsed_feat_rule
         self.assertEqual(ruleset, expected_ruleset)
@@ -201,7 +187,7 @@ class CounterTests(unittest.TestCase):
 
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
             dummy_file = '/dev/null'
-            ruleset = counter.load_config(dummy_file, is_pipeline=True)
+            ruleset = counter.load_config(dummy_file, in_pipeline=True)
 
         expected_ruleset = self.parsed_feat_rule
         self.assertEqual(ruleset, expected_ruleset)

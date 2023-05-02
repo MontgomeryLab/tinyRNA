@@ -1,4 +1,5 @@
 import functools
+import itertools
 import os.path
 import HTSeq
 import pysam
@@ -19,21 +20,25 @@ from tiny.rna.util import report_execution_time, make_filename, ReportFormatter,
 _re_attr_main = re.compile(r"\s*([^\s=]+)[\s=]+(.*)")
 _re_attr_empty = re.compile(r"^\s*$")
 
-# For SAM_reader
+# For AlignmentReader
 AlignmentDict = Dict[str, Union[str, int]]
 Bundle = Tuple[List[AlignmentDict], int]
 _re_tiny = r"\d+_count=\d+"
 _re_fastx = r"seq\d+_x(\d+)"
 
 
-class SAM_reader:
-    """A minimal SAM reader that bundles multiple-alignments and only parses data relevant to the workflow."""
+class AlignmentReader:
+    """A SAM/BAM wrapper for Pysam that bundles multiple-alignments and only retrieves data relevant to the workflow."""
+
+    compatible_unordered = ("bowtie", "bowtie2", "star")  # unordered files from these tools don't require sorting
 
     def __init__(self, **prefs):
         self.decollapse = prefs.get("decollapse", False)
         self.out_prefix = prefs.get("out_prefix", None)
         self.collapser_type = None
         self.references = []
+        self.file_type = None
+        self.basename = None
         self.has_nm = None
         self.file = None
 
@@ -50,8 +55,8 @@ class SAM_reader:
         """Bundles multi-alignments (determined by a shared QNAME) and reports the associated read's count"""
 
         pysam_reader = pysam.AlignmentFile(file)
-        self.file = file
 
+        self._assign_library(file)
         self._gather_metadata(pysam_reader)
         self._iter = AlignmentIter(pysam_reader, self.has_nm, self._decollapsed_callback, self._decollapsed_reads)
         bundle, read_count = self._new_bundle(next(self._iter))
@@ -78,24 +83,69 @@ class SAM_reader:
 
         return [aln], count
 
+    def _assign_library(self, file):
+        self.file_type = file.rsplit('.')[-1].lower()
+        self.basename = os.path.basename(file)
+        self.file = file
+
     def _gather_metadata(self, reader: pysam.AlignmentFile) -> None:
-        """Saves header information, examines the first alignment to determine which collapser utility was used (if any), and whether the alignment has a query sequence and NM tag.
+        """Saves header information, examines the first alignment to determine which collapser utility was used (if any)
+        and whether the alignment has a query sequence and NM tag.
         The input file's header is written to the decollapsed output file if necessary."""
 
         header = reader.header
         first_aln = next(reader.head(1))
 
         if first_aln.query_sequence is None:
-            raise ValueError("SAM alignments must include the read sequence.")
+            raise ValueError(f"Alignments must include the read sequence ({self.basename}).")
 
         self._header = header
-        self._header_dict = header.to_dict()  # performs validation
+        self._header_dict = header.to_dict()  # performs header validation
+        self._check_for_incompatible_order()
         self._determine_collapser_type(first_aln.query_name)
         self.has_nm = first_aln.has_tag("NM")
         self.references = header.references
 
         if self.decollapse:
             self._write_header_for_decollapsed_sam(str(header))
+
+    def _check_for_incompatible_order(self):
+        """Inspects headers to determine if alignments of multi-mapping reads are in adjacent order
+
+        Headers that report unsorted/unknown sorting order are likely still compatible, but
+        since the SAM/BAM standard doesn't address alignment adjacency, we have to assume
+        that it is implementation dependent. Therefore, if all other checks for strict
+        compatibility/incompatibility pass, we check the last reported @PG
+        header against a short (incomplete) list of alignment tools that are known to
+        follow the adjacency convention."""
+
+        hd_header = self._header_dict.get('HD', {})
+        so_header = hd_header.get('SO', "")
+        go_header = hd_header.get('GO', "")
+
+        # Check for strictly compatible order
+        if "queryname" in so_header or "query" in go_header:
+            return
+
+        error = self.basename + " is incompatible because {reason}.\n" \
+                "Please ensure that alignments for multi-mapping reads are ordered so " \
+                "that they are adjacent to each other. One way to achieve this is to " \
+                'sort your files by QNAME with the command "samtools sort -n"'
+
+        # Check for strictly incompatible order
+        if not ({'SO', 'GO'} & hd_header.keys()):
+            raise ValueError(error.format(reason="its sorting/grouping couldn't be determined from headers"))
+        if "coordinate" in so_header:
+            raise ValueError(error.format(reason="it is sorted by coordinate"))
+        if "reference" in go_header:
+            raise ValueError(error.format(reason="it is grouped by reference"))
+
+        # If SO is unknown/unsorted or GO is none, check to see if the last program
+        # to handle the alignments is one that produces adjacent alignments by default
+        pg_header = self._header_dict.get('PG', [{}])
+        last_prog = pg_header[-1].get('ID', "")
+        if last_prog.lower() not in self.compatible_unordered:
+            raise ValueError(error.format(reason="multi-mapping adjacency couldn't be determined"))
 
     def _determine_collapser_type(self, qname: str) -> None:
         """Attempts to determine the collapsing utility that was used before producing the
@@ -108,11 +158,6 @@ class SAM_reader:
         elif re.match(_re_fastx, qname) is not None:
             self.collapser_type = "fastx"
             self._collapser_token = "_x"
-
-            sort_order = self._header_dict.get('HD', {}).get('SO', None)
-            if sort_order is None or sort_order != "queryname":
-                raise ValueError("SAM files from fastx collapsed outputs must be sorted by queryname\n"
-                                 "(and the @HD [...] SO header must be set accordingly).")
         else:
             self.collapser_type = None
 
@@ -148,23 +193,23 @@ class SAM_reader:
             if name != prev_name:
                 seq_count = int(name.rsplit(self._collapser_token, 1)[1])
 
-            aln_out.extend([aln.to_string()] * seq_count)
+            aln_out.extend([aln.to_string() + '\n'] * seq_count)
             prev_name = name
 
         with open(self._get_decollapsed_filename(), 'a') as sam_o:
-            sam_o.write('\n'.join(aln_out))
+            sam_o.writelines(aln_out)
             self._decollapsed_reads.clear()
 
 
-def infer_strandedness(sam_file: str, intervals: dict) -> str:
-    """Infers strandedness from a sample SAM file and intervals from a parsed GFF file
+def infer_strandedness(alignment_file: str, intervals: dict) -> str:
+    """Infers strandedness from a sample alignment file and intervals from a parsed GFF file
 
     Credit: this technique is an adaptation of those in RSeQC's infer_experiment.py.
     It has been modified to accept a GFF reference file rather than a BED file,
-    and to use HTSeq rather than bx-python.
+    and to use our AlignmentReader rather than bx-python.
 
     Args:
-        sam_file: the path of the SAM file to evaluate
+        alignment_file: the path of the alignment file to evaluate
         intervals: the intervals instance attribute of ReferenceFeatures, populated by .get()
     """
 
@@ -175,18 +220,14 @@ def infer_strandedness(sam_file: str, intervals: dict) -> str:
         iv_convert.strand = '.'
         unstranded[iv_convert] = orig_iv.strand
 
-    # Assumes read_SAM() defaults to non-reverse strandedness
-    sample_read = read_SAM(sam_file)
+    # Assumes AlignmentReader defaults to non-reverse strandedness
+    sample_read = AlignmentReader().bundle_multi_alignments(alignment_file)
     gff_sam_map = Counter()
-    for count in range(1, 20000):
-        try:
-            rec = next(sample_read)
-            strandless = HTSeq.GenomicInterval(rec['Chrom'], rec['Start'], rec['End'])
-            sam_strand = rec['strand']
-            gff_strand = ':'.join(unstranded[strandless].get_steps())
-            gff_sam_map[sam_strand + gff_strand] += 1
-        except StopIteration:
-            break
+    for rec, _ in zip(itertools.chain(*sample_read), range(20000)):
+        strandless = HTSeq.GenomicInterval(rec['Chrom'], rec['Start'], rec['End'])
+        sam_strand = rec['strand']
+        gff_strand = ':'.join(unstranded[strandless].get_steps())
+        gff_sam_map[sam_strand + gff_strand] += 1
 
     non_rev = (gff_sam_map['++'] + gff_sam_map['--']) / sum(gff_sam_map.values())
     reverse = (gff_sam_map['+-'] + gff_sam_map['-+']) / sum(gff_sam_map.values())

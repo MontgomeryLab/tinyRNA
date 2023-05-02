@@ -119,7 +119,7 @@ The final output directory name has three components:
 The `run_directory` suffix in the Paths File supports subdirectories; if provided, the final output directory will be named as indicated above, but the subdirectory structure specified in `run_directory` will be retained. 
 
 ## Samples Sheet Details
-|  _Column:_ | FASTQ/SAM Files     | Sample/Group Name | Replicate Number | Control | Normalization |
+|  _Column:_ | Input Files         | Sample/Group Name | Replicate Number | Control | Normalization |
 |-----------:|---------------------|-------------------|------------------|---------|---------------|
 | _Example:_ | cond1_rep1.fastq.gz | condition1        | 1                | True    | RPM           |
 

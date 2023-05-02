@@ -11,7 +11,7 @@ Alternatively, if you have already installed tinyRNA, you can use the `tiny-coun
 
 ## Your Data Files
 Gather the following files for the analysis:
-1. **SAM files** containing small RNA reads aligned to a reference genome, one file per sample
+1. **SAM or BAM files** containing small RNA reads aligned to a reference genome, one file per sample
 2. **GFF3 or GFF2/GTF file(s)** containing annotations for features that you want to assign reads to
 
 ## Configuration Files
@@ -24,7 +24,7 @@ tiny-count --get-templates
 Next, fill out the configuration files that were copied:
 
 ### 1. The Samples Sheet (samples.csv)
-Edit this file to add the paths to your SAM files, and to define the group name, replicate number, etc. for each sample.
+Edit this file to add the paths to your SAM or BAM files, and to define the group name, replicate number, etc. for each sample.
 
 ### 2. The Paths File (paths.yml)
 Edit this file to add the paths to your GFF annotation(s) under the `gff_files` key. You can leave the `alias` key as-is for now. All other keys in this file are used in the tinyRNA workflow.
