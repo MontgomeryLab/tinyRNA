@@ -362,9 +362,9 @@ def load_dge_tables(comparisons: list, class_fillna: str) -> pd.DataFrame:
         if not comparison:
             raise ValueError("Could not find condition names in DGE filename: " + dgefile)
         if len(comparison) > 1:
-            print("Warning: multiple conditions matched in DGE filename. Using first match.")
+            print("Warning: multiple conditions matched in DGE filename. Using last match.")
 
-        comparison_name = "_vs_".join(comparison[0])
+        comparison_name = "_vs_".join(comparison[-1])
         table = set_counts_table_multiindex(pd.read_csv(dgefile), class_fillna)
 
         de_table[comparison_name] = table['padj']

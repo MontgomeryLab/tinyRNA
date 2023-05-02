@@ -7,6 +7,10 @@
 
 
 1.4.0:
+  remove:
+    - counter_all_features
+    - trim5
+    - trim3
   rename:
     - counter_normalize_by_hits: counter_normalize_by_feature_hits
   add:

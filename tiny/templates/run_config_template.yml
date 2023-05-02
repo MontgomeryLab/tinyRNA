@@ -202,10 +202,6 @@ shared_memory: False
 ##-- Suppress all alignments if > <int> exist (default: no limit) (option -m) --##
 #suppress_aln: 10
 
-##-- Trim <int> bases from 5' (left) or 3' (right) end of reads (options --trim5 and --trim3) --##
-#trim5: 0
-#trim3: 0
-
 ##-- Input quals are from GA Pipeline ver. < 1.3 (option --solexa-quals) --##
 #solexa: false
 
@@ -220,9 +216,6 @@ shared_memory: False
 #
 ######-------------------------------------------------------------------------------######
 
-
-##-- If True: show all parsed features in the counts csv, regardless of count/identity --##
-counter_all_features: False
 
 ##-- If True: counts are normalized by genomic hits (number of multi-alignments) --##
 counter_normalize_by_genomic_hits: True
