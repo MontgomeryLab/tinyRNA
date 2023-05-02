@@ -7,7 +7,7 @@ import os
 from collections import Counter, defaultdict
 from typing import List, Dict
 
-from tiny.rna.counter.hts_parsing import parse_gff, ReferenceFeatures, SAM_reader
+from tiny.rna.counter.hts_parsing import parse_gff, ReferenceFeatures
 from tiny.rna.counter.features import FeatureSelector
 from tiny.rna.util import ReportFormatter, sorted_natural, gzip_open
 
@@ -18,7 +18,7 @@ class GFFValidator:
 
     targets = {
         "ID attribute": "Features missing a valid identifier attribute",
-        "sam files": "Potentially incompatible SAM alignment files",
+        "alignment files": "Potentially incompatible alignment files",
         "seq chromosomes": "Chromosomes present in sequence files",
         "gff chromosomes": "Chromosomes present in GFF files",
         "strand": "Features missing strand information",
@@ -171,20 +171,19 @@ class GFFValidator:
     def alignment_chroms_mismatch_heuristic(self, sam_files: List[str], subset_size=50000) -> Dict[str, set]:
         """Since alignment files can be very large, we only check that there's at least one shared
         chromosome identifier and only the first subset_size lines are read from each file. The
-        returned dictionary contains only the SAM files whose sampled chromosome set failed to
+        returned dictionary contains only the alignment files whose sampled chromosome set failed to
         intersect with the chromosomes parsed from GFF files.
         Returns:
-            a dictionary of {SAM filename: SAM chromosomes sampled}"""
+            a dictionary of {alignment filename: alignment chromosomes sampled}"""
 
         files_wo_overlap = {}
 
         for file in sam_files:
             file_chroms = set()
-            with open(file, 'rb') as f:
-                for i, line in zip(range(subset_size), f):
-                    if line[0] == ord('@'): continue
-                    file_chroms.add(line.split(b'\t')[2].strip().decode())
-                    if i % 10000 == 0 and len(file_chroms & self.chrom_set): break
+            reader = pysam.AlignmentFile(file)
+            for i, aln in enumerate(reader.head(subset_size)):
+                file_chroms.add(aln.reference_name)
+                if i % 10000 == 0 and len(file_chroms & self.chrom_set): break
 
             if not len(file_chroms & self.chrom_set):
                 files_wo_overlap[file] = file_chroms
@@ -210,7 +209,7 @@ class GFFValidator:
                   for file, chroms in suspect_files.items()}
 
         summary = {
-            "sam files": chroms,
+            "alignment files": chroms,
             "gff chromosomes": sorted(self.chrom_set)
         }
 
@@ -229,24 +228,24 @@ class GFFValidator:
         return FeatureSelector.build_selectors([selector_defs])[0]
 
 
-class SamSqValidator:
+class AlignmentSqValidator:
     """Validates @SQ headers for tiny-count's sequence-based counting mode"""
 
     targets = {
         "inter sq": "Sequence identifiers with inconsistent lengths",
-        "intra sq": "SAM files with repeated sequence identifiers",
-        "incomplete sq": "SAM files with incomplete @SQ headers",
-        "missing sq": "SAM files that lack @SQ headers"
+        "intra sq": "alignment files with repeated sequence identifiers",
+        "incomplete sq": "alignment files with incomplete @SQ headers",
+        "missing sq": "alignment files that lack @SQ headers"
     }
 
-    def __init__(self, sam_files):
+    def __init__(self, alignment_files):
         self.report = ReportFormatter(self.targets)
-        self.sam_files = sam_files
+        self.alignment_files = alignment_files
         self.reference_seqs = {}
         self.sq_headers = {}
 
     def validate(self):
-        print("Validating sequence identifiers in SAM files... ", end='')
+        print("Validating sequence identifiers in alignment files... ", end='')
         self.read_sq_headers()
         self.validate_sq_headers()
         print("done.")
@@ -279,7 +278,7 @@ class SamSqValidator:
         Sequences with consistent length definitions are added to self.reference_seqs"""
 
         seq_lengths = defaultdict(set)
-        for sam in self.sam_files:
+        for sam in self.alignment_files:
             for sq in self.sq_headers[sam]:
                 seq_id = sq['SN']
                 seq_len = int(sq['LN'])
@@ -296,10 +295,10 @@ class SamSqValidator:
         return bad_seqs
 
     def get_duplicate_identifiers(self) -> Dict[str, List[str]]:
-        """Returns a dictionary of SAM files that contain duplicate sequence identifiers"""
+        """Returns a dictionary of alignment files that contain duplicate sequence identifiers"""
 
         bad_files = {}
-        for file in self.sam_files:
+        for file in self.alignment_files:
             sq = self.sq_headers[file]
             id_count = Counter(seq['SN'] for seq in sq)
             duplicates = [seq_id for seq_id, count in id_count.items() if count > 1]
@@ -308,13 +307,13 @@ class SamSqValidator:
         return bad_files
 
     def get_incomplete_sq_headers(self) -> List[str]:
-        """Returns a list of SAM files that have incomplete @SQ headers"""
+        """Returns a list of alignment files that have incomplete @SQ headers"""
 
         return [file for file, sqs in self.sq_headers.items()
                 if not all("SN" in sq and "LN" in sq for sq in sqs)]
 
     def get_missing_headers(self) -> List[str]:
-        """Returns a list of SAM files that lack @SQ headers"""
+        """Returns a list of alignment files that lack @SQ headers"""
 
         return [file for file, sqs in self.sq_headers.items()
                 if len(sqs) == 0]
@@ -326,7 +325,7 @@ class SamSqValidator:
         if incomplete:
             report['incomplete sq'] = sorted_natural(incomplete)
 
-        header = "Every SAM file must have complete @SQ headers with SN and LN\n" \
+        header = "Every alignment file must have complete @SQ headers with SN and LN\n" \
                  "fields when performing sequence-based counting.\n"
         self.report.add_error_section(header, report)
 
@@ -341,6 +340,6 @@ class SamSqValidator:
         self.report.add_error_section(header, report)
 
     def read_sq_headers(self):
-        for file in self.sam_files:
+        for file in self.alignment_files:
             pr = pysam.AlignmentFile(file, check_sq=False)
             self.sq_headers[file] = pr.header.to_dict().get('SQ', [])

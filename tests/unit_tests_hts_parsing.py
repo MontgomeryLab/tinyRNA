@@ -22,12 +22,13 @@ if __name__ == '__main__':
     unittest.main()
 
 
-class SamReaderTests(unittest.TestCase):
+class AlignmentReaderTests(unittest.TestCase):
     @classmethod
     def setUpClass(self):
-        self.sam_file = f"{resources}/identity_choice_test.sam"
-        self.short_sam_file = f"{resources}/single.sam"
+        self.sam_file = f"{resources}/sam/identity_choice_test.sam"
+        self.short_sam_file = f"{resources}/sam/single.sam"
         self.short_sam = helpers.read(self.short_sam_file)
+        self.short_bam_file = f"{resources}/bam/single.bam"
 
     @staticmethod
     def exhaust_iterator(it):
@@ -35,10 +36,10 @@ class SamReaderTests(unittest.TestCase):
 
     # === TESTS ===
 
-    """Did SAM_reader correctly skip header values and parse all pertinent info from a single record SAM file?"""
+    """Did AlignmentReader correctly skip header values and parse all pertinent info from a single record SAM file?"""
 
-    def test_sam_reader(self):
-        sam_bundle, read_count = next(SAM_reader().bundle_multi_alignments(self.short_sam_file))
+    def test_AlignmentReader_single_sam(self):
+        sam_bundle, read_count = next(AlignmentReader().bundle_multi_alignments(self.short_sam_file))
         sam_record = sam_bundle[0]
 
         self.assertEqual(sam_record['Chrom'], "I")
@@ -50,7 +51,22 @@ class SamReaderTests(unittest.TestCase):
         self.assertEqual(sam_record['Length'], 21)
         self.assertEqual(sam_record['nt5end'], 'G')
 
-    """Does our custom SAM parser produce the same pertinent info as HTSeq's BAM_reader?
+    """Did AlignmentReader correctly skip header values and parse all pertinent info from a single record BAM file?"""
+
+    def test_AlignmentReader_single_bam(self):
+        bam_bundle, read_count = next(AlignmentReader().bundle_multi_alignments(self.short_bam_file))
+        bam_record = bam_bundle[0]
+
+        self.assertEqual(bam_record['Chrom'], "I")
+        self.assertEqual(bam_record['Start'], 15064569)
+        self.assertEqual(bam_record['End'], 15064590)
+        self.assertEqual(bam_record['Strand'], False)
+        self.assertEqual(bam_record['Name'], "0_count=5")
+        self.assertEqual(bam_record['Seq'], "CAAGACAGAGCTTCACCGTTC")
+        self.assertEqual(bam_record['Length'], 21)
+        self.assertEqual(bam_record['nt5end'], 'G')
+
+    """Does our AlignmentReader produce the same pertinent info from a SAM file as HTSeq's BAM_reader?
 
     A note on SAM files: reads are always stored 5' to 3', so antisense reads are actually
     recorded in reverse complement. HTSeq automatically performs this conversion, but we
@@ -59,8 +75,8 @@ class SamReaderTests(unittest.TestCase):
     """
 
     def test_sam_parser_comparison(self):
-        file = f"{resources}/Lib304_test.sam"
-        ours = SAM_reader().bundle_multi_alignments(file)
+        file = f"{resources}/sam/Lib304_test.sam"
+        ours = AlignmentReader().bundle_multi_alignments(file)
         theirs = HTSeq.bundle_multiple_alignments(HTSeq.BAM_Reader(file))
 
         for (our_bundle, _), their_bundle in zip(ours, theirs):
@@ -77,23 +93,44 @@ class SamReaderTests(unittest.TestCase):
                 else:
                     self.assertEqual(our['Seq'], their.read.seq.decode())
 
-    """Does SAM_reader._get_decollapsed_filename() create an appropriate filename?"""
+    """Does our AlignmentReader produce the same pertinent info from a BAM file as HTSeq's BAM_reader?"""
 
-    def test_SAM_reader_get_decollapsed_filename(self):
-        reader = SAM_reader()
+    def test_bam_parser_comparison(self):
+        file = f"{resources}/bam/Lib304_test.bam"
+        ours = AlignmentReader().bundle_multi_alignments(file)
+        theirs = HTSeq.bundle_multiple_alignments(HTSeq.BAM_Reader(file))
+
+        for (our_bundle, _), their_bundle in zip(ours, theirs):
+            self.assertEqual(len(our_bundle), len(their_bundle))
+            for our, their in zip(our_bundle, their_bundle):
+                self.assertEqual(our['Chrom'], their.iv.chrom)
+                self.assertEqual(our['Start'], their.iv.start)
+                self.assertEqual(our['End'], their.iv.end)
+                self.assertEqual(our['Name'], their.read.name)
+                self.assertEqual(our['nt5end'], chr(their.read.seq[0]))  # See note above
+                self.assertEqual(our['Strand'], helpers.strand_to_bool(their.iv.strand))
+                if our['Strand'] is False:  # See note above
+                    self.assertEqual(our['Seq'][::-1].translate(helpers.complement), their.read.seq.decode())
+                else:
+                    self.assertEqual(our['Seq'], their.read.seq.decode())
+
+    """Does AlignmentReader._get_decollapsed_filename() create an appropriate filename?"""
+
+    def test_AlignmentReader_get_decollapsed_filename(self):
+        reader = AlignmentReader()
         reader.file = "~/path/to/input/sam_file.sam"
 
         sam_out = reader._get_decollapsed_filename()
 
         self.assertEqual(sam_out, "sam_file_decollapsed.sam")
 
-    """Does SAM_reader._new_bundle report the correct read count for different collapser types?"""
+    """Does AlignmentReader._new_bundle report the correct read count for different collapser types?"""
 
-    def test_SAM_reader_new_bundle(self):
+    def test_AlignmentReader_new_bundle(self):
         qnames = ["0_count=3", "seq0_x5", "non-collapsed"]
         counts = [3, 5, 1]
 
-        reader = SAM_reader()
+        reader = AlignmentReader()
         reader._header_dict = {'HD': {'SO': 'queryname'}}
 
         for qname, expected in zip(qnames, counts):
@@ -101,37 +138,44 @@ class SamReaderTests(unittest.TestCase):
             _, read_count = reader._new_bundle({'Name': qname})
             self.assertEqual(read_count, expected)
 
-    """Does SAM_reader._gather_metadata() correctly identify metadata and write the decollapsed file header?"""
+    """Does AlignmentReader._gather_metadata() correctly identify metadata and write the decollapsed file header?"""
 
-    def test_SAM_reader_gather_metadata(self):
-        reader = SAM_reader(decollapse=True)
+    def test_AlignmentReader_gather_metadata(self):
+        reader = AlignmentReader(decollapse=True)
         reader._decollapsed_filename = "mock_outfile_name.sam"
-
+        reader._assign_library(self.short_sam_file)
         sam_in = pysam.AlignmentFile(self.short_sam_file)
+
         with patch('builtins.open', mock_open()) as sam_out:
             reader._gather_metadata(sam_in)
 
         expected_writelines = [
             call('mock_outfile_name.sam', 'w'),
             call().__enter__(),
-            call().write("@SQ\tSN:I\tLN:21\n"),
+            call().write("@HD\tSO:unsorted\n@SQ\tSN:I\tLN:21\n@PG\tID:bowtie\n"),
             call().__exit__(None, None, None)
         ]
 
+        expected_header_dict = {
+            'HD': {'SO': 'unsorted'},
+            'SQ': [{'LN': 21, 'SN': 'I'}],
+            'PG': [{'ID': 'bowtie'}]
+        }
+
         sam_out.assert_has_calls(expected_writelines)
         self.assertEqual(reader.collapser_type, 'tiny-collapse')
-        self.assertDictEqual(reader._header_dict, {'SQ': [{'SN': "I", 'LN': 21}]})
+        self.assertDictEqual(reader._header_dict, expected_header_dict)
         self.assertEqual(reader.references, ('I',))
         self.assertTrue(reader.has_nm)
 
-    """Does SAM_reader._write_decollapsed_sam() write the correct number of duplicates to the decollapsed file?"""
+    """Does AlignmentReader._write_decollapsed_sam() write the correct number of duplicates to the decollapsed file?"""
 
-    def test_SAM_reader_write_decollapsed_sam(self):
+    def test_AlignmentReader_write_decollapsed_sam(self):
         header = pysam.AlignmentHeader()
         alignment = pysam.AlignedSegment(header)
         alignment.query_name = "0_count=5"
 
-        reader = SAM_reader(decollapse=True)
+        reader = AlignmentReader(decollapse=True)
         reader.collapser_type = "tiny-collapse"
         reader._collapser_token = "="
         reader._decollapsed_reads = [alignment]
@@ -150,12 +194,12 @@ class SamReaderTests(unittest.TestCase):
         outfile.assert_has_calls(expected_writelines)
         self.assertTrue(len(reader._decollapsed_reads) == 0)
 
-    """Does SAM_reader._parse_alignments() save lines and write them to the decollapsed file when appropriate?"""
+    """Does AlignmentReader._parse_alignments() save lines and write them to the decollapsed file when appropriate?"""
 
-    def test_SAM_reader_parse_alignments_decollapse(self):
-        with patch.object(SAM_reader, "_write_decollapsed_sam") as write_fn:
-            # Set up SAM_reader class
-            reader = SAM_reader(decollapse=True)
+    def test_AlignmentReader_parse_alignments_decollapse(self):
+        with patch.object(AlignmentReader, "_write_decollapsed_sam") as write_fn:
+            # Set up AlignmentReader class
+            reader = AlignmentReader(decollapse=True)
             reader.collapser_type = "tiny-collapse"
             reader._decollapsed_reads = buffer = [0] * 99999  # At 100,001, expect buffer to be written
             reader.file = self.short_sam_file                 # File with single alignment
@@ -178,13 +222,13 @@ class SamReaderTests(unittest.TestCase):
 
     """Are decollapsed outputs skipped when non-collapsed SAM files are supplied?"""
 
-    def test_SAM_reader_no_decollapse_non_collapsed_SAM_files(self):
+    def test_AlignmentReader_no_decollapse_non_collapsed_SAM_files(self):
         stdout_capture = io.StringIO()
-        with patch.object(SAM_reader, "_write_decollapsed_sam") as write_sam, \
-                patch.object(SAM_reader, "_write_header_for_decollapsed_sam") as write_header:
+        with patch.object(AlignmentReader, "_write_decollapsed_sam") as write_sam, \
+                patch.object(AlignmentReader, "_write_header_for_decollapsed_sam") as write_header:
             with contextlib.redirect_stderr(stdout_capture):
-                reader = SAM_reader(decollapse=True)
-                records = reader.bundle_multi_alignments(f"{resources}/non-collapsed.sam")
+                reader = AlignmentReader(decollapse=True)
+                records = reader.bundle_multi_alignments(f"{resources}/sam/non-collapsed.sam")
                 self.exhaust_iterator(records)
 
         write_sam.assert_not_called()
@@ -194,13 +238,88 @@ class SamReaderTests(unittest.TestCase):
                          "Alignments do not appear to be derived from a supported collapser input. "
                          "Decollapsed SAM files will therefore not be produced.\n")
 
+    """Is incompatible alignment file ordering correctly identified from @HD header values?"""
+
+    def test_AlignmentReader_incompatible_HD_header(self):
+        # Valid SO values: ["unknown", "unsorted", "queryname", "coordinate"]
+        # Valid GO values: ["none", "query", "reference"]
+        
+        strictly_compatible = [
+            {'HD': {'SO': "queryname"}},
+            {'HD': {'GO': "query"}},
+        ]
+
+        # Should not throw error
+        for header in strictly_compatible:
+            reader = AlignmentReader()
+            reader._header_dict = header
+            reader._assign_library("mock_infile.sam")
+            reader._check_for_incompatible_order()
+
+        strictly_incompatible = [
+            ({'HD': {'SO': "coordinate"}}, "by coordinate"),
+            ({'HD': {'GO': "reference"}},  "by reference"),
+            ({'HD': {}},                   "sorting/grouping couldn't be determined"),
+            ({},                           "sorting/grouping couldn't be determined"),
+        ]
+
+        # Should throw error
+        for header, message in strictly_incompatible:
+            reader = AlignmentReader()
+            reader._header_dict = header
+            reader._assign_library("mock_infile.sam")
+            with self.assertRaisesRegex(ValueError, message):
+                reader._check_for_incompatible_order()
+
+    """Is incompatible alignment file ordering correctly identified from @PG header values?"""
+
+    def test_AlignmentReader_incompatible_PG_header(self):
+        # SO = ["unknown", "unsorted", "queryname", "coordinate"]
+        # GO = ["none", "query", "reference"]
+
+        self.assertEqual(AlignmentReader.compatible_unordered, ("bowtie", "bowtie2", "star"))
+        SO_unordered = [{'SO': "unknown"}, {'SO': "unsorted"}]
+        GO_unordered = [{'GO': "none"}]
+        compatible = [
+            {'PG': [{'ID': tool}], 'HD': un_so, 'GO': un_go}
+            for tool in AlignmentReader.compatible_unordered
+            for un_so in SO_unordered
+            for un_go in GO_unordered
+        ]
+
+        # Only the last reported PG ID matters
+        multiple_tools = [{'ID': "INCOMPATIBLE"}, {'ID': "bowtie"}]
+        compatible += [{'PG': multiple_tools, 'HD': {'SO': "unsorted"}}]
+
+        # Should not throw error
+        for header in compatible:
+            reader = AlignmentReader()
+            reader._header_dict = header
+            reader._assign_library("mock_infile.sam")
+            reader._check_for_incompatible_order()
+
+        incompatible = [
+            {'PG': [{'ID': "INCOMPATIBLE"}], 'HD': un_so, 'GO': un_go}
+            for un_so in SO_unordered
+            for un_go in GO_unordered
+        ]
+
+        # Should throw error
+        expected_error = "adjacency couldn't be determined"
+        for header in incompatible:
+            reader = AlignmentReader()
+            reader._header_dict = header
+            reader._assign_library("mock_infile.sam")
+            with self.assertRaisesRegex(ValueError, expected_error):
+                reader._check_for_incompatible_order()
+
 
 class ReferenceFeaturesTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(self):
-        self.gff_file = f"{resources}/identity_choice_test.gff3"
-        self.short_gff_file = f"{resources}/single.gff3"
+        self.gff_file = f"{resources}/gff/identity_choice_test.gff3"
+        self.short_gff_file = f"{resources}/gff/single.gff3"
         self.short_gff = helpers.read(self.short_gff_file)
 
         self.maxDiff = None
@@ -365,7 +484,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
     def test_ref_tables_identity_matches_multisource_concat(self):
         feature_source = {
             self.short_gff_file: ["ID"],
-            f"{resources}/single2.gff3": ["ID"]
+            f"{resources}/gff/single2.gff3": ["ID"]
         }
 
         kwargs = {'all_features': True}
@@ -392,7 +511,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
 
     def test_ref_tables_discontinuous_aliases(self):
         kwargs = {'all_features': True}
-        feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
+        feature_source = {f"{resources}/gff/discontinuous.gff3": ["Name"]}
         mock_selector = self.selector_with_template(helpers.rules_template)
 
         _, alias, _ = ReferenceFeatures(feature_source, **kwargs).get(mock_selector)
@@ -408,7 +527,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
 
     def test_ref_tables_discontinuous_no_match_all_features_false(self):
         kwargs = {'all_features': False}
-        feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
+        feature_source = {f"{resources}/gff/discontinuous.gff3": ["Name"]}
         mock_selector = self.selector_with_template([{'Identity': ('No', 'Match')}])
 
         expected_err = "No features were retained while parsing your GFF file.\n" \
@@ -425,7 +544,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
     def test_ref_tables_discontinuous_features(self):
 
         kwargs = {'all_features': True}
-        feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
+        feature_source = {f"{resources}/gff/discontinuous.gff3": ["Name"]}
         feature_selector = self.selector_with_template([{'Identity': ('No', 'Match')}])
 
         # Features that fail to match on identity are not added to the StepVector,
@@ -440,7 +559,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
 
     def test_ref_tables_discontinuous_intervals(self):
         kwargs = {'all_features': True}
-        feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
+        feature_source = {f"{resources}/gff/discontinuous.gff3": ["Name"]}
         feature_selector = self.selector_with_template(helpers.rules_template)
 
         grandparent_iv = HTSeq.GenomicInterval('I', 0, 10, '-')
@@ -467,7 +586,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
     performed for intervals in this test."""
 
     def test_ref_tables_discontinuous_identity_matches(self):
-        feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
+        feature_source = {f"{resources}/gff/discontinuous.gff3": ["Name"]}
         feature_selector = self.selector_with_template([
             {'Identity': ('Class', 'NA'), 'Hierarchy': 2},                  # Rule 1
             {'Identity': ('Name', 'Sibling3'), 'Hierarchy': 3},             # Rule 2
@@ -511,7 +630,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
     def test_ref_tables_source_filter(self):
 
         kwargs = {'all_features': False}
-        feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
+        feature_source = {f"{resources}/gff/discontinuous.gff3": ["Name"]}
         feature_selector = self.selector_with_template([{'Filter_s': "Source2Name"}])
 
         child2_iv =     HTSeq.GenomicInterval('I', 39, 50, '-')
@@ -536,7 +655,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
     def test_ref_tables_type_filter(self):
 
         kwargs = {'all_features': False}
-        feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
+        feature_source = {f"{resources}/gff/discontinuous.gff3": ["Name"]}
         feature_selector = self.selector_with_template([{'Filter_t': "CDS"}])
 
         child1_iv =     HTSeq.GenomicInterval('I', 29, 40, '-')
@@ -561,7 +680,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
     def test_ref_tables_both_filter(self):
 
         kwargs = {'all_features': False}
-        feature_source = {f"{resources}/discontinuous.gff3": ["Name"]}
+        feature_source = {f"{resources}/gff/discontinuous.gff3": ["Name"]}
         feature_selector = self.selector_with_template([{'Filter_s': "SourceName", 'Filter_t': "gene"}])
 
         rt = ReferenceFeatures(feature_source, **kwargs)
@@ -577,7 +696,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
     def test_ref_tables_tagged_match_single(self):
         kwargs = {'all_features': False}
         feat_id = "Gene:WBGene00023193"
-        feature_source = {f"{resources}/single.gff3": ["sequence_name"]}
+        feature_source = {f"{resources}/gff/single.gff3": ["sequence_name"]}
         feature_selector = self.selector_with_template([
             {'Identity': ("ID", feat_id), 'Class': "tagged_match", 'Hierarchy': 1},
             {'Identity': ("ID", feat_id), 'Class': "",             'Hierarchy': 2}
@@ -604,7 +723,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
     """Does ReferenceFeatures.get() correctly merge records for discontinuous features matching multiple tagged rules?"""
 
     def test_ref_tables_tagged_match_merging(self):
-        feature_source = {f"{resources}/discontinuous.gff3": ['Name']}
+        feature_source = {f"{resources}/gff/discontinuous.gff3": ['Name']}
 
         # All rules match the same root feature
         feature_selector = self.selector_with_template([

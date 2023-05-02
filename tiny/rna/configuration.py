@@ -10,12 +10,12 @@ import os
 
 from pkg_resources import resource_filename
 from collections import Counter, OrderedDict, defaultdict
-from typing import Union, Any, List, Dict
+from typing import Union, Any, List, Dict, Optional
 from glob import glob
 
 from tiny.rna.compatibility import RunConfigCompatibility
 from tiny.rna.counter.validation import GFFValidator
-from tiny.rna.util import get_timestamp, get_r_safename
+from tiny.rna.util import get_timestamp, get_r_safename, append_to_exception
 
 
 class ConfigBase:
@@ -265,13 +265,13 @@ class Configuration(ConfigBase):
 
     def process_samples_sheet(self):
         samples_sheet_path = self.paths['samples_csv']
-        samples_sheet = SamplesSheet(samples_sheet_path)
+        samples_sheet = SamplesSheet(samples_sheet_path, context="Pipeline Start")
 
         self['sample_basenames'] = samples_sheet.sample_basenames
         self['control_condition'] = samples_sheet.control_condition
         self['run_deseq'] = samples_sheet.is_compatible_df
 
-        self['in_fq'] = [self.cwl_file(fq, verify=False) for fq in samples_sheet.fastq_files]
+        self['in_fq'] = [self.cwl_file(fq, verify=False) for fq in samples_sheet.hts_samples]
         self['fastp_report_titles'] = [f"{g}_rep_{r}" for g, r in samples_sheet.groups_reps]
 
     def process_features_sheet(self) -> List[dict]:
@@ -641,47 +641,95 @@ class PathsFile(ConfigBase):
 
 
 class SamplesSheet:
-    def __init__(self, file):
+    def __init__(self, file, context):
         self.csv = CSVReader(file, "Samples Sheet")
         self.basename = os.path.basename(file)
         self.dir = os.path.dirname(file)
         self.file = file
 
-        self.fastq_files = []
+        self.hts_samples = []
         self.groups_reps = []
+        self.normalizations = []
         self.sample_basenames = []
         self.control_condition = None
         self.is_compatible_df = False
 
+        map_path, validate_path = self.get_context_methods(context).values()
+        self.validate_sample_path = validate_path
+        self.map_path = map_path
+        self.context = context
+
         self.read_csv()
+
+    def get_context_methods(self, context):
+        return {
+            "Standalone Run": {'map_path': self.from_here, 'validate_path': self.validate_alignments_filepath},
+            "Pipeline Start": {'map_path': self.from_here, 'validate_path': self.validate_fastq_filepath},
+            "Pipeline Step":  {'map_path': self.from_pipeline, 'validate_path': lambda _: True},  # skip validation
+        }[context]
 
     def read_csv(self):
         reps_per_group = Counter()
-        for row in self.csv.rows():
-            fastq_file = Configuration.joinpath(self.dir, row['File'])
-            group_name = row['Group']
-            rep_number = row['Replicate']
-            is_control = row['Control'].lower() == 'true'
-            basename = self.get_sample_basename(fastq_file)
+        try:
+            for row in self.csv.rows():
+                hts_sample = self.map_path(row['File'])
+                group_name = row['Group']
+                rep_number = row['Replicate']
+                is_control = row['Control'].lower() == 'true'
+                norm_prefs = row['Normalization']
+                basename = self.get_sample_basename(hts_sample)
 
-            self.validate_fastq_filepath(fastq_file)
-            self.validate_group_rep(group_name, rep_number)
-            self.validate_control_group(is_control, group_name)
+                self.validate_sample_path(hts_sample)
+                self.validate_group_rep(group_name, rep_number)
+                self.validate_control_group(is_control, group_name)
+                self.validate_normalization(norm_prefs)
 
-            self.fastq_files.append(fastq_file)
-            self.sample_basenames.append(basename)
-            self.groups_reps.append((group_name, rep_number))
-            reps_per_group[group_name] += 1
+                self.hts_samples.append(hts_sample)
+                self.sample_basenames.append(basename)
+                self.groups_reps.append((group_name, rep_number))
+                self.normalizations.append(norm_prefs)
+                reps_per_group[group_name] += 1
 
-            if is_control: self.control_condition = group_name
+                if is_control: self.control_condition = group_name
+        except Exception as e:
+            if not isinstance(e, AssertionError):
+                # Validation steps already indicate row, exception likely from something else
+                msg = f"Error occurred on line {self.csv.row_num} of {self.basename}"
+                append_to_exception(e, msg)
+            raise
 
         self.is_compatible_df = self.validate_deseq_compatibility(reps_per_group)
 
+    def from_here(self, input_file):
+        """Resolves .sam/.bam paths in pipeline startup and standalone context"""
+
+        return ConfigBase.joinpath(self.dir, input_file)
+
+    def from_pipeline(self, input_file):
+        """Resolves .fastq(.gz) file paths in pipeline step context"""
+
+        basename_root, ext = os.path.splitext(os.path.basename(input_file))
+        return f"{basename_root}_aligned_seqs.sam"
+
+    def validate_alignments_filepath(self, file: str):
+        """Checks file existence, extension, and duplicate entries in standalone context"""
+
+        root, ext = os.path.splitext(file)
+
+        assert os.path.isfile(file), \
+            "The file on row {row_num} of {selfname} was not found:\n\t{file}" \
+            .format(row_num=self.csv.row_num, selfname=self.basename, file=file)
+
+        assert ext in (".sam", ".bam"), \
+            "Files in {selfname} must have a .sam or .bam extension (row {row_num})" \
+            .format(selfname=self.basename, row_num=self.csv.row_num)
+
+        assert file not in self.hts_samples, \
+            "Alignment files cannot be listed more than once in {selfname} (row {row_num})" \
+            .format(selfname=self.basename, row_num=self.csv.row_num)
+
     def validate_fastq_filepath(self, file: str):
-        """Checks file existence, extension, and duplicate entries.
-        Args:
-            file: fastq file path. For  which has already been resolved relative to self.dir
-        """
+        """Checks file existence, extension, and duplicate entries in pipeline startup context"""
 
         root, ext = os.path.splitext(file)
 
@@ -690,30 +738,41 @@ class SamplesSheet:
             .format(row_num=self.csv.row_num, selfname=self.basename, file=file)
 
         assert ext in (".fastq", ".gz"), \
-            "Files in {selfname} must have a .fastq(.gz) extension (row {row_num})"\
+            "Files in {selfname} must have a .fastq(.gz) extension (row {row_num})" \
             .format(selfname=self.basename, row_num=self.csv.row_num)
 
-        assert file not in self.fastq_files, \
-            "Fastq files cannot be listed more than once in {selfname} (row {row_num})"\
+        assert file not in self.hts_samples, \
+            "Fastq files cannot be listed more than once in {selfname} (row {row_num})" \
             .format(selfname=self.basename, row_num=self.csv.row_num)
 
     def validate_group_rep(self, group:str, rep:str):
         assert (group, rep) not in self.groups_reps, \
             "The same group and replicate number cannot appear on " \
-            "more than one row in {selfname} (row {row_num})"\
+            "more than one row in {selfname} (row {row_num})" \
             .format(selfname=self.basename, row_num=self.csv.row_num)
 
     def validate_control_group(self, is_control: bool, group: str):
-        if not is_control: return
+
+        if not is_control or self.context != "Pipeline Start":
+            return
+
         assert self.control_condition in (group, None), \
-            "tinyRNA does not support multiple control conditions " \
+            "Experiments with multiple control conditions aren't supported " \
             "(row {row_num} in {selfname}).\nHowever, if the control condition " \
             "is unspecified, all possible comparisons will be made and this " \
-            "should accomplish your goal."\
+            "should accomplish your goal." \
             .format(row_num=self.csv.row_num, selfname=self.basename)
 
-    @staticmethod
-    def validate_deseq_compatibility(sample_groups: Counter) -> bool:
+    def validate_normalization(self, norm):
+        assert re.fullmatch(r"\s*((?:\d+(?:\.\d*)?|\.\d+)|(rpm))\s*", norm, re.IGNORECASE) or not norm, \
+            "Invalid normalization value in {selfname} (row {row_num})" \
+            .format(selfname=self.basename, row_num=self.csv.row_num)
+
+    def validate_deseq_compatibility(self, sample_groups: Counter) -> Optional[bool]:
+
+        if self.context != "Pipeline Start":
+            return None
+
         SamplesSheet.validate_r_safe_sample_groups(sample_groups)
 
         total_samples = sum(sample_groups.values())
@@ -774,7 +833,7 @@ class CSVReader(csv.DictReader):
            "Mismatches":        "Mismatch"
         }),
         "Samples Sheet": OrderedDict({
-            "FASTQ/SAM Files":   "File",
+            "Input Files":       "File",
             "Sample/Group Name": "Group",
             "Replicate Number":  "Replicate",
             "Control":           "Control",
@@ -899,6 +958,15 @@ class CSVReader(csv.DictReader):
                     'tinyRNA. An additional column, "Mismatches", is now expected. Please review',
                     "the Stage 2 section in tiny-count's documentation for more info, then add",
                     "the new column to your Features Sheet to avoid this error."
+                ]))
+
+        if self.doctype == "Samples Sheet":
+            if 'fastq/sam files' in header_vals_lc:
+                compat_errors.append('\n'.join([
+                    "It looks like you're using a Samples Sheet from an earlier version of",
+                    'tinyRNA. The "FASTQ/SAM files" column has been renamed to "Input Files"',
+                    'due to the addition of BAM file support. Please rename the column in',
+                    "your Samples Sheet to avoid this error."
                 ]))
 
         if compat_errors: raise ValueError('\n\n'.join(compat_errors))

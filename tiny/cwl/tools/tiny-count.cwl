@@ -50,10 +50,10 @@ inputs:
     inputBinding:
       prefix: --stepvector
 
-  is_pipeline:
+  in_pipeline:
     type: boolean?
     inputBinding:
-      prefix: --is-pipeline
+      prefix: --in-pipeline
 
   diagnostics:
     type: boolean?

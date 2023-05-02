@@ -8,18 +8,17 @@ import os
 
 from typing import List, Dict
 
-from tiny.rna.counter.validation import GFFValidator, SamSqValidator
+from tiny.rna.counter.validation import GFFValidator, AlignmentSqValidator
 from tiny.rna.counter.features import Features, FeatureCounter
 from tiny.rna.counter.statistics import MergedStatsManager
 from tiny.rna.counter.hts_parsing import ReferenceFeatures, ReferenceSeqs, ReferenceBase
-from tiny.rna.configuration import CSVReader, PathsFile, get_templates
+from tiny.rna.configuration import PathsFile, SamplesSheet, CSVReader, get_templates
 from tiny.rna.util import (
     report_execution_time,
     add_transparent_help,
     append_to_exception,
     get_timestamp,
-    ReadOnlyDict,
-    from_here
+    ReadOnlyDict
 )
 
 # Global variables for multiprocessing
@@ -60,13 +59,13 @@ def get_args():
     optional_args.add_argument('-vs', '--verify-stats', metavar='T/F', default='T',
                                help='Verify that all reported stats are internally consistent.')
     optional_args.add_argument('-dc', '--decollapse', action='store_true',
-                               help='Create a decollapsed copy of all SAM files listed in your Samples Sheet. '
+                               help='Create a decollapsed SAM copy of all files listed in your Samples Sheet. '
                                     'This option is ignored for non-collapsed inputs.')
     optional_args.add_argument('-sv', '--stepvector', choices=['Cython', 'HTSeq'], default='Cython',
                                help='Select which StepVector implementation is used to find '
                                     'features overlapping an interval.')
     optional_args.add_argument('-a', '--all-features', action='store_true', help=argparse.SUPPRESS)  # deprecated
-    optional_args.add_argument('-p', '--is-pipeline', action='store_true',
+    optional_args.add_argument('-p', '--in-pipeline', action='store_true',
                                help='Indicates that tiny-count was invoked as part of a pipeline run '
                                     'and that input files should be sourced as such.')
     optional_args.add_argument('-d', '--report-diags', action='store_true',
@@ -87,72 +86,44 @@ def get_args():
         return ReadOnlyDict(args_dict)
 
 
-def load_samples(samples_csv: str, is_pipeline: bool) -> List[Dict[str, str]]:
+def load_samples(samples_csv: str, in_pipeline: bool) -> List[Dict[str, str]]:
     """Parses the Samples Sheet to determine library names and alignment files for counting
 
-    Sample files may have a .fastq(.gz) extension (i.e. when tiny-count is called as part of a
-    pipeline run) or a .sam extension (i.e. when tiny-count is called as a standalone tool).
+    Sample files can have a .fastq(.gz) extension (i.e. when tiny-count is called as part of a
+    pipeline run) or a .sam/.bam extension (i.e. when tiny-count is called as a standalone tool).
 
     Args:
         samples_csv: a csv file which defines sample group, replicate, and file location
-        is_pipeline: helps locate sample SAM files. If true, files are assumed to reside
-            in the working directory. If false, files are assumed to reside in the same
-            directory as their source FASTQ files with '_aligned_seqs.sam' appended
-            (i.e. /dir/sample1.fastq -> /dir/sample1_aligned_seqs.sam).
+        in_pipeline: helps locate sample alignment files. If true, files are assumed to
+            reside in the working directory.
 
     Returns:
-        inputs: a list of dictionaries for each library, where each dictionary defines the
-        library name and the location of its SAM file for counting.
+        inputs: a list of dictionaries for each library. Each dictionary holds
+        the library's name, file location, and normalization preferences.
     """
 
-    def get_library_filename(csv_row_file: str, samples_csv: str) -> str:
-        """The input samples.csv may contain either fastq or sam files"""
-
-        file_ext = os.path.splitext(csv_row_file)[1].lower()
-
-        # If the sample file has a fastq(.gz) extension, infer the name of its pipeline-produced .sam file
-        if file_ext in [".fastq", ".gz"]:
-            # Fix relative paths to be relative to sample_csv's path, rather than relative to cwd
-            csv_row_file = os.path.basename(csv_row_file) if is_pipeline else from_here(samples_csv, csv_row_file)
-            csv_row_file = os.path.splitext(csv_row_file)[0] + "_aligned_seqs.sam"
-        elif file_ext == ".sam":
-            if not os.path.isabs(csv_row_file):
-                raise ValueError("The following file must be expressed as an absolute path:\n%s" % (csv_row_file,))
-        else:
-            raise ValueError("The filenames defined in your Samples Sheet must have a .fastq(.gz) or .sam extension.\n"
-                             "The following filename contained neither:\n%s" % (csv_row_file,))
-        return csv_row_file
-
+    context = "Pipeline Step" if in_pipeline else "Standalone Run"
+    samples = SamplesSheet(samples_csv, context=context)
     inputs = list()
-    sheet = CSVReader(samples_csv, "Samples Sheet")
 
-    try:
-        for row in sheet.rows():
-            library_name = f"{row['Group']}_rep_{row['Replicate']}"
-            library_file_name = get_library_filename(row['File'], samples_csv)
-            library_normalization = row['Normalization']
+    for file, group_rep, norm in zip(samples.hts_samples, samples.groups_reps, samples.normalizations):
+        record = {
+            "Name": "_rep_".join(group_rep),
+            "File": file,
+            "Norm": norm
+        }
 
-            record = {
-                "Name": library_name,
-                "File": library_file_name,
-                "Norm": library_normalization
-            }
-
-            if record not in inputs: inputs.append(record)
-    except Exception as e:
-        msg = f"Error occurred on line {sheet.line_num} of {os.path.basename(samples_csv)}"
-        append_to_exception(e, msg)
-        raise
+        if record not in inputs: inputs.append(record)
 
     return inputs
 
 
-def load_config(features_csv: str, is_pipeline: bool) -> List[dict]:
+def load_config(features_csv: str, in_pipeline: bool) -> List[dict]:
     """Parses the Features Sheet to provide inputs to FeatureSelector and reference parsers
 
     Args:
         features_csv: a csv file which defines feature sources and selection rules
-        is_pipeline: not currently used; helps properly locate input files
+        in_pipeline: not currently used; helps properly locate input files
 
     Returns:
         rules: a list of dictionaries, each representing a parsed row from input.
@@ -173,7 +144,7 @@ def load_config(features_csv: str, is_pipeline: bool) -> List[dict]:
             # Duplicate rule entries are not allowed
             if rule not in rules: rules.append(rule)
     except Exception as e:
-        msg = f"Error occurred on line {sheet.line_num} of {os.path.basename(features_csv)}"
+        msg = f"Error occurred on line {sheet.row_num} of {os.path.basename(features_csv)}"
         append_to_exception(e, msg)
         raise
 
@@ -181,7 +152,7 @@ def load_config(features_csv: str, is_pipeline: bool) -> List[dict]:
 
 
 def load_references(paths: PathsFile, libraries: List[dict], rules: List[dict], prefs) -> ReferenceBase:
-    """Determines the reference source (GFF or SAM @SQ headers) and constructs the appropriate object
+    """Determines the reference source (GFF or alignment @SQ headers) and constructs the appropriate object
 
     Args:
         paths: a PathsFile object that optionally contains a `gff_files` configuration
@@ -195,13 +166,13 @@ def load_references(paths: PathsFile, libraries: List[dict], rules: List[dict], 
     """
 
     gff_files = paths.get_gff_config()
-    sam_files = [lib['File'] for lib in libraries]
+    aln_files = [lib['File'] for lib in libraries]
 
     if gff_files:
-        GFFValidator(gff_files, rules, alignments=sam_files).validate()
+        GFFValidator(gff_files, rules, alignments=aln_files).validate()
         references = ReferenceFeatures(gff_files, **prefs)
     else:
-        sq_validator = SamSqValidator(sam_files)
+        sq_validator = AlignmentSqValidator(aln_files)
 
         # Reuse sq_validator's parsing results to save time
         sq_validator.validate()
@@ -218,7 +189,7 @@ def map_and_reduce(libraries, paths, prefs):
     # MergedStatsManager handles final output files, regardless of multiprocessing status
     summary = MergedStatsManager(Features, paths['features_csv'], prefs)
 
-    # Use a multiprocessing pool if multiple sam files were provided
+    # Use a multiprocessing pool if multiple alignment files were provided
     if len(libraries) > 1:
         mp.set_start_method("fork")
         with mp.Pool(len(libraries)) as pool:
@@ -237,13 +208,13 @@ def map_and_reduce(libraries, paths, prefs):
 def main():
     # Get command line arguments.
     args = get_args()
-    is_pipeline = args['is_pipeline']
+    in_pipeline = args['in_pipeline']
 
     try:
         # Load and validate config files and input files
-        paths = PathsFile(args['paths_file'], is_pipeline)
-        libraries = load_samples(paths['samples_csv'], is_pipeline)
-        selection = load_config(paths['features_csv'], is_pipeline)
+        paths = PathsFile(args['paths_file'], in_pipeline)
+        libraries = load_samples(paths['samples_csv'], in_pipeline)
+        selection = load_config(paths['features_csv'], in_pipeline)
         reference = load_references(paths, libraries, selection, args)
 
         # global for multiprocessing
@@ -258,7 +229,7 @@ def main():
     except Exception as e:
         if type(e) is SystemExit: return
         traceback.print_exception(*sys.exc_info())
-        if args['is_pipeline']:
+        if in_pipeline:
             print("\n\ntiny-count encountered an error. Don't worry! You don't have to start over.\n"
                   "You can resume the pipeline at tiny-count. To do so:\n\t"
                   "1. cd into your Run Directory\n\t"

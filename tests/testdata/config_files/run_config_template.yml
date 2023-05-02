@@ -41,9 +41,8 @@ run_native: false
 
 ######------------------------- BOWTIE INDEX BUILD OPTIONS --------------------------######
 #
-# If you do not already have bowtie indexes, they can be built for you by setting
-# run_bowtie_build (above) to true and adding your reference genome file(s) to your
-# paths_config file.
+# If you do not already have bowtie indexes, they can be built for you
+# (see the BOWTIE-BUILD section in the Paths File)
 #
 # We have specified default parameters for small RNA data based on our own "best practices".
 # You can change the parameters here.
