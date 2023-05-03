@@ -40,13 +40,6 @@ def get_cython_extension_defs():
     Extensions indicated as optional in pyx_files will NOT cause the installation to
     error out if there are build issues, and therefore must be used as optional imports."""
 
-    pyx_files = [
-        # (file path, optional, include)
-        ('tiny/rna/counter/stepvector/_stepvector.pyx', True, []),
-        ('tests/cython_tests/stepvector/test_cython.pyx', True, []),
-        ('tiny/rna/counter/parsing/alignments.pyx', False, pysam.get_include())
-    ]
-
     cxx_extension_args = {
         'extra_compile_args': ['-std=c++11', '-O3'],
         'extra_link_args': [],
@@ -60,13 +53,29 @@ def get_cython_extension_defs():
         cxx_extension_args['extra_compile_args'] += ['-isystem', os.path.join(sdk_root, '/usr/include')]
         cxx_extension_args['extra_link_args'] += ['-L' + os.path.join(sdk_root, '/usr/lib')]
 
-    return [setuptools.Extension(
-                pyx_filename.replace('./', '').replace('/', '.').rstrip('.pyx'),
-                sources=[pyx_filename],
-                include_dirs=include,
-                optional=optional,
-                **cxx_extension_args)
-            for pyx_filename, optional, include in pyx_files]
+    StepVector = setuptools.Extension(
+        "tiny.rna.counter.stepvector._stepvector",
+        sources=["tiny/rna/counter/stepvector/_stepvector.pyx"],
+        optional=True,
+        **cxx_extension_args
+    )
+
+    StepVector_test = setuptools.Extension(
+        "tests.cython_tests.stepvector.test_cython",
+        sources=["tests/cython_tests/stepvector/test_cython.pyx"],
+        optional=True,
+        **cxx_extension_args
+    )
+
+    AlignmentIter = setuptools.Extension(
+        "tiny.rna.counter.parsing.alignments",
+        sources=["tiny/rna/counter/parsing/alignments.pyx"],
+        extra_link_args=pysam.get_libraries(),
+        include_dirs=pysam.get_include(),
+        define_macros=pysam.get_defines()
+    )
+
+    return [StepVector, StepVector_test, AlignmentIter]
 
 
 def get_macos_sdk_path():
