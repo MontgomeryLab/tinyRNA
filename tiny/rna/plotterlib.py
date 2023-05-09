@@ -723,5 +723,7 @@ class ScatterCache(CacheBase):
         self.ax.set_aspect('equal')
 
     def get(self) -> Tuple[plt.Figure, plt.Axes]:
-        if len(self.ax.collections): self.ax.collections.clear()
+        for group in self.ax.collections:
+            group.remove()
+
         return self.fig, self.ax
