@@ -389,7 +389,7 @@ class plotterlib:
         x1 = counts_df.max().max()
         minpos = 1e-300
 
-        if not np.isfinite([x0, x1]).all() or not isinstance(x0, np.float) or x1 <= 0:
+        if not np.isfinite([x0, x1]).all() or not isinstance(x0, float) or x1 <= 0:
             print("The provided dataset contains invalid values.", file=sys.stderr)
             return (minpos, minpos)
 
