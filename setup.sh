@@ -138,7 +138,7 @@ else
 fi
 
 # Check if the conda environment $env_name exists
-if conda env list | grep -q "$env_name"; then
+if conda env list | grep -q "^${env_name}\s"; then
   echo
   echo "The Conda environment $env_name already exists."
   echo "    1) Update environment"
