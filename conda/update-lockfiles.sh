@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 
+# USAGE: if you would like to specify a different environment file,
+# you can pass the preferred filename as the first argument to the script.
+# Otherwise, environment.yml is used.
+#   ./update-lockfiles.sh preferred_file
+
+[[ $# -eq 1 ]] && env_file=$1 || env_file="environment.yml"
+
 dev_env_name="tinyrna_dev_v1.0"
 dev_deps="conda-forge::conda-lock python=3.9"
 
@@ -66,14 +73,14 @@ conda activate "${dev_env_name}"
 
 # Update Linux lockfile
 status "Updating linux-64 lockfile..."
-conda-lock lock --kind explicit --platform linux-64 --file environment.yml > "linux_lockfile.log" 2>&1
+conda-lock lock --kind explicit --platform linux-64 --file "$env_file" > "linux_lockfile.log" 2>&1
 
 # Check result for Linux lockfile
 check_lockfile_update_status $?
 
 # Update macOS lockfile
 status "Updating osx-64 lockfile..."
-conda-lock lock --kind explicit --platform osx-64 --file environment.yml > "osx_lockfile.log" 2>&1
+conda-lock lock --kind explicit --platform osx-64 --file "$env_file" > "osx_lockfile.log" 2>&1
 
 # Check result for OSX lockfile
 check_lockfile_update_status $?
