@@ -4,7 +4,7 @@
 # you can pass the preferred name as the first argument to the script:
 #   ./setup.sh preferred_name
 
-[[ $# -eq 1 ]] && env_name=$1 || env_name="tinyrna"
+env_name=${1:-tinyrna}
 
 python_version="3.9"
 miniconda_version="4.12.0"

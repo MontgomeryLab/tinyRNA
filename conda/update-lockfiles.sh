@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
-# USAGE: if you would like to specify a different environment file,
-# you can pass the preferred filename as the first argument to the script.
-# Otherwise, environment.yml is used.
-#   ./update-lockfiles.sh preferred_file
+# USAGE: provide the filename for the desired environment version.
+# Lock files will be produced for linux-64 and osx-64.
+#   ./update-lockfiles.sh ENVIRONMENT_FILE.yml
 
-[[ $# -eq 1 ]] && env_file=$1 || env_file="environment.yml"
+usage="Usage: $(basename "$0") ENVIRONMENT_FILE.yml"
+env_file=${1:? $usage}
 
 dev_env_name="tinyrna_dev_v1.0"
 dev_deps="conda-forge::conda-lock python=3.9"
