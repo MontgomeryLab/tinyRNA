@@ -63,8 +63,8 @@ def get_args():
             args_section = parser.add_argument_group("Required arguments")
             args_section.add_argument(
                 '--config',
-                help=f"The file path to your {config.replace('_', ' ')}",
-                metavar=config.upper(),
+                help=f"The file path to your {config}",
+                metavar=config.upper().replace(' ', '_'),
                 required=True
             )
 
@@ -94,7 +94,7 @@ def get_args():
                "file: the Paths File. Within the Paths File you must specify the location "
                "of your file inputs, including two final configuration files: the Samples "
                "Sheet and Features Sheet.",
-        config='run_config',
+        config='Run Config',
         formatter_class=SmartFormatter
     )
 
@@ -108,14 +108,14 @@ def get_args():
         "recount",
         brief="Resume an analysis at the tiny-count step",
         detail=resume_helpstring_template.format(step_name='tiny-count'),
-        config='processed_run_config'
+        config='Processed Run Config'
     )
 
     add_subcommand(
         "replot",
         brief="Resume an analysis at the tiny-plot step",
         detail=resume_helpstring_template.format(step_name='tiny-plot'),
-        config='processed_run_config'
+        config='Processed Run Config'
     )
 
     add_subcommand(
@@ -126,7 +126,7 @@ def get_args():
                "Run Config, and it will copy the workflow CWL files to the current "
                'directory. You can also pass the word "none" for your Run Config to '
                "skip processing and only copy the workflow files.",
-        config='run_config'
+        config='Run Config'
     )
 
     return primary_parser.parse_args()
