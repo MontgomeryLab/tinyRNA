@@ -15,13 +15,13 @@ dependencies:
 - pandas=2.0.1
 - pip=23.1.2
 - setuptools=67.7.2
-- conda-forge::cwltool=3.1.20230425144158
+- conda-forge::cwltool==3.1.20230425144158
   # Mamba solves for a bad build of cwl-utils which didn't state its requirement for urllib3 <2 (likely temporary)
 - conda-forge::urllib3 <2
-- conda-forge::matplotlib=3.7.1
-- conda-forge::mscorefonts=0.0.1
-- conda-forge::psutil=5.9.5
-- conda-forge::r-base=4.2.2
+- conda-forge::matplotlib==3.7.1
+- conda-forge::mscorefonts==0.0.1
+- conda-forge::psutil==5.9.5
+- conda-forge::r-base==4.2.2
   # tinyRNA codebase must be installed via pip in root project dir
 variables:
 - PYTHONNOUSERSITE: 1
