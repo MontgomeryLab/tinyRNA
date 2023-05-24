@@ -233,17 +233,18 @@ def run_cwltool_subprocess(config_object: 'ConfigBase', workflow: str, run_direc
     parallel = config_object['run_parallel']
     verbosity = config_object['verbosity']
 
-    command = ['cwltool --timestamps --relax-path-checks --on-error continue']
-    command.append(f'--log-dir {run_directory}/{config_object["dir_name_logs"]}')
-    command.append(f'--outdir {run_directory}')
+    command = ["cwltool",
+               "--timestamps", "--relax-path-checks", "--on-error", "continue",
+               "--log-dir", os.path.join(run_directory, config_object['dir_name_logs']),
+               "--outdir", run_directory]
 
-    if tmpdir is not None: command.append(f'--tmpdir-prefix {tmpdir}')
-    if verbosity == 'debug': command.append('--debug --js-console --leave-tmpdir')
-    if verbosity == 'quiet': command.append('--quiet')
-    if parallel: command.append('--parallel')
+    if tmpdir is not None: command.extend(["--tmpdir-prefix", tmpdir])
+    if verbosity == 'debug': command.extend(["--debug", "--js-console", "--leave-tmpdir"])
+    if verbosity == 'quiet': command.append("--quiet")
+    if parallel: command.append("--parallel")
 
-    cwl_runner = ' '.join(command + [workflow, processed_configfile])
-    return subprocess.run(cwl_runner, shell=True).returncode
+    command.extend([workflow, processed_configfile])
+    return subprocess.run(command).returncode
 
 
 def run_cwltool_native(config_object: 'ConfigBase', workflow: str, run_directory: str = '.') -> int:
