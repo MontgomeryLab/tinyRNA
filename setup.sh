@@ -5,9 +5,13 @@
 #   ./setup.sh preferred_name
 
 env_name=${1:-tinyrna}
+miniconda_version="23.3.1-0"
+cwd="$(dirname "$0")"
 
-python_version="3.9"
-miniconda_version="4.12.0"
+# This is the default Python version that will be used by Miniconda (if Miniconda requires installation).
+# Note that this isn't the same as the tinyRNA environment's Python version.
+# The tinyRNA environment's Python version is instead specified in the platform lockfile.
+miniconda_python_version="310"
 
 function success() {
   check="✓"
@@ -57,7 +61,7 @@ function verify_conda_checksum() {
 function setup_environment() {
   # Setup tinyRNA environment using our generated lock file
   status "Setting up $env_name environment (this may take a while)..."
-  conda create --file $platform_lock_file --name $env_name 2>&1 | tee "env_install.log"
+  conda create --file $platform_lockfile --name $env_name 2>&1 | tee "env_install.log"
   if ! tr -d \\n < env_install.log | grep -q "Executing transaction: ...working... done"; then
     fail "$env_name environment setup failed"
     echo "Console output has been saved to env_install.log."
@@ -94,15 +98,16 @@ fi
 # Check if os is mac or linux
 if [[ "$OSTYPE" == "darwin"* ]]; then
   success "macOS detected"
+  arch=$(uname -m)  # Support Apple Silicon
   shell=$(basename "$(dscl . -read ~/ UserShell | cut -f 2 -d " ")")
-  miniconda_installer="Miniconda3-py${python_version/./}_${miniconda_version}-MacOSX-x86_64.sh"
-  platform_lock_file="./conda/conda-osx-64.lock"
+  miniconda_installer="Miniconda3-py${miniconda_python_version}_${miniconda_version}-MacOSX-${arch}.sh"
+  platform_lockfile="${cwd}/conda/conda-osx-64.lock"
   setup_macOS_command_line_tools
 elif [[ "$OSTYPE" == "linux-gnu" ]]; then
   success "Linux detected"
   shell="$(basename "$SHELL")"
-  miniconda_installer="Miniconda3-py${python_version/./}_${miniconda_version}-Linux-x86_64.sh"
-  platform_lock_file="./conda/conda-linux-64.lock"
+  miniconda_installer="Miniconda3-py${miniconda_python_version}_${miniconda_version}-Linux-x86_64.sh"
+  platform_lockfile="${cwd}/conda/conda-linux-64.lock"
 else
   fail "Unsupported OS"
   exit 1
@@ -112,6 +117,7 @@ fi
 if grep -q "conda init" ~/."$shell"rc ~/."$shell"_profile 2> /dev/null; then
   success "Conda is already installed for $shell"
   eval "$(conda shell."$shell" hook)"
+  miniconda_installed=0
 else
   status "Downloading Miniconda..."
   curl -O -# https://repo.anaconda.com/miniconda/$miniconda_installer
@@ -119,7 +125,8 @@ else
     success "Miniconda downloaded"
     verify_conda_checksum $miniconda_installer
     status "Running interactive Miniconda installer..."
-    if ! $shell $miniconda_installer; then
+    # Use bash since the installer appears to no longer work with zsh
+    if ! bash $miniconda_installer; then
       fail "Miniconda installation failed"
       exit 1
     fi
@@ -134,6 +141,7 @@ else
   conda config --set auto_activate_base false
 
   success "Miniconda installed"
+  miniconda_installed=1
   rm $miniconda_installer
 fi
 
@@ -141,29 +149,22 @@ fi
 if conda env list | grep -q "^${env_name}\s"; then
   echo
   echo "The Conda environment $env_name already exists."
-  echo "    1) Update environment"
-  echo "    2) Remove and recreate environment"
+  echo "It must be removed and recreated."
   echo
-  read -p "Select an option [1/2]: " -n 1 -r
+  read -p "Would you like to proceed? [y/n]: " -n 1 -r
 
-  if [[ $REPLY =~ ^[1]$ ]]; then
-    echo
-    echo
-    status "Updating $env_name environment..."
-    conda update --file $platform_lock_file --name "$env_name" 2>&1 | tee "env_update.log"
-    if ! tr -d \\n < env_install.log | grep -q "Executing transaction: ...working... done"; then
-      fail "Failed to update the environment"
-      echo "Check the env_update.log file for more information."
-      exit 1
-    fi
-    success "$env_name environment updated"
-  elif [[ $REPLY =~ ^[2]$ ]]; then
+  if [[ $REPLY =~ ^y$ ]]; then
     echo
     echo
     status "Removing $env_name environment..."
     conda env remove -n "$env_name" -y > /dev/null 2>&1
     success "Environment removed"
     setup_environment
+  elif [[ $REPLY =~ ^n$ ]]; then
+    echo
+    echo
+    fail "Exiting..."
+    exit 1
   else
     echo
     fail "Invalid option: $REPLY"
@@ -180,7 +181,7 @@ conda env config vars set PYTHONNOUSERSITE=1 > /dev/null  # FYI: cannot be set b
 
 # Install the tinyRNA codebase
 status "Installing tinyRNA codebase via pip..."
-if ! pip install . > "pip_install.log" 2>&1; then
+if ! pip install "$cwd" > "pip_install.log" 2>&1; then
   fail "Failed to install tinyRNA codebase"
   echo "Check the pip_install.log file for more information."
   exit 1
@@ -188,6 +189,12 @@ fi
 success "tinyRNA codebase installed"
 
 success "Setup complete"
+if [[ $miniconda_installed -eq 1 ]]; then
+  status "First, run this one-time command to finalize the Miniconda installation:"
+  echo
+  echo "  source ~/${shell}.rc"
+  echo
+fi
 status "To activate the environment, run:"
 echo
 echo "  conda activate $env_name"
