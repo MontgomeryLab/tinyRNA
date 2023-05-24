@@ -4,7 +4,7 @@ channels:
   - main
 dependencies:
   - python>={PYTHON_VERSION}
-  - pysam>=0.21.0  # 0.20 is incompatible with Apple Silicon. This is likely safe to remove in
+  - pysam>=0.21.0  # 0.20 is incompatible with Apple Silicon. This is likely safe to remove in the future
   - bioconductor-deseq2
   - bowtie
   - cython
@@ -16,6 +16,8 @@ dependencies:
   - pip
   - setuptools
   - conda-forge::cwltool
+  # Mamba solves for a bad build of cwl-utils which didn't state its requirement for urllib3 <2 (likely temporary)
+  - conda-forge::urllib3 <2
   - conda-forge::matplotlib
   - conda-forge::mscorefonts
   - conda-forge::psutil
