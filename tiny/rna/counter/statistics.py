@@ -25,9 +25,9 @@ class LibraryStats:
                           'Reads Assigned to Single Feature', 'Sequences Assigned to Single Feature',
                           'Reads Assigned to Multiple Features', 'Sequences Assigned to Multiple Features']
 
-    def __init__(self, **prefs):
+    def __init__(self, features, **prefs):
         self.library = {'Name': 'Unassigned', 'File': 'Unassigned', 'Norm': '1'}
-        self.diags = Diagnostics() if prefs.get('report_diags') else None
+        self.diags = Diagnostics(features) if prefs.get('report_diags') else None
         self.norm_gh = prefs.get('normalize_by_genomic_hits', True)
         self.norm_fh = prefs.get('normalize_by_feature_hits', True)
 
@@ -53,6 +53,7 @@ class LibraryStats:
         return {
             'read_count': read_counts,
             'corr_count': corr_counts,
+            'loci_count': loci_counts,
             'assigned_ftags': set(),
             'assigned_reads': 0.0,
             'unassigned_reads': 0.0,
@@ -614,15 +615,17 @@ class Diagnostics:
     summary_categories = ['Eliminated counts', 'No feature counts',
                           'Uncounted alignments (+)', 'Uncounted alignments (-)']
 
-    alignment_columns =  ["Sequence", "Normalized Count", "Chrom", "Strand",
-                          "Start", "End", "Candidates", "Assigned Features"]
+    alignment_columns =  ["Sequence", "Raw Count", "Normalized Count", "Genomic Hits",
+                          "Chrom", "Strand", "Start", "End", "Mismatches",
+                          "Candidates", "Feature Hits", "Feature Aliases"]
 
     complement = bytes.maketrans(b'ACGTacgt', b'TGCAtgca')
     map_strand = {True: '+', False: '-', None: '.'}
 
-    def __init__(self):
+    def __init__(self, Features_obj):
         self.assignment_diags = {stat: 0 for stat in Diagnostics.summary_categories}
         self.selection_diags = defaultdict(Counter)
+        self.aliases = Features_obj.aliases
         self.alignments = []
 
     def record_assignments(self, assignments, alignment, bundle, n_candidates):
@@ -640,16 +643,20 @@ class Diagnostics:
         strand = self.map_strand[aln['Strand']]
 
         # Perform reverse complement for anti-sense reads
-        read = aln['Seq'] if strand == '+' \
+        seq = aln['Seq'] if strand == '+' \
             else aln['Seq'][::-1].translate(self.complement)
 
-        # Indicate classifier in parentheses if present. Report NONE if no assignments
-        feats = ';'.join(f"{feat_id}({tag})" if tag else feat_id
-                         for feat_id, tag in assignments) \
-                or "NONE"
+        # For easy parsing, report as: (id, classifier); ...
+        feature_hits = '; '.join(f"({fid}, {tag})" for fid, tag in assignments)
 
-        # sequence, cor_counts, chrom, strand, start, end, candidates, feat1;feat2;feat3
-        row = (read, bundle['corr_count'], aln['Chrom'], strand, aln['Start'], aln['End'], n_candidates, feats)
+        # For easy parsing, report as: (alias1, alias2, ...); ...
+        feat_aliases = [', '.join(self.aliases.get(fid, '')) for fid, _ in assignments]
+        feat_aliases = '; '.join(f"({aliases})" for aliases in feat_aliases)
+
+        counts = (bundle['corr_count'], bundle['read_count'], bundle['loci_count'])
+        pos = (aln['Chrom'], strand, aln['Start'], aln['End'], aln['NM'])
+        row = (seq, *counts, *pos, n_candidates, feature_hits, feat_aliases)
+
         self.alignments.append(row)
 
     def record_summary_diagnostics(self, assignments, aln, bundle, n_candidates):
