@@ -653,7 +653,7 @@ class Diagnostics:
         feat_aliases = [', '.join(self.aliases.get(fid, '')) for fid, _ in assignments]
         feat_aliases = '; '.join(f"({aliases})" for aliases in feat_aliases)
 
-        counts = (bundle['corr_count'], bundle['read_count'], bundle['loci_count'])
+        counts = (bundle['read_count'], bundle['corr_count'], bundle['loci_count'])
         pos = (aln['Chrom'], strand, aln['Start'], aln['End'], aln['NM'])
         row = (seq, *counts, *pos, n_candidates, feature_hits, feat_aliases)
 
