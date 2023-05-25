@@ -183,16 +183,22 @@ class AlignmentReader:
 
     def _write_decollapsed_sam(self) -> None:
         """Expands the collapsed alignments in the _decollapsed_reads buffer
-        and writes the result to the decollapsed output file"""
+        and writes the result to the decollapsed output file. The sequence
+        count will be removed from the QNAME so that decollapsed outputs
+        can be recounted by tiny-count, if the user wishes."""
 
         assert self.collapser_type is not None
-        aln_out, prev_name, seq_count = [], None, 0
+        aln_out, prev_name = [], None
+        seq_id, seq_count = "", 0
+
         for aln in self._decollapsed_reads:
             # Parse count just once per multi-alignment
             name = aln.query_name
             if name != prev_name:
-                seq_count = int(name.rsplit(self._collapser_token, 1)[1])
+                seq_split = name.rsplit(self._collapser_token, 1)
+                seq_id, seq_count = seq_split[0], int(seq_split[1])
 
+            aln.query_name = seq_id  # Remove count from QNAME
             aln_out.extend([aln.to_string() + '\n'] * seq_count)
             prev_name = name
 
