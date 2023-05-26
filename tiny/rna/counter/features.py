@@ -31,7 +31,6 @@ class Features(metaclass=Singleton):
 class FeatureCounter:
 
     def __init__(self, references, selection_rules, **prefs):
-        self.stats = LibraryStats(**prefs)
         self.alignment_reader = AlignmentReader(**prefs)
         self.selector = FeatureSelector(selection_rules, **prefs)
 
@@ -43,6 +42,7 @@ class FeatureCounter:
             raise TypeError("Expected ReferenceFeatures or ReferenceSeqs, got %s" % type(references))
 
         Features(*references.get(self.selector))
+        self.stats = LibraryStats(Features, **prefs)
         self.prefs = prefs
 
     def count_reads(self, library: dict):
