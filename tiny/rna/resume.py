@@ -115,9 +115,8 @@ class ResumeConfig(ConfigBase, ABC):
             step_dir = "dir_name_" + subdir
             self[step_dir] = self[step_dir] + "_" + self.dt
 
-        # These dirs aren't from a workflow step but still need a timestamp
-        self['dir_name_logs'] = self['dir_name_logs'] + "_" + self.dt
-        self['dir_name_config'] = self['dir_name_config'] + "_" + self.dt
+        # The logs dir isn't from a workflow step but still needs a timestamp
+        self['dir_name_logs'] = self.append_or_replace_ts(self['dir_name_logs'])
 
         # Update run_name output prefix variable for the current date and time
         self['run_name'] = re.sub(timestamp_format, self.dt, self['run_name'])
@@ -137,7 +136,7 @@ class ResumeCounterConfig(ResumeConfig):
     """A class for modifying the workflow and config to resume a run at tiny-count"""
 
     def __init__(self, processed_config, workflow):
-        steps = ["tiny-count", "tiny-deseq", "tiny-plot"]
+        steps = ["tiny-count", "tiny-deseq", "tiny-plot", "config"]
 
         inputs = {
             'aligned_seqs': {'var': "resume_sams", 'type': "File[]"},
@@ -175,7 +174,7 @@ class ResumePlotterConfig(ResumeConfig):
     """A class for modifying the workflow and config to resume a run at tiny-plot"""
 
     def __init__(self, processed_config, workflow):
-        steps = ["tiny-plot"]
+        steps = ["tiny-plot", "config"]
 
         inputs = {
             'raw_counts': {'var': "resume_raw", 'type': "File"},

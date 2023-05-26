@@ -122,14 +122,6 @@ inputs:
 
 steps:
 
-  organize_config:
-    run: ../tools/make-subdir.cwl
-    in:
-      dir_files:
-        source: [ processed_run_config, paths_file, samples_csv, features_csv, plot_style_sheet ]
-      dir_name: dir_name_config
-    out: [ subdir ]
-
   preprocessing:
     run: preprocessing.cwl
     scatter: [in_fq, sample_basename, fastp_report_title]
@@ -290,6 +282,14 @@ steps:
       - replicate_scatter
       - sample_avg_scatter_by_dge
       - sample_avg_scatter_by_dge_class
+
+  organize_config:
+    run: ../tools/make-subdir.cwl
+    in:
+      dir_files:
+        source: [ processed_run_config, paths_file, samples_csv, features_csv, plot_style_sheet ]
+      dir_name: dir_name_config
+    out: [ subdir ]
 
   organize_bt_indexes:
     run: ../tools/make-subdir.cwl
