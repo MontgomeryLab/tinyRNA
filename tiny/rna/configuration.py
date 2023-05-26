@@ -196,7 +196,13 @@ class ConfigBase:
 
     def write_processed_config(self, filename: str = None) -> str:
         """Writes the current configuration to disk"""
-        if filename is None: filename = self.get_outfile_path(self.inf)
+        if filename is None:
+            filename = self.get_outfile_path(self.inf)
+
+        if "processed_run_config" in self:
+            # The CWL specification doesn't provide a way to get this info,
+            # but it's needed for run_directory/config, so we store it here
+            self['processed_run_config'] = self.cwl_file(filename, verify=False)
 
         with open(filename, 'w') as outconf:
             self.yaml.dump(self.config, outconf)
