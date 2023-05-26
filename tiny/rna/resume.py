@@ -115,8 +115,9 @@ class ResumeConfig(ConfigBase, ABC):
             step_dir = "dir_name_" + subdir
             self[step_dir] = self[step_dir] + "_" + self.dt
 
-        # The logs dir isn't a workflow step but still needs a timestamp
+        # These dirs aren't from a workflow step but still need a timestamp
         self['dir_name_logs'] = self['dir_name_logs'] + "_" + self.dt
+        self['dir_name_config'] = self['dir_name_config'] + "_" + self.dt
 
         # Update run_name output prefix variable for the current date and time
         self['run_name'] = re.sub(timestamp_format, self.dt, self['run_name'])
