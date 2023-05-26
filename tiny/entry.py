@@ -189,32 +189,32 @@ def resume(tinyrna_cwl_path: str, config_file: str, step: str) -> None:
 
     """
 
-    # Maps step to Configuration class
-    entry_config = {
+    # Map step to Configuration class
+    resume_config_class = {
         "tiny-count": ResumeCounterConfig,
         "tiny-plot": ResumePlotterConfig
-    }
+    }[step]
 
     print(f"Resuming pipeline execution at the {step} step...")
 
-    # Make appropriate config and workflow for this step; write modified workflow to disk
-    config = entry_config[step](config_file, f"{tinyrna_cwl_path}/workflows/tinyrna_wf.cwl")
-    resume_wf = f"{tinyrna_cwl_path}/workflows/tiny-resume.cwl"
-    config.write_workflow(resume_wf)
+    # The resume workflow is dynamically generated from the run workflow
+    base_workflow = f"{tinyrna_cwl_path}/workflows/tinyrna_wf.cwl"   # The workflow to derive from
+    workflow_dyna = f"{tinyrna_cwl_path}/workflows/tiny-resume.cwl"  # The dynamically generated workflow to write
 
-    if config['run_native']:
-        # We can pass our config object directly without writing to disk first
-        run_cwltool_native(config, resume_wf)
+    config_object = resume_config_class(config_file, base_workflow)
+    config_object.write_workflow(workflow_dyna)
+    config_object.write_processed_config()
+
+    if config_object['run_native']:
+        # Can pass the config object directly but still write to disk for autodocumentation
+        run_cwltool_native(config_object, workflow_dyna)
     else:
         # Processed Run Config must be written to disk first
-        resume_conf_file = config.get_outfile_path()
-        config.write_processed_config(resume_conf_file)
-        run_cwltool_subprocess(config, resume_wf)
+        run_cwltool_subprocess(config_object, workflow_dyna)
 
-    if os.path.isfile(resume_wf):
+    if os.path.isfile(workflow_dyna):
         # We don't want the generated workflow to be returned by a call to setup-cwl
-        os.remove(resume_wf)
-
+        os.remove(workflow_dyna)
 
 def run_cwltool_subprocess(config_object: 'ConfigBase', workflow: str, run_directory='.') -> int:
     """Executes the workflow using a command line invocation of cwltool
