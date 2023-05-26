@@ -134,7 +134,7 @@ class plotterlib:
         text_colors = plt.get_cmap("Greys")
 
         # Create the plot and set plot attributes
-        cbar = (prop_ds * 100).plot(kind='barh', ax=ax, color=bar_colors, sort_columns=False, **kwargs)
+        cbar = (prop_ds * 100).plot(kind='barh', ax=ax, color=bar_colors, **kwargs)
         cbar.set_xlabel('Percentage of reads')
         cbar.set_xlim(0, min([(max_prop * 100) + 10, 100]))
 
@@ -389,7 +389,7 @@ class plotterlib:
         x1 = counts_df.max().max()
         minpos = 1e-300
 
-        if not np.isfinite([x0, x1]).all() or not isinstance(x0, np.float) or x1 <= 0:
+        if not np.isfinite([x0, x1]).all() or not isinstance(x0, float) or x1 <= 0:
             print("The provided dataset contains invalid values.", file=sys.stderr)
             return (minpos, minpos)
 
@@ -723,5 +723,7 @@ class ScatterCache(CacheBase):
         self.ax.set_aspect('equal')
 
     def get(self) -> Tuple[plt.Figure, plt.Axes]:
-        if len(self.ax.collections): self.ax.collections.clear()
+        for group in self.ax.collections:
+            group.remove()
+
         return self.fig, self.ax

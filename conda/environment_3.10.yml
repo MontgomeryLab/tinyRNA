@@ -1,0 +1,27 @@
+name: tinyrna
+channels:
+- bioconda
+- main
+dependencies:
+- python>=3.10, <3.11
+- pysam>=0.21.0    # 0.20 is incompatible with Apple Silicon. This is likely safe to remove in the future
+- bioconductor-deseq2=1.38.0
+- bowtie=1.3.1
+- cython=0.29.34
+- fastp=0.23.3
+- htseq=2.0.3
+- nodejs=18.12.1
+- numpy=1.24.3
+- pandas=2.0.1
+- pip=23.1.2
+- setuptools=67.7.2
+- conda-forge::cwltool==3.1.20230425144158
+  # Mamba solves for a bad build of cwl-utils which didn't state its requirement for urllib3 <2 (likely temporary)
+- conda-forge::urllib3 <2
+- conda-forge::matplotlib==3.7.1
+- conda-forge::mscorefonts==0.0.1
+- conda-forge::psutil==5.9.5
+- conda-forge::r-base==4.2.2
+  # tinyRNA codebase must be installed via pip in root project dir
+variables:
+- PYTHONNOUSERSITE: 1

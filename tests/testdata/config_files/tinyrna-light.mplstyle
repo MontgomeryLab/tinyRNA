@@ -1,6 +1,6 @@
 # Matplotlib style sheet for Small RNA plots
 # === DOCUMENTATION for this version ===============================================================
-# https://matplotlib.org/3.5.2/tutorials/introductory/customizing.html#the-default-matplotlibrc-file
+# https://matplotlib.org/3.7.1/tutorials/introductory/customizing.html#the-default-matplotlibrc-file
 
 #### Figure basics ####
 savefig.dpi: 300

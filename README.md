@@ -50,6 +50,9 @@ This option provides the latest features but stable releases are more rigorously
  ./setup.sh
 ```
 
+### Updating an Existing Installation
+When it's time to update your installation of tinyRNA, simply repeat the procedure you used for installation. Note that the existing Conda environment, including any additional packages you may have installed within it, will be removed by the installation script.
+
 ## tiny-count Standalone Installation
 Alternatively, you can install tinyRNA's precision counting tool by itself. Unlike the full tinyRNA suite, this option can be installed in existing conda environments and requires fewer dependencies.
 

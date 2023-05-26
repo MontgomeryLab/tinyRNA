@@ -219,7 +219,7 @@ class MergedStatsManager:
 
 class FeatureCounts(MergedStat):
     def __init__(self, Features_obj):
-        self.feat_counts_df = pd.DataFrame(index=set.union(*Features_obj.classes.values()))
+        self.feat_counts_df = pd.DataFrame(index=pd.MultiIndex.from_tuples(set.union(*Features_obj.classes.values())))
         self.feat_counts_df.index.names = ["Feature ID", "Classifier"]
         self.aliases = Features_obj.aliases
         self.finalized = False
@@ -388,7 +388,7 @@ class NtLenMatrices(MergedStat):
 
         # Drop non-nucleotide columns if they don't contain counts
         assigned_nt_len_df.drop([
-            col for col, values in assigned_nt_len_df.iteritems()
+            col for col, values in assigned_nt_len_df.items()
             if col not in ['A', 'T', 'G', 'C'] and values.isna().all()
         ], axis='columns', inplace=True)
 

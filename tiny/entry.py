@@ -63,8 +63,8 @@ def get_args():
             args_section = parser.add_argument_group("Required arguments")
             args_section.add_argument(
                 '--config',
-                help=f"The file path to your {config.replace('_', ' ')}",
-                metavar=config.upper(),
+                help=f"The file path to your {config}",
+                metavar=config.upper().replace(' ', '_'),
                 required=True
             )
 
@@ -94,7 +94,7 @@ def get_args():
                "file: the Paths File. Within the Paths File you must specify the location "
                "of your file inputs, including two final configuration files: the Samples "
                "Sheet and Features Sheet.",
-        config='run_config',
+        config='Run Config',
         formatter_class=SmartFormatter
     )
 
@@ -108,14 +108,14 @@ def get_args():
         "recount",
         brief="Resume an analysis at the tiny-count step",
         detail=resume_helpstring_template.format(step_name='tiny-count'),
-        config='processed_run_config'
+        config='Processed Run Config'
     )
 
     add_subcommand(
         "replot",
         brief="Resume an analysis at the tiny-plot step",
         detail=resume_helpstring_template.format(step_name='tiny-plot'),
-        config='processed_run_config'
+        config='Processed Run Config'
     )
 
     add_subcommand(
@@ -126,7 +126,7 @@ def get_args():
                "Run Config, and it will copy the workflow CWL files to the current "
                'directory. You can also pass the word "none" for your Run Config to '
                "skip processing and only copy the workflow files.",
-        config='run_config'
+        config='Run Config'
     )
 
     return primary_parser.parse_args()
@@ -233,17 +233,18 @@ def run_cwltool_subprocess(config_object: 'ConfigBase', workflow: str, run_direc
     parallel = config_object['run_parallel']
     verbosity = config_object['verbosity']
 
-    command = ['cwltool --timestamps --relax-path-checks --on-error continue']
-    command.append(f'--log-dir {run_directory}/{config_object["dir_name_logs"]}')
-    command.append(f'--outdir {run_directory}')
+    command = ["cwltool",
+               "--timestamps", "--relax-path-checks", "--on-error", "continue",
+               "--log-dir", os.path.join(run_directory, config_object['dir_name_logs']),
+               "--outdir", run_directory]
 
-    if tmpdir is not None: command.append(f'--tmpdir-prefix {tmpdir}')
-    if verbosity == 'debug': command.append('--debug --js-console --leave-tmpdir')
-    if verbosity == 'quiet': command.append('--quiet')
-    if parallel: command.append('--parallel')
+    if tmpdir is not None: command.extend(["--tmpdir-prefix", tmpdir])
+    if verbosity == 'debug': command.extend(["--debug", "--js-console", "--leave-tmpdir"])
+    if verbosity == 'quiet': command.append("--quiet")
+    if parallel: command.append("--parallel")
 
-    cwl_runner = ' '.join(command + [workflow, processed_configfile])
-    return subprocess.run(cwl_runner, shell=True).returncode
+    command.extend([workflow, processed_configfile])
+    return subprocess.run(command).returncode
 
 
 def run_cwltool_native(config_object: 'ConfigBase', workflow: str, run_directory: str = '.') -> int:

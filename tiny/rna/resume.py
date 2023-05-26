@@ -2,9 +2,7 @@ import os
 import re
 import sys
 
-import ruamel.yaml
 from ruamel.yaml.comments import CommentedOrderedMap
-from pkg_resources import resource_filename
 from abc import ABC, abstractmethod
 from glob import glob
 
