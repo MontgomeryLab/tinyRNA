@@ -5,7 +5,14 @@
 #  - Adding mappings requires noting the key that should precede the new key
 #  - Renames are evaluated before additions; preceding_key should use the new name if version renames it
 
-
+1.5.0:
+  remove: []
+  rename: []
+  add:
+    - preceding_key: dir_name_logs
+      dir_name_config: config
+    - preceding_key: plot_class_scatter_filter_exclude
+      processed_run_config: {}
 1.4.0:
   remove:
     - counter_all_features

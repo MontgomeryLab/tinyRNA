@@ -310,6 +310,7 @@ dir_name_tiny-count: tiny-count
 dir_name_tiny-deseq: tiny-deseq
 dir_name_tiny-plot: tiny-plot
 dir_name_logs: logs
+dir_name_config: config
 
 
 #########################  AUTOMATICALLY GENERATED CONFIGURATIONS #########################
@@ -384,3 +385,7 @@ run_deseq: True
 # Filters for class scatter plots
 plot_class_scatter_filter_include: []
 plot_class_scatter_filter_exclude: []
+
+##-- Used to populate the directory defined in dir_name_config --##
+##-- CWL spec doesn't provide a way to get this info from within the workflow --##
+processed_run_config: {}
