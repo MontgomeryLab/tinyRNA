@@ -108,24 +108,23 @@ class ResumeConfig(ConfigBase, ABC):
             self[key] = self.paths[key]
 
     def _add_timestamps(self, steps):
-        """Differentiates resume-run output subdirs by adding a timestamp to them"""
+        """Differentiates resume-run output subdirs by appending a timestamp to their names"""
 
         # Rename output directories with timestamp
         for subdir in steps:
             step_dir = "dir_name_" + subdir
-            self[step_dir] = self[step_dir] + "_" + self.dt
+            self[step_dir] = self.append_or_replace_ts(self[step_dir])
 
         # The logs dir isn't from a workflow step but still needs a timestamp
         self['dir_name_logs'] = self.append_or_replace_ts(self['dir_name_logs'])
 
-        # Update run_name output prefix variable for the current date and time
-        self['run_name'] = re.sub(timestamp_format, self.dt, self['run_name'])
+        # Update run_name output prefix with the current date and time
+        self['run_name'] = self.append_or_replace_ts(self['run_name'])
 
-    # Override
-    def get_outfile_path(self, infile: str = None) -> str:
-        if infile is None: infile = self.inf
-        root, ext = os.path.splitext(os.path.basename(infile))
-        return '_'.join(["resume", root, self.dt]) + ext
+    def append_or_replace_ts(self, s):
+        """Appends (or replaces) a timestamp at the end of the string"""
+        optional_timestamp = rf"(_{timestamp_format})|$"
+        return re.sub(optional_timestamp, "_" + self.dt, s, count=1)
 
     def write_workflow(self, workflow_outfile: str) -> None:
         with open(workflow_outfile, "w") as wf:

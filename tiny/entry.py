@@ -202,8 +202,8 @@ def resume(tinyrna_cwl_path: str, config_file: str, step: str) -> None:
     workflow_dyna = f"{tinyrna_cwl_path}/workflows/tiny-resume.cwl"  # The dynamically generated workflow to write
 
     config_object = resume_config_class(config_file, base_workflow)
+    config_object.write_processed_config(config_file)
     config_object.write_workflow(workflow_dyna)
-    config_object.write_processed_config()
 
     if config_object['run_native']:
         # Can pass the config object directly but still write to disk for autodocumentation
