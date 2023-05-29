@@ -4,7 +4,6 @@ import multiprocessing as mp
 import traceback
 import argparse
 import sys
-import os
 
 from typing import List, Dict
 
@@ -12,11 +11,10 @@ from tiny.rna.counter.validation import GFFValidator, AlignmentSqValidator
 from tiny.rna.counter.features import Features, FeatureCounter
 from tiny.rna.counter.statistics import MergedStatsManager
 from tiny.rna.counter.hts_parsing import ReferenceFeatures, ReferenceSeqs, ReferenceBase
-from tiny.rna.configuration import PathsFile, SamplesSheet, CSVReader, get_templates
+from tiny.rna.configuration import PathsFile, SamplesSheet, FeaturesSheet, get_templates
 from tiny.rna.util import (
     report_execution_time,
     add_transparent_help,
-    append_to_exception,
     get_timestamp,
     ReadOnlyDict
 )
@@ -131,24 +129,10 @@ def load_config(features_csv: str, in_pipeline: bool) -> List[dict]:
             further digest to produce its rules table.
     """
 
-    sheet = CSVReader(features_csv, "Features Sheet")
-    rules = list()
+    context = "Pipeline Step" if in_pipeline else "Standalone Run"
+    features = FeaturesSheet(features_csv, context=context)
 
-    try:
-        for rule in sheet.rows():
-            rule['nt5end'] = rule['nt5end'].upper().translate({ord('U'): 'T'})  # Convert RNA base to cDNA base
-            rule['Identity'] = (rule.pop('Key'), rule.pop('Value'))             # Create identity tuple
-            rule['Hierarchy'] = int(rule['Hierarchy'])                          # Convert hierarchy to number
-            rule['Overlap'] = rule['Overlap'].lower()                           # Built later in reference parsers
-
-            # Duplicate rule entries are not allowed
-            if rule not in rules: rules.append(rule)
-    except Exception as e:
-        msg = f"Error occurred on line {sheet.row_num} of {os.path.basename(features_csv)}"
-        append_to_exception(e, msg)
-        raise
-
-    return rules
+    return features.rules
 
 
 def load_references(paths: PathsFile, libraries: List[dict], rules: List[dict], prefs) -> ReferenceBase:
