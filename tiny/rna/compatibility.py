@@ -68,9 +68,10 @@ class YamlShop:
 
         # Comments & linebreaks are often (but not always!) attached to
         #   the preceding key. Move them down to the new key.
-        inherit_prev = doc.ca.items[prec_key][2]
-        doc.ca.items[key] = [None, None, inherit_prev, None]
-        doc.ca.items[prec_key][2] = None
+        if prec_key in doc.ca.items:
+            inherit_prev = doc.ca.items[prec_key][2]
+            doc.ca.items[key] = [None, None, inherit_prev, None]
+            doc.ca.items[prec_key][2] = None
 
 
 class RunConfigCompatibility:
