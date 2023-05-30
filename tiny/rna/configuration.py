@@ -940,7 +940,7 @@ class CSVReader(csv.DictReader):
 
     def rows(self):
         self.replace_excel_ellipses()
-        with open(os.path.expanduser(self.tinyrna_file), 'r', encoding='utf-8-sig') as f:
+        with open(os.path.expanduser(self.tinyrna_file), 'r', encoding='utf-8-sig', newline='') as f:
             super().__init__(f, fieldnames=self.tinyrna_fields, delimiter=',')
             header = next(self)
 
