@@ -180,19 +180,16 @@ class ResumeCounterConfig(ResumeConfig):
         File[] arrays with their corresponding pipeline outputs on disk.
         """
 
-        def cwl_file_resume(subdir, file):
-            try:
-                return self.cwl_file('/'.join([subdir, file]))
-            except FileNotFoundError as e:
-                sys.exit("The following pipeline output could not be found:\n%s" % (e.filename,))
+        bowtie = self['dir_name_bowtie']
+        fastp = self['dir_name_fastp']
+        collapser = self['dir_name_tiny-collapse']
 
-        resume_file_lists = ['resume_sams', 'resume_fastp_logs', 'resume_collapsed_fas']
-        self.set_default_dict({key: [] for key in resume_file_lists})
-
-        for sample in self['sample_basenames']:
-            self['resume_sams'].append(cwl_file_resume(self['dir_name_bowtie'], sample + '_aligned_seqs.sam'))
-            self['resume_fastp_logs'].append(cwl_file_resume(self['dir_name_fastp'], sample + '_qc.json'))
-            self['resume_collapsed_fas'].append(cwl_file_resume(self['dir_name_tiny-collapse'], sample + '_collapsed.fa'))
+        try:
+            self['resume_sams'] = list(map(self.cwl_file, glob(bowtie + "/*_aligned_seqs.sam")))
+            self['resume_fastp_logs'] = list(map(self.cwl_file, glob(fastp + "/*_qc.json")))
+            self['resume_collapsed_fas'] = list(map(self.cwl_file, glob(collapser + "/*_collapsed.fa")))
+        except FileNotFoundError as e:
+            sys.exit("The following pipeline output could not be found:\n%s" % (e.filename,))
 
 
 class ResumePlotterConfig(ResumeConfig):
