@@ -1,4 +1,4 @@
-﻿Input Files,Sample/Group Name,Replicate number,Control,Normalization
+﻿Input Files,Sample/Group Name,Replicate Number,Control,Normalization
 ./fastq_files/cond1_rep1.fastq.gz,condition1,1,TRUE,
 ./fastq_files/cond1_rep2.fastq.gz,condition1,2,,
 ./fastq_files/cond1_rep3.fastq.gz,condition1,3,,
