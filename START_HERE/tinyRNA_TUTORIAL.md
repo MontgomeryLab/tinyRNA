@@ -32,7 +32,7 @@ And when you're done, you can close your terminal or use `conda deactivate` to r
 The output you see on your terminal is from `cwltool`, which coordinates the execution of the workflow CWL. The terminal output from individual steps is redirected to a logfile for later reference.
 
 ### File outputs
-When the analysis is complete you'll notice a new folder has appeared whose name contains the date and time of the run. Inside you'll find subdirectories containing the file and terminal outputs for each step, and the processed Run Config file for auto-documentation of the run.
+When the analysis is complete you'll notice a new timestamped folder has appeared. Inside you'll find subdirectories containing the file outputs for each step, and processed copies of your configuration files which serve as auto-documentation of the run. These configuration copies also allow for repeat analyses using the existing file outputs.
 
 ### Bowtie indexes
 Bowtie indexes were built during this run because `paths.yml` didn't define an `ebwt` prefix. Now, you'll see the `ebwt` points to the freshly built indexes in your run directory. This means that indexes won't be rebuilt during any subsequent runs that use this `paths.yml` file. If you need to rebuild your indexes, simply delete the value to the right of `ebwt` in paths.yml

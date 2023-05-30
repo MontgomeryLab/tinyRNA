@@ -97,7 +97,7 @@ class ResumeConfig(ConfigBase, ABC):
         created under the old auto-documentation approach (in the new approach, it
         would be adjacent and therefore a basename). In order to allow for multiple
         resumes on this old Run Directory, we upgrade it to use the new auto-doc
-        approach and safe the existing Run Config to the /config subdir."""
+        approach and save the existing processed Run Config to the /config subdir."""
 
         paths = PathsFile(self['paths_config'])
         if os.path.isabs(self['paths_config']):

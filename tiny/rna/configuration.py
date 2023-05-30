@@ -473,7 +473,7 @@ class PathsFile(ConfigBase):
     Relative paths are automatically resolved on lookup and list types are enforced.
     While this is convenient, developers should be aware of the following caveats:
         - Lookups that return list values do not return the original object; don't
-          append to them. Instead, use the append_to() helper function.
+          expect modifications to stick. If appending, use append_to().
         - Chained assignments can produce unexpected results.
 
     Args:
