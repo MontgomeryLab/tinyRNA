@@ -239,38 +239,30 @@ class Configuration(ConfigBase):
         super().__init__(config_file, RunConfigCompatibility)
 
         self.paths = self.load_paths_config()
-        self.absorb_paths_file()
+        self.samples_sheet = self.load_samples_config()
+        self.features_sheet = self.load_features_config()
 
         if skip_setup: return
         self.setup_pipeline()
-        self.setup_file_groups()
         self.setup_ebwt_idx()
-        self.process_samples_sheet()
-        self.process_features_sheet()
         self.setup_step_inputs()
         if validate_gffs: self.validate_inputs()
 
-    def load_paths_config(self):
+    def load_paths_config(self) -> 'PathsFile':
         """Returns a PathsFile object and updates keys related to the Paths File path"""
 
-        # paths_config: user-specified
-        #   Paths File will be copied to the Run Directory in save_run_profile()
-        orig_path = self.from_here(self['paths_config'])
-        self['paths_config'] = os.path.basename(orig_path)
+        # Resolve relative path to the Paths File and construct
+        resolved = self.from_here(self['paths_config'])
+        paths = PathsFile(resolved)
 
-        # paths_file: automatically generated
-        #   CWL file dictionary is used as a workflow input
-        self['paths_file'] = self.cwl_file(self['paths_config'])
-
-        return PathsFile(self['paths_config'])
-
-    def absorb_paths_file(self):
+        # Absorb PathsFile object keys into the configuration
         for key in [*PathsFile.single, *PathsFile.groups]:
-            self[key] = self.paths.as_cwl_file_obj(key)
+            self[key] = paths.as_cwl_file_obj(key)
         for key in PathsFile.prefix:
-            self[key] = self.paths[key]
+            self[key] = paths[key]
+        return paths
 
-    def process_samples_sheet(self):
+    def load_samples_config(self) -> 'SamplesSheet':
         samples_sheet_path = self.paths['samples_csv']
         samples_sheet = SamplesSheet(samples_sheet_path, context="Pipeline Start")
 
@@ -281,21 +273,13 @@ class Configuration(ConfigBase):
         self['in_fq'] = [self.cwl_file(fq, verify=False) for fq in samples_sheet.hts_samples]
         self['fastp_report_titles'] = [f"{g}_rep_{r}" for g, r in samples_sheet.groups_reps]
 
-    def process_features_sheet(self) -> List[dict]:
+        return samples_sheet
+
+    def load_features_config(self) -> 'FeaturesSheet':
         """Retrieves GFF Source and Type Filter definitions for use in GFFValidator"""
+
         features_sheet_path = self.paths['features_csv']
-        reader = CSVReader(features_sheet_path, "Features Sheet").rows()
-
-        interests = ("Filter_s", "Filter_t")
-        return [{selector: rule[selector] for selector in interests}
-                for rule in reader]
-
-    def setup_file_groups(self):
-        """Configuration keys that represent lists of files"""
-
-        self.set_default_dict({per_file_setting_key: [] for per_file_setting_key in
-            ['in_fq', 'sample_basenames', 'gff_files', 'fastp_report_titles']
-        })
+        return FeaturesSheet(features_sheet_path, context="Pipeline Start")
             
     def setup_pipeline(self):
         """Overall settings for the whole pipeline"""
