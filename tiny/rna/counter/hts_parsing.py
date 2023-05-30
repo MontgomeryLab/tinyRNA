@@ -393,7 +393,7 @@ class ReferenceBase(ABC):
     """The base class for reference parsers"""
 
     def __init__(self, **prefs):
-        self.stepvector = prefs.get('stepvector', 'HTSeq')
+        self.stepvector = prefs.get('stepvector', 'Cython')
         self.feats = self._init_genomic_array()
 
         # The selector is assigned whenever get() is called.
