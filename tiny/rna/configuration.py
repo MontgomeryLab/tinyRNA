@@ -406,6 +406,11 @@ class Configuration(ConfigBase):
         self.paths.save_run_profile(run_dir)
         self.samples_sheet.save_run_profile(run_dir)
         self.features_sheet.save_run_profile(run_dir)
+
+        # The paths_* keys should now point to the copy produced above
+        self['paths_file'] = self.cwl_file(os.path.join(run_dir, self.paths.basename))  # CWL file object
+        self['paths_config'] = self.paths.basename                                      # User-facing value
+
         return self.write_processed_config(config_file_name)
 
     """========== COMMAND LINE =========="""

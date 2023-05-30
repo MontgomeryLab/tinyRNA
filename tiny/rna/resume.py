@@ -1,14 +1,13 @@
+import shutil
+import sys
 import os
 import re
-import sys
 
-import ruamel.yaml
 from ruamel.yaml.comments import CommentedOrderedMap
-from pkg_resources import resource_filename
 from abc import ABC, abstractmethod
 from glob import glob
 
-from tiny.rna.configuration import ConfigBase, PathsFile
+from tiny.rna.configuration import ConfigBase, PathsFile, SamplesSheet, FeaturesSheet
 from tiny.rna.compatibility import RunConfigCompatibility
 from tiny.rna.util import timestamp_format, get_timestamp
 
@@ -92,11 +91,38 @@ class ResumeConfig(ConfigBase, ABC):
             wf_steps[self.steps[0]]['in'][param] = new_input['var']
 
     def load_paths_config(self):
-        """Returns a PathsFile object and updates keys related to the Paths File path"""
+        """Returns a PathsFile object and updates keys if necessary
 
-        self['paths_config'] = self.from_here(self['paths_config'])
-        self['paths_file'] = self.cwl_file(self['paths_config'])
-        return PathsFile(self['paths_config'])
+        If paths_config is an absolute path then we assume this Run Directory was
+        created under the old auto-documentation approach (in the new approach, it
+        would be adjacent and therefore a basename). In order to allow for multiple
+        resumes on this old Run Directory, we upgrade it to use the new auto-doc
+        approach and safe the existing Run Config to the /config subdir."""
+
+        paths = PathsFile(self['paths_config'])
+        if os.path.isabs(self['paths_config']):
+            run_dir = os.getcwd()
+            conf_dir = self['dir_name_config']
+
+            # Handle existing Run Config
+            if os.path.exists(conf_dir):
+                msg = "Could not resume old-style Run Directory (/config exists)."
+                raise FileExistsError(msg)
+            try:
+                os.mkdir(conf_dir)
+                shutil.copyfile(self.inf, os.path.join(conf_dir, self.basename))
+            except FileExistsError:
+                msg = "Could not resume old-style Run Directory (/config exists)."
+                raise FileExistsError(msg)
+
+            # Handle remaining config files
+            paths.save_run_profile(run_dir)
+            self['paths_config'] = paths.basename
+            self['paths_file'] = self.cwl_file(paths.basename)
+            SamplesSheet(paths['samples_csv'], "Pipeline Start").save_run_profile(run_dir)
+            FeaturesSheet(paths['features_csv'], "Pipeline Start").save_run_profile(run_dir)
+
+        return paths
 
     def assimilate_paths_file(self):
         """Updates the processed workflow with resume-safe Paths File parameters"""
