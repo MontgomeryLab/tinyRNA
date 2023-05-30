@@ -489,8 +489,8 @@ class PathsFile(ConfigBase):
     groups =   ('reference_genome_files', 'gff_files')
     prefix =   ('ebwt', 'run_directory', 'tmp_directory')
 
-    # Parameters that need to be held constant between resume runs for analysis integrity
-    resume_forbidden = ('samples_csv', 'run_directory', 'ebwt', 'reference_genome_files')
+    # Parameters that should be held constant between resume runs
+    resume_forbidden = ('run_directory', 'ebwt', 'reference_genome_files')
 
     def __init__(self, file: str, in_pipeline=False):
         super().__init__(file)
