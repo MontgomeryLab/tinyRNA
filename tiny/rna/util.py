@@ -213,7 +213,7 @@ gzip_open = functools.partial(gzip.GzipFile, compresslevel=6, fileobj=None, mtim
 
 
 # For timestamp matching and creation
-timestamp_format = re.compile(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}")
+timestamp_format = r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}"
 def get_timestamp():
     return datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
 
