@@ -104,15 +104,12 @@ class ResumeConfig(ConfigBase, ABC):
             run_dir = os.getcwd()
             conf_dir = self['dir_name_config']
 
-            # Handle existing Run Config
-            if os.path.exists(conf_dir):
-                msg = "Could not resume old-style Run Directory (/config exists)."
-                raise FileExistsError(msg)
             try:
+                # Handle existing Run Config
                 os.mkdir(conf_dir)
                 shutil.copyfile(self.inf, os.path.join(conf_dir, self.basename))
             except FileExistsError:
-                msg = "Could not resume old-style Run Directory (/config exists)."
+                msg = f"Could not resume old-style Run Directory (/{conf_dir} exists)."
                 raise FileExistsError(msg)
 
             # Handle remaining config files
