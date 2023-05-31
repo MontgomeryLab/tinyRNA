@@ -15,6 +15,7 @@ inputs:
   # multi input
   threads: int?
   run_name: string
+  processed_run_config: File
   sample_basenames: string[]
 
   # bowtie build
@@ -117,6 +118,7 @@ inputs:
   dir_name_tiny-count: string
   dir_name_tiny-deseq: string
   dir_name_tiny-plot: string
+  dir_name_config: string
 
 steps:
 
@@ -281,6 +283,14 @@ steps:
       - sample_avg_scatter_by_dge
       - sample_avg_scatter_by_dge_class
 
+  organize_config:
+    run: ../tools/make-subdir.cwl
+    in:
+      dir_files:
+        source: [ processed_run_config, paths_file, samples_csv, features_csv, plot_style_sheet ]
+      dir_name: dir_name_config
+    out: [ subdir ]
+
   organize_bt_indexes:
     run: ../tools/make-subdir.cwl
     when: $(inputs.run_bowtie_build)
@@ -353,6 +363,10 @@ steps:
 outputs:
 
   # Subdirectory outputs
+  config_out_dir:
+    type: Directory
+    outputSource: organize_config/subdir
+
   bt_build_out_dir:
     type: Directory?
     outputSource: organize_bt_indexes/subdir

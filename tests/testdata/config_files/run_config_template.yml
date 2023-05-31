@@ -310,6 +310,7 @@ dir_name_tiny-count: tiny-count
 dir_name_tiny-deseq: tiny-deseq
 dir_name_tiny-plot: tiny-plot
 dir_name_logs: logs
+dir_name_config: config
 
 
 #########################  AUTOMATICALLY GENERATED CONFIGURATIONS #########################
@@ -320,7 +321,7 @@ dir_name_logs: logs
 #
 ###########################################################################################
 
-version: 1.4.0
+version: 1.5.0
 
 ######--------------------------- DERIVED FROM PATHS FILE ---------------------------######
 #
@@ -332,10 +333,10 @@ run_directory: ~
 tmp_directory: ~
 features_csv: { }
 samples_csv: { }
-paths_file: { }
 gff_files: [ ]
 run_bowtie_build: false
 reference_genome_files: [ ]
+bt_index_files: [ ]
 plot_style_sheet: ~
 adapter_fasta: ~
 ebwt: ~
@@ -355,10 +356,6 @@ sample_basenames: [ ]
 in_fq: [ ]
 # output reports
 fastp_report_titles: [ ]
-
-###-- Utilized by bowtie --###
-# bowtie index files
-bt_index_files: [ ]
 
 ##-- Utilized by tiny-deseq.r --##
 # The control for comparison. If unspecified, all comparisons are made
@@ -384,3 +381,10 @@ run_deseq: True
 # Filters for class scatter plots
 plot_class_scatter_filter_include: []
 plot_class_scatter_filter_exclude: []
+
+##-- Used to populate the directory defined in dir_name_config --##
+##-- CWL spec doesn't provide a way to get this info from within the workflow --##
+processed_run_config: {}
+
+##-- This is the paths_config key converted to a CWL file object for handling --##
+paths_file: {}

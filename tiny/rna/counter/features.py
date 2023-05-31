@@ -102,11 +102,12 @@ class FeatureSelector:
     rules_table: List[dict]
     inv_ident: Dict[tuple, List[int]]
 
-    def __init__(self, rules: List[dict], **kwargs):
+    def __init__(self, rules: List[dict], **prefs):
         FeatureSelector.rules_table = self.build_selectors(rules)
         FeatureSelector.inv_ident = self.build_inverted_identities(FeatureSelector.rules_table)
         self.warnings = defaultdict(set)
         self.overlap_cache = {}
+        self.prefs = prefs
 
     @classmethod
     def choose(cls, candidates: Set[feature_record_tuple], alignment: dict) -> Mapping[str, set]:
