@@ -719,7 +719,7 @@ class LenDistCache(CacheBase):
 
 class ScatterCache(CacheBase):
     def __init__(self):
-        self.fig, self.ax = plt.subplots(figsize=(8, 8), tight_layout=False)
+        self.fig, self.ax = plt.subplots(figsize=(8, 8), layout="none")
         self.ax.set_aspect('equal')
 
     def get(self) -> Tuple[plt.Figure, plt.Axes]:
