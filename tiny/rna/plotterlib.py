@@ -726,4 +726,5 @@ class ScatterCache(CacheBase):
         for group in self.ax.collections:
             group.remove()
 
+        self.fig.set_layout_engine('none')
         return self.fig, self.ax
