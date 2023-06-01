@@ -1,12 +1,13 @@
+import shutil
+import sys
 import os
 import re
-import sys
 
 from ruamel.yaml.comments import CommentedOrderedMap
 from abc import ABC, abstractmethod
 from glob import glob
 
-from tiny.rna.configuration import ConfigBase, PathsFile
+from tiny.rna.configuration import ConfigBase, PathsFile, SamplesSheet, FeaturesSheet
 from tiny.rna.compatibility import RunConfigCompatibility
 from tiny.rna.util import timestamp_format, get_timestamp
 
@@ -90,11 +91,35 @@ class ResumeConfig(ConfigBase, ABC):
             wf_steps[self.steps[0]]['in'][param] = new_input['var']
 
     def load_paths_config(self):
-        """Returns a PathsFile object and updates keys related to the Paths File path"""
+        """Returns a PathsFile object and updates keys if necessary
 
-        self['paths_config'] = self.from_here(self['paths_config'])
-        self['paths_file'] = self.cwl_file(self['paths_config'])
-        return PathsFile(self['paths_config'])
+        If paths_config is an absolute path then we assume this Run Directory was
+        created under the old auto-documentation approach (in the new approach, it
+        would be adjacent and therefore a basename). In order to allow for multiple
+        resumes on this old Run Directory, we upgrade it to use the new auto-doc
+        approach and save the existing processed Run Config to the /config subdir."""
+
+        paths = PathsFile(self['paths_config'])
+        if os.path.isabs(self['paths_config']):
+            run_dir = os.getcwd()
+            conf_dir = self['dir_name_config']
+
+            try:
+                # Handle existing Run Config
+                os.mkdir(conf_dir)
+                shutil.copyfile(self.inf, os.path.join(conf_dir, self.basename))
+            except FileExistsError:
+                msg = f"Could not resume old-style Run Directory (/{conf_dir} exists)."
+                raise FileExistsError(msg)
+
+            # Handle remaining config files
+            paths.save_run_profile(run_dir)
+            self['paths_config'] = paths.basename
+            self['paths_file'] = self.cwl_file(paths.basename)
+            SamplesSheet(paths['samples_csv'], "Pipeline Start").save_run_profile(run_dir)
+            FeaturesSheet(paths['features_csv'], "Pipeline Start").save_run_profile(run_dir)
+
+        return paths
 
     def assimilate_paths_file(self):
         """Updates the processed workflow with resume-safe Paths File parameters"""
@@ -106,24 +131,23 @@ class ResumeConfig(ConfigBase, ABC):
             self[key] = self.paths[key]
 
     def _add_timestamps(self, steps):
-        """Differentiates resume-run output subdirs by adding a timestamp to them"""
+        """Differentiates resume-run output subdirs by appending a timestamp to their names"""
 
         # Rename output directories with timestamp
         for subdir in steps:
             step_dir = "dir_name_" + subdir
-            self[step_dir] = self[step_dir] + "_" + self.dt
+            self[step_dir] = self.append_or_replace_ts(self[step_dir])
 
-        # The logs dir isn't a workflow step but still needs a timestamp
-        self['dir_name_logs'] = self['dir_name_logs'] + "_" + self.dt
+        # The logs dir isn't from a workflow step but still needs a timestamp
+        self['dir_name_logs'] = self.append_or_replace_ts(self['dir_name_logs'])
 
-        # Update run_name output prefix variable for the current date and time
-        self['run_name'] = re.sub(timestamp_format, self.dt, self['run_name'])
+        # Update run_name output prefix with the current date and time
+        self['run_name'] = self.append_or_replace_ts(self['run_name'])
 
-    # Override
-    def get_outfile_path(self, infile: str = None) -> str:
-        if infile is None: infile = self.inf
-        root, ext = os.path.splitext(os.path.basename(infile))
-        return '_'.join(["resume", root, self.dt]) + ext
+    def append_or_replace_ts(self, s):
+        """Appends (or replaces) a timestamp at the end of the string"""
+        optional_timestamp = rf"(_{timestamp_format})|$"
+        return re.sub(optional_timestamp, "_" + self.dt, s, count=1)
 
     def write_workflow(self, workflow_outfile: str) -> None:
         with open(workflow_outfile, "w") as wf:
@@ -134,7 +158,7 @@ class ResumeCounterConfig(ResumeConfig):
     """A class for modifying the workflow and config to resume a run at tiny-count"""
 
     def __init__(self, processed_config, workflow):
-        steps = ["tiny-count", "tiny-deseq", "tiny-plot"]
+        steps = ["tiny-count", "tiny-deseq", "tiny-plot", "config"]
 
         inputs = {
             'aligned_seqs': {'var': "resume_sams", 'type': "File[]"},
@@ -153,26 +177,23 @@ class ResumeCounterConfig(ResumeConfig):
         File[] arrays with their corresponding pipeline outputs on disk.
         """
 
-        def cwl_file_resume(subdir, file):
-            try:
-                return self.cwl_file('/'.join([subdir, file]))
-            except FileNotFoundError as e:
-                sys.exit("The following pipeline output could not be found:\n%s" % (e.filename,))
+        bowtie = self['dir_name_bowtie']
+        fastp = self['dir_name_fastp']
+        collapser = self['dir_name_tiny-collapse']
 
-        resume_file_lists = ['resume_sams', 'resume_fastp_logs', 'resume_collapsed_fas']
-        self.set_default_dict({key: [] for key in resume_file_lists})
-
-        for sample in self['sample_basenames']:
-            self['resume_sams'].append(cwl_file_resume(self['dir_name_bowtie'], sample + '_aligned_seqs.sam'))
-            self['resume_fastp_logs'].append(cwl_file_resume(self['dir_name_fastp'], sample + '_qc.json'))
-            self['resume_collapsed_fas'].append(cwl_file_resume(self['dir_name_tiny-collapse'], sample + '_collapsed.fa'))
+        try:
+            self['resume_sams'] = list(map(self.cwl_file, glob(bowtie + "/*_aligned_seqs.sam")))
+            self['resume_fastp_logs'] = list(map(self.cwl_file, glob(fastp + "/*_qc.json")))
+            self['resume_collapsed_fas'] = list(map(self.cwl_file, glob(collapser + "/*_collapsed.fa")))
+        except FileNotFoundError as e:
+            sys.exit("The following pipeline output could not be found:\n%s" % (e.filename,))
 
 
 class ResumePlotterConfig(ResumeConfig):
     """A class for modifying the workflow and config to resume a run at tiny-plot"""
 
     def __init__(self, processed_config, workflow):
-        steps = ["tiny-plot"]
+        steps = ["tiny-plot", "config"]
 
         inputs = {
             'raw_counts': {'var': "resume_raw", 'type': "File"},

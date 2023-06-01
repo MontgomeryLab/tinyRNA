@@ -699,7 +699,7 @@ class MergedDiags(MergedStat):
         header = Diagnostics.alignment_columns
         for library_name, table in self.alignment_tables.items():
             outfile = make_filename([self.prefix, library_name, 'alignment_table'], ext='.csv')
-            with open(outfile, 'w') as ao:
+            with open(outfile, 'w', newline='') as ao:
                 csv_writer = csv.writer(ao)
                 csv_writer.writerow(header)
                 csv_writer.writerows(table)

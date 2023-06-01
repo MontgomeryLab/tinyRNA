@@ -18,9 +18,10 @@ tiny replot --config processed_run_config.yml
 The `tiny run` command performs a comprehensive analysis of your [input files](../README.md#requirements-for-user-provided-input-files) according to the preferences defined in your [configuration files](Configuration.md).
 
 ## Resuming a Prior Analysis
-The tiny-count and tiny-plot steps offer a wide variety of options for refining your analysis. You might find that repeat analyses are required while tuning these options to your goals. However, the earlier pipeline steps (fastp, tiny-collapse, and bowtie) handle the largest volume of data and are resource intensive, so you can save time by reusing their outputs for subsequent analyses. One could do so by running the later steps individually (e.g. using commands `tiny-count`, `tiny-deseq.r`, and `tiny-plot`), but assembling their commandline inputs by hand is labor-intensive and prone to spelling mistakes.
+The tiny-count and tiny-plot steps offer many options for refining your analysis. You might find that repeat analyses are required while tuning these options to your goals. However, the earlier pipeline steps (fastp, tiny-collapse, and bowtie) handle the largest volume of data and are resource intensive, so you can save time by reusing their outputs for subsequent analyses.
 
-The commands `tiny recount` and `tiny replot` seek to solve this problem. As discussed in the [Run Config documentation](Configuration.md#the-processed-run-config), the Run Directory for each end-to-end analysis will contain a processed Run Config, and this is the file that determines the behavior of a resume run.
+The commands `tiny recount` and `tiny replot` allow the workflow to be resumed using outputs from a prior run. The Run Directory for each end-to-end analysis will contain the run's four primary configuration files, and these files can be freely edited to change the resume run's behavior without sacrificing auto-documentation.
+
 
 <figure align="center">
     <figcaption><b>tiny recount</b></figcaption>
@@ -29,25 +30,19 @@ The commands `tiny recount` and `tiny replot` seek to solve this problem. As dis
     <img src="../images/replot.png" width="65%" alt="replot"/>
 </figure>
 
-
-You can modify the behavior of a resume run by changing settings in:
-- The **processed** Run Config
-- The **original** Features Sheet that was used for the end-to-end run (as indicated by `features_csv` in the processed Run Config)
-- The **original** Paths File (as indicated by `paths_config` in the processed Run Config)
-
 ### The Steps
-1. Make and save the desired changes in the files above
-2. In your terminal, `cd` to the Run Directory of the end-to-end run you wish to resume
+1. Make and save changes to the configuration files within the target Run Directory
+2. In your terminal, `cd` to the target Run Directory
 3. Run the desired resume command
 
-### A Note on File Inputs
-File inputs are sourced from the **original** output subdirectories of prior steps in the target Run Directory. For `tiny replot`, this means that files from previous executions of `tiny recount` will **not** be used as inputs; only the original end-to-end outputs are used.
+### Auto-Documentation
+Among the subdirectories produced in your Run Directory after an end-to-end run, you'll find a directory named "config" which holds a copy of the run's four primary configuration files. These files serve as documentation for the run and, unlike those found at the root of the Run Directory, they should not be modified. A timestamped "config" directory is created after each resume run to similarly document the configurations that were used.
 
-### Where to Find Outputs from Resume Runs
+### Resume Run Outputs
 Output subdirectories for resume runs can be found alongside the originals, and will have a timestamp appended to their name to differentiate them.
 
-### Auto-Documentation of Resume Runs
-A new processed Run Config will be saved in the Run Directory at the beginning of each resume run. It will be labelled with the same timestamp used in the resume run's other outputs to differentiate it. It includes the changes to your Paths File and Run Config. A copy of your Features Sheet is saved to the timestamped tiny-count output directory during `tiny recount` runs.
+### Repeated Analyses
+If a `recount` run is performed and a `replot` is performed later in the same Run Directory, then only the outputs of the `recount` run are used for generating the plots. If multiple `recount` runs precede the `replot` then the most recent outputs are used.
 
 ## Parallelization
 Most steps in the pipeline run in parallel to minimize runtimes. This is particularly advantageous for multiprocessor systems like server environments. However, parallelization isn't always beneficial. If your computer doesn't have enough free memory, or if you have a large sample file set and/or reference genome, parallel execution might push your machine to its limits. When this happens you might see memory errors or your computer may become unresponsive. In these cases it makes more sense to run resource intensive steps one at a time, in serial, rather than in parallel. To do so, set `run_parallel: false` in your Run Config. This will affect fastp, tiny-collapse, and bowtie since these steps typically handle the largest volumes of data.

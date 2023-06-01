@@ -3,6 +3,7 @@ import argparse
 import shutil
 import errno
 import time
+import copy
 import sys
 import csv
 import re
@@ -196,7 +197,13 @@ class ConfigBase:
 
     def write_processed_config(self, filename: str = None) -> str:
         """Writes the current configuration to disk"""
-        if filename is None: filename = self.get_outfile_path(self.inf)
+        if filename is None:
+            filename = self.get_outfile_path(self.inf)
+
+        if "processed_run_config" in self:
+            # The CWL specification doesn't provide a way to get this info,
+            # but it's needed for run_directory/config, so we store it here
+            self['processed_run_config'] = self.cwl_file(filename, verify=False)
 
         with open(filename, 'w') as outconf:
             self.yaml.dump(self.config, outconf)
@@ -232,38 +239,30 @@ class Configuration(ConfigBase):
         super().__init__(config_file, RunConfigCompatibility)
 
         self.paths = self.load_paths_config()
-        self.absorb_paths_file()
+        self.samples_sheet = self.load_samples_config()
+        self.features_sheet = self.load_features_config()
 
         if skip_setup: return
         self.setup_pipeline()
-        self.setup_file_groups()
         self.setup_ebwt_idx()
-        self.process_samples_sheet()
-        self.process_features_sheet()
         self.setup_step_inputs()
         if validate_gffs: self.validate_inputs()
 
-    def load_paths_config(self):
+    def load_paths_config(self) -> 'PathsFile':
         """Returns a PathsFile object and updates keys related to the Paths File path"""
 
-        # paths_config: user-specified
-        #   Resolve the absolute path so that it remains valid when
-        #   the processed Run Config is copied to the Run Directory
-        self['paths_config'] = self.from_here(self['paths_config'])
+        # Resolve relative path to the Paths File and construct
+        resolved = self.from_here(self['paths_config'])
+        paths = PathsFile(resolved)
 
-        # paths_file: automatically generated
-        #   CWL file dictionary is used as a workflow input
-        self['paths_file'] = self.cwl_file(self['paths_config'])
-
-        return PathsFile(self['paths_config'])
-
-    def absorb_paths_file(self):
+        # Absorb PathsFile object keys into the configuration
         for key in [*PathsFile.single, *PathsFile.groups]:
-            self[key] = self.paths.as_cwl_file_obj(key)
+            self[key] = paths.as_cwl_file_obj(key)
         for key in PathsFile.prefix:
-            self[key] = self.paths[key]
+            self[key] = paths[key]
+        return paths
 
-    def process_samples_sheet(self):
+    def load_samples_config(self) -> 'SamplesSheet':
         samples_sheet_path = self.paths['samples_csv']
         samples_sheet = SamplesSheet(samples_sheet_path, context="Pipeline Start")
 
@@ -274,21 +273,13 @@ class Configuration(ConfigBase):
         self['in_fq'] = [self.cwl_file(fq, verify=False) for fq in samples_sheet.hts_samples]
         self['fastp_report_titles'] = [f"{g}_rep_{r}" for g, r in samples_sheet.groups_reps]
 
-    def process_features_sheet(self) -> List[dict]:
+        return samples_sheet
+
+    def load_features_config(self) -> 'FeaturesSheet':
         """Retrieves GFF Source and Type Filter definitions for use in GFFValidator"""
+
         features_sheet_path = self.paths['features_csv']
-        reader = CSVReader(features_sheet_path, "Features Sheet").rows()
-
-        interests = ("Filter_s", "Filter_t")
-        return [{selector: rule[selector] for selector in interests}
-                for rule in reader]
-
-    def setup_file_groups(self):
-        """Configuration keys that represent lists of files"""
-
-        self.set_default_dict({per_file_setting_key: [] for per_file_setting_key in
-            ['in_fq', 'sample_basenames', 'gff_files', 'fastp_report_titles']
-        })
+        return FeaturesSheet(features_sheet_path, context="Pipeline Start")
             
     def setup_pipeline(self):
         """Overall settings for the whole pipeline"""
@@ -381,7 +372,7 @@ class Configuration(ConfigBase):
         if gff_files:
             GFFValidator(
                 gff_files,
-                self.process_features_sheet(),
+                self.features_sheet.get_source_type_filters(),
                 self.paths['ebwt'] if not self['run_bowtie_build'] else None,
                 self.paths['reference_genome_files']
             ).validate()
@@ -411,11 +402,15 @@ class Configuration(ConfigBase):
     def save_run_profile(self, config_file_name=None) -> str:
         """Saves Samples Sheet and processed run config to the Run Directory for record keeping"""
 
-        from importlib.metadata import version
-        self['version'] = version('tinyrna')
+        run_dir = self['run_directory']
+        self.paths.save_run_profile(run_dir)
+        self.samples_sheet.save_run_profile(run_dir)
+        self.features_sheet.save_run_profile(run_dir)
 
-        samples_sheet_name = os.path.basename(self['samples_csv']['path'])
-        shutil.copyfile(self['samples_csv']['path'], f"{self['run_directory']}/{samples_sheet_name}")
+        # The paths_* keys should now point to the copy produced above
+        self['paths_file'] = self.cwl_file(os.path.join(run_dir, self.paths.basename))  # CWL file object
+        self['paths_config'] = self.paths.basename                                      # User-facing value
+
         return self.write_processed_config(config_file_name)
 
     """========== COMMAND LINE =========="""
@@ -478,7 +473,7 @@ class PathsFile(ConfigBase):
     Relative paths are automatically resolved on lookup and list types are enforced.
     While this is convenient, developers should be aware of the following caveats:
         - Lookups that return list values do not return the original object; don't
-          append to them. Instead, use the append_to() helper function.
+          expect modifications to stick. If appending, use append_to().
         - Chained assignments can produce unexpected results.
 
     Args:
@@ -494,8 +489,8 @@ class PathsFile(ConfigBase):
     groups =   ('reference_genome_files', 'gff_files')
     prefix =   ('ebwt', 'run_directory', 'tmp_directory')
 
-    # Parameters that need to be held constant between resume runs for analysis integrity
-    resume_forbidden = ('samples_csv', 'run_directory', 'ebwt', 'reference_genome_files')
+    # Parameters that should be held constant between resume runs
+    resume_forbidden = ('run_directory', 'ebwt', 'reference_genome_files')
 
     def __init__(self, file: str, in_pipeline=False):
         super().__init__(file)
@@ -638,6 +633,35 @@ class PathsFile(ConfigBase):
 
         target.append(val)
         return target
+
+    def save_run_profile(self, run_directory):
+        """Saves a copy of the Paths File to the Run Directory with amended paths.
+        Note the distinction between out_obj[key] and self[key]. The latter performs
+        automatic path resolution, whereas out_obj is essentially just a dict."""
+
+        out_obj = copy.deepcopy(self.config)
+        out_file = os.path.join(run_directory, self.basename)
+
+        adjacent_paths = self.required
+        absolute_paths = [path for path in (*self.single, *self.prefix)
+                          if path not in ("run_directory", *self.required)]
+
+        for adjacent in adjacent_paths:
+            out_obj[adjacent] = os.path.basename(self[adjacent])
+
+        for key in absolute_paths:
+            if not self.is_path_str(self[key]): continue
+            out_obj[key] = os.path.abspath(self[key])
+
+        for key in self.groups:
+            for i, entry in enumerate(self[key]):
+                if self.is_path_dict(entry):
+                    out_obj[key][i]['path'] = os.path.abspath(entry['path'])
+                elif self.is_path_str(entry):
+                    out_obj[key][i] = os.path.abspath(entry)
+
+        with open(out_file, 'w') as f:
+            self.yaml.dump(out_obj, f)
 
 
 class SamplesSheet:
@@ -802,11 +826,75 @@ class SamplesSheet:
             "The following group names are too similar and will cause a namespace collision in R:\n" \
             + '\n'.join(collisions)
 
+    def save_run_profile(self, run_directory):
+        """Writes a copy of the CSV with absolute paths"""
+
+        outfile = os.path.join(run_directory, self.basename)
+        header = CSVReader.tinyrna_sheet_fields['Samples Sheet'].keys()
+        coldata = zip(self.hts_samples, self.groups_reps, self.normalizations)
+
+        with open(outfile, 'w', newline='') as out_csv:
+            csv_writer = csv.writer(out_csv)
+            csv_writer.writerow(header)
+            for sample, (group, rep), norm in coldata:
+                control = (group == self.control_condition) or ""
+                sample = os.path.abspath(sample)
+                csv_writer.writerow([sample, group, rep, control, norm])
+
     @staticmethod
     def get_sample_basename(filename):
         root, _ = os.path.splitext(filename)
         return os.path.basename(root)
 
+
+class FeaturesSheet:
+    def __init__(self, file, context):
+        self.csv = CSVReader(file, "Features Sheet")
+        self.basename = os.path.basename(file)
+        self.dir = os.path.dirname(file)
+        self.context = context
+        self.file = file
+
+        self.rules = []
+        self.read_csv()
+
+    def read_csv(self):
+        try:
+            rules, hierarchies = [], []
+            for rule in self.csv.rows():
+                rule['nt5end'] = rule['nt5end'].upper().translate({ord('U'): 'T'})  # Convert RNA base to cDNA base
+                rule['Identity'] = (rule.pop('Key'), rule.pop('Value'))             # Create identity tuple
+                rule['Overlap'] = rule['Overlap'].lower()                           # Built later in reference parsers
+                hierarchy = int(rule.pop('Hierarchy'))                              # Convert hierarchy to number
+
+                # Duplicate rules are screened out here
+                # Equality check omits hierarchy value
+                if rule not in rules:
+                    rules.append(rule)
+                    hierarchies.append(hierarchy)
+        except Exception as e:
+            msg = f"Error occurred on line {self.csv.row_num} of {self.basename}"
+            append_to_exception(e, msg)
+            raise
+
+        # Reunite hierarchy values with their rules
+        self.rules = [
+            dict(rule, Hierarchy=hierarchy)
+            for rule, hierarchy in zip(rules, hierarchies)
+        ]
+
+    def get_source_type_filters(self):
+        """Returns only the Source Filter and Type Filter columns"""
+
+        interests = ("Filter_s", "Filter_t")
+        return [{selector: rule[selector] for selector in interests}
+                for rule in self.rules]
+
+    def save_run_profile(self, run_directory):
+        """Copies the Features Sheet to the run directory"""
+
+        outfile = os.path.join(run_directory, self.basename)
+        shutil.copyfile(self.file, outfile)
 
 class CSVReader(csv.DictReader):
     """A simple wrapper class for csv.DictReader
@@ -852,7 +940,7 @@ class CSVReader(csv.DictReader):
 
     def rows(self):
         self.replace_excel_ellipses()
-        with open(os.path.expanduser(self.tinyrna_file), 'r', encoding='utf-8-sig') as f:
+        with open(os.path.expanduser(self.tinyrna_file), 'r', encoding='utf-8-sig', newline='') as f:
             super().__init__(f, fieldnames=self.tinyrna_fields, delimiter=',')
             header = next(self)
 
