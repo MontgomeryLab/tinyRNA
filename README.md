@@ -310,6 +310,9 @@ Cleanup commands will be added to tinyRNA in a future release, but for now the f
 rm {fastp/*.fastq,{tiny-collapse,bowtie}/*.fa,bowtie/*.sam}
 ```
 
+## Citation
+Tate, A. J., Brown, K. C., & Montgomery, T. A. (2023). tiny-count: A counting tool for hierarchical classification and quantification of small RNA-seq reads with single-nucleotide precision. _Bioinformatics Advances_. https://doi.org/10.1093/bioadv/vbad065
+
 
 ## Contributing
 
