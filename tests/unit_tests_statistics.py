@@ -20,7 +20,7 @@ class MyTestCase(unittest.TestCase):
         }
 
         if lib: library.update(lib)
-        libstat_obj = LibraryStats()
+        libstat_obj = LibraryStats(None)
         libstat_obj.assign_library(library)
         return libstat_obj
 
