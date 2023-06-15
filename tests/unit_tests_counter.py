@@ -1,12 +1,11 @@
-import io
 import os
 import unittest
 
 from unittest.mock import patch, mock_open
-from collections import defaultdict
 
 import unit_test_helpers as helpers
 import tiny.rna.counter.counter as counter
+from tiny.rna.util import ReadOnlyDict
 from tiny.rna.configuration import ConfigBase
 
 resources = "./testdata/counter"
@@ -81,6 +80,15 @@ class CounterTests(unittest.TestCase):
         }
 
     # === HELPERS ===
+
+    def get_mock_samples_sheet_path(self):
+        return os.path.split('/dev/null/samples.csv')
+
+    def get_standalone_args(self):
+        return ReadOnlyDict({'in_pipeline': False, 'autodoc_dir': '.'})
+
+    def get_pipeline_args(self):
+        return ReadOnlyDict({'in_pipeline': True})
     
     def get_loaded_samples_row(self, row, exp_file):
         return [{
@@ -91,80 +99,99 @@ class CounterTests(unittest.TestCase):
         
     # === TESTS ===
 
-    """Does load_samples correctly parse a single record samples.csv for command line invocation?"""
+    """Does load_samples correctly parse a single record samples.csv in standalone mode?"""
 
     def test_load_samples_single_cmd(self):
-        mock_samp_sheet_path = '/dev/null'
-        inp_file = "test.fastq"
-        exp_file = ConfigBase.joinpath(mock_samp_sheet_path, "test_aligned_seqs.sam")
-
-        row = dict(self.csv_samp_row_dict, **{'File': inp_file})
+        inp_file = "test.sam"  # sam or bam
+        row = dict(self.csv_samp_row_dict, File=inp_file)
         csv = self.csv("samples.csv", [row])
 
+        mock_dir, mock_file = self.get_mock_samples_sheet_path()
+        exp_file = ConfigBase.joinpath(mock_dir, inp_file)
+
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
-            inputs_step = counter.load_samples(mock_samp_sheet_path, in_pipeline=False)
+            with patch('tiny.rna.configuration.os.path.isfile', return_value=True):
+                args = self.get_standalone_args()
+                inputs_standalone = counter.load_samples(f"{mock_dir}/{mock_file}", args)
 
         expected_result = self.get_loaded_samples_row(row, exp_file)
-        self.assertEqual(inputs_step, expected_result)
+        self.assertListEqual(inputs_standalone, expected_result)
 
-    """Does load_samples correctly parse a single record samples.csv for pipeline invocation?"""
+    """Does load_samples correctly parse a single record samples.csv in pipeline mode?"""
 
     def test_load_samples_single_pipeline(self):
-        mock_samp_sheet_path = '/dev/null'
         inp_file = "test.fastq"
-        exp_file = "test_aligned_seqs.sam"
-
-        row = dict(self.csv_samp_row_dict, **{'File': inp_file})
+        row = dict(self.csv_samp_row_dict, File=inp_file)
         csv = self.csv("samples.csv", [row])
 
+        mock_dir, mock_file = self.get_mock_samples_sheet_path()
+        inp_root, _ = os.path.splitext(os.path.basename(inp_file))
+        exp_file = f"{inp_root}_aligned_seqs.sam"
+
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
-            inputs_pipeline = counter.load_samples(mock_samp_sheet_path, in_pipeline=True)
+            with patch('tiny.rna.configuration.os.path.isfile', return_value=True):
+                args = self.get_pipeline_args()
+                inputs_pipeline = counter.load_samples(f"{mock_dir}/{mock_file}", args)
 
         expected_result = self.get_loaded_samples_row(row, exp_file)
         self.assertEqual(inputs_pipeline, expected_result)
 
-    """Does load_samples correctly handle duplicate samples? There should be no duplicates."""
+    """Does load_samples correctly handle duplicate samples? Duplicates are forbidden."""
 
     def test_load_samples_duplicate(self):
-        row = self.csv_samp_row_dict.copy()
-        csv = self.csv("samples.csv", [row, row])
+        # Same sample file but all other fields differ
+        row1 = dict(self.csv_samp_row_dict, File="test.sam")
+        row2 = dict(self.csv_samp_row_dict, File="test.sam", **{k: v + "_" for k, v in row1.items() if k != "File"})
+        csv = self.csv("samples.csv", [row1, row2])
 
-        with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
-            dummy_file = '/dev/null'
-            inputs = counter.load_samples(dummy_file, False)
+        expected_error = r"Alignment files cannot be listed more than once in .* \(row 2\)"
 
-        self.assertEqual(len(inputs), 1)
+        with self.assertRaisesRegex(AssertionError, expected_error):
+            with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
+                with patch('tiny.rna.configuration.os.path.isfile', return_value=True):
+                    dummy_file = '/dev/null'
+                    args = self.get_standalone_args()
+                    counter.load_samples(dummy_file, args)
 
-    """Does load_samples correctly handle SAM filenames?"""
-
-    def test_load_samples_sam(self):
-        sam_filename = "/fake/absolute/path/sample.sam"
-        row = dict(self.csv_samp_row_dict, **{'File': sam_filename})
-        csv = self.csv("samples.csv", [row])
-
-        with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
-            dummy_file = '/dev/null'
-            inputs = counter.load_samples(dummy_file, in_pipeline=False)
-
-        expected_result = self.get_loaded_samples_row(row, sam_filename)
-        self.assertEqual(inputs, expected_result)
-
-    """Does load_samples throw ValueError if sample filename does not have a .fastq or .sam extension?"""
+    """Does load_samples throw ValueError if sample file does not have a .sam or .bam extension in standalone mode?"""
 
     def test_load_samples_bad_extension(self):
         bad = "./bad_extension.xyz"
         row = dict(self.csv_samp_row_dict, **{'File': bad})
         csv = self.csv("samples.csv", [row])
 
-        expected_error = r"The filenames defined in your Samples Sheet must have a \.fastq\(\.gz\) or \.sam extension\.\n" \
-                         r"The following filename contained neither\:\n" + bad
+        expected_error = r"Files in .* must have a .sam or .bam extension \(row 1\)"
 
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
-            with self.assertRaisesRegex(ValueError, expected_error):
-                dummy_file = '/dev/null'
-                counter.load_samples(dummy_file, False)
+            with patch('tiny.rna.configuration.os.path.isfile', return_value=True):
+                with self.assertRaisesRegex(AssertionError, expected_error):
+                    dummy_file = '/dev/null'
+                    args = self.get_standalone_args()
+                    counter.load_samples(dummy_file, args)
 
-    """Does load_config correctly parse a single-entry features.csv config file for command line invocation?"""
+    """Does load_config write an autodoc copy of the Features Sheet to the Run Directory in standalone mode only?"""
+
+    def test_load_config_autodoc(self):
+        csv = self.csv("features.csv", [self.csv_feat_row_dict.copy()])
+        dummy_file = '/dev/null'
+
+        # As a pipeline step
+        args = self.get_pipeline_args()
+        with patch('tiny.rna.configuration.open', mock_open(read_data=csv)), \
+                patch('tiny.rna.configuration.shutil') as sh:
+            ruleset1 = counter.load_config(dummy_file, args)
+            sh.copyfile.assert_not_called()
+
+        # As a standalone step
+        args = self.get_standalone_args()
+        with patch('tiny.rna.configuration.open', mock_open(read_data=csv)), \
+                patch('tiny.rna.configuration.shutil') as sh:
+            ruleset2 = counter.load_config(dummy_file, args)
+            sh.copyfile.assert_called_once()
+
+        self.assertListEqual(ruleset1, ruleset2)
+
+    """Does load_config correctly parse a single-entry features.csv config file in standalone mode?"""
 
     def test_load_config_single_cmd(self):
         # Features CSV with a single rule/row
@@ -173,35 +200,40 @@ class CounterTests(unittest.TestCase):
 
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
             dummy_file = '/dev/null'
-            ruleset = counter.load_config(dummy_file, in_pipeline=False)
+            args = self.get_standalone_args()
+            ruleset = counter.load_config(dummy_file, args)
 
         expected_ruleset = self.parsed_feat_rule
         self.assertEqual(ruleset, expected_ruleset)
 
-    """Does load_config correctly parse a single-entry features.csv config file for pipeline invocation?"""
+    """Does load_config correctly parse a single-entry features.csv config file for pipeline mode?"""
 
     def test_load_config_single_pipeline(self):
         # Features CSV with a single rule/row
         row = self.csv_feat_row_dict.copy()
         csv = self.csv("features.csv", [row])
 
-        with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
+        with patch('tiny.rna.configuration.open', mock_open(read_data=csv)) as conf:
             dummy_file = '/dev/null'
-            ruleset = counter.load_config(dummy_file, in_pipeline=True)
+            args = self.get_pipeline_args()
+            ruleset = counter.load_config(dummy_file, args)
 
         expected_ruleset = self.parsed_feat_rule
         self.assertEqual(ruleset, expected_ruleset)
 
-    """Does load_config correctly handle duplicate rules? Want: no duplicate rules and no duplicate Name Attributes."""
+    """Does load_config correctly handle duplicate rules? Want: no duplicate rules
+    (including rules that differ only by their hierarchy value)."""
 
     def test_load_config_duplicate_rules(self):
-        # Features CSV with two duplicate rules/rows
+        # Features CSV with two duplicate rules and one that differs only by hierarchy
         row = self.csv_feat_row_dict.copy()
-        csv = self.csv("features.csv", [row, row])  # Duplicate rows
-        
+        row_diff_hierarchy = dict(row, Hierarchy=int(row["Hierarchy"]) + 1)
+        csv = self.csv("features.csv", [row, row, row_diff_hierarchy])
+
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
             dummy_filename = '/dev/null'
-            ruleset = counter.load_config(dummy_filename, False)
+            args = self.get_standalone_args()
+            ruleset = counter.load_config(dummy_filename, args)
 
         expected_ruleset = self.parsed_feat_rule
         self.assertEqual(ruleset, expected_ruleset)
@@ -215,10 +247,32 @@ class CounterTests(unittest.TestCase):
 
         with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
             dummy_file = '/dev/null'
-            ruleset = counter.load_config(dummy_file, False)
+            args = self.get_standalone_args()
+            ruleset = counter.load_config(dummy_file, args)
 
         self.assertEqual(ruleset[0]['nt5end'], 'T')
 
+    """Does load_config write an autodoc copy of the Features Sheet to the Run Directory in standalone mode only?"""
+
+    def test_load_config_autodoc(self):
+        csv = self.csv("features.csv", [self.csv_feat_row_dict.copy()])
+        dummy_file = '/dev/null'
+
+        # As a pipeline step
+        args = self.get_pipeline_args()
+        with patch('tiny.rna.configuration.open', mock_open(read_data=csv)), \
+                patch('tiny.rna.configuration.shutil') as sh:
+            ruleset1 = counter.load_config(dummy_file, args)
+            sh.copyfile.assert_not_called()
+
+        # As a standalone step
+        args = self.get_standalone_args()
+        with patch('tiny.rna.configuration.open', mock_open(read_data=csv)), \
+                patch('tiny.rna.configuration.shutil') as sh:
+            ruleset2 = counter.load_config(dummy_file, args)
+            sh.copyfile.assert_called_once()
+
+        self.assertListEqual(ruleset1, ruleset2)
 
 if __name__ == '__main__':
     unittest.main()
