@@ -126,7 +126,7 @@ setuptools.setup(
     description=DESCRIPTION,
     cmdclass={'install': PrereqAndExec},
     include_package_data=True,
-    packages=['tiny'],
+    packages=setuptools.find_namespace_packages(),
     zip_safe=False,
     entry_points={'console_scripts': console_scripts},
     ext_modules=cythonize(
