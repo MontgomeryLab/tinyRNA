@@ -334,7 +334,7 @@ steps:
                   tiny-count/mapped_nt_len_dist, tiny-count/assigned_nt_len_dist,
                   tiny-count/alignment_stats, tiny-count/summary_stats, tiny-count/decollapsed_sams,
                   tiny-count/assignment_diags, tiny-count/selection_diags, tiny-count/alignment_tables,
-                  tiny-count/stats_check, features_csv ]
+                  tiny-count/stats_check ]
       dir_name: dir_name_tiny-count
     out: [ subdir ]
 
