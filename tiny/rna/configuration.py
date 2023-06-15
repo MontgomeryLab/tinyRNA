@@ -896,6 +896,7 @@ class FeaturesSheet:
         outfile = os.path.join(run_directory, self.basename)
         shutil.copyfile(self.file, outfile)
 
+
 class CSVReader(csv.DictReader):
     """A simple wrapper class for csv.DictReader
 

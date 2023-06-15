@@ -337,8 +337,7 @@ def setup_cwl(tinyrna_cwl_path: str, config_file: str) -> None:
 
     """
 
-    if config_file.upper() == "NONE":
-        # Simply copy workflow files. No config file processing.
+    if config_file.upper() != "NONE":
         print("Processing configuration file...")
         outfile_name = "processed_" + os.path.basename(config_file)
         Configuration(config_file).write_processed_config(filename=outfile_name)
