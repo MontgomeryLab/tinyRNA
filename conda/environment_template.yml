@@ -18,6 +18,7 @@ dependencies:
   - conda-forge::cwltool
   # Mamba solves for a bad build of cwl-utils which didn't state its requirement for urllib3 <2 (likely temporary)
   - conda-forge::urllib3 <2
+  - conda-forge::cxx-compiler
   - conda-forge::matplotlib
   - conda-forge::mscorefonts
   - conda-forge::psutil
