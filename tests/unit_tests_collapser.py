@@ -11,7 +11,7 @@ from io import StringIO
 
 import tiny.rna.collapser as collapser
 
-class MyTestCase(unittest.TestCase):
+class CollapserTests(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         # Change CWD to test folder if test was invoked from project root (ex: by Travis)

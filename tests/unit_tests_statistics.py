@@ -5,7 +5,7 @@ from unittest.mock import patch, mock_open, create_autospec
 from tiny.rna.counter.statistics import LibraryStats, SummaryStats
 
 
-class MyTestCase(unittest.TestCase):
+class StatisticsTests(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         pass

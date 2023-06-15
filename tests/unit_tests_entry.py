@@ -21,7 +21,7 @@ test covers both environments.
 """
 
 
-class test_entry(unittest.TestCase):
+class EntryTests(unittest.TestCase):
     @classmethod
     def setUpClass(self):
 

@@ -18,7 +18,7 @@ def patch_open(read_data):
     return patch('tiny.rna.configuration.open', mock_open(read_data=read_data))
 
 
-class BowtieIndexesTest(unittest.TestCase):
+class BowtieIndexesTests(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         self.root_cfg_dir = os.path.abspath("./testdata/config_files")
@@ -156,7 +156,7 @@ class BowtieIndexesTest(unittest.TestCase):
         self.assertListEqual(mo.call_args_list, expected_writes)
 
 
-class SamplesSheetTest(unittest.TestCase):
+class SamplesSheetTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
@@ -320,7 +320,7 @@ class SamplesSheetTest(unittest.TestCase):
                 SamplesSheet("mock_filename", context=context)
 
 
-class PathsFileTest(unittest.TestCase):
+class PathsFileTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(self):
@@ -489,7 +489,7 @@ class PathsFileTest(unittest.TestCase):
         self.assertDictEqual(gff_files, expected)
 
 
-class ConfigurationTest(unittest.TestCase):
+class ConfigurationTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):

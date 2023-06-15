@@ -15,7 +15,7 @@ if __name__ == '__main__':
     unittest.main()
 
 
-class GFFValidatorTest(unittest.TestCase):
+class GFFValidatorTests(unittest.TestCase):
 
     """======== Helper functions =========================== """
 
@@ -301,7 +301,7 @@ class GFFValidatorTest(unittest.TestCase):
         self.assertLessEqual(end-start, 2)
 
 
-class SamSqValidatorTest(unittest.TestCase):
+class SamSqValidatorTests(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         self.syntax_header = "Every alignment file must have complete @SQ headers with SN and LN\n" \
