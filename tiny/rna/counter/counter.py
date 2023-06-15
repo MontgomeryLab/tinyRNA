@@ -63,7 +63,6 @@ def get_args() -> 'ReadOnlyDict':
     optional_args.add_argument('-sv', '--stepvector', choices=['Cython', 'HTSeq'], default='Cython',
                                help='Select which StepVector implementation is used to find '
                                     'features overlapping an interval.')
-    optional_args.add_argument('-a', '--all-features', action='store_true', help=argparse.SUPPRESS)  # deprecated
     optional_args.add_argument('-p', '--in-pipeline', action='store_true',
                                help='All file inputs and outputs will be read from and written to the working '
                                     'directory regardless of the exact paths listed in configuration files. '
@@ -72,7 +71,11 @@ def get_args() -> 'ReadOnlyDict':
                                help='Produce diagnostic information about uncounted/eliminated '
                                     'selection elements.')
 
+    # Hidden arguments
+    optional_args.add_argument('-a', '--all-features', action='store_true', help=argparse.SUPPRESS)  # deprecated
+    optional_args.add_argument('--autodoc-dir', help=argparse.SUPPRESS)  # placeholder value
     add_transparent_help(arg_parser)
+
     args = arg_parser.parse_args()
 
     if args.get_templates:
