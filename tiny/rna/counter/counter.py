@@ -133,8 +133,7 @@ def load_samples(samples_csv: str, args: ReadOnlyDict) -> List[Dict[str, str]]:
 
     Args:
         samples_csv: a csv file which defines sample group, replicate, and file location
-        in_pipeline: helps locate sample alignment files. If true, files are assumed to
-            reside in the working directory.
+        args: A ReadOnlyDict of argparse commandline arguments
 
     Returns:
         inputs: a list of dictionaries for each library. Each dictionary holds
@@ -154,6 +153,9 @@ def load_samples(samples_csv: str, args: ReadOnlyDict) -> List[Dict[str, str]]:
 
         if record not in inputs: inputs.append(record)
 
+    if context == "Standalone Run":
+        samples.save_run_profile(args['autodoc_dir'])
+
     return inputs
 
 
@@ -162,7 +164,7 @@ def load_config(features_csv: str, args: ReadOnlyDict) -> List[dict]:
 
     Args:
         features_csv: a csv file which defines feature sources and selection rules
-        in_pipeline: not currently used; helps properly locate input files
+        args: A ReadOnlyDict of argparse commandline arguments
 
     Returns:
         rules: a list of dictionaries, each representing a parsed row from input.
@@ -172,6 +174,9 @@ def load_config(features_csv: str, args: ReadOnlyDict) -> List[dict]:
 
     context = "Pipeline Step" if args['in_pipeline'] else "Standalone Run"
     features = FeaturesSheet(features_csv, context=context)
+
+    if context == "Standalone Run":
+        features.save_run_profile(args['autodoc_dir'])
 
     return features.rules
 
