@@ -49,7 +49,7 @@ def get_args() -> 'ReadOnlyDict':
                                     'tiny-count into the current directory.')
 
     # Optional arguments
-    optional_args.add_argument('-o', '--out-prefix', metavar='PREFIX',
+    optional_args.add_argument('-o', '--out-prefix', metavar='PREFIX', default='',
                                help='The output prefix to use for file names.')
     optional_args.add_argument('-ng', '--normalize-by-genomic-hits', metavar='T/F', default='T',
                                help='Normalize counts by genomic hits.')

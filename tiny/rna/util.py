@@ -149,7 +149,7 @@ class SmartFormatter(argparse.HelpFormatter):
 
 
 def make_filename(args, ext='.csv'):
-    return '_'.join([str(chnk) for chnk in args if chnk is not None]) + ext
+    return '_'.join([str(chnk) for chnk in args if chnk]) + ext
 
 
 r_reserved_keywords = [
