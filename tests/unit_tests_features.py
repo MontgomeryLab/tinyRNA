@@ -1,7 +1,7 @@
 import unittest
 from copy import deepcopy
-
 from unittest.mock import patch, call
+
 from tiny.rna.counter.features import *
 from unit_test_helpers import read, make_parsed_alignment, rules_template, strand_to_bool
 

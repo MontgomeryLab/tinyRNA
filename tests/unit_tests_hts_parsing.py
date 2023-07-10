@@ -184,7 +184,7 @@ class AlignmentReaderTests(unittest.TestCase):
         expected_writelines = [
             call('mock_outfile_name.sam', 'a'),
             call().__enter__(),
-            call().write('\n'.join([alignment.to_string()] * 5)),
+            call().writelines([alignment.to_string() + '\n'] * 5),
             call().__exit__(None, None, None)
         ]
 
@@ -388,7 +388,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
         feats, alias, tags = ReferenceFeatures(feature_source, **kwargs).get(feature_selector)
         steps = list(feats[iv].array[iv.start:iv.end].get_steps(values_only=True))
 
-        self.assertEqual((type(feats), type(alias), type(tags)), (HTSeq.GenomicArrayOfSets, dict, defaultdict))
+        self.assertEqual((type(feats), type(alias), type(tags)), (HTSeq.GenomicArray, dict, defaultdict))
         self.assertEqual(steps, [{(("Gene:WBGene00023193", 'tag'), False, ((1, 2, IntervalPartialMatch(iv), wc),))}])
         self.assertEqual(alias, {"Gene:WBGene00023193": ('Y74C9A.6',)})
         self.assertDictEqual(tags, {"Gene:WBGene00023193": {('Gene:WBGene00023193', 'tag')}})
@@ -412,7 +412,7 @@ class ReferenceFeaturesTests(unittest.TestCase):
         feats, alias, tags = ReferenceFeatures(feature_source, **kwargs).get(feature_selector)
         steps = list(feats[iv].array[iv.start:iv.end].get_steps(values_only=True))
 
-        self.assertEqual((type(feats), type(alias), type(tags)), (HTSeq.GenomicArrayOfSets, dict, defaultdict))
+        self.assertEqual((type(feats), type(alias), type(tags)), (HTSeq.GenomicArray, dict, defaultdict))
         self.assertEqual(steps, [{(("Gene:WBGene00023193", 'tag'), False, ((1, 2, IntervalPartialMatch(iv), wc),))}])
         self.assertDictEqual(alias, {"Gene:WBGene00023193": ('Y74C9A.6',)})
         self.assertDictEqual(tags, {"Gene:WBGene00023193": {('Gene:WBGene00023193', 'tag')}})

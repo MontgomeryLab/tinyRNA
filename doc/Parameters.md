@@ -89,7 +89,7 @@ By default, tiny-count will increment feature counts by a normalized amount to a
 |---------------------|------------------------|
 | counter_decollapse: | `--decollapse`         |
 
-The SAM files produced by the tinyRNA pipeline are collapsed by default; alignments sharing a SEQ field are strictly multi-alignments and do not reflect original sequence counts. If this option is switched "on", tiny-count will produce a decollapsed copy of each input SAM file. Each alignment in the decollapsed SAM will be duplicated by the sequence's original count. This is useful for browsing in IGV. If non-collapsed inputs are provided to tiny-count in standalone mode, this option will be ignored.
+The SAM files produced by the tinyRNA pipeline are collapsed by default; alignments sharing a SEQ field are strictly multi-alignments and do not reflect original sequence counts. If this option is switched "on", tiny-count will produce a decollapsed copy of each input SAM file. Each alignment in the decollapsed SAM will be duplicated by the sequence's original count. This is useful for browsing in IGV. The indicated count will be stripped from each alignment's QNAME field so that these files remain compatible with tiny-count. If non-collapsed inputs are provided to tiny-count in standalone mode, this option will be ignored.
 
 ### StepVector
 | Run Config Key     | Commandline Argument |
@@ -135,10 +135,8 @@ Optional arguments:
   argument mentioned above.
 
   -o PREFIX, --out-prefix PREFIX
-                        The output prefix to use for file names. All
-                        occurrences of the substring {timestamp} will be
-                        replaced with the current date and time. (default:
-                        tiny-count_{timestamp})
+                        The output prefix to use for file names. (default:
+                        None)
   -ng T/F, --normalize-by-genomic-hits T/F
                         Normalize counts by genomic hits. (default: T)
   -nf T/F, --normalize-by-feature-hits T/F
@@ -146,15 +144,17 @@ Optional arguments:
   -vs T/F, --verify-stats T/F
                         Verify that all reported stats are internally
                         consistent. (default: T)
-  -dc, --decollapse     Create a decollapsed copy of all SAM files listed in
+  -dc, --decollapse     Create a decollapsed SAM copy of all files listed in
                         your Samples Sheet. This option is ignored for non-
                         collapsed inputs. (default: False)
   -sv {Cython,HTSeq}, --stepvector {Cython,HTSeq}
                         Select which StepVector implementation is used to find
                         features overlapping an interval. (default: Cython)
-  -p, --in-pipeline     Indicates that tiny-count was invoked as part of a
-                        pipeline run and that input files should be sourced as
-                        such. (default: False)
+  -p, --in-pipeline     All file inputs and outputs will be read from and
+                        written to the working directory regardless of the
+                        exact paths listed in configuration files. This is
+                        convenient when working with workflow runners.
+                        (default: False)
   -d, --report-diags    Produce diagnostic information about
                         uncounted/eliminated selection elements. (default:
                         False)

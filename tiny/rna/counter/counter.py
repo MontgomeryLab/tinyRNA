@@ -4,8 +4,9 @@ import multiprocessing as mp
 import traceback
 import argparse
 import sys
+import os
 
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 from tiny.rna.counter.validation import GFFValidator, AlignmentSqValidator
 from tiny.rna.counter.features import Features, FeatureCounter
@@ -16,6 +17,7 @@ from tiny.rna.util import (
     report_execution_time,
     add_transparent_help,
     get_timestamp,
+    make_filename,
     ReadOnlyDict
 )
 
@@ -23,7 +25,7 @@ from tiny.rna.util import (
 counter: FeatureCounter
 
 
-def get_args():
+def get_args() -> 'ReadOnlyDict':
     """Get input arguments from the user/command line."""
 
     arg_parser = argparse.ArgumentParser(
@@ -47,9 +49,8 @@ def get_args():
                                     'tiny-count into the current directory.')
 
     # Optional arguments
-    optional_args.add_argument('-o', '--out-prefix', metavar='PREFIX', default='tiny-count_{timestamp}',
-                               help='The output prefix to use for file names. All occurrences of the '
-                                    'substring {timestamp} will be replaced with the current date and time.')
+    optional_args.add_argument('-o', '--out-prefix', metavar='PREFIX', default='',
+                               help='The output prefix to use for file names.')
     optional_args.add_argument('-ng', '--normalize-by-genomic-hits', metavar='T/F', default='T',
                                help='Normalize counts by genomic hits.')
     optional_args.add_argument('-nf', '--normalize-by-feature-hits', metavar='T/F', default='T',
@@ -62,15 +63,19 @@ def get_args():
     optional_args.add_argument('-sv', '--stepvector', choices=['Cython', 'HTSeq'], default='Cython',
                                help='Select which StepVector implementation is used to find '
                                     'features overlapping an interval.')
-    optional_args.add_argument('-a', '--all-features', action='store_true', help=argparse.SUPPRESS)  # deprecated
     optional_args.add_argument('-p', '--in-pipeline', action='store_true',
-                               help='Indicates that tiny-count was invoked as part of a pipeline run '
-                                    'and that input files should be sourced as such.')
+                               help='All file inputs and outputs will be read from and written to the working '
+                                    'directory regardless of the exact paths listed in configuration files. '
+                                    'This is convenient when working with workflow runners.')
     optional_args.add_argument('-d', '--report-diags', action='store_true',
                                help='Produce diagnostic information about uncounted/eliminated '
                                     'selection elements.')
 
+    # Hidden arguments
+    optional_args.add_argument('-a', '--all-features', action='store_true', help=argparse.SUPPRESS)  # deprecated
+    optional_args.add_argument('--autodoc-dir', help=argparse.SUPPRESS)  # placeholder value
     add_transparent_help(arg_parser)
+
     args = arg_parser.parse_args()
 
     if args.get_templates:
@@ -78,13 +83,52 @@ def get_args():
         sys.exit(0)
     else:
         args_dict = vars(args)
-        args_dict['out_prefix'] = args.out_prefix.replace('{timestamp}', get_timestamp())
+        prefix, autodoc_dir = get_output_dest(args_dict)
+        args_dict['out_prefix'] = prefix
+        args_dict['autodoc_dir'] = autodoc_dir
         for tf in ('normalize_by_feature_hits', 'normalize_by_genomic_hits', 'verify_stats'):
             args_dict[tf] = args_dict[tf].lower() in ['t', 'true']
         return ReadOnlyDict(args_dict)
 
 
-def load_samples(samples_csv: str, in_pipeline: bool) -> List[Dict[str, str]]:
+def get_output_dest(args: dict) -> Tuple[str, str]:
+    """Creates the run directory and autodoc directory if running in standalone mode"""
+
+    prefix = args['out_prefix']
+    if "{timestamp}" in prefix:
+        print("Support for {timestamp} substitution in tiny-count "
+              "prefixes was removed in v1.6", file=sys.stderr)
+
+    if not args['in_pipeline']:
+        run_ts = get_timestamp()
+        run_directory = f"tiny-count_{run_ts}"
+        prefix_tail = make_filename([prefix, run_ts], ext='')
+        prefix = os.path.join(run_directory, prefix_tail)
+        config = os.path.join(run_directory, "config")
+        os.makedirs(config)
+    else:
+        config = None  # Handled by workflow runner
+
+    return prefix, config
+
+
+def load_paths(args: ReadOnlyDict) -> 'PathsFile':
+    """Parses the Paths File which provides the locations of config files and reference files.
+
+    Args: A ReadOnlyDict of argparse commandline arguments
+    Returns: A loaded PathsFile object
+    """
+
+    context = "Pipeline Step" if args['in_pipeline'] else "Standalone Run"
+    paths = PathsFile(args['paths_file'], args['in_pipeline'])
+
+    if context == "Standalone Run":
+        paths.save_run_profile(args['autodoc_dir'])
+
+    return paths
+
+
+def load_samples(samples_csv: str, args: ReadOnlyDict) -> List[Dict[str, str]]:
     """Parses the Samples Sheet to determine library names and alignment files for counting
 
     Sample files can have a .fastq(.gz) extension (i.e. when tiny-count is called as part of a
@@ -92,15 +136,14 @@ def load_samples(samples_csv: str, in_pipeline: bool) -> List[Dict[str, str]]:
 
     Args:
         samples_csv: a csv file which defines sample group, replicate, and file location
-        in_pipeline: helps locate sample alignment files. If true, files are assumed to
-            reside in the working directory.
+        args: A ReadOnlyDict of argparse commandline arguments
 
     Returns:
         inputs: a list of dictionaries for each library. Each dictionary holds
         the library's name, file location, and normalization preferences.
     """
 
-    context = "Pipeline Step" if in_pipeline else "Standalone Run"
+    context = "Pipeline Step" if args['in_pipeline'] else "Standalone Run"
     samples = SamplesSheet(samples_csv, context=context)
     inputs = list()
 
@@ -113,15 +156,18 @@ def load_samples(samples_csv: str, in_pipeline: bool) -> List[Dict[str, str]]:
 
         if record not in inputs: inputs.append(record)
 
+    if context == "Standalone Run":
+        samples.save_run_profile(args['autodoc_dir'])
+
     return inputs
 
 
-def load_config(features_csv: str, in_pipeline: bool) -> List[dict]:
+def load_config(features_csv: str, args: ReadOnlyDict) -> List[dict]:
     """Parses the Features Sheet to provide inputs to FeatureSelector and reference parsers
 
     Args:
         features_csv: a csv file which defines feature sources and selection rules
-        in_pipeline: not currently used; helps properly locate input files
+        args: A ReadOnlyDict of argparse commandline arguments
 
     Returns:
         rules: a list of dictionaries, each representing a parsed row from input.
@@ -129,8 +175,11 @@ def load_config(features_csv: str, in_pipeline: bool) -> List[dict]:
             further digest to produce its rules table.
     """
 
-    context = "Pipeline Step" if in_pipeline else "Standalone Run"
+    context = "Pipeline Step" if args['in_pipeline'] else "Standalone Run"
     features = FeaturesSheet(features_csv, context=context)
+
+    if context == "Standalone Run":
+        features.save_run_profile(args['autodoc_dir'])
 
     return features.rules
 
@@ -192,13 +241,12 @@ def map_and_reduce(libraries, paths, prefs):
 def main():
     # Get command line arguments.
     args = get_args()
-    in_pipeline = args['in_pipeline']
 
     try:
-        # Load and validate config files and input files
-        paths = PathsFile(args['paths_file'], in_pipeline)
-        libraries = load_samples(paths['samples_csv'], in_pipeline)
-        selection = load_config(paths['features_csv'], in_pipeline)
+        # Load and validate config and input files
+        paths = load_paths(args)
+        libraries = load_samples(paths['samples_csv'], args)
+        selection = load_config(paths['features_csv'], args)
         reference = load_references(paths, libraries, selection, args)
 
         # global for multiprocessing
@@ -213,7 +261,7 @@ def main():
     except Exception as e:
         if type(e) is SystemExit: return
         traceback.print_exception(*sys.exc_info())
-        if in_pipeline:
+        if args['in_pipeline']:
             print("\n\ntiny-count encountered an error. Don't worry! You don't have to start over.\n"
                   "You can resume the pipeline at tiny-count. To do so:\n\t"
                   "1. cd into your Run Directory\n\t"

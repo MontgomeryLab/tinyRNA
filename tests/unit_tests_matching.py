@@ -4,11 +4,10 @@ from copy import deepcopy
 
 from tiny.rna.counter.features import FeatureSelector
 from tiny.rna.counter.matching import *
-from tiny.rna.counter.statistics import LibraryStats
 from unit_test_helpers import rules_template
 
 
-class MyTestCase(unittest.TestCase):
+class MatchingTests(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         pass

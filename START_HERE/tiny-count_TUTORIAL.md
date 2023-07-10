@@ -44,7 +44,7 @@ tiny-count --paths-file paths.yml
 ```
 
 ## Outputs
-The primary output is feature_counts.csv, a table of classified counts per feature. You can read about the other file outputs in the [Counts and Pipeline Statistics section of the README](../README.md#counts-and-pipeline-statistics).
+A new directory with be created with the name `tiny-count_{timestamp}` where `{timestamp}` is the date and time at the start of the run. This directory holds the counting results along with a `config` subdirectory for auto-documenting the run's configuration. The primary output is feature_counts.csv, a table of classified counts per feature. You can read about the other file outputs in the [Counts and Pipeline Statistics section of the README](../README.md#counts-and-pipeline-statistics).
 
 ## Next Steps
 Now that you've run tiny-count, you can edit the configuration files to customize the analysis. For example, you can increase the specificity of your selection rule, or add more selection rules with similar or different hierarchy values, or add more GFF files to the Paths File. You can also add more samples to the Samples Sheet, and run tiny-count again to add them to the output.
