@@ -136,7 +136,8 @@ else
   fi
 
   # Finalize installation
-  source ~/."$shell"rc
+  # Essentially equivalent to calling `source ~/."$shell"rc` but with cross-shell/platform compatibility
+  . <(tail -n +$(grep -n "# >>> conda initialize" ~/."$shell"rc | cut -f 1 -d ":") ~/."$shell"rc)
   eval "$(conda shell."$shell" hook)"
   conda config --set auto_activate_base false
 
