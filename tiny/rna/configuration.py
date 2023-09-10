@@ -297,7 +297,7 @@ class Configuration(ConfigBase):
         # Prefix Run Directory basename while preserving subdirectory structure
         rd_head, rd_tail = os.path.split(self['run_directory'].rstrip(os.sep))
         basename = '_'.join(x for x in [self['run_name'], rd_tail] if x)
-        self['run_directory'] = self.joinpath(rd_head, basename)
+        self['run_directory'] = self.joinpath(rd_head or os.getcwd(), basename)
 
         self.templates = resource_filename('tiny', 'templates/')
 
