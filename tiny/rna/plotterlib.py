@@ -345,10 +345,16 @@ class plotterlib:
         """Assigns a color to each class for consistency across samples"""
 
         stylesheet_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-        if len(classes) <= len(stylesheet_colors):
-            colors = iter(stylesheet_colors)
+        extended_colors = [plt.get_cmap(cmap) for cmap in ["tab20", "tab20b", "tab20c"]]
+        class_limit = len(stylesheet_colors) + sum(ext.N for ext in extended_colors)
+
+        if len(classes) > class_limit:
+            raise ValueError(f"The number of classes to plot ({len(classes)}) exceeds the color limit. "
+                             f"Your stylesheet provided {len(stylesheet_colors)} colors, and tiny-plot "
+                             f"provides additional colors for a total of {class_limit} colors.")
         else:
-            colors = iter(plt.get_cmap("tab20"))
+            overflow_colors = [rgb_tuple for cmap in extended_colors for rgb_tuple in cmap.colors]
+            colors = iter(stylesheet_colors + overflow_colors)
 
         return {cls: next(colors) for cls in sorted_natural(classes)}
 
