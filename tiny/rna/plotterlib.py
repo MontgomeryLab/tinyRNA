@@ -30,7 +30,7 @@ from matplotlib.patches import Rectangle
 from matplotlib.transforms import Bbox
 from matplotlib.scale import LogTransform
 
-from typing import Union, Tuple, List, Optional
+from typing import Union, Tuple, List, Optional, Dict
 from abc import ABC, abstractmethod
 
 from tiny.rna.util import sorted_natural
@@ -341,22 +341,34 @@ class plotterlib:
         axes.legend(handles=handles)
 
     @staticmethod
-    def assign_class_colors(classes):
-        """Assigns a color to each class for consistency across samples"""
+    def assign_class_colors(classes) -> Dict[str, str]:
+        """Assigns a color to each class for consistency across samples
 
-        stylesheet_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-        extended_colors = [plt.get_cmap(cmap) for cmap in ["tab20", "tab20b", "tab20c"]]
-        class_limit = len(stylesheet_colors) + sum(ext.N for ext in extended_colors)
+        Args:
+            classes: an iterable of classes for color assignment
 
-        if len(classes) > class_limit:
+        Returns: A dictionary of classes and their assigned hexadecimal color strings.
+            All colors are guaranteed to be unique values, but no attempt is made
+            to calculate and filter by color similarity.
+        """
+
+        user_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        extended_colors = [mpl.colors.rgb2hex(rgb).upper()  # for homogenous types
+                           for cmap in ["tab20", "tab20b", "tab20c"]
+                           for rgb in plt.get_cmap(cmap).colors]
+
+        # Remove any duplicates while preserving user-defined order
+        all_colors = list(map(str.upper, user_colors)) + extended_colors
+        colors = sorted(set(all_colors), key=all_colors.index)
+
+        if len(classes) > len(colors):
             raise ValueError(f"The number of classes to plot ({len(classes)}) exceeds the color limit. "
-                             f"Your stylesheet provided {len(stylesheet_colors)} colors, and tiny-plot "
-                             f"provides additional colors for a total of {class_limit} colors.")
-        else:
-            overflow_colors = [rgb_tuple for cmap in extended_colors for rgb_tuple in cmap.colors]
-            colors = iter(stylesheet_colors + overflow_colors)
+                             f"Your stylesheet provided {len(user_colors)} colors, and tiny-plot "
+                             f"provides additional colors for a total of {len(colors)} colors.")
 
-        return {cls: next(colors) for cls in sorted_natural(classes)}
+        # Sort classes before final assignment
+        sorted_classes = sorted_natural(classes)
+        return {cls: color for cls, color in zip(sorted_classes, colors)}
 
     def set_dge_class_legend_style(self):
         """Widens the "scatter" figure and moves plot to the left to accommodate legend"""
