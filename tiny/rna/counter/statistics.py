@@ -654,7 +654,7 @@ class Diagnostics:
         feat_aliases = '; '.join(f"({aliases})" for aliases in feat_aliases)
 
         counts = (bundle['read_count'], bundle['corr_count'], bundle['loci_count'])
-        pos = (aln['Chrom'], strand, aln['Start'] + 1, aln['End'] + 1, aln['NM'])
+        pos = (aln['Chrom'], strand, aln['Start'] + 1, aln['End'], aln['NM'])
         row = (seq, *counts, *pos, n_candidates, feature_hits, feat_aliases)
 
         self.alignments.append(row)
