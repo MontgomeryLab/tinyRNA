@@ -767,9 +767,9 @@ class StatisticsValidator:
             MergedStat.add_warning("Alignment stats and summary stats disagree on the number of assigned reads.")
             MergedStat.add_warning(self.indent_table(a_df.loc[TAR], s_df.loc[AR], index=("Alignment Stats", "Summary Stats")))
 
-        if s_df.loc[NMR].gt(s_df.loc[MR]).any():
+        if not self.approx_equal(s_df.loc[NMR], s_df.loc[MR]) and s_df.loc[NMR].gt(s_df.loc[MR]).any():
             MergedStat.add_warning("Summary stats reports normalized mapped reads > non-normalized mapped reads.")
-            MergedStat.add_warning(self.indent_table(s_df.loc[NMR], s_df.loc(MR), index=("Normalized", "Non-normalized")))
+            MergedStat.add_warning(self.indent_table(s_df.loc[NMR], s_df.loc[MR], index=("Normalized", "Non-normalized")))
 
         if not self.approx_equal(res.loc["Sum"].sum(), 0):
             outfile_name = "stats_check"
