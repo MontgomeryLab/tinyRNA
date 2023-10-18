@@ -4,11 +4,15 @@ import numpy as np
 import pandas as pd
 
 from unittest.mock import patch
+
+import matplotlib as mpl
+from matplotlib import pyplot as plt, cycler
 from pandas.testing import assert_frame_equal
 from pkg_resources import resource_filename
 
 import tiny.rna.plotter as plotter
 import tiny.rna.plotterlib as lib
+
 
 class PlotterTests(unittest.TestCase):
 
@@ -182,6 +186,40 @@ class PlotterTests(unittest.TestCase):
             scatter.assert_not_called()
             plotter.scatter_by_dge_class(counts, dge, 'dummy_prefix', (0, 0), exclude=[])
             scatter.assert_not_called()
+
+    """Are classes assigned only unique colors? Are built-in colors used after stylesheet colors are exhausted?"""
+
+    def test_scatter_dge_class_color_assignment(self):
+        tab20 = [mpl.colors.rgb2hex(rgb).upper() for rgb in plt.get_cmap("tab20").colors]
+        user_colors = ["FFFFFF", "ffffff", tab20[0]]
+        expected_colors = ["#FFFFFF", tab20[0], tab20[1], tab20[2]]
+
+        test_stylesheet = {'axes.prop_cycle': cycler(color=user_colors)}
+        plib = lib.plotterlib(test_stylesheet)
+
+        classes = [str(i) for i in range(len(user_colors) + 1)]  # +1 ensures that "stylesheet" colors are exhausted
+        assignments = plib.assign_class_colors(classes)
+
+        self.assertEqual(len(classes), len(assignments))                    # all classes are represented
+        self.assertEqual(len(set(assignments.values())), len(assignments))  # all colors are unique
+        self.assertEqual(list(assignments.values()), expected_colors)       # correct transition from stylesheet to tab20 colors
+
+    """Is an exception produced when there are more classes than unique colors?"""
+
+    def test_scatter_dge_class_color_overshoot(self):
+        user_colors = []
+        n_overflow_colors = 20 * 3  # tab20, tab20b, tab20c
+        classes = [str(i) for i in range(n_overflow_colors + 1)]  # +1 ensures that tab20* colors are exhausted
+
+        test_stylesheet = {'axes.prop_cycle': cycler(color=user_colors)}
+        plib = lib.plotterlib(test_stylesheet)
+
+        expected_msg = rf".*classes to plot \({len(classes)}\)" \
+                       rf".*stylesheet provided {len(user_colors)}" \
+                       rf".*total of {n_overflow_colors} colors"
+
+        with self.assertRaisesRegex(ValueError, expected_msg):
+            plib.assign_class_colors(classes)
 
     """Do scatter plots show the appropriate major ticks through a range of view limits?"""
 
