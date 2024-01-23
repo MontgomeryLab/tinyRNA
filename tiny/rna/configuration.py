@@ -11,12 +11,12 @@ import os
 
 from pkg_resources import resource_filename
 from collections import Counter, OrderedDict, defaultdict
-from typing import Union, Any, List, Dict, Optional
+from typing import Union, Any, Dict, Optional
 from glob import glob
 
 from tiny.rna.compatibility import RunConfigCompatibility
 from tiny.rna.counter.validation import GFFValidator
-from tiny.rna.util import get_timestamp, get_r_safename, append_to_exception
+from tiny.rna.util import get_timestamp, get_csv_dialect, get_r_safename, append_to_exception
 
 
 class ConfigBase:
@@ -942,7 +942,7 @@ class CSVReader(csv.DictReader):
     def rows(self):
         self.replace_excel_ellipses()
         with open(os.path.expanduser(self.tinyrna_file), 'r', encoding='utf-8-sig', newline='') as f:
-            super().__init__(f, fieldnames=self.tinyrna_fields, delimiter=',')
+            super().__init__(f, fieldnames=self.tinyrna_fields, dialect=get_csv_dialect(f))
             header = next(self)
 
             # Compatibility check. Column headers are still often changed at this stage

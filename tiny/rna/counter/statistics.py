@@ -13,7 +13,7 @@ from typing import Tuple, Optional, Union, List, DefaultDict
 from collections import Counter, defaultdict
 from glob import glob
 
-from ..util import make_filename, report_execution_time
+from ..util import make_filename, report_execution_time, get_csv_dialect
 
 
 class LibraryStats:
@@ -324,7 +324,7 @@ class RuleCounts(MergedStat):
         of the output table."""
 
         with open(features_csv, 'r', encoding='utf-8-sig') as f:
-            return [row for row in csv.DictReader(f)]
+            return [row for row in csv.DictReader(f, dialect=get_csv_dialect(f))]
 
     def get_inverted_classifiers(self):
         """Returns a dictionary of classifiers and the indices of the rules

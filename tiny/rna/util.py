@@ -1,4 +1,5 @@
 import argparse
+import csv
 import functools
 import textwrap
 import gzip
@@ -7,6 +8,7 @@ import os
 import re
 
 from datetime import datetime
+from typing import TextIO, Type
 
 
 class Singleton(type):
@@ -230,3 +232,22 @@ def append_to_exception(e, msg):
     else:
         primary_msg = "%s\n%s" % (str(e.args[0]), msg)
         e.args = (primary_msg,) + e.args[1:]
+
+
+def get_csv_dialect(file: TextIO) -> Type[csv.Dialect]:
+    """Returns the dialect of the CSV file (delimiter, quoting conventions, etc.).
+    If the dialect can't be determined, the default Excel dialect is returned.
+    It is necessary to do this before parsing the CSV because the delimiter is
+    ultimately determined by locale, and locales that use comma for decimal
+    separator might instead use a semicolon as the CSV delimiter."""
+
+    try:
+        # Read <= 5mb just in case the file is huge
+        file_sample = file.read(5 * 1024 * 1024)
+        dialect = csv.Sniffer().sniff(file_sample)
+        file.seek(0)
+        return dialect
+    except csv.Error:
+        print("Unable to determine CSV dialect. Assuming Excel...")
+        file.seek(0)
+        return csv.excel
