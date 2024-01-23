@@ -1,11 +1,12 @@
 import contextlib
+import csv
 import io
 import os
 import random
 import unittest
 from unittest.mock import patch, mock_open, call
 
-from tiny.rna.configuration import Configuration, SamplesSheet, PathsFile, get_templates
+from tiny.rna.configuration import Configuration, SamplesSheet, PathsFile, get_templates, CSVReader
 from unit_test_helpers import csv_factory, paths_template_file, make_paths_file
 from tiny.rna.util import r_reserved_keywords
 
@@ -597,6 +598,29 @@ class ConfigurationTests(unittest.TestCase):
             actual = config['run_directory']
             expected = output.format(ts=config.dt)
             self.assertEqual(actual, expected)
+
+    """Does CSVReader handle CSVs with other delimiters? Adherence to RFC 4180 is loose
+    in the wild. Delimiter can also be locale-dependent, e.g. if a locale's decimal
+    separator is a comma, then the delimiter is likely to be converted to a semicolon
+    when the user saves the file."""
+
+    def test_csv_reader_delimiter(self):
+        fieldnames = CSVReader.tinyrna_sheet_fields['Features Sheet'].keys()
+
+        for delimiter in [',', ';', '\t', ' ', ':', '|']:
+            csv_body = io.StringIO()
+            csv_writer = csv.DictWriter(csv_body, fieldnames=fieldnames, delimiter=delimiter)
+            test_row = {k: '.' for k in fieldnames}
+
+            csv_writer.writeheader()
+            csv_writer.writerow(test_row)
+            mopen = mock_open(read_data=csv_body.getvalue())
+            mopen.return_value.seek.side_effect = mopen.side_effect  # just rewind when seek() is called
+
+            with patch("tiny.rna.configuration.open", mopen):
+                csv_reader = CSVReader("/dev/null", "Features Sheet")
+                read = list(csv_reader.rows())
+                self.assertEqual(list(read[0].values()), list(test_row.values()))
 
 
 if __name__ == '__main__':
