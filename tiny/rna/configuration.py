@@ -936,8 +936,8 @@ class CSVReader(csv.DictReader):
         self.row_num = 0
         try:
             self.tinyrna_fields = tuple(CSVReader.tinyrna_sheet_fields[doctype].values())
-        except KeyError as ke:
-            raise ValueError("w-HH-at 'n t'heck are you doin")
+        except KeyError:
+            raise ValueError(f'No existing configuration for doctype "{doctype}"')
 
     def rows(self):
         self.replace_excel_ellipses()
@@ -986,12 +986,11 @@ class CSVReader(csv.DictReader):
         expected = {key.lower() for key in doc_reference.keys()}
 
         # The header values that were read
-        read_vals = {val.lower() for key, val in header.items() if None not in (key, val)}
-        read_vals.update(val.lower() for val in header.get(None, ()))  # Extra headers
+        read_vals = {val.lower() for key, val in header.items() if val is not None}
         self.check_backward_compatibility(read_vals)
 
         # Find differences between actual and expected headers
-        unknown = {col_name for col_name in read_vals if col_name not in expected}
+        unknown = read_vals - expected
         missing = expected - read_vals
 
         if len(missing):

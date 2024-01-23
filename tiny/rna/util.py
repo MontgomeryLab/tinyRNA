@@ -4,7 +4,6 @@ import functools
 import textwrap
 import gzip
 import time
-import os
 import re
 
 from datetime import datetime
@@ -220,13 +219,14 @@ def get_timestamp():
     return datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
 
 
-# Allows -h/--help without listing it within the optional arguments section
 def add_transparent_help(parser):
+    # Allows -h/--help without listing it within the optional arguments section
     parser.add_argument('-h', '--help', action="help", help=argparse.SUPPRESS)
 
 
-# Appends to an exception's error message while preserving its provenance and traceback
 def append_to_exception(e, msg):
+    """Appends to an exception's error message while preserving its provenance and traceback"""
+
     if type(e) is KeyError:
         e.args += (msg,)
     else:
