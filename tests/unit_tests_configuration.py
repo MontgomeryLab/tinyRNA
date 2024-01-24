@@ -16,7 +16,20 @@ def patch_isfile():
 
 
 def patch_open(read_data):
-    return patch('tiny.rna.configuration.open', mock_open(read_data=read_data))
+    """Constructs a mock_open that supports rewinding read_data via seek(0)."""
+
+    def rewind(offset):
+        if offset == 0:
+            # Same as calling mock_open's function-scoped reset_data()
+            mopen.side_effect()
+        else:
+            # In order to support this we need access to _state in mock_open's function scope.
+            # There's a way to do that, but it's ugly and the patch isn't persistent.
+            raise ValueError("Patched mock_open.seek() only supports seek(0).")
+
+    mopen = mock_open(read_data=read_data)
+    mopen.return_value.seek.side_effect = rewind
+    return patch('tiny.rna.configuration.open', mopen)
 
 
 class BowtieIndexesTests(unittest.TestCase):
@@ -599,10 +612,10 @@ class ConfigurationTests(unittest.TestCase):
             expected = output.format(ts=config.dt)
             self.assertEqual(actual, expected)
 
-    """Does CSVReader handle CSVs with other delimiters? Adherence to RFC 4180 is loose
-    in the wild. Delimiter can also be locale-dependent, e.g. if a locale's decimal
-    separator is a comma, then the delimiter is likely to be converted to a semicolon
-    when the user saves the file."""
+    """Does CSVReader handle CSVs with other delimiters?
+    Adherence to RFC 4180 isn't strict in the wild. Delimiter can also be locale-dependent, 
+    e.g. if a locale's decimal separator is a comma, then the delimiter is likely to be 
+    converted to a semicolon when the user saves the file."""
 
     def test_csv_reader_delimiter(self):
         fieldnames = CSVReader.tinyrna_sheet_fields['Features Sheet'].keys()
@@ -610,14 +623,12 @@ class ConfigurationTests(unittest.TestCase):
         for delimiter in [',', ';', '\t', ' ', ':', '|']:
             csv_body = io.StringIO()
             csv_writer = csv.DictWriter(csv_body, fieldnames=fieldnames, delimiter=delimiter)
-            test_row = {k: '.' for k in fieldnames}
+            test_row = {col: '.' for col in fieldnames}
 
             csv_writer.writeheader()
             csv_writer.writerow(test_row)
-            mopen = mock_open(read_data=csv_body.getvalue())
-            mopen.return_value.seek.side_effect = mopen.side_effect  # just rewind when seek() is called
 
-            with patch("tiny.rna.configuration.open", mopen):
+            with patch_open(read_data=csv_body.getvalue()):
                 csv_reader = CSVReader("/dev/null", "Features Sheet")
                 read = list(csv_reader.rows())
                 self.assertEqual(list(read[0].values()), list(test_row.values()))

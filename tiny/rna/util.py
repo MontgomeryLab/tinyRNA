@@ -235,19 +235,19 @@ def append_to_exception(e, msg):
 
 
 def get_csv_dialect(file: TextIO) -> Type[csv.Dialect]:
-    """Returns the dialect of the CSV file (delimiter, quoting conventions, etc.).
-    If the dialect can't be determined, the default Excel dialect is returned.
+    """Returns the default CSV dialect with delimiter determined by heuristics
     It is necessary to do this before parsing the CSV because the delimiter is
-    ultimately determined by locale, and locales that use comma for decimal
-    separator might instead use a semicolon as the CSV delimiter."""
+    ultimately determined by locale where last edited, and locales that use a
+    comma for decimal separator might instead use a semicolon delimiter."""
 
-    try:
-        # Read <= 5mb just in case the file is huge
-        file_sample = file.read(5 * 1024 * 1024)
-        dialect = csv.Sniffer().sniff(file_sample)
-        file.seek(0)
-        return dialect
-    except csv.Error:
-        print("Unable to determine CSV dialect. Assuming Excel...")
-        file.seek(0)
-        return csv.excel
+    file_sample = file.read(16 * 1024)  # 16 kb
+    heuristic = csv.Sniffer().sniff(file_sample)
+
+    # All other dialect attributes should be default values to ensure compatibility
+    # with our own outputs. Currently, the quote heuristics produce incorrect results
+    # during testing (e.g. single row Features Sheet with embedded quotes in one field)
+
+    dialect = csv.excel  # the default dialect
+    dialect.delimiter = heuristic.delimiter
+    file.seek(0)
+    return dialect
