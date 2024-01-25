@@ -6,9 +6,9 @@ import random
 import unittest
 from unittest.mock import patch, mock_open, call
 
-from tiny.rna.configuration import Configuration, SamplesSheet, PathsFile, get_templates, CSVReader
+from tiny.rna.configuration import Configuration, SamplesSheet, PathsFile, get_templates
 from unit_test_helpers import csv_factory, paths_template_file, make_paths_file
-from tiny.rna.util import r_reserved_keywords
+from tiny.rna.util import CSVReader, r_reserved_keywords
 
 
 def patch_isfile():
@@ -29,7 +29,7 @@ def patch_open(read_data):
 
     mopen = mock_open(read_data=read_data)
     mopen.return_value.seek.side_effect = rewind
-    return patch('tiny.rna.configuration.open', mopen)
+    return patch('builtins.open', mopen)
 
 
 class BowtieIndexesTests(unittest.TestCase):

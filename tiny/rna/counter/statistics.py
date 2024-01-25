@@ -13,7 +13,7 @@ from typing import Tuple, Optional, Union, List, DefaultDict
 from collections import Counter, defaultdict
 from glob import glob
 
-from ..util import make_filename, report_execution_time, get_csv_dialect
+from ..util import get_csv_dialect, CSVReader, make_filename, report_execution_time
 
 
 class LibraryStats:
