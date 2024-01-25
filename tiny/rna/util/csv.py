@@ -1,26 +1,8 @@
-import csv
+import csv  # From Python standard library
 import os
 
-from collections import OrderedDict
+from collections import OrderedDict, Counter
 from typing import TextIO, Type
-
-def get_csv_dialect(file: TextIO) -> Type[csv.Dialect]:
-    """Returns the default CSV dialect with delimiter determined by heuristics
-    It is necessary to do this before parsing the CSV because the delimiter is
-    ultimately determined by locale where last edited, and locales that use a
-    comma for decimal separator might instead use a semicolon delimiter."""
-
-    file_sample = file.read(16 * 1024)  # 16 kb
-    heuristic = csv.Sniffer().sniff(file_sample)
-
-    # All other dialect attributes should be default values to ensure compatibility
-    # with our own outputs. Currently, the quote heuristics produce incorrect results
-    # during testing (e.g. single row Features Sheet with embedded quotes in one field)
-
-    dialect = csv.excel  # the default dialect
-    dialect.delimiter = heuristic.delimiter
-    file.seek(0)
-    return dialect
 
 
 class CSVReader(csv.DictReader):
@@ -68,7 +50,7 @@ class CSVReader(csv.DictReader):
     def rows(self):
         self.replace_excel_ellipses()
         with open(os.path.expanduser(self.tinyrna_file), 'r', encoding='utf-8-sig', newline='') as f:
-            super().__init__(f, fieldnames=self.tinyrna_fields, dialect=get_csv_dialect(f))
+            super().__init__(f, fieldnames=self.tinyrna_fields, dialect=self.get_csv_dialect(f))
             header = next(self)
 
             # Compatibility check. Column headers are still often changed at this stage
@@ -109,6 +91,43 @@ class CSVReader(csv.DictReader):
                 print(f"Replaced invalid character in {self.doctype} header.")
             else:
                 raise
+
+    def get_csv_dialect(self, file: TextIO) -> Type[csv.Dialect]:
+        """Returns the default CSV dialect with delimiter determined by heuristics.
+        It is necessary to do this before parsing the CSV because the delimiter is
+        ultimately determined by locale where last edited, and locales that use a
+        comma for decimal separator might instead use a semicolon delimiter."""
+
+        sniffer = csv.Sniffer()
+        file_sample = file.read(16 * 1024)  # 16 kb
+
+        try:
+            allowed_delims = ''.join(sniffer.preferred)
+            guess = sniffer.sniff(file_sample, delimiters=allowed_delims)
+            delim = guess.delimiter
+        except csv.Error:
+            # Heuristics can fail. As fallback,
+            # determine using expected header values
+            header = file_sample.splitlines()[0]
+            expect = self.tinyrna_sheet_fields[self.doctype].keys()
+
+            # Remove quotes and expected header substrings
+            for c in expect: header = header.replace(c, "")
+            header = header.replace('"', "")
+            if not header: raise
+
+            # Most common character remaining wins
+            delim = Counter(header).most_common(1)[0][0]
+            print(f'Heuristics chose "{delim}" for CSV delimiter')
+
+        # All other dialect attributes should be default values
+        # Currently, quote heuristics produce incorrect results during testing
+        # (e.g. single row Features Sheet with embedded quotes in one field)
+
+        dialect = csv.excel  # the default dialect
+        dialect.delimiter = delim
+        file.seek(0)
+        return dialect
 
     def validate_csv_header(self, header: OrderedDict):
         # The expected header values
