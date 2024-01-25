@@ -13,7 +13,7 @@ from typing import Tuple, Optional, Union, List, DefaultDict
 from collections import Counter, defaultdict
 from glob import glob
 
-from ..util import get_csv_dialect, CSVReader, make_filename, report_execution_time
+from ..util import CSVReader, make_filename, report_execution_time
 
 
 class LibraryStats:
@@ -318,19 +318,19 @@ class RuleCounts(MergedStat):
 
     def read_features_sheet(self, features_csv):
         """Reads the Features Sheet and returns a list of rules in
-        the same order as the FeatureSelector.rules_table. We don't use the
-        CSVReader class here because it returns rows with shortened column names,
-        and we want to preserve the full column names for the Rule String column
-        of the output table."""
+        the same order as the FeatureSelector.rules_table. CSVReader
+        yields rows that have internal short names for the fields.
+        Since these will be user-facing, we need to rename them
+        back to their original names."""
 
-        with open(features_csv, 'r', encoding='utf-8-sig') as f:
-            return [row for row in csv.DictReader(f, dialect=get_csv_dialect(f))]
+        reader = CSVReader(features_csv, "Features Sheet")
+        rename = {v: k for k, v in reader.tinyrna_sheet_fields['Features Sheet'].items()}
+        return [{rename[k]: v for k, v in row.items()} for row in reader.rows()]
 
     def get_inverted_classifiers(self):
         """Returns a dictionary of classifiers and the indices of the rules
         where they are defined. Note the use of the user-facing column name
-        rather than the internal shortname for "Classify as..." since the
-        CSVReader class wasn't used."""
+        (Classify as...) rather than the internal shortname."""
 
         inverted_classifiers = defaultdict(list)
         for i, rule in enumerate(self.rules):
