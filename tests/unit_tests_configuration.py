@@ -618,20 +618,58 @@ class ConfigurationTests(unittest.TestCase):
     converted to a semicolon when the user saves the file."""
 
     def test_csv_reader_delimiter(self):
-        fieldnames = CSVReader.tinyrna_sheet_fields['Features Sheet'].keys()
+        for doctype in CSVReader.tinyrna_sheet_fields.keys():
+            fieldnames = CSVReader.tinyrna_sheet_fields[doctype].keys()
 
-        for delimiter in [',', ';', '\t', ' ', ':', '|']:
+            for delimiter in csv.Sniffer().preferred:
+                csv_body = io.StringIO()
+                csv_writer = csv.DictWriter(csv_body, fieldnames=fieldnames, delimiter=delimiter)
+                test_row = {col: '.' for col in fieldnames}
+
+                csv_writer.writeheader()
+                csv_writer.writerow(test_row)
+
+                with patch_open(read_data=csv_body.getvalue()):
+                    csv_reader = CSVReader("/dev/null", doctype)
+                    read = list(csv_reader.rows())
+                    self.assertEqual(list(read[0].values()), list(test_row.values()))
+
+    """Does CSVReader raise an error if the CSV has a header but no body?"""
+
+    def test_csv_no_body(self):
+        for doctype in CSVReader.tinyrna_sheet_fields.keys():
+            fieldnames = CSVReader.tinyrna_sheet_fields[doctype].keys()
+
             csv_body = io.StringIO()
-            csv_writer = csv.DictWriter(csv_body, fieldnames=fieldnames, delimiter=delimiter)
-            test_row = {col: '.' for col in fieldnames}
-
+            csv_writer = csv.DictWriter(csv_body, fieldnames=fieldnames, delimiter=';')
             csv_writer.writeheader()
-            csv_writer.writerow(test_row)
 
-            with patch_open(read_data=csv_body.getvalue()):
-                csv_reader = CSVReader("/dev/null", "Features Sheet")
-                read = list(csv_reader.rows())
-                self.assertEqual(list(read[0].values()), list(test_row.values()))
+            with self.assertRaisesRegex(csv.Error, rf"{doctype} is empty"):
+                with patch_open(read_data=csv_body.getvalue()):
+                    csv_reader = CSVReader("/dev/null", doctype)
+                    next(csv_reader.rows())
+
+    """Does CSVReader raise an error if the CSV has a row with an unexpected column count?"""
+
+    def test_csv_column_count_consistency(self):
+        for doctype in CSVReader.tinyrna_sheet_fields.keys():
+            fieldnames = list(CSVReader.tinyrna_sheet_fields[doctype].keys())
+            test_rows = [
+                ['.' for _ in fieldnames[:-1]],         # Missing last column
+                ['.' for _ in [*fieldnames, "Extra"]]   # Extra column
+            ]
+
+            for test_row in test_rows:
+                csv_body = io.StringIO()
+                csv_writer = csv.writer(csv_body)
+
+                csv_writer.writerow(fieldnames)  # Header
+                csv_writer.writerow(test_row)
+
+                with self.assertRaisesRegex(csv.Error, rf"Inconsistent column count"):
+                    with patch_open(read_data=csv_body.getvalue()):
+                        csv_reader = CSVReader("/dev/null", doctype)
+                        list(csv_reader.rows())
 
 
 if __name__ == '__main__':
