@@ -1,9 +1,11 @@
 import os
 import unittest
 
-from unittest.mock import patch, mock_open
+from unittest.mock import patch
 
 import unit_test_helpers as helpers
+from unit_tests_configuration import patch_open, patch_isfile as patch_config_isfile
+
 import tiny.rna.counter.counter as counter
 from tiny.rna.util import ReadOnlyDict
 from tiny.rna.configuration import ConfigBase
@@ -109,10 +111,9 @@ class CounterTests(unittest.TestCase):
         mock_dir, mock_file = self.get_mock_samples_sheet_path()
         exp_file = ConfigBase.joinpath(mock_dir, inp_file)
 
-        with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
-            with patch('tiny.rna.configuration.os.path.isfile', return_value=True):
-                args = self.get_standalone_args()
-                inputs_standalone = counter.load_samples(f"{mock_dir}/{mock_file}", args)
+        with patch_open(read_data=csv), patch_config_isfile():
+            args = self.get_standalone_args()
+            inputs_standalone = counter.load_samples(f"{mock_dir}/{mock_file}", args)
 
         expected_result = self.get_loaded_samples_row(row, exp_file)
         self.assertListEqual(inputs_standalone, expected_result)
@@ -128,10 +129,9 @@ class CounterTests(unittest.TestCase):
         inp_root, _ = os.path.splitext(os.path.basename(inp_file))
         exp_file = f"{inp_root}_aligned_seqs.sam"
 
-        with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
-            with patch('tiny.rna.configuration.os.path.isfile', return_value=True):
-                args = self.get_pipeline_args()
-                inputs_pipeline = counter.load_samples(f"{mock_dir}/{mock_file}", args)
+        with patch_open(read_data=csv), patch_config_isfile():
+            args = self.get_pipeline_args()
+            inputs_pipeline = counter.load_samples(f"{mock_dir}/{mock_file}", args)
 
         expected_result = self.get_loaded_samples_row(row, exp_file)
         self.assertEqual(inputs_pipeline, expected_result)
@@ -147,11 +147,10 @@ class CounterTests(unittest.TestCase):
         expected_error = r"Alignment files cannot be listed more than once in .* \(row 2\)"
 
         with self.assertRaisesRegex(AssertionError, expected_error):
-            with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
-                with patch('tiny.rna.configuration.os.path.isfile', return_value=True):
-                    dummy_file = '/dev/null'
-                    args = self.get_standalone_args()
-                    counter.load_samples(dummy_file, args)
+            with patch_open(read_data=csv), patch_config_isfile():
+                dummy_file = '/dev/null'
+                args = self.get_standalone_args()
+                counter.load_samples(dummy_file, args)
 
     """Does load_samples throw ValueError if sample file does not have a .sam or .bam extension in standalone mode?"""
 
@@ -162,12 +161,11 @@ class CounterTests(unittest.TestCase):
 
         expected_error = r"Files in .* must have a .sam or .bam extension \(row 1\)"
 
-        with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
-            with patch('tiny.rna.configuration.os.path.isfile', return_value=True):
-                with self.assertRaisesRegex(AssertionError, expected_error):
-                    dummy_file = '/dev/null'
-                    args = self.get_standalone_args()
-                    counter.load_samples(dummy_file, args)
+        with patch_open(read_data=csv), patch_config_isfile():
+            with self.assertRaisesRegex(AssertionError, expected_error):
+                dummy_file = '/dev/null'
+                args = self.get_standalone_args()
+                counter.load_samples(dummy_file, args)
 
     """Does load_config write an autodoc copy of the Features Sheet to the Run Directory in standalone mode only?"""
 
@@ -177,15 +175,13 @@ class CounterTests(unittest.TestCase):
 
         # As a pipeline step
         args = self.get_pipeline_args()
-        with patch('tiny.rna.configuration.open', mock_open(read_data=csv)), \
-                patch('tiny.rna.configuration.shutil') as sh:
+        with patch_open(read_data=csv), patch('tiny.rna.configuration.shutil') as sh:
             ruleset1 = counter.load_config(dummy_file, args)
             sh.copyfile.assert_not_called()
 
         # As a standalone step
         args = self.get_standalone_args()
-        with patch('tiny.rna.configuration.open', mock_open(read_data=csv)), \
-                patch('tiny.rna.configuration.shutil') as sh:
+        with patch_open(read_data=csv), patch('tiny.rna.configuration.shutil') as sh:
             ruleset2 = counter.load_config(dummy_file, args)
             sh.copyfile.assert_called_once()
 
@@ -198,7 +194,7 @@ class CounterTests(unittest.TestCase):
         row = self.csv_feat_row_dict.copy()
         csv = self.csv("features.csv", [row])
 
-        with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
+        with patch_open(read_data=csv):
             dummy_file = '/dev/null'
             args = self.get_standalone_args()
             ruleset = counter.load_config(dummy_file, args)
@@ -213,7 +209,7 @@ class CounterTests(unittest.TestCase):
         row = self.csv_feat_row_dict.copy()
         csv = self.csv("features.csv", [row])
 
-        with patch('tiny.rna.configuration.open', mock_open(read_data=csv)) as conf:
+        with patch_open(read_data=csv) as conf:
             dummy_file = '/dev/null'
             args = self.get_pipeline_args()
             ruleset = counter.load_config(dummy_file, args)
@@ -230,7 +226,7 @@ class CounterTests(unittest.TestCase):
         row_diff_hierarchy = dict(row, Hierarchy=int(row["Hierarchy"]) + 1)
         csv = self.csv("features.csv", [row, row, row_diff_hierarchy])
 
-        with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
+        with patch_open(read_data=csv):
             dummy_filename = '/dev/null'
             args = self.get_standalone_args()
             ruleset = counter.load_config(dummy_filename, args)
@@ -245,7 +241,7 @@ class CounterTests(unittest.TestCase):
         row["nt5end"] = 'U'
         csv = self.csv("features.csv", [row])
 
-        with patch('tiny.rna.configuration.open', mock_open(read_data=csv)):
+        with patch_open(read_data=csv):
             dummy_file = '/dev/null'
             args = self.get_standalone_args()
             ruleset = counter.load_config(dummy_file, args)
@@ -260,15 +256,13 @@ class CounterTests(unittest.TestCase):
 
         # As a pipeline step
         args = self.get_pipeline_args()
-        with patch('tiny.rna.configuration.open', mock_open(read_data=csv)), \
-                patch('tiny.rna.configuration.shutil') as sh:
+        with patch_open(read_data=csv), patch('tiny.rna.configuration.shutil') as sh:
             ruleset1 = counter.load_config(dummy_file, args)
             sh.copyfile.assert_not_called()
 
         # As a standalone step
         args = self.get_standalone_args()
-        with patch('tiny.rna.configuration.open', mock_open(read_data=csv)), \
-                patch('tiny.rna.configuration.shutil') as sh:
+        with patch_open(read_data=csv), patch('tiny.rna.configuration.shutil') as sh:
             ruleset2 = counter.load_config(dummy_file, args)
             sh.copyfile.assert_called_once()
 

@@ -1,4 +1,5 @@
 import contextlib
+import csv
 import io
 import os
 import random
@@ -7,7 +8,7 @@ from unittest.mock import patch, mock_open, call
 
 from tiny.rna.configuration import Configuration, SamplesSheet, PathsFile, get_templates
 from unit_test_helpers import csv_factory, paths_template_file, make_paths_file
-from tiny.rna.util import r_reserved_keywords
+from tiny.rna.util import CSVReader, r_reserved_keywords
 
 
 def patch_isfile():
@@ -15,7 +16,20 @@ def patch_isfile():
 
 
 def patch_open(read_data):
-    return patch('tiny.rna.configuration.open', mock_open(read_data=read_data))
+    """Constructs a mock_open that supports rewinding read_data via seek(0)."""
+
+    def rewind(offset):
+        if offset == 0:
+            # Same as calling mock_open's function-scoped reset_data()
+            mopen.side_effect()
+        else:
+            # In order to support this we need access to _state in mock_open's function scope.
+            # There's a way to do that, but it's ugly and the patch isn't persistent.
+            raise ValueError("Patched mock_open.seek() only supports seek(0).")
+
+    mopen = mock_open(read_data=read_data)
+    mopen.return_value.seek.side_effect = rewind
+    return patch('builtins.open', mopen)
 
 
 class BowtieIndexesTests(unittest.TestCase):
@@ -597,6 +611,65 @@ class ConfigurationTests(unittest.TestCase):
             actual = config['run_directory']
             expected = output.format(ts=config.dt)
             self.assertEqual(actual, expected)
+
+    """Does CSVReader handle CSVs with other delimiters?
+    Adherence to RFC 4180 isn't strict in the wild. Delimiter can also be locale-dependent, 
+    e.g. if a locale's decimal separator is a comma, then the delimiter is likely to be 
+    converted to a semicolon when the user saves the file."""
+
+    def test_csv_reader_delimiter(self):
+        for doctype in CSVReader.tinyrna_sheet_fields.keys():
+            fieldnames = CSVReader.tinyrna_sheet_fields[doctype].keys()
+
+            for delimiter in csv.Sniffer().preferred:
+                csv_body = io.StringIO()
+                csv_writer = csv.DictWriter(csv_body, fieldnames=fieldnames, delimiter=delimiter)
+                test_row = {col: '.' for col in fieldnames}
+
+                csv_writer.writeheader()
+                csv_writer.writerow(test_row)
+
+                with patch_open(read_data=csv_body.getvalue()):
+                    csv_reader = CSVReader("/dev/null", doctype)
+                    read = list(csv_reader.rows())
+                    self.assertEqual(list(read[0].values()), list(test_row.values()))
+
+    """Does CSVReader raise an error if the CSV has a header but no body?"""
+
+    def test_csv_no_body(self):
+        for doctype in CSVReader.tinyrna_sheet_fields.keys():
+            fieldnames = CSVReader.tinyrna_sheet_fields[doctype].keys()
+
+            csv_body = io.StringIO()
+            csv_writer = csv.DictWriter(csv_body, fieldnames=fieldnames, delimiter=';')
+            csv_writer.writeheader()
+
+            with self.assertRaisesRegex(csv.Error, rf"{doctype} is empty"):
+                with patch_open(read_data=csv_body.getvalue()):
+                    csv_reader = CSVReader("/dev/null", doctype)
+                    next(csv_reader.rows())
+
+    """Does CSVReader raise an error if the CSV has a row with an unexpected column count?"""
+
+    def test_csv_column_count_consistency(self):
+        for doctype in CSVReader.tinyrna_sheet_fields.keys():
+            fieldnames = list(CSVReader.tinyrna_sheet_fields[doctype].keys())
+            test_rows = [
+                ['.' for _ in fieldnames[:-1]],         # Missing last column
+                ['.' for _ in [*fieldnames, "Extra"]]   # Extra column
+            ]
+
+            for test_row in test_rows:
+                csv_body = io.StringIO()
+                csv_writer = csv.writer(csv_body)
+
+                csv_writer.writerow(fieldnames)  # Header
+                csv_writer.writerow(test_row)
+
+                with self.assertRaisesRegex(csv.Error, rf"Inconsistent column count"):
+                    with patch_open(read_data=csv_body.getvalue()):
+                        csv_reader = CSVReader("/dev/null", doctype)
+                        list(csv_reader.rows())
 
 
 if __name__ == '__main__':

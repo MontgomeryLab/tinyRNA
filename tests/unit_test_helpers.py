@@ -14,7 +14,8 @@ import os
 
 from typing import List
 
-from tiny.rna.configuration import CSVReader, PathsFile
+from tiny.rna.configuration import PathsFile
+from tiny.rna.util import CSVReader
 
 rules_template = [{'Identity': ("*", "*"),
                    'Class': '',
