@@ -196,7 +196,7 @@ And this feature matched a rule in your Features Sheet defining _Classify as..._
 
 | Feature ID | Classifier | Feature Name     | Group1_rep_1 | Group1_rep_2 | ... |
 |------------|------------|------------------|--------------|--------------|-----|
-| 406904     | miRNA      | mir-1, hsa-miR-1 | 1234         | 999          | ... |
+| 406904     | miRNA      | hsa-miR-1, mir-1 | 1234         | 999          | ... |
 
 #### Normalized Counts
 If your Samples Sheet has settings for Normalization, an additional copy of the Feature Counts table is produced with the specified per-library normalizations applied. Note that these normalizations are [unrelated to normalization by genomic/feature hits](doc/Configuration.md#applying-custom-normalization).
