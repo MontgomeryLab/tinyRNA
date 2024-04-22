@@ -1,6 +1,7 @@
 import ruamel.yaml
 import argparse
 import shutil
+import pysam
 import errno
 import time
 import copy
@@ -723,6 +724,7 @@ class SamplesSheet:
             raise
 
         self.is_compatible_df = self.validate_deseq_compatibility(reps_per_group)
+        self.validate_samples_nonempty()
 
     def from_here(self, input_file):
         """Resolves .sam/.bam paths in pipeline startup and standalone context"""
@@ -768,6 +770,50 @@ class SamplesSheet:
         assert file not in self.hts_samples, \
             "Fastq files cannot be listed more than once in {selfname} (row {row_num})" \
             .format(selfname=self.basename, row_num=self.csv.row_num)
+
+    def validate_samples_nonempty(self):
+        """Checks that input sample files are non-empty.
+        This is done after reading the CSV so that all empty files
+        can be reported at once rather than stopping at the first."""
+
+        if self.context == "Pipeline Start":
+            self.validate_fastq_nonempty()
+        elif self.context in ("Standalone Run", "Pipeline Step"):
+            self.validate_alignments_nonempty()
+
+    def validate_alignments_nonempty(self):
+        """Checks that alignment files contain at least one alignment.
+        Since SAM/BAM files might have a header but no alignments,
+        we have to attempt parsing the first record rather than
+        simply checking for non-zero file size."""
+
+        empty = []
+        for i, file in enumerate(self.hts_samples):
+            try:
+                pysam_reader = pysam.AlignmentFile(file)
+                next(pysam_reader.head(1))
+            except StopIteration:
+                basename = os.path.basename(self.hts_samples[i])
+                group, rep = self.groups_reps[i]
+                empty.append(f"{basename} ({group} replicate {rep})")
+
+        assert not empty, \
+            "The following alignment files are empty:\n\t{files}" \
+            .format(files='\n\t'.join(empty))
+
+    def validate_fastq_nonempty(self):
+        """Checks that fastq files have a non-zero file size."""
+
+        empty = []
+        for i, file in enumerate(self.hts_samples):
+            if os.path.getsize(file) == 0:
+                basename = os.path.basename(self.hts_samples[i])
+                group, rep = self.groups_reps[i]
+                empty.append(f"{basename} ({group} replicate {rep})")
+
+        assert not empty, \
+            "The following files are empty:\n\t{files}" \
+            .format(files='\n\t'.join(empty))
 
     def validate_group_rep(self, group:str, rep:str):
         assert (group, rep) not in self.groups_reps, \
