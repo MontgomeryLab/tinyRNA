@@ -1,18 +1,36 @@
 import contextlib
+import unittest
+import shutil
+import random
 import csv
 import io
 import os
-import random
-import unittest
-from unittest.mock import patch, mock_open, call
+import re
+
+from unittest.mock import patch, mock_open, call, MagicMock
 
 from tiny.rna.configuration import Configuration, SamplesSheet, PathsFile, get_templates
 from unit_test_helpers import csv_factory, paths_template_file, make_paths_file
 from tiny.rna.util import CSVReader, r_reserved_keywords
 
+if __name__ == '__main__':
+    unittest.main()
 
-def patch_isfile():
-    return patch('tiny.rna.configuration.os.path.isfile', return_value=True)
+
+def patch_ospath(size=1):
+    """Returns a patch object that mocks os.path.isfile() and os.path.getsize().
+    All other method calls are passed through to the real os.path module."""
+
+    mock_path = MagicMock(wraps=os.path)
+    mock_path.configure_mock(**{
+        'isfile.return_value': True,
+        'getsize.return_value': size
+    })
+    return patch('tiny.rna.configuration.os.path', new=mock_path)
+
+
+def patch_pysam():
+    return patch('tiny.rna.configuration.pysam', autospec=True)
 
 
 def patch_open(read_data):
@@ -189,7 +207,7 @@ class SamplesSheetTests(unittest.TestCase):
         step_sheet =  csv_factory("samples.csv", [dict(r, File=f"{i}.sam")   for i, r in enumerate(rows)])
         run_sheet = step_sheet
 
-        with patch_isfile():
+        with patch_ospath(), patch_pysam():
             # Control condition should not be evaluated in Pipeline Step or Standalone Run context
             with patch_open(step_sheet):
                 SamplesSheet('mock_filename', context="Pipeline Step")
@@ -219,7 +237,7 @@ class SamplesSheetTests(unittest.TestCase):
 
         # Validation should take place in all contexts
         for context, sheet in contexts:
-            with self.assertRaisesRegex(AssertionError, exp_contains), patch_open(sheet), patch_isfile():
+            with self.assertRaisesRegex(AssertionError, exp_contains), patch_open(sheet), patch_ospath():
                 SamplesSheet('mock_filename', context=context)
 
     """Does SamplesSheet catch bad fastq entries in Pipeline Start context?"""
@@ -240,13 +258,13 @@ class SamplesSheetTests(unittest.TestCase):
 
         # Duplicate filename
         exp_contains = r".*(listed more than once).*\(row 2\)"
-        with self.assertRaisesRegex(AssertionError, exp_contains), patch_open(sheet), patch_isfile():
+        with self.assertRaisesRegex(AssertionError, exp_contains), patch_open(sheet), patch_ospath():
             SamplesSheet('mock_filename', context=context)
 
         # Bad file extension
         sheet = csv_factory("samples.csv", csv_rows[1:])  # remove duplicate entry
         exp_contains = r".*(\.fastq\(\.gz\) extension).*\(row 2\)"
-        with self.assertRaisesRegex(AssertionError, exp_contains), patch_open(sheet), patch_isfile():
+        with self.assertRaisesRegex(AssertionError, exp_contains), patch_open(sheet), patch_ospath():
             SamplesSheet('mock_filename', context=context)
 
     """Does SamplesSheet catch bad alignment file entries in Standalone Run context?"""
@@ -268,13 +286,13 @@ class SamplesSheetTests(unittest.TestCase):
 
         # Duplicate filename
         exp_contains = r".*(listed more than once).*\(row 2\)"
-        with self.assertRaisesRegex(AssertionError, exp_contains), patch_open(sheet), patch_isfile():
+        with self.assertRaisesRegex(AssertionError, exp_contains), patch_open(sheet), patch_ospath():
             SamplesSheet('mock_filename', context=context)
 
         # Bad file extension
         sheet = csv_factory("samples.csv", csv_rows[1:])  # remove duplicate entry
         exp_contains = r".*(\.sam or \.bam extension).*\(row 3\)"
-        with self.assertRaisesRegex(AssertionError, exp_contains), patch_open(sheet), patch_isfile():
+        with self.assertRaisesRegex(AssertionError, exp_contains), patch_open(sheet), patch_ospath():
             SamplesSheet('mock_filename', context=context)
 
     """Does validate_r_safe_sample_groups() detect group names that will cause namespace collisions in R?"""
@@ -312,7 +330,7 @@ class SamplesSheetTests(unittest.TestCase):
 
         # These SHOULD NOT throw an error
         for context, sheet in zip(self.contexts, [start_sheet, step_sheet, run_sheet]):
-            with patch_open(sheet), patch_isfile():
+            with patch_open(sheet), patch_ospath(), patch_pysam():
                 SamplesSheet("mock_filename", context=context)
 
         bad = [
@@ -330,7 +348,12 @@ class SamplesSheetTests(unittest.TestCase):
 
         # These SHOULD throw an error
         for context, sheet in zip(self.contexts, [start_sheet, step_sheet, run_sheet]):
-            with self.assertRaisesRegex(AssertionError, exp_contains), patch_open(sheet), patch_isfile():
+            with (
+                self.assertRaisesRegex(AssertionError, exp_contains),
+                patch_open(sheet),
+                patch_ospath(),
+                patch_pysam()
+            ):
                 SamplesSheet("mock_filename", context=context)
 
 
