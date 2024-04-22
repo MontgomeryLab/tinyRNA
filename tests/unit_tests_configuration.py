@@ -356,6 +356,42 @@ class SamplesSheetTests(unittest.TestCase):
             ):
                 SamplesSheet("mock_filename", context=context)
 
+    """If sam/bam files lack alignments, are all of these files reported?"""
+
+    def test_empty_alignments(self):
+        context = "Standalone Run"
+        res = "testdata/counter"
+        csv_rows = [
+            {'File': f'{res}/sam/single.sam', 'Group': 'G1', 'Replicate': '1', 'Control': True, 'Normalization': ''},  # Good
+            {'File': f'{res}/bam/single.bam', 'Group': 'G1', 'Replicate': '2', 'Control': True, 'Normalization': ''},  # Good
+            {'File': f'{res}/sam/empty.sam',  'Group': 'G1', 'Replicate': '3', 'Control': True, 'Normalization': ''},  # Bad
+            {'File': f'{res}/bam/empty.bam',  'Group': 'G1', 'Replicate': '4', 'Control': True, 'Normalization': ''},  # Bad
+        ]
+
+        sheet = csv_factory("samples.csv", csv_rows)
+        exp_contains = re.compile(r"empty\.sam.*\n\tempty\.bam", re.MULTILINE)
+        with self.assertRaisesRegex(AssertionError, exp_contains), patch_open(sheet):
+            SamplesSheet('mock_filename', context=context)
+
+        context = "Pipeline Step"
+        csv_rows = [
+            {'File': 'single.fastq', 'Group': 'G1', 'Replicate': '1', 'Control': True, 'Normalization': ''},  # Good
+            {'File': 'empty.fastq',  'Group': 'G2', 'Replicate': '2', 'Control': True, 'Normalization': ''},  # Bad
+        ]
+
+        try:
+            # We can't use patch_open() on Pysam; primitive file copy is necessary
+            for nameroot in ("single", "empty"):
+                shutil.copyfile(f'{res}/sam/{nameroot}.sam', f'./{nameroot}_aligned_seqs.sam')
+
+            sheet = csv_factory("samples.csv", csv_rows)
+            exp_contains = "empty_aligned_seqs.sam"
+            with self.assertRaisesRegex(AssertionError, exp_contains), patch_open(sheet):
+                SamplesSheet('mock_filename', context=context)
+        finally:
+            for nameroot in ("single", "empty"):
+                os.remove(f'{nameroot}_aligned_seqs.sam')
+
 
 class PathsFileTests(unittest.TestCase):
 
@@ -693,7 +729,3 @@ class ConfigurationTests(unittest.TestCase):
                     with patch_open(read_data=csv_body.getvalue()):
                         csv_reader = CSVReader("/dev/null", doctype)
                         list(csv_reader.rows())
-
-
-if __name__ == '__main__':
-    unittest.main()
