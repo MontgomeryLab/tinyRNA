@@ -93,12 +93,15 @@ class AlignmentReader:
         and whether the alignment has a query sequence and NM tag.
         The input file's header is written to the decollapsed output file if necessary."""
 
-        header = reader.header
-        first_aln = next(reader.head(1))
+        try:
+            first_aln = next(reader.head(1))
+        except StopIteration:
+            raise ValueError(f"Alignment file is empty ({self.basename}).")
 
         if first_aln.query_sequence is None:
             raise ValueError(f"Alignments must include the read sequence ({self.basename}).")
 
+        header = reader.header
         self._header = header
         self._header_dict = header.to_dict()  # performs header validation
         self._check_for_incompatible_order()
