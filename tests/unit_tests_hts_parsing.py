@@ -27,6 +27,7 @@ class AlignmentReaderTests(unittest.TestCase):
     def setUpClass(self):
         self.sam_file = f"{resources}/sam/identity_choice_test.sam"
         self.short_sam_file = f"{resources}/sam/single.sam"
+        self.empty_sam_file = f"{resources}/sam/empty.sam"
         self.short_sam = helpers.read(self.short_sam_file)
         self.short_bam_file = f"{resources}/bam/single.bam"
 
@@ -137,6 +138,17 @@ class AlignmentReaderTests(unittest.TestCase):
             reader._determine_collapser_type(qname)
             _, read_count = reader._new_bundle({'Name': qname})
             self.assertEqual(read_count, expected)
+
+    """Does AlignmentReader._gather_metadata() correctly report SAM files that lack alignments?"""
+
+    def test_AlignmentReader_empty_sam(self):
+        reader = AlignmentReader()
+        reader._assign_library(self.empty_sam_file)
+        sam_in = pysam.AlignmentFile(self.empty_sam_file)
+
+        message = rf"Alignment file is empty \({os.path.basename(self.empty_sam_file)}\)\."
+        with self.assertRaisesRegex(ValueError, message):
+            reader._gather_metadata(sam_in)
 
     """Does AlignmentReader._gather_metadata() correctly identify metadata and write the decollapsed file header?"""
 

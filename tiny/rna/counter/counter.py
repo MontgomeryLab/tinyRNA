@@ -262,6 +262,8 @@ def main():
         if type(e) is SystemExit: return
         traceback.print_exception(*sys.exc_info())
         if args['in_pipeline']:
+            # Print again to logfile (cwltool redirects stdout for tiny-count)
+            traceback.print_exception(*sys.exc_info(), file=sys.stdout)
             print("\n\ntiny-count encountered an error. Don't worry! You don't have to start over.\n"
                   "You can resume the pipeline at tiny-count. To do so:\n\t"
                   "1. cd into your Run Directory\n\t"

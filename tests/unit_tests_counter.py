@@ -4,7 +4,11 @@ import unittest
 from unittest.mock import patch
 
 import unit_test_helpers as helpers
-from unit_tests_configuration import patch_open, patch_isfile as patch_config_isfile
+from unit_tests_configuration import (
+    patch_open,
+    patch_ospath as patch_config_isfile,
+    patch_pysam as patch_config_pysam
+)
 
 import tiny.rna.counter.counter as counter
 from tiny.rna.util import ReadOnlyDict
@@ -111,7 +115,7 @@ class CounterTests(unittest.TestCase):
         mock_dir, mock_file = self.get_mock_samples_sheet_path()
         exp_file = ConfigBase.joinpath(mock_dir, inp_file)
 
-        with patch_open(read_data=csv), patch_config_isfile():
+        with patch_open(read_data=csv), patch_config_isfile(), patch_config_pysam():
             args = self.get_standalone_args()
             inputs_standalone = counter.load_samples(f"{mock_dir}/{mock_file}", args)
 
@@ -129,7 +133,7 @@ class CounterTests(unittest.TestCase):
         inp_root, _ = os.path.splitext(os.path.basename(inp_file))
         exp_file = f"{inp_root}_aligned_seqs.sam"
 
-        with patch_open(read_data=csv), patch_config_isfile():
+        with patch_open(read_data=csv), patch_config_isfile(), patch_config_pysam():
             args = self.get_pipeline_args()
             inputs_pipeline = counter.load_samples(f"{mock_dir}/{mock_file}", args)
 
