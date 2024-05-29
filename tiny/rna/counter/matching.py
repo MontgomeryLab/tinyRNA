@@ -89,27 +89,28 @@ class NtMatch(tuple):
 
 
 class NumericalMatch(frozenset):
-    """For evaluating sequence length against a list and/or range of desired values
+    """For evaluating numerical values against a list and/or range of desired values
 
     FeatureSelector will determine a match by checking the frozenset
     superclass's __contains__() function. Frozensets have
     marginally faster lookup for wider ranges of values.
     """
 
-    def __new__(cls, lengths):
-        cls.validate_definition(lengths)
+    def __new__(cls, values):
+        values = re.sub(r'\s+', '', values)  # Remove all whitespace
+        cls.validate_definition(values)
 
         # Supports intermixed lists and ranges
-        rule, lengths = lengths.split(','), []
+        rule, values = values.split(','), []
         for piece in rule:
             if '-' in piece:
                 for lo, hi in re.findall(r"(\d+)-(\d+)", piece):
-                    lengths.extend([*range(int(lo), int(hi) + 1)])
+                    values.extend([*range(int(lo), int(hi) + 1)])
             else:
-                lengths.append(int(piece))
+                values.append(int(piece))
 
         # Call frozenset superclass constructor
-        return super().__new__(cls, lengths)
+        return super().__new__(cls, values)
 
     @staticmethod
     def validate_definition(defn: str):
