@@ -57,6 +57,10 @@ def get_args() -> 'ReadOnlyDict':
                                help='Normalize counts by feature hits.')
     optional_args.add_argument('-vs', '--verify-stats', metavar='T/F', default='T',
                                help='Verify that all reported stats are internally consistent.')
+    optional_args.add_argument('-mp', '--mismatch-pattern', choices=['ADAR', 'TUT'], type=str.upper,
+                               help="Require a specific editing pattern for reads that contain mismatches.\n"
+                                    "• ADAR: A-to-I editing pattern (A -> G)\n"
+                                    "• TUT: 3' uridylation pattern (N -> U)\n")
     optional_args.add_argument('-dc', '--decollapse', action='store_true',
                                help='Create a decollapsed SAM copy of all files listed in your Samples Sheet. '
                                     'This option is ignored for non-collapsed inputs.')
