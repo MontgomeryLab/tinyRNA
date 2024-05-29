@@ -35,11 +35,12 @@ class AlignmentReader:
     def __init__(self, **prefs):
         self.decollapse = prefs.get("decollapse", False)
         self.out_prefix = prefs.get("out_prefix", None)
+        self.report_edit_details = prefs.get("mismatch_pattern") is not None
         self.collapser_type = None
+        self.expected_tags = ()
         self.references = []
         self.file_type = None
         self.basename = None
-        self.has_nm = None
         self.file = None
 
         self._collapser_token = None
@@ -58,7 +59,14 @@ class AlignmentReader:
 
         self._assign_library(file)
         self._gather_metadata(pysam_reader)
-        self._iter = AlignmentIter(pysam_reader, self.has_nm, self._decollapsed_callback, self._decollapsed_reads)
+        self._iter = AlignmentIter(
+            pysam_reader,
+            self.expected_tags,
+            self._decollapsed_callback,
+            self._decollapsed_reads,
+            self.report_edit_details
+        )
+
         bundle, read_count = self._new_bundle(next(self._iter))
 
         for aln in self._iter:
@@ -106,8 +114,14 @@ class AlignmentReader:
         self._header_dict = header.to_dict()  # performs header validation
         self._check_for_incompatible_order()
         self._determine_collapser_type(first_aln.query_name)
-        self.has_nm = first_aln.has_tag("NM")
+        self.expected_tags = tuple(tag for tag, _ in first_aln.get_tags())
         self.references = header.references
+
+        if "NM" not in self.expected_tags:
+            raise ValueError(f"Alignments must include the NM tag ({self.basename}).")
+
+        if "MD" not in self.expected_tags and self.report_edit_details:
+            raise ValueError(f"Alignments must include the MD tag for evaluating mismatch patterns ({self.basename}).")
 
         if self.decollapse:
             self._write_header_for_decollapsed_sam(str(header))
