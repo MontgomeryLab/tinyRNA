@@ -26,7 +26,7 @@ cdef class AlignmentIter:
             expected_tags: tuple,
             dc_callback: Callable,
             dc_queue: list,
-            detailed_mismatch: bint
+            detailed_mismatch: bint = False
     ):
         self.reader = pysam_reader
         self.references = pysam_reader.header.references
@@ -91,7 +91,9 @@ cdef class AlignmentIter:
     @staticmethod
     cdef int _get_mismatches_from_nm(AlignedSegment aln):               # aln.get_tag("NM")
         nm = bam_aux_get(aln._delegate, b"NM")
-        if nm == NULL: return 0  # Assume missing tag means NM:i:0
+        if nm == NULL:
+            raise ValueError("Alignment is missing a required MD tag.")
+
         return bam_aux2i(nm)
 
     @staticmethod
