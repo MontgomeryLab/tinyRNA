@@ -97,8 +97,10 @@ class NumericalMatch(frozenset):
     """
 
     def __new__(cls, values):
-        values = re.sub(r'\s+', '', values)  # Remove all whitespace
-        cls.validate_definition(values)
+        # Remove whitespace at start, end, "-", and ","
+        ws_around_delims = r'(\s*)([,\-])(\s*)'
+        cleaned = re.sub(ws_around_delims, r"\2", values.strip())
+        cls.validate_definition(cleaned, values)
 
         # Supports intermixed lists and ranges
         rule, values = values.split(','), []
@@ -113,9 +115,9 @@ class NumericalMatch(frozenset):
         return super().__new__(cls, values)
 
     @staticmethod
-    def validate_definition(defn: str):
-        assert re.match(r'(^\d+$)|^(\d+)([\d\-,]|(, +))*(\d|\1)$', defn) is not None, \
-            f'Invalid length selector: "{defn}"'
+    def validate_definition(cleaned: str, values: str):
+        assert re.match(r'^\d+(-\d+)?(,\d+(-\d+)?)*$', cleaned) is not None, \
+            f'Invalid length selector: "{values}"'
 
 
 class EditMatch(NumericalMatch):
@@ -228,7 +230,9 @@ class TutEditMatch(NumericalMatch):
 
         consecutive_3p_u = 0
         for md_3p_char, read_nt in zip(iter_3p_md, iter_read_md):
-            while md_3p_char == "0": md_3p_char = next(iter_3p_md)  # Mismatch bases are preceded/delimited/flanked by 0
+            while md_3p_char == "0":
+                md_3p_char = next(iter_3p_md)        # Mismatch bases are delimited and flanked by 0
+
             if md_3p_char.isdigit(): break           # End of terminal run is indicated by a digit (match)
             if md_3p_char == "^": return False       # Deletions automatically disqualify the alignment
             if read_nt != need_read_nt: break        # End of terminal run is indicated by a non-uridylation nucleotide
