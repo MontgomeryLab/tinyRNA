@@ -84,6 +84,17 @@ By default, tiny-count will increment feature counts by a normalized amount to a
 
 By default, tiny-count will increment feature counts by a normalized amount to avoid overcounting. Each sequence alignment locus is allocated a portion of the sequence's original read count (depending on `counter_normalize_by_genomic_hits`), and once selection is complete the allocated count is divided by the number of selected features, or _feature hits_, at the alignment. The resulting value is added to the totals for each matching feature. By disabling this normalization step, each selected feature will receive the full amount allocated to the locus rather than the normalized portion.
 
+### Mismatch Pattern
+| Run Config Key            | Commandline Argument            |
+|---------------------------|---------------------------------|
+| counter_mismatch_pattern: | `--mismatch-pattern {ADAR,TUT}` |
+
+Rules that define a mismatch requirement can be extended to require a specific edit pattern. Two choices are available for this parameter:
+- **ADAR**: all mismatches must follow the A → I edit pattern which is characteristic of the double-stranded RNA-specific adenosine deaminase (ADAR) enzyme family. Inosene is recognized as guanosine by reverse transcriptase and therefore represented as G when sequenced, so this pattern is represented as A → G in sequencing data.
+- **TUT**: all mismatches must follow the N → U edit pattern at the 3' terminus which is characteristic of the Terminal Uridylyl Transferase (TUT) enzyme family. Mismatches must be consecutive from the 3' end. Reverse transcription prior to sequencing means this pattern is represented as N → T in sequencing data.
+
+This option applies globally to all rules except those that lack a mismatch requirement. Rules without the requirement will continue to allow any number of mismatches following any edit pattern.
+
 ### Decollapse
 | Run Config Key      | Commandline Argument   |
 |---------------------|------------------------|
@@ -98,7 +109,7 @@ The SAM files produced by the tinyRNA pipeline are collapsed by default; alignme
 
 A custom Cython implementation of HTSeq's StepVector is used for finding features that overlap each alignment interval. While the core C++ component of the StepVector is the same, we have found that our Cython implementation can result in runtimes up to 50% faster than HTSeq's implementation. This parameter allows you to use HTSeq's StepVector if you wish.
 
-### Is Pipeline
+### In Pipeline
 | Run Config Key | Commandline Argument |
 |----------------|----------------------|
 |                | `--in-pipeline`      |
@@ -115,7 +126,8 @@ Diagnostic information will include intermediate alignment files for each librar
 ### Full tiny-count Help String
 ```
 tiny-count (-pf FILE | --get-templates) [-o PREFIX] [-ng T/F] [-nf T/F]
-                  [-vs T/F] [-dc] [-sv {Cython,HTSeq}] [-p] [-d]
+                  [-vs T/F] [-mp {ADAR,TUT}] [-dc] [-sv {Cython,HTSeq}] [-p]
+                  [-d]
 
 tiny-count is a precision counting tool for hierarchical classification and
 quantification of small RNA-seq reads
@@ -135,8 +147,7 @@ Optional arguments:
   argument mentioned above.
 
   -o PREFIX, --out-prefix PREFIX
-                        The output prefix to use for file names. (default:
-                        None)
+                        The output prefix to use for file names. (default: )
   -ng T/F, --normalize-by-genomic-hits T/F
                         Normalize counts by genomic hits. (default: T)
   -nf T/F, --normalize-by-feature-hits T/F
@@ -144,6 +155,12 @@ Optional arguments:
   -vs T/F, --verify-stats T/F
                         Verify that all reported stats are internally
                         consistent. (default: T)
+  -mp {ADAR,TUT}, --mismatch-pattern {ADAR,TUT}
+                        Require a specific editing pattern for reads that
+                          contain mismatches.
+                        • ADAR: A-to-I editing pattern (A -> G)
+                        • TUT: 3' uridylation pattern (N -> U)
+                         (default: None)
   -dc, --decollapse     Create a decollapsed SAM copy of all files listed in
                         your Samples Sheet. This option is ignored for non-
                         collapsed inputs. (default: False)
