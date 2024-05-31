@@ -180,9 +180,9 @@ class FeatureSelector:
             "nt5end": NtMatch,
             "Length": NumericalMatch,
             "Mismatch": {
-                None: EditMatch,
                 "ADAR": AdarEditMatch,
                 "TUT": TutEditMatch,
+                None: EditMatch,
             }[prefs.get("mismatch_pattern")],
             "Identity": lambda x:x
         }
