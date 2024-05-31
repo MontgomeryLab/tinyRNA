@@ -103,8 +103,8 @@ class MatchingTests(unittest.TestCase):
     """Does NumericalMatch properly validate the rule definition?"""
 
     def test_NumericalMatch_rule_validation(self):
-        good_defs = ["10", "10,11", "10-12", "12-14,   16", "1 -  2"]
-        bad_defs = [",5", "5 5", " "]
+        good_defs = ["10", "10,11", "1-1", "10-12", "1 -2 ", "12 -14,  16"]
+        bad_defs = [",5", "5 5", " ", "1-2-3"]
 
         for defn in good_defs:
             NumericalMatch(defn)
