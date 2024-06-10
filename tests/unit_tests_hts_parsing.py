@@ -11,6 +11,7 @@ from unittest.mock import patch, mock_open, call
 from tiny.rna.counter.features import FeatureSelector
 from tiny.rna.counter.matching import *
 from tiny.rna.counter.hts_parsing import *
+from tiny.rna.counter.parsing.alignments import _validate_alignment
 
 import unit_test_helpers as helpers
 
@@ -326,6 +327,24 @@ class AlignmentReaderTests(unittest.TestCase):
             reader._assign_library("mock_infile.sam")
             with self.assertRaisesRegex(ValueError, expected_error):
                 reader._check_for_incompatible_order()
+
+    """Does AlignmentIter reject alignments that contain unsupported CIGAR operators?"""
+
+    def test_AlignmentIter_incompatible_cigar_ops(self):
+        good = ["1M", "1D", "1I", "1=", "1X"]
+        bad = ["1N", "1S", "1H", "1P"]
+
+        header = pysam.AlignmentHeader()
+        test_aln = pysam.AlignedSegment(header)
+
+        for cigar in good:
+            test_aln.cigarstring = cigar
+            _validate_alignment(test_aln)
+
+        for cigar in bad:
+            test_aln.cigarstring = cigar
+            with self.assertRaisesRegex(ValueError, "not supported at this time"):
+                _validate_alignment(test_aln)
 
 
 class ReferenceFeaturesTests(unittest.TestCase):

@@ -67,15 +67,20 @@ class AlignmentReader:
             self.report_edit_details
         )
 
-        bundle, read_count = self._new_bundle(next(self._iter))
+        try:
+            bundle, read_count = self._new_bundle(next(self._iter))
 
-        for aln in self._iter:
-            if aln['Name'] != bundle[0]['Name']:
-                yield bundle, read_count
-                bundle, read_count = self._new_bundle(aln)
-            else:
-                bundle.append(aln)
-        yield bundle, read_count
+            for aln in self._iter:
+                if aln['Name'] != bundle[0]['Name']:
+                    yield bundle, read_count
+                    bundle, read_count = self._new_bundle(aln)
+                else:
+                    bundle.append(aln)
+            yield bundle, read_count
+        except Exception as e:
+            extended_msg = f" (record {self._iter.record_num} in {self.basename})"
+            append_to_exception(e, extended_msg)
+            raise
 
         if self.decollapse and len(self._decollapsed_reads):
             self._write_decollapsed_sam()
