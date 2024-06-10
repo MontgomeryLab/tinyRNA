@@ -2,7 +2,7 @@
 # cython: profile=False
 
 cimport cython
-from libc.stdint cimport uint32_t
+from libc.stdint cimport uint32_t, uint64_t
 from pysam.libcalignmentfile cimport AlignmentFile, AlignedSegment
 from pysam.libcalignedsegment cimport pysam_bam_get_qname, pysam_bam_get_cigar, pysam_get_n_cigar
 from pysam.libchtslib cimport (
@@ -22,7 +22,7 @@ cdef class AlignmentIter:
     cdef list dc_queue
     cdef bint detailed_mismatch
     cdef bint decollapse
-    cdef int record_num
+    cdef uint64_t record_num
 
 
     def __init__(
@@ -39,7 +39,7 @@ cdef class AlignmentIter:
         self.dc_callback = dc_callback
         self.dc_queue = dc_queue
         self.detailed_mismatch = detailed_mismatch
-        self.record_num = 0
+        self.record_num = 0LL
 
         if "NM" not in expected_tags:
             raise NotImplementedError("Alignments must include the NM tag.")
@@ -53,14 +53,13 @@ cdef class AlignmentIter:
         return self._next_alignment()
 
     cdef dict _next_alignment(self):
+        self.record_num += 1
         cdef:
             AlignedSegment aln = next(self.reader)                  # Equivalent Python API calls:
             int flag = aln._delegate.core.flag                          # aln.flag
             int start, length
             str seq, nt5, name
             bint strand
-
-        self.record_num += 1
 
         # Skip unmapped alignments
         while flag & BAM_FUNMAP:                                        # aln.is_unmapped
@@ -104,6 +103,10 @@ cdef class AlignmentIter:
         self.dc_queue.append(aln)
         if len(self.dc_queue) > 100_000:
             self.dc_callback()
+
+    @property
+    def record_number(self):
+        return self.record_num
 
 
 cdef int _get_mismatches_from_nm(AlignedSegment aln):                   # aln.get_tag("NM")

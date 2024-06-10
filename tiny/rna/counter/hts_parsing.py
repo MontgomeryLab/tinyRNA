@@ -78,7 +78,7 @@ class AlignmentReader:
                     bundle.append(aln)
             yield bundle, read_count
         except Exception as e:
-            extended_msg = f" (record {self._iter.record_num} in {self.basename})"
+            extended_msg = f"(record {self._iter.record_number} in {self.basename})"
             append_to_exception(e, extended_msg)
             raise
 
