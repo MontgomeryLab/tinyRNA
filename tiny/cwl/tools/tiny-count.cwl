@@ -28,7 +28,7 @@ inputs:
     inputBinding:
       prefix: --out-prefix
 
-  # Optional inputs
+  # === Optional inputs ===
 
   normalize_by_feature_hits:
     type: string?
@@ -39,6 +39,11 @@ inputs:
     type: string?
     inputBinding:
       prefix: --normalize-by-genomic-hits
+
+  mismatch_pattern:
+    type: string?
+    inputBinding:
+      prefix: --mismatch-pattern
 
   decollapse:
     type: boolean?
@@ -60,7 +65,7 @@ inputs:
     inputBinding:
       prefix: --report-diags
 
-  # The following optional inputs are for staging InitialWorkingDir files for pipeline execution
+  # === The following optional inputs are for staging InitialWorkingDir files for pipeline execution ===
 
   samples_csv:
     type: File

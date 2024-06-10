@@ -18,18 +18,27 @@ from tiny.rna.util import (
     add_transparent_help,
     get_timestamp,
     make_filename,
-    ReadOnlyDict
+    ReadOnlyDict,
+    SmartFormatter
 )
 
 # Global variables for multiprocessing
 counter: FeatureCounter
 
 
+# 1. Preserves newlines in help string
+# 2. Shows default values for each argument
+class TinyCountArgparseFormatter(
+    SmartFormatter,
+    argparse.ArgumentDefaultsHelpFormatter
+): ...
+
+
 def get_args() -> 'ReadOnlyDict':
     """Get input arguments from the user/command line."""
 
     arg_parser = argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        formatter_class=TinyCountArgparseFormatter,
         description=__doc__,
         add_help=False,
     )
@@ -57,6 +66,10 @@ def get_args() -> 'ReadOnlyDict':
                                help='Normalize counts by feature hits.')
     optional_args.add_argument('-vs', '--verify-stats', metavar='T/F', default='T',
                                help='Verify that all reported stats are internally consistent.')
+    optional_args.add_argument('-mp', '--mismatch-pattern', choices=['ADAR', 'TUT'], type=str.upper,
+                               help="R|Require a specific editing pattern for reads that contain mismatches.\n"
+                                    "• ADAR: A-to-I editing pattern (A -> G)\n"
+                                    "• TUT: 3' uridylation pattern (N -> T)\n")
     optional_args.add_argument('-dc', '--decollapse', action='store_true',
                                help='Create a decollapsed SAM copy of all files listed in your Samples Sheet. '
                                     'This option is ignored for non-collapsed inputs.')

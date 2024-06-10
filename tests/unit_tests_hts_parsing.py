@@ -11,6 +11,7 @@ from unittest.mock import patch, mock_open, call
 from tiny.rna.counter.features import FeatureSelector
 from tiny.rna.counter.matching import *
 from tiny.rna.counter.hts_parsing import *
+from tiny.rna.counter.parsing.alignments import _validate_alignment
 
 import unit_test_helpers as helpers
 
@@ -178,25 +179,27 @@ class AlignmentReaderTests(unittest.TestCase):
         self.assertEqual(reader.collapser_type, 'tiny-collapse')
         self.assertDictEqual(reader._header_dict, expected_header_dict)
         self.assertEqual(reader.references, ('I',))
-        self.assertTrue(reader.has_nm)
+        self.assertIn("NM", reader.expected_tags)
 
     """Does AlignmentReader._write_decollapsed_sam() write the correct number of duplicates to the decollapsed file?"""
 
     def test_AlignmentReader_write_decollapsed_sam(self):
         header = pysam.AlignmentHeader()
-        alignment = pysam.AlignedSegment(header)
-        alignment.query_name = "0_count=5"
+        alignment_in = pysam.AlignedSegment(header)
+        alignment_in.query_name = "0_count=5"
+        alignment_out = pysam.AlignedSegment(header)
+        alignment_out.query_name = "0_count"
 
         reader = AlignmentReader(decollapse=True)
         reader.collapser_type = "tiny-collapse"
         reader._collapser_token = "="
-        reader._decollapsed_reads = [alignment]
+        reader._decollapsed_reads = [alignment_in]
         reader._decollapsed_filename = "mock_outfile_name.sam"
 
         expected_writelines = [
             call('mock_outfile_name.sam', 'a'),
             call().__enter__(),
-            call().writelines([alignment.to_string() + '\n'] * 5),
+            call().writelines([alignment_out.to_string() + '\n'] * 5),
             call().__exit__(None, None, None)
         ]
 
@@ -220,8 +223,8 @@ class AlignmentReaderTests(unittest.TestCase):
             sam_in = pysam.AlignmentFile(reader.file)
             callback = reader._write_decollapsed_sam
             first_aln_offset = sam_in.tell()
-            has_nm = True
-            aln_iter = AlignmentIter(sam_in, has_nm, callback, buffer)
+            expected_tags = ("NM",)
+            aln_iter = AlignmentIter(sam_in, expected_tags, callback, buffer)
 
             # Add 100,000th alignment to the buffer
             self.exhaust_iterator(aln_iter)
@@ -324,6 +327,24 @@ class AlignmentReaderTests(unittest.TestCase):
             reader._assign_library("mock_infile.sam")
             with self.assertRaisesRegex(ValueError, expected_error):
                 reader._check_for_incompatible_order()
+
+    """Does AlignmentIter reject alignments that contain unsupported CIGAR operators?"""
+
+    def test_AlignmentIter_incompatible_cigar_ops(self):
+        good = ["1M", "1D", "1I", "1=", "1X"]
+        bad = ["1N", "1S", "1H", "1P"]
+
+        header = pysam.AlignmentHeader()
+        test_aln = pysam.AlignedSegment(header)
+
+        for cigar in good:
+            test_aln.cigarstring = cigar
+            _validate_alignment(test_aln)
+
+        for cigar in bad:
+            test_aln.cigarstring = cigar
+            with self.assertRaisesRegex(ValueError, "not supported at this time"):
+                _validate_alignment(test_aln)
 
 
 class ReferenceFeaturesTests(unittest.TestCase):

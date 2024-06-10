@@ -170,7 +170,7 @@ Examples:
 - **Mixed** <sup>§</sup>: `19, 21-23, 25-30` 
 
 <sup>†</sup> the `Strand` selector also supports `both`<br>
-<sup>§</sup> only supported by the `Length` selector
+<sup>§</sup> only supported by the `Mismatches` and `Length` selectors
 
 ### Case Sensitivity
 All selectors are case-insensitive.

@@ -103,7 +103,7 @@ class FeatureSelector:
     inv_ident: Dict[tuple, List[int]]
 
     def __init__(self, rules: List[dict], **prefs):
-        FeatureSelector.rules_table = self.build_selectors(rules)
+        FeatureSelector.rules_table = self.build_selectors(rules, **prefs)
         FeatureSelector.inv_ident = self.build_inverted_identities(FeatureSelector.rules_table)
         self.warnings = defaultdict(set)
         self.overlap_cache = {}
@@ -138,7 +138,7 @@ class FeatureSelector:
         hits = [(rank, rule, feat, strand)
                 for feat, strand, matches in candidates
                 for rule, rank, iv_match, nm_match in matches
-                if alignment in iv_match and alignment['NM'] in nm_match]
+                if alignment in iv_match and alignment in nm_match]
 
         if not hits: return {}
         hits.sort(key=lambda x: x[0])
@@ -160,7 +160,7 @@ class FeatureSelector:
         return selections
 
     @staticmethod
-    def build_selectors(rules_table) -> List[dict]:
+    def build_selectors(rules_table, **prefs) -> List[dict]:
         """Builds single/list/range/wildcard membership-matching selectors.
 
         Applies to: strand, 5' end nucleotide, length, and identities containing wildcards
@@ -179,7 +179,11 @@ class FeatureSelector:
             "Strand": StrandMatch,
             "nt5end": NtMatch,
             "Length": NumericalMatch,
-            "Mismatch": NumericalMatch,
+            "Mismatch": {
+                "ADAR": AdarEditMatch,
+                "TUT": TutEditMatch,
+                None: EditMatch,
+            }[prefs.get("mismatch_pattern")],
             "Identity": lambda x:x
         }
 

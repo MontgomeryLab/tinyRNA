@@ -226,6 +226,9 @@ counter_normalize_by_feature_hits: True
 ##-- If True: a decollapsed copy of each SAM file will be produced (useful for IGV) --##
 counter_decollapse: False
 
+##-- Require a specific edit pattern for mismatches. Choices: ADAR, TUT. Default: None --##
+counter_mismatch_pattern:
+
 ##-- Select the StepVector implementation that is used. Options: HTSeq or Cython --##
 counter_stepvector: 'Cython'
 

@@ -87,6 +87,7 @@ inputs:
   counter_diags: boolean?
   counter_decollapse: boolean?
   counter_stepvector: string?
+  counter_mismatch_pattern: string?
   counter_normalize_by_feature_hits: boolean?
   counter_normalize_by_genomic_hits: boolean?
 
@@ -221,6 +222,7 @@ steps:
       normalize_by_genomic_hits:
         source: counter_normalize_by_genomic_hits
         valueFrom: $(String(self))  # convert boolean -> string
+      mismatch_pattern: counter_mismatch_pattern
       decollapse: counter_decollapse
       stepvector: counter_stepvector
       in_pipeline: {default: true}

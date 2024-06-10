@@ -89,32 +89,160 @@ class NtMatch(tuple):
 
 
 class NumericalMatch(frozenset):
-    """For evaluating sequence length against a list and/or range of desired values
+    """For evaluating numerical values against a list and/or range of desired values
 
     FeatureSelector will determine a match by checking the frozenset
     superclass's __contains__() function. Frozensets have
     marginally faster lookup for wider ranges of values.
     """
 
-    def __new__(cls, lengths):
-        cls.validate_definition(lengths)
+    def __new__(cls, values):
+        # Remove whitespace at start, end, "-", and ","
+        ws_around_delims = r'(\s*)([,\-])(\s*)'
+        cleaned = re.sub(ws_around_delims, r"\2", values.strip())
+        cls.validate_definition(cleaned, values)
 
         # Supports intermixed lists and ranges
-        rule, lengths = lengths.split(','), []
+        rule, values = values.split(','), []
         for piece in rule:
             if '-' in piece:
                 for lo, hi in re.findall(r"(\d+)-(\d+)", piece):
-                    lengths.extend([*range(int(lo), int(hi) + 1)])
+                    values.extend([*range(int(lo), int(hi) + 1)])
             else:
-                lengths.append(int(piece))
+                values.append(int(piece))
 
         # Call frozenset superclass constructor
-        return super().__new__(cls, lengths)
+        return super().__new__(cls, values)
 
     @staticmethod
-    def validate_definition(defn: str):
-        assert re.match(r'(^\d+$)|^(\d+)([\d\-,]|(, +))*(\d|\1)$', defn) is not None, \
-            f'Invalid length selector: "{defn}"'
+    def validate_definition(cleaned: str, values: str):
+        assert re.match(r'^\d+(-\d+)?(,\d+(-\d+)?)*$', cleaned) is not None, \
+            f'Invalid length selector: "{values}"'
+
+
+class EditMatch(NumericalMatch):
+    """Evaluates that the edit distance reported in the alignment
+    dictionary's NM field is within the desired range of values."""
+
+    def __new__(cls, values):
+        return super().__new__(cls, values)
+
+    def __contains__(self, alignment):
+        return super().__contains__(alignment['NM'])
+
+
+class AdarEditMatch(NumericalMatch):
+    """Evaluates whether the alignment's mismatches are A -> G from ADAR enzyme editing.
+    The count of A -> G mismatches must exactly equal the edit distance reported in the
+    NM tag. Any other mismatches, including insertions and deletions, are disqualifying.
+    """
+
+    def __new__(cls, lengths):
+        return super().__new__(cls, lengths)
+
+    def __contains__(self, alignment):
+        """Method for evaluating ADAR edit pattern.
+
+        Args:
+            alignment: a dictionary with information from the alignment's SAM record, with fields:
+              - "Seq": The alignment's SEQ field, which is always 5' -> 3' regardless of strand
+              - "NM": the edit distance between the aligned sequence and reference sequence.
+              - "MD": the MD tag for determining reference bases
+              - "Strand": True for (+) strand, False if (-) strand
+
+        Returns: True if the A -> G mismatch count is equal to the NM value.
+        """
+
+        # Check that NM is in the desired range
+        if not super().__contains__(alignment['NM']):
+            return False
+
+        nm, md = alignment['NM'], alignment['MD']
+        read_seq = alignment['Seq']
+        strand = alignment['Strand']
+
+        # Tokenize the MD tag into match/mismatch runs
+        md_ops = re.findall(r"\d+|\D+", md)
+
+        # Account for SEQ aligned to reverse strand
+        need_ref_nt = "A" if strand is True else "T"
+        need_read_nt = "G" if strand is True else "C"
+
+        read_pos, total_mm = 0, 0
+        for run in md_ops:
+            if run == "0":
+                continue
+            try:
+                # op is a run of matches
+                run = int(run)
+                read_pos += run
+            except ValueError:
+                # op is a mismatch or run of deletions
+                for reference_nt in run:
+                    if reference_nt != need_ref_nt: return False
+                    if read_seq[read_pos] != need_read_nt: return False
+
+                    total_mm += 1
+                    read_pos += 1
+
+        # nm > total_mm if the read contains insertions
+        return total_mm == nm
+
+
+class TutEditMatch(NumericalMatch):
+    """Evaluates whether the alignment's mismatches are due to 3' terminal uridylation.
+    The uridylation mismatch count must exactly match the edit distance reported in the
+    NM tag. Any other mismatches, including insertions and deletions, are disqualifying.
+    """
+
+    def __new__(cls, values):
+        return super().__new__(cls, values)
+
+    def __contains__(self, alignment: dict):
+        """Method for evaluating TUT edit pattern.
+
+        Args:
+            alignment: a dictionary with information from the alignment's SAM record, with fields:
+              - "Seq": The alignment's SEQ field, which is always 5' -> 3' regardless of strand
+              - "NM": the edit distance between the aligned sequence and reference sequence.
+              - "MD": the MD tag for determining reference bases
+              - "Strand": True for (+) strand, False if (-) strand
+
+        Returns: True if the 3' terminal uridylation mismatch count is equal to the NM value.
+        """
+
+        # Check that NM is in the desired range
+        if not super().__contains__(alignment['NM']):
+            return False
+
+        nm, md = alignment['NM'], alignment['MD']
+        strand = alignment['Strand']
+        read_seq = alignment['Seq']
+
+        # Iteration direction and read NT depend on strand
+        # since SEQ, MD, and reference are always 5' -> 3'
+        if strand is True:
+            iter_3p_md = reversed(md)
+            iter_read_md = reversed(read_seq)
+            need_read_nt = "T"  # DNA
+        else:
+            iter_3p_md = iter(md)
+            iter_read_md = read_seq
+            need_read_nt = "A"  # DNA
+
+        consecutive_3p_u = 0
+        for md_3p_char, read_nt in zip(iter_3p_md, iter_read_md):
+            while md_3p_char == "0":
+                md_3p_char = next(iter_3p_md)        # Mismatch bases are delimited and flanked by 0
+
+            if md_3p_char.isdigit(): break           # End of terminal run is indicated by a digit (match)
+            if md_3p_char == "^": return False       # Deletions automatically disqualify the alignment
+            if read_nt != need_read_nt: break        # End of terminal run is indicated by a non-uridylation nucleotide
+
+            consecutive_3p_u += 1
+
+        # nm == consecutive_3p_u if mismatches are only from 3' terminal uridylation
+        return consecutive_3p_u == nm
 
 
 # Used in IntervalSelector

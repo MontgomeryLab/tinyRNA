@@ -103,8 +103,8 @@ class MatchingTests(unittest.TestCase):
     """Does NumericalMatch properly validate the rule definition?"""
 
     def test_NumericalMatch_rule_validation(self):
-        good_defs = ["10", "10,11", "10-12", "12-14,   16"]
-        bad_defs = [",5", "5 5", " "]
+        good_defs = ["10", "10,11", "1-1", "10-12", "1 -2 ", "12 -14,  16"]
+        bad_defs = [",5", "5 5", " ", "1-2-3"]
 
         for defn in good_defs:
             NumericalMatch(defn)
@@ -141,6 +141,103 @@ class MatchingTests(unittest.TestCase):
 
         with self.assertRaisesRegex(IllegalShiftError, "negative start interval"):
             IntervalSelector.get_shifted_interval("-1, 0", iv)
+
+    """Does AdarEditMatch work as expected?"""
+
+    def test_AdarEditMatch(self):
+        good_alns = [                                                  # Reference Sequence:
+            {'Seq': "G",    'Strand': True,  'MD': "0A0",     'NM': 1},  # A (+)
+            {'Seq': "C",    'Strand': False, 'MD': "0T0",     'NM': 1},  # A (-)
+            {'Seq': "GGG",  'Strand': True,  'MD': "0A0A0A0", 'NM': 3},  # AAA (+)
+            {'Seq': "CCC",  'Strand': False, 'MD': "0T0T0T0", 'NM': 3},  # AAA (-)
+            {'Seq': "GTGC", 'Strand': True,  'MD': "0A3",     'NM': 1},  # ATGC (+)
+            {'Seq': "GCAC", 'Strand': False, 'MD': "3T0",     'NM': 1},  # ATGC (-)
+        ]
+
+        bad_alns = [                                                   # Problem:
+            {'Seq': "G",    'Strand': True,  'MD': "1",       'NM': 0},  # No mismatch (+)
+            {'Seq': "C",    'Strand': False, 'MD': "1",       'NM': 0},  # No mismatch (-)
+            {'Seq': "G",    'Strand': True,  'MD': "0T0",     'NM': 1},  # Mismatch, but not from A (+)
+            {'Seq': "C",    'Strand': False, 'MD': "0A0",     'NM': 1},  # Mismatch, but not from A (-)
+            {'Seq': "C",    'Strand': True,  'MD': "0T0",     'NM': 1},  # A -> G but wrong strand (+)
+            {'Seq': "G",    'Strand': False, 'MD': "0A0",     'NM': 1},  # A -> G but wrong strand (-)
+            {'Seq': "GTGC", 'Strand': True,  'MD': "4",       'NM': 0},  # No mismatch (+)
+            {'Seq': "GCAC", 'Strand': False, 'MD': "4",       'NM': 0},  # No mismatch (-)
+            {'Seq': "GTGC", 'Strand': True,  'MD': "0A2T0",   'NM': 2},  # Mismatch from A and other (+)
+            {'Seq': "GCAC", 'Strand': False, 'MD': "0A2T0",   'NM': 2},  # Mismatch from A and other (-)
+            {'Seq': "G",    'Strand': True,  'MD': "0A0^T0",  'NM': 2},  # Mismatch from A and deletion (+)
+            {'Seq': "C",    'Strand': False, 'MD': "0T0^C0",  'NM': 2},  # Mismatch from A and deletion (-)
+        ]
+
+        # Test range
+        try:
+            range_match = AdarEditMatch("1-3")
+            for aln in good_alns:
+                self.assertTrue(aln in range_match)
+            for aln in bad_alns:
+                self.assertFalse(aln in range_match)
+        except Exception as e:
+            print("Failing alignment: \n" + str(aln))
+            raise e
+
+        # Test single value
+        val_match_lo = AdarEditMatch("1")
+        val_match_hi = AdarEditMatch("3")
+        aln_lo, aln_hi = good_alns[0], good_alns[2]
+        self.assertTrue(aln_lo['NM'] == 1 and aln_hi['NM'] == 3)  # sanity check
+        self.assertTrue(aln_lo in val_match_lo and aln_lo not in val_match_hi)
+        self.assertTrue(aln_hi in val_match_hi and aln_hi not in val_match_lo)
+
+    """Does TutEditMatch work as expected?"""
+
+    def test_TutEditMatch(self):
+        good_alns = [                                                  # Reference Sequence:
+            {'Seq': "T",    'Strand': True,  'MD': "0G0",     'NM': 1},  # G (+)
+            {'Seq': "A",    'Strand': False, 'MD': "0C0",     'NM': 1},  # C (-)
+            {'Seq': "TTT",  'Strand': True,  'MD': "0C0C0A0", 'NM': 3},  # CCA (+)
+            {'Seq': "AAA",  'Strand': False, 'MD': "0G0C0T0", 'NM': 3},  # AGC (-)
+            {'Seq': "ATTT", 'Strand': True,  'MD': "2C0C0",   'NM': 2},  # ATCC (+)
+            {'Seq': "AAGC", 'Strand': False, 'MD': "0G3",     'NM': 1},  # GCTC (-)
+        ]
+
+        bad_alns = [                                                   # Problem:
+            {'Seq': "T",    'Strand': True,  'MD': "1",       'NM': 0},  # No mismatch (+)
+            {'Seq': "A",    'Strand': False, 'MD': "1",       'NM': 0},  # No mismatch (-)
+            {'Seq': "G",    'Strand': True,  'MD': "0T0",     'NM': 1},  # Mismatch, but not to U (+)
+            {'Seq': "G",    'Strand': False, 'MD': "0A0",     'NM': 1},  # Mismatch, but not to U (-)
+            {'Seq': "A",    'Strand': True,  'MD': "0G0",     'NM': 1},  # N -> U but wrong strand (+)
+            {'Seq': "T",    'Strand': False, 'MD': "0G0",     'NM': 1},  # N -> U but wrong strand (-)
+            {'Seq': "GTGC", 'Strand': True,  'MD': "4",       'NM': 0},  # No mismatch (+)
+            {'Seq': "GCAC", 'Strand': False, 'MD': "4",       'NM': 0},  # No mismatch (-)
+            {'Seq': "GTTT", 'Strand': True,  'MD': "0T1G0A0", 'NM': 3},  # Mismatch to U and other (+)
+            {'Seq': "AAAG", 'Strand': False, 'MD': "0C2T0",   'NM': 2},  # Mismatch to U and other (-)
+            {'Seq': "T",    'Strand': True,  'MD': "0C0^T0",  'NM': 2},  # Mismatch to U and deletion (+)
+            {'Seq': "A",    'Strand': False, 'MD': "0G0^A0",  'NM': 2},  # Mismatch to U and deletion (-)
+        ]
+
+        # Test range
+        try:
+            range_match = TutEditMatch("1-3")
+            for aln in good_alns:
+                self.assertTrue(aln in range_match)
+            for aln in bad_alns:
+                self.assertFalse(aln in range_match)
+        except Exception as e:
+            print("Failing alignment: \n" + str(aln))
+            raise e
+
+        # Test single value
+        val_match_lo = TutEditMatch("1")
+        val_match_hi = TutEditMatch("3")
+        aln_lo, aln_hi = good_alns[0], good_alns[2]
+        self.assertTrue(aln_lo['NM'] == 1 and aln_hi['NM'] == 3)
+        self.assertTrue(aln_lo in val_match_lo and aln_lo not in val_match_hi)
+        self.assertTrue(aln_hi in val_match_hi and aln_hi not in val_match_lo)
+
+        # Test terminal run of desired length, but below mismatch threshold
+        tricky = TutEditMatch("3")
+        self.assertTrue(good_alns[4]['Seq'] == "ATTT" and good_alns[4]['NM'] == 2)
+        self.assertFalse(good_alns[4] in tricky)
 
 
 if __name__ == '__main__':
