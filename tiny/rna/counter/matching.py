@@ -170,6 +170,8 @@ class AdarEditMatch(NumericalMatch):
 
         read_pos, total_mm = 0, 0
         for run in md_ops:
+            if run == "0":
+                continue
             try:
                 # op is a run of matches
                 run = int(run)
