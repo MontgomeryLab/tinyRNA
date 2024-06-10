@@ -27,7 +27,7 @@ class LibraryStats:
 
     def __init__(self, features, **prefs):
         self.library = {'Name': 'Unassigned', 'File': 'Unassigned', 'Norm': '1'}
-        self.diags = Diagnostics(features) if prefs.get('report_diags') else None
+        self.diags = Diagnostics(features, prefs) if prefs.get('report_diags') else None
         self.norm_gh = prefs.get('normalize_by_genomic_hits', True)
         self.norm_fh = prefs.get('normalize_by_feature_hits', True)
 
@@ -622,11 +622,16 @@ class Diagnostics:
     complement = bytes.maketrans(b'ACGTacgt', b'TGCAtgca')
     map_strand = {True: '+', False: '-', None: '.'}
 
-    def __init__(self, Features_obj):
+    def __init__(self, Features_obj, prefs):
         self.assignment_diags = {stat: 0 for stat in Diagnostics.summary_categories}
         self.selection_diags = defaultdict(Counter)
         self.aliases = Features_obj.aliases
         self.alignments = []
+
+        if prefs.get('mismatch_pattern') is not None:
+            self._get_mismatches = self._format_nm_and_md_tags
+        else:
+            self._get_mismatches = self._format_nm_tag
 
     def record_assignments(self, assignments, alignment, bundle, n_candidates):
         self.record_alignment_details(assignments, alignment, bundle, n_candidates)
@@ -654,7 +659,7 @@ class Diagnostics:
         feat_aliases = '; '.join(f"({aliases})" for aliases in feat_aliases)
 
         counts = (bundle['read_count'], bundle['corr_count'], bundle['loci_count'])
-        pos = (aln['Chrom'], strand, aln['Start'] + 1, aln['End'], aln['NM'])
+        pos = (aln['Chrom'], strand, aln['Start'] + 1, aln['End'], self._get_mismatches(aln))
         row = (seq, *counts, *pos, n_candidates, feature_hits, feat_aliases)
 
         self.alignments.append(row)
@@ -671,6 +676,14 @@ class Diagnostics:
                 self.assignment_diags['No feature counts'] += bundle['corr_count']
             else:
                 self.assignment_diags['Eliminated counts'] += bundle['corr_count']
+
+    @staticmethod
+    def _format_nm_tag(aln):
+        return aln['NM']
+
+    @staticmethod
+    def _format_nm_and_md_tags(aln):
+        return f"{aln['NM']} (MD:{aln['MD']})"
 
 
 class MergedDiags(MergedStat):
