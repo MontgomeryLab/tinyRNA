@@ -123,7 +123,7 @@ class AlignmentReader:
         self.references = header.references
 
         if "NM" not in self.expected_tags:
-            raise ValueError(f"Alignments must include the NM tag ({self.basename}).")
+            raise NotImplementedError(f"Alignments must include the NM tag ({self.basename}).")
 
         if "MD" not in self.expected_tags and self.report_edit_details:
             raise ValueError(f"Alignments must include the MD tag for evaluating mismatch patterns ({self.basename}).")
