@@ -28,7 +28,19 @@ tinyRNA is a set of tools to simplify the analysis of next-generation sequencing
 
 ## tinyRNA Installation
 
-### Stable Releases
+### Development Releases
+This option provides the latest features but stable releases are more rigorously tested.
+The latest development release addresses installation issues related to Apple Silicon–based systems.
+```shell
+# Clone the repository into a local directory
+ git clone https://github.com/MontgomeryLab/tinyrna.git
+ cd tinyrna
+
+# Install the tinyrna environment and dependencies
+ ./setup.sh
+```
+
+### Stable Releases (Installation issues may arise when installing on Apple Silicon–based systems)
 1. Download the latest release from the [releases link](https://github.com/MontgomeryLab/tinyRNA/releases) on the sidebar
 2. Decompress the archive and navigate to the resulting directory in your terminal
 3. Run `./setup.sh` to install the project and its dependencies in a conda environment named "tinyrna"
@@ -38,17 +50,6 @@ tinyRNA is a set of tools to simplify the analysis of next-generation sequencing
   - Press "q" if you find yourself trapped on the license page
   - We recommend answering "yes" to running `conda init`
 - A custom environment name can be passed as the first argument to `setup.sh`
-
-### Development Releases
-This option provides the latest features but stable releases are more rigorously tested.
-```shell
-# Clone the repository into a local directory
- git clone https://github.com/MontgomeryLab/tinyrna.git
- cd tinyrna
-
-# Install the tinyrna environment and dependencies
- ./setup.sh
-```
 
 ### Updating an Existing Installation
 When it's time to update your installation of tinyRNA, simply repeat the procedure you used for installation. Note that the existing Conda environment, including any additional packages you may have installed within it, will be removed by the installation script.

@@ -6,9 +6,10 @@
 
 env_name=${1:-tinyrna}
 miniconda_version="25.1.1-2"
-cwd="$(dirname "$0")"
+cwd="$(cd "$(dirname "$0")" && pwd -P)"
 export ts=$(date +%Y-%m-%d_%H-%M-%S) && readonly ts
-
+# Ensure common Conda locations are discoverable before detection/bootstrapping
+export PATH="/opt/homebrew/bin:/usr/local/bin:${HOME}/.local/bin:${HOME}/bin:${HOME}/miniconda3/bin:${HOME}/anaconda3/bin:${HOME}/miniforge3/bin:${HOME}/mambaforge/bin:${HOME}/opt/miniconda3/bin:${HOME}/opt/anaconda3/bin:${PATH}"
 # This is the default Python version that will be used by Miniconda (if installation of Miniconda is required).
 # Note that this isn't the same as the tinyRNA environment's Python version.
 # The tinyRNA environment's Python version is instead specified in the platform lockfile.
@@ -17,6 +18,57 @@ miniconda_python_version="310"
 
 ######------------------------------ HELPER FUNCTIONS -------------------------------######
 
+
+# Ensure `conda activate` works reliably inside this non-interactive script.
+function conda_bootstrap() {
+  local conda_exe conda_root conda_sh
+
+  # micromamba doesn't use conda.sh like conda/mamba; use the hook
+  if [[ "${CONDA:-conda}" == "micromamba" ]]; then
+    conda_exe="${MICROMAMBA_EXE:-$(type -P micromamba 2>/dev/null)}"
+    [[ -n "$conda_exe" && -x "$conda_exe" ]] || return 1
+    eval "$("$conda_exe" shell hook -s bash)" || return 1
+    return 0
+  fi
+
+  # Prefer conda for locating base
+  conda_exe="$(type -P conda 2>/dev/null)" || conda_exe="$(type -P "${CONDA:-conda}" 2>/dev/null)" || return 1
+  conda_root="$("$conda_exe" info --base 2>/dev/null)" || return 1
+  conda_sh="${conda_root}/etc/profile.d/conda.sh"
+
+  if [[ -f "$conda_sh" ]]; then
+    # shellcheck disable=SC1090
+    source "$conda_sh"
+    return 0
+  fi
+
+  return 1
+}
+
+# Configure build environment for pip-installed native extensions on macOS.
+# Forces use of the system Apple clang toolchain and an older deployment target
+# to avoid compilation failures (e.g. _Float16 errors) caused by Conda compiler
+# wrappers and newer macOS SDK headers. This affects build-time behavior only
+# and does not modify the Conda environment or lockfile contents.
+function configure_build_env() {
+  status "Configuring build environment"
+
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    # Force an x86_64-safe macOS SDK surface.
+    # Prevents _Float16 errors when building pip extensions on newer macOS SDKs.
+    export MACOSX_DEPLOYMENT_TARGET=10.15
+    export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
+
+    export CC="/usr/bin/clang"
+    export CXX="/usr/bin/clang++"
+
+    export CFLAGS="-mmacosx-version-min=${MACOSX_DEPLOYMENT_TARGET}"
+    export CXXFLAGS="-mmacosx-version-min=${MACOSX_DEPLOYMENT_TARGET}"
+    export LDFLAGS="-mmacosx-version-min=${MACOSX_DEPLOYMENT_TARGET}"
+
+    status "macOS build target set to ${MACOSX_DEPLOYMENT_TARGET}"
+  fi
+}
 
 function success() {
   local check="✓"
@@ -52,15 +104,36 @@ function stop() {
 # rather than stopping current task and proceeding to the next
 trap 'stop' SIGINT
 
+function ensure_conda_on_path() {
+  local target_user target_home
+  target_user="${SUDO_USER:-$USER}"
+
+  if command -v getent >/dev/null 2>&1; then
+    target_home="$(getent passwd "$target_user" | cut -d: -f6)"
+  else
+    target_home="$HOME"
+  fi
+  export CONDA_TARGET_HOME="$target_home"
+
+  # If conda is already visible, do nothing
+  if command -v conda >/dev/null 2>&1 || command -v mamba >/dev/null 2>&1 || command -v micromamba >/dev/null 2>&1; then
+    return 0
+  fi
+
+  export PATH="/opt/homebrew/bin:/usr/local/bin:${target_home}/.local/bin:${target_home}/bin:${target_home}/miniconda3/bin:${target_home}/anaconda3/bin:${target_home}/miniforge3/bin:${target_home}/mambaforge/bin:/opt/conda/bin:${PATH}"
+}
+
 function get_host_conda_command() {
-  if command -v conda > /dev/null 2>&1; then
+  if [[ -n "${MICROMAMBA_EXE:-}" && -x "${MICROMAMBA_EXE:-}" ]]; then
+    echo "micromamba"
+  elif command -v conda > /dev/null 2>&1; then
     echo "conda"
   elif command -v mamba > /dev/null 2>&1; then
     echo "mamba"
   elif command -v micromamba > /dev/null 2>&1; then
     echo "micromamba"
   else
-    return 1  # installation is required
+    return 1
   fi
 }
 
@@ -88,17 +161,17 @@ function get_shell_rcfile() {
 
 function get_shell_hook() {
   local shell_current="$1"
-  if [[ $CONDA == "conda" ]]; then
-    $CONDA shell."$shell_current" hook
-  elif [[ $CONDA == "mamba" || $CONDA == "micromamba" ]]; then
-    $CONDA shell hook -s "$shell_current"
+  if [[ "$CONDA" == "conda" ]]; then
+    "$CONDA" shell."$shell_current" hook
+  elif [[ "$CONDA" == "mamba" || "$CONDA" == "micromamba" ]]; then
+    "$CONDA" shell hook -s "$shell_current"
   fi
 }
 
 function get_init_block_regex() {
-  if [[ $CONDA == "conda" ]]; then
+  if [[ "$CONDA" == "conda" ]]; then
     echo '/^# >>> conda initialize >>>/,/^# <<< conda initialize <<</p'
-  elif [[ $CONDA == "mamba" || $CONDA == "micromamba" ]]; then
+  elif [[ "$CONDA" == "mamba" || "$CONDA" == "micromamba" ]]; then
     echo '/^# >>> mamba initialize >>>/,/^# <<< mamba initialize <<</p'
   fi
 }
@@ -123,15 +196,26 @@ function download_and_install_miniconda() {
     fail "Miniconda download failed"
     stop
   fi
+  
+  # Ensure freshly-installed Miniconda is discoverable in this script.
+  export PATH="${CONDA_TARGET_HOME:-$HOME}/miniconda3/bin:${CONDA_TARGET_HOME:-$HOME}/opt/miniconda3/bin:${PATH}"
+  export CONDA=conda
+  conda_bootstrap || { fail "Failed to initialize conda (conda.sh not found)"; stop; }
+  local new_conda
+  new_conda="$(type -P conda 2>/dev/null)" || true
+  if [[ -n "$new_conda" ]]; then
+    export PATH="$(cd "$(dirname "$new_conda")" && pwd -P):${PATH}"
+  fi
 }
 
 function verify_miniconda_checksum() {
   local installer_file; local repo_index; local installer_hash; local expected_hash;
 
   installer_file="$1"
-  if ! installer_hash=$(set -o pipefail && shasum -a 256 "$installer_file" | cut -f 1 -d ' '); then
-    fail "Failed to get checksum for Miniconda installer"
-    return 1
+  if command -v sha256sum >/dev/null 2>&1; then
+    installer_hash=$(set -o pipefail && sha256sum "$installer_file" | awk '{print $1}') || return 1
+  else
+    installer_hash=$(set -o pipefail && shasum -a 256 "$installer_file" | awk '{print $1}') || return 1
   fi
 
   # Get HTML table of all Miniconda versions and their info, including checksums
@@ -148,7 +232,7 @@ function verify_miniconda_checksum() {
 
   if [[ "$installer_hash" == "$expected_hash" ]]; then
     success "Miniconda installer checksum verified"
-  elif $GREP -q "$installer_hash" <<< "$repo_index"; then
+  elif grep -Fq "$installer_hash" <<< "$repo_index"; then
     # Fallback incase table HTML changes in the future
     success "Miniconda installer checksum verified (fallback)"
   else
@@ -160,52 +244,76 @@ function verify_miniconda_checksum() {
   fi
 }
 
-## This function attempts to normalize formatting variations in the `env list` output
-## across different Conda/Mamba versions so that it's easier to handle downstream.
-## The output is two tab separated columns: env name (can be zero width) and path.
-function get_env_list() {
-  local env_list; local names_width;
+function env_prefix() {
+  local name="$1"
+  local base
+  base="$("$CONDA" info --base 2>/dev/null)" || return 1
+  echo "${base}/envs/${name}"
+}
 
-  env_list=$($CONDA env list)
+function env_exists() {
+  local name="$1"
+  local prefix
+  prefix="$(env_prefix "$name" 2>/dev/null)" || prefix=""
 
-  # Heuristic to determine name column width
-  names_width=$(echo "$env_list" | awk '
-    {
-      path_start_pos = index($0, "/");
-      if (path_start_pos) count[path_start_pos]++;
-    }
-    END {
-      for (pos in count) {
-        if (count[pos] > max_count) {
-          max_count = count[pos];
-          width = pos;
-        }
-      }
-      print width;
-    }'
-  )
+  # 1) Fast path: if prefix dir exists, treat as existing (even if conda doesn't list it)
+  if [[ -n "$prefix" && -d "$prefix" ]]; then
+    return 0
+  fi
 
-  # Extract columns and normalize formatting
-  echo "$env_list" | awk -v f1="$names_width" '
-    substr($0, f1, 1) == "/" {
-      name = substr($0, 1, f1 - 1);
-      gsub(/(^[[:space:]]+)|(([[:space:]]|\*)+)/, "", name);
-      path = substr($0, f1);
-      print name "\t" path;
-    }'
+  # 2) Otherwise fall back to parsing env list (works for conda/mamba/micromamba)
+  "$CONDA" env list 2>/dev/null | awk -v target="$name" '
+    NF==0 {next}
+    $1=="#" {next}
+    $1=="Name" {next}
+    { env=$1; gsub(/\*/, "", env); if (env==target) found=1 }
+    END { exit(found?0:1) }
+  '
+}
+
+function prune_env_record() {
+  local prefix="$1"
+  local envs_file="${HOME}/.conda/environments.txt"
+
+  [[ -f "$envs_file" ]] || return 0
+
+  # Remove exact matching line (portable for macOS sed)
+  /usr/bin/grep -Fvx "$prefix" "$envs_file" > "${envs_file}.tmp" 2>/dev/null || true
+  mv "${envs_file}.tmp" "$envs_file" 2>/dev/null || true
 }
 
 function remove_environment() {
   local env_name="$1"
   local logfile="env_remove_${ts}.log"
+  local prefix
+  prefix="$(env_prefix "$env_name" 2>/dev/null)" || prefix=""
 
   status "Removing $env_name environment..."
-  if ! $CONDA env remove -n "$env_name" -y > "$logfile" 2>&1; then
-    fail "Failed to remove environment (see ${logfile})"
-    stop
-  else
+
+  # Try by name first
+  if "$CONDA" env remove -n "$env_name" -y > "$logfile" 2>&1; then
     success "$env_name environment removed"
+    return 0
   fi
+
+  # If that fails, try by prefix (helps when conda env list doesn't know about it)
+  if [[ -n "$prefix" && -d "$prefix" ]]; then
+    if "$CONDA" env remove -p "$prefix" -y >> "$logfile" 2>&1; then
+      success "$env_name environment removed (by prefix)"
+      return 0
+    fi
+
+    # Last resort: directory exists but conda can't remove it -> remove folder
+    warn "Conda couldn't remove $env_name, but prefix exists at: $prefix"
+    warn "Removing directory directly..."
+    rm -rf "$prefix" >> "$logfile" 2>&1 || { fail "Failed to remove $prefix (see ${logfile})"; stop; }
+    prune_env_record "$prefix"
+    success "$env_name environment directory removed"
+    return 0
+  fi
+
+  fail "Failed to remove environment (see ${logfile})"
+  stop
 }
 
 function setup_environment() {
@@ -213,12 +321,27 @@ function setup_environment() {
   local platform_lockfile="$2"
   local logfile="env_install_${ts}.log"
 
-  # Setup tinyRNA environment using our generated lock file
   status "Setting up $env_name environment (this may take a while)..."
-  $CONDA create --file "$platform_lockfile" --name "$env_name" -y > "$logfile" 2>&1
 
-  # Check that the new environment is listed
-  if ! get_env_list | $GREP -q "^${env_name}\t/"; then
+  if [[ "$CONDA" == "micromamba" ]]; then
+    if [[ -n "${conda_subdir:-}" ]]; then
+      if ! CONDA_SUBDIR="$conda_subdir" "$CONDA" create -n "$env_name" --file "$platform_lockfile" -y > "$logfile" 2>&1; then
+        CONDA_SUBDIR="$conda_subdir" "$CONDA" create -n "$env_name" -f "$platform_lockfile" -y >> "$logfile" 2>&1 || stop
+      fi
+    else
+      if ! "$CONDA" create -n "$env_name" --file "$platform_lockfile" -y > "$logfile" 2>&1; then
+        "$CONDA" create -n "$env_name" -f "$platform_lockfile" -y >> "$logfile" 2>&1 || stop
+      fi
+    fi
+  else
+    if [[ -n "${conda_subdir:-}" ]]; then
+      CONDA_SUBDIR="$conda_subdir" "$CONDA" create --file "$platform_lockfile" --name "$env_name" -y > "$logfile" 2>&1 || stop
+    else
+      "$CONDA" create --file "$platform_lockfile" --name "$env_name" -y > "$logfile" 2>&1 || stop
+    fi
+  fi
+
+  if ! env_exists "$env_name"; then
     fail "$env_name environment setup failed (see ${logfile})"
     stop
   else
@@ -226,19 +349,31 @@ function setup_environment() {
   fi
 }
 
+
 function setup_macOS_command_line_tools() {
   # Install Xcode command line tools if necessary
-  if ! xcode-select --print-path > /dev/null 2>&1; then
-    status "Installing Xcode command line tools. Follow prompts in new window..."
-    if xcode-select --install; then
-      success "Command line tools setup complete"
-    else
-      fail "Command line tools installation failed"
-      stop
-    fi
-  else
+  if xcode-select --print-path > /dev/null 2>&1; then
     success "Xcode command line tools are already installed"
+    return 0
   fi
+
+  status "Installing Xcode command line tools. Follow prompts in new window..."
+  # This only REQUESTS the install and often returns immediately.
+  xcode-select --install >/dev/null 2>&1 || true
+
+  # Wait until xcode-select --print-path succeeds (install completed)
+  local i
+  for i in {1..120}; do  # up to ~10 minutes (120 * 5s)
+    if xcode-select --print-path > /dev/null 2>&1; then
+      success "Command line tools setup complete"
+      return 0
+    fi
+    sleep 5
+  done
+
+  fail "Command line tools are not installed yet."
+  fail "Finish the installation in the pop-up, then re-run this script."
+  stop
 }
 
 
@@ -256,18 +391,32 @@ fi
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
   platform="macOS"
-  arch=$(uname -m)  # Support Apple Silicon
-  shell_preferred=$(basename "$(dscl . -read ~/ UserShell | cut -f 2 -d " ")")
+  arch=$(uname -m)
+  conda_subdir=""
+
+  if [[ "$arch" == "arm64" ]]; then
+    # On Apple Silicon, install Rosetta if it isn't already.
+    warn "Apple Silicon detected: creating an osx-64 (x86_64/Rosetta) environment to match the lockfile"
+    conda_subdir="osx-64"
+    if ! /usr/bin/pgrep -q oahd 2>/dev/null && ! /usr/sbin/pkgutil --pkg-info com.apple.pkg.RosettaUpdateAuto >/dev/null 2>&1; then
+      status "Rosetta is required for x86_64 tools; requesting admin permission if needed..."
+      /usr/bin/sudo -n /usr/sbin/softwareupdate --install-rosetta --agree-to-license >/dev/null 2>&1 \
+        || /usr/bin/sudo /usr/sbin/softwareupdate --install-rosetta --agree-to-license >/dev/null 2>&1 \
+        || { warn "Rosetta install was not completed (may require admin approval)."; stop; }
+    fi
+  fi
+
+  shell_preferred=$(dscl . -read "/Users/$USER" UserShell 2>/dev/null | awk '{print $2}' | xargs basename)
   miniconda_installer="Miniconda3-py${miniconda_python_version}_${miniconda_version}-MacOSX-${arch}.sh"
   platform_lockfile="${cwd}/conda/conda-osx-64.lock"
   setup_macOS_command_line_tools
-  export GREP="grep -E" && readonly GREP
+
 elif [[ "$OSTYPE" == "linux-gnu" ]]; then
   platform="linux"
   shell_preferred="$(basename "$SHELL")"
   miniconda_installer="Miniconda3-py${miniconda_python_version}_${miniconda_version}-Linux-x86_64.sh"
   platform_lockfile="${cwd}/conda/conda-linux-64.lock"
-  export GREP="grep -P" && readonly GREP
+
 else
   fail "Unsupported OS"
   exit 1
@@ -275,12 +424,11 @@ fi
 
 success "$platform detected"
 
-
 ######-------------------------------- SHELL INFO -----------------------------------######
-
 
 shell_current=$(ps -o comm= $PPID | cut -f 1 -d " ")
 shell_current=${shell_current#-}  # remove the leading dash that login shells have
+shell_current=$(basename "$shell_current") # Convert /usr/local/bin/bash -> bash
 
 if [[ "$shell_current" != "$shell_preferred" ]]; then
   warn "The current shell is $shell_current but your default is $shell_preferred"
@@ -294,21 +442,29 @@ fi
 
 ######--------------------------- MINICONDA INSTALLATION ----------------------------######
 
+ensure_conda_on_path
 
 if CONDA=$(get_host_conda_command); then
   export CONDA && readonly CONDA
   success "$CONDA is already installed for $shell_current"
-  eval "$(get_shell_hook "$shell_current")"
+
+  if ! conda_bootstrap; then
+    fail "Failed to initialize conda (conda.sh not found in expected locations)"
+    stop
+  fi
+
   miniconda_installed=0
 else
   warn "Couldn't find an existing Conda/Mamba installation"
   download_and_install_miniconda "$miniconda_installer"
   export CONDA="conda" && readonly CONDA
 
-  # Initialize conda so that we can use commands in this script
-  . <(sed -n "$(get_init_block_regex "$CONDA")" "$shellrc")
-  eval "$(get_shell_hook "$shell_current")"
-  $CONDA config --set auto_activate_base false
+  if ! conda_bootstrap; then
+    fail "Failed to initialize conda (conda.sh not found in expected locations)"
+    stop
+  fi
+
+  "$CONDA" config --set auto_activate_base false
 
   success "Miniconda installed"
   miniconda_installed=1
@@ -319,7 +475,7 @@ fi
 ######----------------------------- CREATE ENVIRONMENT ------------------------------######
 
 
-if get_env_list | $GREP -q "^${env_name}\t/"; then
+if env_exists "$env_name"; then
   echo
   echo "The Conda environment \"$env_name\" already exists"
   echo "It must be removed and recreated"
@@ -338,12 +494,29 @@ if get_env_list | $GREP -q "^${env_name}\t/"; then
   fi
 fi
 
+# Apply macOS build-time compiler overrides *after* activating the Conda environment.
+# This ensures pip builds use the system Apple clang instead of Conda's compiler
+# wrappers, which can fail with newer macOS SDKs.
 setup_environment "$env_name" "$platform_lockfile"
-$CONDA activate "$env_name"
 
-# Set environment variable for Python import stability
-# Equivalent (unsupported by Mamba): `conda env config vars set PYTHONNOUSERSITE=1`
-echo '{"env_vars": {"PYTHONNOUSERSITE": "1"}}' > "$CONDA_PREFIX/conda-meta/state"
+# NOTE: For micromamba, activation works because conda_bootstrap
+# runs `micromamba shell hook -s bash`
+if [[ "$CONDA" == "micromamba" ]]; then
+  micromamba activate "$env_name"
+else
+  "$CONDA" activate "$env_name"
+fi
+
+if [[ -z "${CONDA_PREFIX:-}" ]]; then
+  fail "Environment activation failed"
+  stop
+fi
+
+configure_build_env
+
+# Avoid writing conda internal metadata (conda-meta/state). If you want
+# PYTHONNOUSERSITE, set it in the user's shell or via activation hooks.
+# export PYTHONNOUSERSITE=1
 
 
 ######---------------------------- tinyRNA INSTALLATION -----------------------------######
@@ -352,7 +525,7 @@ echo '{"env_vars": {"PYTHONNOUSERSITE": "1"}}' > "$CONDA_PREFIX/conda-meta/state
 status "Installing tinyRNA codebase via pip..."
 logfile="pip_install_${ts}.log"
 
-if ! pip install "$cwd" > "$logfile" 2>&1; then
+if ! python -m pip install "$cwd" > "$logfile" 2>&1; then
   fail "Failed to install tinyRNA codebase (see ${logfile})"
   exit 1
 fi
@@ -372,5 +545,5 @@ fi
 echo
 echo "To activate the environment, run:"
 echo
-echo "  $CONDA activate $env_name"
+echo "  conda activate $env_name"
 echo
