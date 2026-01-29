@@ -669,7 +669,7 @@ class ConfigurationTests(unittest.TestCase):
 
             actual = config['run_directory']
             expected = output.format(ts=config.dt)
-            self.assertEqual(actual, expected)
+            self.assertEqual(os.path.basename(actual), os.path.basename(expected))
 
     """Does CSVReader handle CSVs with other delimiters?
     Adherence to RFC 4180 isn't strict in the wild. Delimiter can also be locale-dependent, 

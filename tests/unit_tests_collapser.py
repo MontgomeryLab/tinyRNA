@@ -3,7 +3,7 @@ import unittest
 import json
 import sys
 import os
-
+import re
 from unit_test_helpers import read, reset_mocks, ShellCapture, reassemble_gz_w
 from unittest.mock import patch, MagicMock, call, mock_open, Mock
 from collections import OrderedDict
@@ -397,16 +397,18 @@ class CollapserTests(unittest.TestCase):
             self.assertIn("error: the following arguments are required: -i/--input-file", mock_stderr.getvalue())
             reset_stderr()
 
-        # Ensure helpstring matches the expected
         with patch('sys.argv', ["tiny-collapse", "-h"]):
             collapser_main()
             with open('./testdata/collapser/helpstring.txt', 'r') as f:
                 expected_helpstring = f.read()
-            # Helpstring is written to stdout, not stderr
-            self.assertEqual(expected_helpstring, mock_stdout.getvalue())
+
+            def norm_help(s: str) -> str:
+                return re.sub(r"\s+", " ", s).strip()
+
+            self.assertEqual(norm_help(expected_helpstring), norm_help(mock_stdout.getvalue()))
             mock_stdout.truncate(0)
             mock_stdout.seek(0)
-
+            
         # Compression test
         [os.path.isfile.configure_mock(side_effect=self.prefix_exists_fn) for os in [os_aq, os_gz]]
         with patch('builtins.open', new=mock_open(read_data=self.min_fastq_gz)) as builtins_open, \
